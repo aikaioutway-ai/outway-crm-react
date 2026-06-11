@@ -213,7 +213,7 @@ export async function editAccrualAmount(
   // Загружаем текущую запись чтобы зафиксировать старое значение в лог
   const { data: current, error: fetchError } = await supabase
     .from('payments')
-    .select('amount, accountant_status, is_frozen')
+    .select('id, family_id, amount, accountant_status, is_frozen')
     .eq('id', paymentId)
     .single();
 
@@ -237,7 +237,7 @@ export async function editAccrualAmount(
 
   // Пишем в историю изменений: кто, что изменил, было → стало
   await supabase.from('audit_log').insert({
-    family_id:  current.family_id ?? null,
+    family_id:  current.family_id,
     user_name:  userName,
     action:     'Ручное редактирование начисления',
     field:      'amount',
