@@ -295,15 +295,16 @@ function TabInfo({ family, editMode }: { family: Family; editMode: boolean }) {
     contactPhone: family.contactPhone ?? '',
     fullAddress: family.fullAddress,
     comment: family.comment ?? '',
+    schoolCode: family.schoolCode,
   });
 
   const set = (k: keyof typeof form) => (v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const hasCoords = family.latitude && family.longitude;
   const mapsUrl = hasCoords
-    ? `https://www.google.com/maps?q=${family.latitude},${family.longitude}`
+    ? `https://yandex.ru/maps/?pt=${family.longitude},${family.latitude}&z=16&l=map`
     : family.fullAddress
-    ? `https://www.google.com/maps/search/${encodeURIComponent(family.fullAddress)}`
+    ? `https://yandex.ru/maps/?text=${encodeURIComponent(family.fullAddress)}`
     : null;
 
   return (
@@ -342,7 +343,7 @@ function TabInfo({ family, editMode }: { family: Family; editMode: boolean }) {
               fontSize: 13, fontWeight: 600, color: 'var(--accent)',
               textDecoration: 'none',
             }}>
-              <MapPin size={14} /> Открыть Google Maps
+              <MapPin size={14} /> Открыть Яндекс Карты
             </a>
           </div>
         )}
@@ -353,7 +354,17 @@ function TabInfo({ family, editMode }: { family: Family; editMode: boolean }) {
       </Section>
 
       <Section title="Прочее">
-        <Field label="Школа" value={SCHOOL_NAME[family.schoolCode] ?? family.schoolCode} />
+        <Field label="Школа" value={SCHOOL_NAME[family.schoolCode] ?? family.schoolCode}
+          editMode={editMode}
+          inputEl={
+            <select value={form.schoolCode} onChange={e => set('schoolCode')(e.target.value)}
+              style={{ flex:1, padding:'5px 10px', border:'1px solid var(--border)', borderRadius:6, fontSize:13, fontWeight:500, color:'var(--text)', background:'var(--bg)', outline:'none' }}>
+              {Object.entries(SCHOOL_NAME).map(([code, name]) => (
+                <option key={code} value={code}>{name}</option>
+              ))}
+            </select>
+          }
+        />
         <Field label="Дата заявки" value={family.createdAt ? new Date(family.createdAt).toLocaleDateString('ru-RU') : null} />
         {(editMode || form.comment) && (
           <div style={{ marginTop: 4 }}>
