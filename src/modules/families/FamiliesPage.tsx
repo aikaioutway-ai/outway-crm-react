@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase';
-import { Family, SchoolCode } from '../../types';
+import { SchoolCode } from '../../types';
 import { money } from '../../utils/pricing';
 
 import SchoolBar from '../../core/bars/SchoolBar';
