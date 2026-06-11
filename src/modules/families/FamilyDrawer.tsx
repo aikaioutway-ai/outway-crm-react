@@ -105,7 +105,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager' }: 
         id: String(r.id),
         familyId: String(r.family_id),
         schoolCode: r.school_code || family.schoolCode,
-        periodKey: r.month === 0 ? 'deposit' : String(r.month),
+        periodKey: (r.month === 0 ? 'deposit' : String(r.month)) as import('../../types').PeriodKey,
         month: Number(r.month),
         year: Number(r.year),
         amount: Number(r.amount ?? 0),
