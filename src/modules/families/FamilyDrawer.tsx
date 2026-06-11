@@ -73,8 +73,12 @@ export default function FamilyDrawer({ family, onClose }: Props) {
         routeSource: r.route_source,
         transferNumber: r.transfer_number,
         schoolCode: r.school_code,
-        zone: r.zone === 1 ? 'A' : r.zone === 2 ? 'B' : 'C',
-        vehicleType: r.vehicle_type ?? 'microbus',
+        zone: Number(r.zone) === 1 ? 'A' : Number(r.zone) === 2 ? 'B' : 'C',
+        vehicleType: (() => {
+          const vt = r.vehicle_type ?? 'microbus';
+          if (vt === 'minibus' || vt === 'bus' || vt === 'mini-bus') return 'microbus';
+          return vt;
+        })(),
       })));
     }
     setLoadingChildren(false);
