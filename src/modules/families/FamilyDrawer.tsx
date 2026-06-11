@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { X, User, Users, Truck, CreditCard } from 'lucide-react';
-import { Family, Child, Payment, Zone } from '../../types';
+import { Family, Child, Payment } from '../../types';
 import { getPriceByZone, getFamilyPrice, calcPenalty, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import StatusBadge from '../../core/cards/StatusBadge';
@@ -54,6 +54,7 @@ export default function FamilyDrawer({ family, onClose }: Props) {
   useEffect(() => {
     loadChildren();
     loadPayments();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
   async function loadChildren() {
@@ -112,8 +113,6 @@ export default function FamilyDrawer({ family, onClose }: Props) {
     .filter(p => p.accountantStatus === 'Не оплачено' || p.accountantStatus === 'Просрочено' || p.accountantStatus === 'Частично оплачено')
     .filter(p => p.periodKey !== 'deposit')
     .reduce((s, p) => s + (p.amount - p.factAmount), 0);
-
-  const depositPayment = payments.find(p => p.periodKey === 'deposit');
 
   return (
     <>
