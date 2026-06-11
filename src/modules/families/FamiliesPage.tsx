@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase';
-import { SchoolCode } from '../../types';
+import { SchoolCode, Family } from '../../types';
 import { money } from '../../utils/pricing';
+import FamilyDrawer from './FamilyDrawer';
 
 import SchoolBar from '../../core/bars/SchoolBar';
 import StatusBadge from '../../core/cards/StatusBadge';
@@ -173,8 +174,41 @@ export default function FamiliesPage() {
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<SchoolCode | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
+  const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
 
   useEffect(() => { load(); }, []);
+
+  async function openFamily(familyId: string) {
+    const { data } = await supabase.from('families').select('*').eq('id', familyId).single();
+    if (!data) return;
+    const f = data as any;
+    const zone = f.zone === 1 ? 'A' : f.zone === 2 ? 'B' : 'C';
+    setSelectedFamily({
+      id: f.id,
+      schoolCode: f.school_code,
+      parentName: f.parent_name,
+      phone: f.phone,
+      phoneTelegram: f.phone_telegram,
+      secondPhone: f.second_phone,
+      contactName: f.contact_name,
+      contactPhone: f.contact_phone,
+      fullAddress: f.full_address,
+      latitude: f.latitude,
+      longitude: f.longitude,
+      distanceKm: f.distance_km,
+      zone: zone as any,
+      vehicleType: f.vehicle_type,
+      vehicleLabel: f.vehicle_label,
+      monthlyPrice: f.monthly_price ?? 0,
+      comment: f.comment,
+      createdAt: f.created_at,
+      status: f.status ?? 'new',
+      transferNumber: f.transfer_number,
+      stopNumber: f.stop_number,
+      timeMorning: f.time_morning,
+      timeEvening: f.time_evening,
+    });
+  }
 
   async function load() {
     setLoading(true);
@@ -325,11 +359,18 @@ export default function FamiliesPage() {
           loading={loading}
           emptyText="Заявок не найдено"
           groupColorKey="familyIndex"
-          onRowClick={(row) => console.log('open family', row.familyId)}
+          onRowClick={(row) => openFamily(row.familyId)}
           onRowDelete={(row) => console.log('delete', row.rowId)}
           onRowEdit={(row) => console.log('edit', row.rowId)}
         />
       </div>
+
+      {selectedFamily && (
+        <FamilyDrawer
+          family={selectedFamily}
+          onClose={() => setSelectedFamily(null)}
+        />
+      )}
     </div>
   );
 }
