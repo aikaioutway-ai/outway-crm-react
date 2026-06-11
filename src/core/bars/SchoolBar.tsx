@@ -8,64 +8,112 @@ interface SchoolBarProps {
   badges?: Partial<Record<SchoolCode | 'ALL', number>>;
 }
 
-const SHORT: Record<string, string> = {
-  KINGS:   'Kings',
-  LIGHT:   'Light',
-  BILIM:   'Bilim',
-  AES:     'AES',
-  KAS:     'KAS',
-  EPSILON: 'Eps',
-  GENIUS:  'Genius',
-  GENIUS4: 'Gen4',
-  NOVA:    'Nova',
-  INDIGO:  'Indigo',
-  ERUDIT:  'Erudit',
-  TENSAY:  'Tensay',
-  EDISON:  'Edison',
+// Цвет точки для каждой школы
+const SCHOOL_COLORS: Record<string, string> = {
+  KINGS:   '#EF4444',
+  LIGHT:   '#F59E0B',
+  BILIM:   '#EF4444',
+  AES:     '#EF4444',
+  KAS:     '#EF4444',
+  EPSILON: '#10B981',
+  GENIUS:  '#10B981',
+  GENIUS4: '#10B981',
+  NOVA:    '#10B981',
+  INDIGO:  '#F59E0B',
+  ERUDIT:  '#EF4444',
+  TENSAY:  '#10B981',
+  EDISON:  '#10B981',
 };
 
 export default function SchoolBar({ active, onChange, badges = {} }: SchoolBarProps) {
-  const tabs = [{ code: 'ALL' as const, name: 'Все' }, ...SCHOOLS];
-
   return (
     <div style={{
-      display: 'flex', gap: 5, overflowX: 'auto',
-      padding: '14px 20px',
-      background: '#fff', borderBottom: '1px solid var(--border)',
-      scrollbarWidth: 'none', alignItems: 'center',
+      display: 'flex',
+      gap: 6,
+      overflowX: 'auto',
+      padding: '12px 20px',
+      background: '#fff',
+      borderBottom: '1px solid var(--border)',
+      scrollbarWidth: 'none',
+      alignItems: 'center',
+      flexShrink: 0,
     }}>
-      {tabs.map(s => {
-        const isActive = active === s.code;
-        const badge = badges[s.code as keyof typeof badges];
-        const label = s.code === 'ALL' ? 'Все школы' : SHORT[s.code] ?? s.name;
 
-        return (
-          <button
-            key={s.code}
-            onClick={() => onChange(s.code)}
-            style={{
-              display: 'flex', alignItems: 'center', gap: 5,
-              padding: '6px 14px', borderRadius: 8, border: 'none',
-              whiteSpace: 'nowrap', fontSize: 13, cursor: 'pointer',
-              background: isActive ? 'var(--accent)' : 'var(--bg)',
-              color: isActive ? '#fff' : 'var(--text-2)',
-              fontWeight: isActive ? 700 : 500,
-              transition: 'all 0.15s',
-            }}
-          >
-            {label}
-            {badge != null && badge > 0 && (
-              <span style={{
-                background: isActive ? 'rgba(199,210,254,0.35)' : 'var(--danger)',
-                color: '#fff', borderRadius: 10, fontSize: 11, fontWeight: 700,
-                padding: '0 6px', minWidth: 18, textAlign: 'center',
-              }}>
-                {badge}
-              </span>
-            )}
-          </button>
-        );
-      })}
+      {/* Все школы */}
+      <SchoolBtn
+        label="Все школы"
+        isActive={active === 'ALL'}
+        onClick={() => onChange('ALL')}
+        badge={badges['ALL']}
+        color={null}
+      />
+
+      {SCHOOLS.map(s => (
+        <SchoolBtn
+          key={s.code}
+          label={s.short ?? s.name}
+          isActive={active === s.code}
+          onClick={() => onChange(s.code)}
+          badge={badges[s.code]}
+          color={SCHOOL_COLORS[s.code] ?? '#6B7280'}
+        />
+      ))}
     </div>
+  );
+}
+
+interface BtnProps {
+  label: string;
+  isActive: boolean;
+  onClick: () => void;
+  badge?: number;
+  color: string | null;
+}
+
+function SchoolBtn({ label, isActive, onClick, badge, color }: BtnProps) {
+  return (
+    <button
+      onClick={onClick}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 6,
+        padding: '6px 14px',
+        borderRadius: 6,
+        border: isActive ? '2px solid var(--accent)' : '2px solid transparent',
+        background: isActive ? 'var(--accent)' : 'var(--bg)',
+        color: isActive ? '#fff' : 'var(--text)',
+        fontWeight: isActive ? 700 : 500,
+        fontSize: 13,
+        whiteSpace: 'nowrap',
+        cursor: 'pointer',
+        transition: 'all 0.15s',
+      }}
+    >
+      {color && (
+        <span style={{
+          width: 8,
+          height: 8,
+          borderRadius: '50%',
+          background: isActive ? 'rgba(255,255,255,0.8)' : color,
+          flexShrink: 0,
+        }} />
+      )}
+      {label}
+      {badge != null && badge > 0 && (
+        <span style={{
+          background: isActive ? 'rgba(199,210,254,0.4)' : '#EF4444',
+          color: '#fff',
+          borderRadius: 10,
+          fontSize: 11,
+          fontWeight: 700,
+          padding: '0 6px',
+          minWidth: 18,
+          textAlign: 'center',
+        }}>
+          {badge}
+        </span>
+      )}
+    </button>
   );
 }
