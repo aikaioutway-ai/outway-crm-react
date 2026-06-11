@@ -48,6 +48,7 @@ export interface DataTableProps<T = any> {
   storageKey?: string;                     // localStorage key for preferences
   loading?: boolean;
   emptyText?: string;
+  groupColorKey?: string;  // field name whose value alternates row background color
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -147,6 +148,7 @@ export function DataTable<T extends Record<string, any>>({
   storageKey = 'dt_prefs',
   loading = false,
   emptyText = 'Нет данных',
+  groupColorKey,
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
@@ -559,6 +561,7 @@ export function DataTable<T extends Record<string, any>>({
                   <tr
                     key={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
+                    data-group-even={groupColorKey ? (((row as any)[groupColorKey] ?? 0) % 2 === 0 ? 'true' : 'false') : undefined}
                     onClick={() => onRowClick?.(row)}
                     onContextMenu={e => {
                       e.preventDefault();
@@ -677,3 +680,4 @@ export function DataTable<T extends Record<string, any>>({
 }
 
 export default DataTable;
+
