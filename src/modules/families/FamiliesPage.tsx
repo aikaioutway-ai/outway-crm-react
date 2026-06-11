@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase';
-import { SchoolCode } from '../../types';
+import { Family, SchoolCode } from '../../types';
 import { money } from '../../utils/pricing';
 
 import SchoolBar from '../../core/bars/SchoolBar';
@@ -180,11 +180,15 @@ export default function FamiliesPage() {
     setLoading(true);
 
     // Грузим families + children параллельно
-    const [{ data: famData }, { data: childData }] = await Promise.all([
+    const [famRes, childRes] = await Promise.all([
       supabase.from('families').select('*').order('created_at', { ascending: false }),
       supabase.from('children').select('*'),
     ]);
+    const famData = famRes.data;
+    const childData = childRes.data;
+    console.log('famError:', famRes.error, 'childError:', childRes.error);
 
+    console.log('famData:', famData?.length, 'childData:', childData?.length, 'childError');
     if (famData) {
       const childMap: Record<string, any[]> = {};
       (childData ?? []).forEach((c: any) => {
@@ -229,6 +233,7 @@ export default function FamiliesPage() {
         familyIndex++;
       });
 
+      console.log('result rows:', result.length);
       setRows(result);
     }
     setLoading(false);
