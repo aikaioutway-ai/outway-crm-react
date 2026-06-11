@@ -361,3 +361,20 @@
 .dt-wrap::-webkit-scrollbar-track  { background: var(--dt-bg); }
 .dt-wrap::-webkit-scrollbar-thumb  { background: var(--dt-accent-l); border-radius: 3px; }
 .dt-wrap::-webkit-scrollbar-thumb:hover { background: var(--dt-accent); }
+
+
+/* ── GROUP ROW ALTERNATING COLOR ── */
+.dt-tr[data-group-even="true"] td {
+  background: #FFFFFF;
+}
+.dt-tr[data-group-even="false"] td {
+  background: #F6F8FF;
+}
+.dt-tr[data-group-even="true"]:hover td,
+.dt-tr[data-group-even="false"]:hover td {
+  background: #EEF2FF !important;
+}
+.dt-tr--selected[data-group-even="true"] td,
+.dt-tr--selected[data-group-even="false"] td {
+  background: #E0E7FF !important;
+}
