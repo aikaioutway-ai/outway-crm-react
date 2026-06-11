@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase';
 import { Family, SchoolCode } from '../../types';
 import { money } from '../../utils/pricing';
-import { schoolByCode } from '../../utils/schools';
+
 import SchoolBar from '../../core/bars/SchoolBar';
 import StatusBadge from '../../core/cards/StatusBadge';
 import { Search, Plus, RefreshCw } from 'lucide-react';
