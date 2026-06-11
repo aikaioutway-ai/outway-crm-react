@@ -73,7 +73,18 @@ export default function FamilyDrawer({ family, onClose }: Props) {
         routeSource: r.route_source,
         transferNumber: r.transfer_number,
         schoolCode: r.school_code,
-        zone: Number(r.zone) === 1 ? 'A' : Number(r.zone) === 2 ? 'B' : 'C',
+        zone: (() => {
+          const z = r.zone;
+          // уже буква
+          if (z === 'A' || z === 'B' || z === 'C') return z;
+          // число или строка-число
+          const n = Number(z);
+          if (n === 1) return 'A';
+          if (n === 2) return 'B';
+          if (n === 3) return 'C';
+          // fallback — зона семьи
+          return family.zone;
+        })(),
         vehicleType: (() => {
           const vt = r.vehicle_type ?? 'microbus';
           if (vt === 'minibus' || vt === 'bus' || vt === 'mini-bus') return 'microbus';
@@ -240,7 +251,7 @@ export default function FamilyDrawer({ family, onClose }: Props) {
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
 
           {tab === 'info' && <TabInfo family={family} />}
-          {tab === 'children' && <TabChildren children={children} loading={loadingChildren} />}
+          {tab === 'children' && <TabChildren children={children} loading={loadingChildren} familyZone={family.zone} familySchool={family.schoolCode} familyVehicle={family.vehicleType} />}
           {tab === 'logistics' && <TabLogistics family={family} children={children} loading={loadingChildren} />}
           {tab === 'finance' && <TabFinance payments={payments} loading={loadingPayments} family={family} />}
 
@@ -367,7 +378,7 @@ function TabInfo({ family }: { family: Family }) {
 
 // ─── TAB: Дети и цена ────────────────────────────────────────────────────────
 
-function TabChildren({ children, loading }: { children: Child[]; loading: boolean }) {
+function TabChildren({ children, loading, familyZone, familySchool, familyVehicle }: { children: Child[]; loading: boolean; familyZone: string; familySchool: string; familyVehicle: string }) {
   if (loading) return <Spinner />;
   if (!children.length) return <Empty text="Детей нет" />;
 
@@ -376,7 +387,10 @@ function TabChildren({ children, loading }: { children: Child[]; loading: boolea
       <Section title={`Дети (${children.length})`}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           {children.map((kid, i) => {
-            const base = getPriceByZone(kid.schoolCode, kid.zone, kid.vehicleType);
+            const kidZone = (kid.zone === 'A' || kid.zone === 'B' || kid.zone === 'C') ? kid.zone : familyZone as any;
+            const kidSchool = kid.schoolCode || familySchool as any;
+            const kidVehicle = kid.vehicleType || familyVehicle as any;
+            const base = getPriceByZone(kidSchool, kidZone, kidVehicle);
             const discount = i > 0;
             const price = discount ? Math.round(base * 0.95) : base;
 
