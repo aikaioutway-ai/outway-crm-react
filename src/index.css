@@ -2,18 +2,19 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  --bg:        #F7F6F2;
+  --bg:        #F0F4FF;
   --white:     #FFFFFF;
-  --accent:    #E8621A;
-  --accent-h:  #D4571A;
-  --text:      #1A1A1A;
-  --text-2:    #6B6B6B;
-  --border:    #E2E2DC;
+  --accent:    #312E81;
+  --accent-h:  #27246B;
+  --accent-l:  #C7D2FE;
+  --text:      #1A1A2E;
+  --text-2:    #6B6B8A;
+  --border:    #DDE3F5;
   --danger:    #E53935;
   --success:   #2E7D32;
   --warning:   #F57C00;
   --info:      #1565C0;
-  --shadow:    0 1px 4px rgba(0,0,0,.08);
+  --shadow:    0 1px 4px rgba(49,46,129,.08);
   --radius:    8px;
   --font:      Arial, sans-serif;
 }
@@ -33,4 +34,4 @@ a { color: var(--accent); text-decoration: none; }
 /* ── SCROLLBAR ────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--accent-l); border-radius: 3px; }
