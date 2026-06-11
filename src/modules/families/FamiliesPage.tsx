@@ -7,6 +7,7 @@ import SchoolBar from '../../core/bars/SchoolBar';
 import StatusBadge from '../../core/cards/StatusBadge';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import '../../core/tables/DataTable.css';
+import FamilyDrawer from './FamilyDrawer';
 import { Search, Plus, RefreshCw } from 'lucide-react';
 
 const SHORT_SCHOOL: Record<string, string> = {
@@ -29,14 +30,12 @@ const VT_LABEL: Record<string, string> = {
   minivan: 'Минивэн', sedan: 'Седан', car: 'Седан',
 };
 
-// ── Расширенный тип строки (семья + порядковый номер) ──
 interface FamilyRow extends Family {
   schoolLabel: string;
   zoneLabel: string;
   vehicleLabel2: string;
 }
 
-// ── Колонки DataTable ──
 const COLUMNS: ColumnDef<FamilyRow>[] = [
   {
     key: 'parentName',
@@ -162,6 +161,7 @@ export default function FamiliesPage() {
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<SchoolCode | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
+  const [selected, setSelected] = useState<FamilyRow | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -200,7 +200,6 @@ export default function FamiliesPage() {
           stopNumber:     r.stop_number,
           timeMorning:    r.time_morning,
           timeEvening:    r.time_evening,
-          // computed labels for filter/sort
           schoolLabel:    SHORT_SCHOOL[r.school_code] ?? r.school_code,
           zoneLabel:      `Зона ${zone}`,
           vehicleLabel2:  VT_LABEL[vt] ?? vt,
@@ -211,7 +210,6 @@ export default function FamiliesPage() {
     setLoading(false);
   }
 
-  // Фильтр по школе + поиск (до DataTable)
   const filtered = families.filter(f => {
     if (school !== 'ALL' && f.schoolCode !== school) return false;
     if (search) {
@@ -236,10 +234,8 @@ export default function FamiliesPage() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
-      {/* School tabs */}
       <SchoolBar active={school} onChange={setSchool} badges={badges} />
 
-      {/* Search + actions */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
         padding: '12px 20px', background: '#fff',
@@ -289,7 +285,6 @@ export default function FamiliesPage() {
         </button>
       </div>
 
-      {/* DataTable */}
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
         <DataTable<FamilyRow>
           columns={COLUMNS}
@@ -298,11 +293,18 @@ export default function FamiliesPage() {
           storageKey="families_table"
           loading={loading}
           emptyText="Заявок не найдено"
-          onRowClick={(row) => console.log('open family', row.id)}
+          onRowClick={(row) => setSelected(row)}
           onRowDelete={(row) => console.log('delete family', row.id)}
-          onRowEdit={(row) => console.log('edit family', row.id)}
+          onRowEdit={(row) => setSelected(row)}
         />
       </div>
+
+      {selected && (
+        <FamilyDrawer
+          family={selected}
+          onClose={() => setSelected(null)}
+        />
+      )}
 
     </div>
   );
