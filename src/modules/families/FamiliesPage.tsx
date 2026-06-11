@@ -8,11 +8,11 @@ import StatusBadge from '../../core/cards/StatusBadge';
 import { Search, Plus, RefreshCw } from 'lucide-react';
 
 const SHORT_SCHOOL: Record<string, string> = {
-  KINGS:   'Kings',   LIGHT:   'Light',  BILIM:  'Bilim',
-  AES:     'AES',     KAS:     'KAS',    EPSILON:'Eps',
-  GENIUS:  'Genius',  GENIUS4: 'Gen4',   NOVA:   'Nova',
-  INDIGO:  'Indigo',  ERUDIT:  'Erudit', TENSAY: 'Tensay',
-  EDISON:  'Edison',
+  KINGS:   'Kings',   LIGHT:   'Light',  BILIM:   'Bilim',
+  AES:     'AES',     KAS:     'KAS',    EPSILON: 'Eps',
+  GENIUS:  'Genius',  GENIUS4: 'Gen4',   NOVA:    'Nova',
+  INDIGO:  'Indigo',  ERUDIT:  'Erudit', TENSAY:  'Tensay',
+  TENSAI:  'Tensay',  EDISON:  'Edison',
 };
 
 const ZONE_STYLE: Record<string, { bg: string; color: string }> = {
@@ -22,9 +22,13 @@ const ZONE_STYLE: Record<string, { bg: string; color: string }> = {
 };
 
 const VT_LABEL: Record<string, string> = {
-  microbus: 'Микроавтобус',
-  minivan:  'Минивэн',
-  sedan:    'Седан',
+  microbus:    'Микроавтобус',
+  bus:         'Микроавтобус',
+  minibus:     'Микроавтобус',
+  'mini-bus':  'Микроавтобус',
+  minivan:     'Минивэн',
+  sedan:       'Седан',
+  car:         'Седан',
 };
 
 export default function FamiliesPage() {
