@@ -1,33 +1,27 @@
 // supabase/functions/sync-google-sheets/index.ts
-// Синхронизация новых заявок из Google Таблицы → Supabase
+// Синхронизация из Google Таблицы → Supabase
 //
-// Деплой: supabase functions deploy sync-google-sheets
-// Cron (каждые 30 минут): "*/30 * * * *"
-//   supabase functions schedule sync-google-sheets --cron "*/30 * * * *"
+// ЛОГИКА:
+//   Один родитель может занимать несколько строк (по одной на каждого ребёнка).
+//   Ключ уникальности семьи: phone + school_code
+//   Алгоритм:
+//     1. Сгруппировать строки таблицы по (phone + school_code) → получаем семьи с детьми
+//     2. Для каждой семьи: если уже есть в Supabase — добавить только новых детей
+//                          если нет — создать семью + всех детей + начисления
 //
-// Переменные окружения (задать в Supabase Dashboard → Settings → Edge Functions):
-//   GOOGLE_SHEET_ID      — ID таблицы из URL
-//   GOOGLE_API_KEY       — API ключ Google (или GOOGLE_SERVICE_ACCOUNT_JSON для сервисного аккаунта)
-//
-// Как получить GOOGLE_API_KEY:
-//   1. console.cloud.google.com → APIs → Google Sheets API → включить
-//   2. Credentials → Create API Key
-//   3. Таблицу открыть всем (Поделиться → Все у кого есть ссылка → Просмотр)
-//
-// Формат Google Таблицы (первая строка — заголовки):
-//   A: parent_name  B: phone  C: phone_telegram  D: school_code  E: zone
-//   F: vehicle_type G: full_address  H: distance_km  I: child_name
-//   J: child_class  K: comment  L: status (оставить пустым — будет 'new')
+// Формат Google Таблицы (лист "Заявки", 1-я строка — заголовки):
+//   A: Родитель  B: Телефон  C: Telegram  D: Школа  E: Зона  F: ТС
+//   G: Адрес     H: Км       I: Ребёнок   J: Класс  K: Комментарий
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_URL      = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const SHEET_ID = Deno.env.get('GOOGLE_SHEET_ID')!;
-const API_KEY  = Deno.env.get('GOOGLE_API_KEY')!;
+const SHEET_ID          = Deno.env.get('GOOGLE_SHEET_ID')!;
+const API_KEY           = Deno.env.get('GOOGLE_API_KEY')!;
+const SHEET_RANGE       = 'Заявки!A2:K';
 
-// Диапазон — лист "Заявки", строки 2+ (без заголовка)
-const SHEET_RANGE = 'Заявки!A2:M';
+// ─── Тарифы ──────────────────────────────────────────────────────────────────
 
 const PRICE_RULES: Record<string, { zone1: number; zone2: number; zone3: number | null }> = {
   KINGS:   { zone1: 5000, zone2: 5500, zone3: 6000 },
@@ -55,34 +49,119 @@ function getPriceByZone(schoolCode: string, zone: number, vehicleType: string): 
   return rule.zone3 ?? rule.zone2;
 }
 
-// Нормализация кода школы (на случай если пишут по-разному)
+// Цена семьи с учётом скидки 5% на 2-го и далее
+function getFamilyPrice(children: Array<{ school_code: string; zone: number; vehicle_type: string }>): number {
+  return children.reduce((sum, kid, index) => {
+    const base = getPriceByZone(kid.school_code, kid.zone, kid.vehicle_type);
+    return sum + (index === 0 ? base : Math.round(base * 0.95));
+  }, 0);
+}
+
+// ─── Нормализация ─────────────────────────────────────────────────────────────
+
 function normalizeSchool(raw: string): string {
   const s = raw.trim().toUpperCase();
   const map: Record<string, string> = {
     'ТЕНСАЙ': 'TENSAY', 'TENSAI': 'TENSAY',
     'ГЕНИЙ':  'GENIUS', 'ЭДИСОН': 'EDISON',
     'ЭРУДИТ': 'ERUDIT', 'ИНДИГО': 'INDIGO',
-    'НОВАЯ':  'NOVA',   'БИИМ':   'BILIM',
+    'НОВАЯ':  'NOVA',   'БИЛИМ':  'BILIM',
   };
   return map[s] ?? s;
 }
 
-// Нормализация типа ТС
 function normalizeVehicle(raw: string): string {
   const s = raw.trim().toLowerCase();
-  if (['минивэн', 'minivan', 'мини-вэн'].includes(s)) return 'minivan';
+  if (['минивэн', 'minivan', 'мини-вэн', 'мини вэн'].includes(s)) return 'minivan';
   if (['седан', 'sedan', 'car'].includes(s)) return 'sedan';
   return 'microbus';
 }
 
-// Нормализация зоны (A/B/C или 1/2/3)
 function normalizeZone(raw: string): number {
   const s = raw.trim().toUpperCase();
-  if (s === 'A' || s === '1') return 1;
-  if (s === 'B' || s === '2') return 2;
-  if (s === 'C' || s === '3') return 3;
+  if (s === 'A' || s === 'А' || s === '1') return 1; // А — кирилица тоже
+  if (s === 'B' || s === 'В' || s === '2') return 2;
+  if (s === 'C' || s === 'С' || s === '3') return 3;
   return 1;
 }
+
+function normalizePhone(raw: string): string {
+  return raw.trim().replace(/[\s\-\(\)]/g, '');
+}
+
+// ─── Структуры ───────────────────────────────────────────────────────────────
+
+interface SheetChild {
+  childName: string;
+  childClass: string;
+  zone: number;
+  vehicleType: string;
+  schoolCode: string;
+}
+
+interface SheetFamily {
+  phone: string;
+  schoolCode: string;
+  parentName: string;
+  telegram: string;
+  address: string;
+  distanceKm: number | null;
+  comment: string;
+  zone: number;         // зона семьи (по первой строке)
+  vehicleType: string;  // ТС семьи (по первой строке)
+  children: SheetChild[];
+}
+
+// ─── Парсинг таблицы ─────────────────────────────────────────────────────────
+
+function parseSheetRows(rows: string[][]): Map<string, SheetFamily> {
+  // Ключ: phone__schoolCode
+  const families = new Map<string, SheetFamily>();
+
+  for (const row of rows) {
+    if (!row[0] && !row[1]) continue; // пустая строка
+
+    const parentName = row[0]?.trim() ?? '';
+    const phone      = normalizePhone(row[1] ?? '');
+    const telegram   = row[2]?.trim() ?? '';
+    const schoolCode = normalizeSchool(row[3] ?? '');
+    const zone       = normalizeZone(row[4] ?? '1');
+    const vehicleType = normalizeVehicle(row[5] ?? 'microbus');
+    const address    = row[6]?.trim() ?? '';
+    const distanceKm = parseFloat(row[7]?.trim() ?? '') || null;
+    const childName  = row[8]?.trim() ?? '';
+    const childClass = row[9]?.trim() ?? '';
+    const comment    = row[10]?.trim() ?? '';
+
+    if (!phone || !schoolCode) continue;
+
+    const key = `${phone}__${schoolCode}`;
+
+    if (!families.has(key)) {
+      // Первая строка этой семьи — берём данные родителя
+      families.set(key, {
+        phone, schoolCode, parentName, telegram,
+        address, distanceKm, comment,
+        zone, vehicleType,
+        children: [],
+      });
+    }
+
+    // Добавляем ребёнка (если указан)
+    if (childName) {
+      const fam = families.get(key)!;
+      // Не дублировать ребёнка если уже есть (на случай повторного запуска)
+      const alreadyInSheet = fam.children.some(c => c.childName === childName);
+      if (!alreadyInSheet) {
+        fam.children.push({ childName, childClass, zone, vehicleType, schoolCode });
+      }
+    }
+  }
+
+  return families;
+}
+
+// ─── Основной обработчик ─────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -96,156 +175,168 @@ Deno.serve(async (req) => {
 
   if (!SHEET_ID || !API_KEY) {
     return Response.json(
-      { ok: false, error: 'GOOGLE_SHEET_ID или GOOGLE_API_KEY не заданы в переменных окружения' },
+      { ok: false, error: 'GOOGLE_SHEET_ID или GOOGLE_API_KEY не заданы' },
       { status: 500 }
     );
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
-  // ── Загружаем данные из Google Sheets ──────────────────────────────────────
+  // 1. Загрузить строки из Google Sheets
   const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(SHEET_RANGE)}?key=${API_KEY}`;
   const sheetRes = await fetch(sheetUrl);
   if (!sheetRes.ok) {
-    const errText = await sheetRes.text();
-    return Response.json({ ok: false, error: `Google Sheets ошибка: ${errText}` }, { status: 500 });
+    return Response.json({ ok: false, error: `Google Sheets: ${await sheetRes.text()}` }, { status: 500 });
   }
   const sheetData = await sheetRes.json();
   const rows: string[][] = sheetData.values ?? [];
 
   if (!rows.length) {
-    return Response.json({ ok: true, message: 'Таблица пустая или нет данных', imported: 0 });
+    return Response.json({ ok: true, message: 'Таблица пустая', imported: 0, updated: 0 });
   }
 
-  // ── Существующие телефоны (чтобы не дублировать) ───────────────────────────
-  const { data: existing } = await supabase
-    .from('families')
-    .select('phone, school_code');
+  // 2. Сгруппировать строки по семьям
+  const sheetFamilies = parseSheetRows(rows);
 
-  const existingKeys = new Set(
-    (existing ?? []).map((f: any) => `${f.phone}__${f.school_code}`)
+  // 3. Загрузить существующие семьи из Supabase (phone + school_code)
+  const { data: existingFamilies } = await supabase
+    .from('families')
+    .select('id, phone, school_code');
+
+  const existingMap = new Map<string, string>(); // key → familyId
+  for (const f of existingFamilies ?? []) {
+    existingMap.set(`${f.phone}__${f.school_code}`, f.id);
+  }
+
+  // 4. Загрузить существующих детей (чтобы не дублировать)
+  const existingFamilyIds = [...existingMap.values()];
+  const { data: existingChildren } = existingFamilyIds.length
+    ? await supabase.from('children').select('family_id, child_name').in('family_id', existingFamilyIds)
+    : { data: [] };
+
+  // Set: familyId__childName
+  const existingChildKeys = new Set(
+    (existingChildren ?? []).map((c: any) => `${c.family_id}__${c.child_name}`)
   );
 
-  let imported = 0;
-  let skipped  = 0;
+  // 5. Обработать каждую семью
+  let familiesCreated  = 0;
+  let childrenAdded    = 0;
+  let familiesUpdated  = 0; // добавили ребёнка к существующей семье
   const errors: string[] = [];
 
-  for (let i = 0; i < rows.length; i++) {
-    const row = rows[i];
-    // Пропускаем пустые строки
-    if (!row[0] && !row[1]) continue;
-
+  for (const [key, fam] of sheetFamilies) {
     try {
-      const parentName = row[0]?.trim() ?? '';
-      const phone      = row[1]?.trim().replace(/\s/g, '') ?? '';
-      const telegram   = row[2]?.trim() ?? '';
-      const schoolRaw  = row[3]?.trim() ?? '';
-      const zoneRaw    = row[4]?.trim() ?? '1';
-      const vehicleRaw = row[5]?.trim() ?? 'microbus';
-      const address    = row[6]?.trim() ?? '';
-      const distKm     = parseFloat(row[7]?.trim() ?? '0') || null;
-      const childName  = row[8]?.trim() ?? '';
-      const childClass = row[9]?.trim() ?? '';
-      const comment    = row[10]?.trim() ?? '';
-      // Колонка M (индекс 12) — флаг "уже импортировано" (можно добавить в таблицу)
-      const alreadyImported = row[12]?.trim() === '✓';
+      let familyId = existingMap.get(key);
 
-      if (!phone || !parentName || !schoolRaw) {
-        errors.push(`Строка ${i + 2}: пропущены обязательные поля`);
-        continue;
+      if (!familyId) {
+        // ── Новая семья ────────────────────────────────────────────────────
+
+        // Цена считается по детям (если есть), иначе по данным семьи
+        const kidsForPrice = fam.children.length > 0 ? fam.children : [{
+          school_code: fam.schoolCode,
+          zone: fam.zone,
+          vehicle_type: fam.vehicleType,
+        }];
+        const price = getFamilyPrice(kidsForPrice);
+
+        const { data: newFam, error: famErr } = await supabase
+          .from('families')
+          .insert({
+            parent_name:    fam.parentName,
+            phone:          fam.phone,
+            phone_telegram: fam.telegram || null,
+            school_code:    fam.schoolCode,
+            zone:           fam.zone,
+            vehicle_type:   fam.vehicleType,
+            full_address:   fam.address,
+            distance_km:    fam.distanceKm,
+            monthly_price:  price,
+            comment:        fam.comment || null,
+            status:         'new',
+          })
+          .select('id')
+          .single();
+
+        if (famErr || !newFam) {
+          errors.push(`${fam.phone} (${fam.schoolCode}): ${famErr?.message ?? 'ошибка создания'}`);
+          continue;
+        }
+
+        familyId = newFam.id;
+        existingMap.set(key, familyId);
+        familiesCreated++;
+
+        // Начисления: депозит + сентябрь
+        const basePayment = {
+          family_id: familyId, school_code: fam.schoolCode,
+          amount: price, manager_amount: 0, manager_date: null,
+          has_receipt: false, accountant_status: 'Не оплачено',
+          fact_amount: 0, fact_date: null, is_frozen: false, comment: '',
+        };
+        await supabase.from('payments').insert([
+          { ...basePayment, period_key: 'deposit', month: 0, year: 2026 },
+          { ...basePayment, period_key: '9',       month: 9, year: 2026 },
+        ]);
       }
 
-      if (alreadyImported) {
-        skipped++;
-        continue;
-      }
+      // ── Добавить новых детей (и для новой семьи, и для существующей) ────────
+      let addedForThisFamily = 0;
 
-      const schoolCode  = normalizeSchool(schoolRaw);
-      const vehicleType = normalizeVehicle(vehicleRaw);
-      const zone        = normalizeZone(zoneRaw);
-      const key         = `${phone}__${schoolCode}`;
+      for (const child of fam.children) {
+        const childKey = `${familyId}__${child.childName}`;
+        if (existingChildKeys.has(childKey)) continue; // уже есть
 
-      if (existingKeys.has(key)) {
-        skipped++;
-        continue;
-      }
-
-      const price = getPriceByZone(schoolCode, zone, vehicleType);
-
-      // ── Создаём семью ──────────────────────────────────────────────────────
-      const { data: newFamily, error: famErr } = await supabase
-        .from('families')
-        .insert({
-          parent_name:    parentName,
-          phone,
-          phone_telegram: telegram || null,
-          school_code:    schoolCode,
-          zone,
-          vehicle_type:   vehicleType,
-          full_address:   address,
-          distance_km:    distKm,
-          monthly_price:  price,
-          comment:        comment || null,
-          status:         'new',
-        })
-        .select('id')
-        .single();
-
-      if (famErr || !newFamily) {
-        errors.push(`Строка ${i + 2}: ${famErr?.message ?? 'неизвестная ошибка'}`);
-        continue;
-      }
-
-      const familyId = newFamily.id;
-      existingKeys.add(key);
-
-      // ── Создаём ребёнка (если указан) ──────────────────────────────────────
-      if (childName) {
         await supabase.from('children').insert({
           family_id:         familyId,
-          child_name:        childName,
-          class:             childClass || null,
-          school_code:       schoolCode,
-          zone,
-          vehicle_type:      vehicleType,
+          child_name:        child.childName,
+          class:             child.childClass || null,
+          school_code:       child.schoolCode,
+          zone:              child.zone,
+          vehicle_type:      child.vehicleType,
           self_exit_allowed: false,
         });
+
+        existingChildKeys.add(childKey);
+        childrenAdded++;
+        addedForThisFamily++;
       }
 
-      // ── Создаём начисления (депозит + сентябрь) ────────────────────────────
-      const basePayment = {
-        family_id:         familyId,
-        school_code:       schoolCode,
-        amount:            price,
-        manager_amount:    0,
-        manager_date:      null,
-        has_receipt:       false,
-        accountant_status: 'Не оплачено',
-        fact_amount:       0,
-        fact_date:         null,
-        is_frozen:         false,
-        comment:           '',
-      };
+      // Если добавили ребёнка к уже существующей семье — пересчитать цену
+      if (addedForThisFamily > 0 && familiesCreated === 0) {
+        familiesUpdated++;
+        // Получаем всех детей семьи для пересчёта
+        const { data: allKids } = await supabase
+          .from('children')
+          .select('school_code, zone, vehicle_type')
+          .eq('family_id', familyId);
 
-      await supabase.from('payments').insert([
-        { ...basePayment, period_key: 'deposit', month: 0, year: 2026 },
-        { ...basePayment, period_key: '9',       month: 9, year: 2026 },
-      ]);
+        if (allKids?.length) {
+          const newPrice = getFamilyPrice(allKids);
+          // Обновляем monthly_price семьи
+          await supabase.from('families').update({ monthly_price: newPrice }).eq('id', familyId);
+          // Пересчитываем неоплаченные платежи
+          await supabase
+            .from('payments')
+            .update({ amount: newPrice })
+            .eq('family_id', familyId)
+            .not('accountant_status', 'in', '("Оплачено","Частично оплачено")')
+            .eq('is_frozen', false);
+        }
+      }
 
-      // ── Помечаем строку как импортированную (колонка M) ────────────────────
-      // Это опционально — нужен OAuth токен для записи. Пока просто считаем по флагу.
-
-      imported++;
     } catch (e: any) {
-      errors.push(`Строка ${i + 2}: ${e.message}`);
+      errors.push(`${fam.phone}: ${e.message}`);
     }
   }
 
   return Response.json({
     ok: true,
-    message: `Синхронизация завершена`,
-    imported,
-    skipped,
+    message: 'Синхронизация завершена',
+    familiesCreated,
+    familiesUpdated,
+    childrenAdded,
+    totalInSheet: sheetFamilies.size,
     errors: errors.length ? errors : undefined,
   });
 });
