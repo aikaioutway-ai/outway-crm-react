@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { X, Phone, MapPin, User, Users, Truck, DollarSign, CreditCard, ChevronRight } from 'lucide-react';
-import { Family, Child, Payment, SchoolCode, Zone, VehicleType } from '../../types';
+import { X, User, Users, Truck, CreditCard } from 'lucide-react';
+import { Family, Child, Payment, Zone } from '../../types';
 import { getPriceByZone, getFamilyPrice, calcPenalty, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import StatusBadge from '../../core/cards/StatusBadge';
@@ -32,8 +32,6 @@ const PERIOD_LABEL: Record<string, string> = {
 };
 
 const PERIOD_ORDER = ['deposit','9','10','11','12','1','2','3','4','5'];
-
-function zoneNum(z: Zone): number { return z === 'A' ? 1 : z === 'B' ? 2 : 3; }
 
 // ─── types ───────────────────────────────────────────────────────────────────
 
@@ -92,7 +90,7 @@ export default function FamilyDrawer({ family, onClose }: Props) {
         id: r.id,
         familyId: r.family_id,
         schoolCode: r.school_code,
-        periodKey: (r.month === 0 ? 'deposit' : String(r.month)) as import('../../types').PeriodKey,
+        periodKey: r.month === 0 ? 'deposit' : String(r.month) as any,
         month: r.month,
         year: r.year,
         amount: r.amount ?? 0,
