@@ -92,7 +92,7 @@ export default function FamilyDrawer({ family, onClose }: Props) {
         id: r.id,
         familyId: r.family_id,
         schoolCode: r.school_code,
-        periodKey: r.month === 0 ? 'deposit' : String(r.month),
+        periodKey: (r.month === 0 ? 'deposit' : String(r.month)) as import('../../types').PeriodKey,
         month: r.month,
         year: r.year,
         amount: r.amount ?? 0,
