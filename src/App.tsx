@@ -1,26 +1,35 @@
-import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import React, { useState } from 'react';
+import Sidebar, { NavSection } from './core/bars/Sidebar';
+import FamiliesPage from './modules/families/FamiliesPage';
+import './index.css';
 
-function App() {
+const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
+  finance:   '💳 Модуль Оплаты — в разработке',
+  logistics: '🗺️ Модуль Логистика — в разработке',
+  drivers:   '🚗 Модуль Водители — в разработке',
+  payroll:   '💰 Модуль Зарплата — в разработке',
+  settings:  '⚙️ Настройки — в разработке',
+};
+
+export default function App() {
+  const [section, setSection] = useState<NavSection>('families');
+
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
+    <div style={{ display: 'flex', minHeight: '100vh' }}>
+      <Sidebar active={section} onChange={setSection} />
+
+      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+        {section === 'families' ? (
+          <FamiliesPage />
+        ) : (
+          <div style={{
+            flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: 'var(--text-2)', fontSize: 18,
+          }}>
+            {PLACEHOLDERS[section]}
+          </div>
+        )}
+      </main>
     </div>
   );
 }
-
-export default App;
