@@ -6,6 +6,7 @@ export type SchoolCode =
   | 'ERUDIT' | 'TENSAY' | 'EDISON';
 
 export interface School {
+  short?: string;
   code: SchoolCode;
   name: string;
   zones: 2 | 3;
@@ -119,3 +120,4 @@ export interface User {
   role: UserRole;
   email: string;
 }
+
