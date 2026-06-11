@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, User, Users, Truck, CreditCard, Pencil, Check, MapPin } from 'lucide-react';
 import { Family, Child, Payment } from '../../types';
-import { getPriceByZone, getFamilyPrice, calcPenalty, money } from '../../utils/pricing';
+import { getPriceByZone, calcPenalty, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import StatusBadge from '../../core/cards/StatusBadge';
 
@@ -226,7 +226,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager' }: 
         <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
           {tab === 'info'      && <TabInfo family={family} editMode={editMode} />}
           {tab === 'children'  && <TabChildren children={children} loading={loadingChildren} family={family} editMode={editMode} isAdmin={isAdmin} />}
-          {tab === 'logistics' && <TabLogistics family={family} children={children} loading={loadingChildren} editMode={editMode} />}
+          {tab === 'logistics' && <TabLogistics family={family} children={children} loading={loadingChildren} />}
           {tab === 'finance'   && <TabFinance payments={payments} loading={loadingPayments} family={family} editMode={editMode} isAdmin={isAdmin} />}
         </div>
       </div>
@@ -518,7 +518,7 @@ function TabChildren({ children, loading, family, editMode, isAdmin }: {
 
 // ─── TAB: Логистика ───────────────────────────────────────────────────────────
 
-function TabLogistics({ family, children, loading, editMode }: { family: Family; children: Child[]; loading: boolean; editMode: boolean }) {
+function TabLogistics({ family, children, loading }: { family: Family; children: Child[]; loading: boolean }) {
   if (loading) return <Spinner />;
   return (
     <div>
@@ -657,7 +657,7 @@ function Tag({ label, color }: { label: string; color?: { bg: string; color: str
   );
 }
 
-function PCell({ label, value, bold }: { label: string; value: string; bold?: boolean; highlight?: boolean }) {
+function PCell({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div>
       <div style={{ fontSize: 10, color: 'var(--text-2)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
