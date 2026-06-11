@@ -7,6 +7,26 @@ import SchoolBar from '../../core/bars/SchoolBar';
 import StatusBadge from '../../core/cards/StatusBadge';
 import { Search, Plus, RefreshCw } from 'lucide-react';
 
+const SHORT_SCHOOL: Record<string, string> = {
+  KINGS:   'Kings',   LIGHT:   'Light',  BILIM:  'Bilim',
+  AES:     'AES',     KAS:     'KAS',    EPSILON:'Eps',
+  GENIUS:  'Genius',  GENIUS4: 'Gen4',   NOVA:   'Nova',
+  INDIGO:  'Indigo',  ERUDIT:  'Erudit', TENSAY: 'Tensay',
+  EDISON:  'Edison',
+};
+
+const ZONE_STYLE: Record<string, { bg: string; color: string }> = {
+  A: { bg: '#E8F5E9', color: '#1B5E20' },
+  B: { bg: '#EDE7F6', color: '#311B92' },
+  C: { bg: '#E3F2FD', color: '#0D47A1' },
+};
+
+const VT_LABEL: Record<string, string> = {
+  microbus: 'Микроавтобус',
+  minivan:  'Минивэн',
+  sedan:    'Седан',
+};
+
 export default function FamiliesPage() {
   const [families, setFamilies] = useState<Family[]>([]);
   const [loading, setLoading] = useState(true);
@@ -74,18 +94,6 @@ export default function FamiliesPage() {
     }
   });
 
-  const ZONE_STYLE: Record<string, { bg: string; color: string }> = {
-    A: { bg: '#E8F5E9', color: '#2E7D32' },
-    B: { bg: '#EDE7F6', color: '#4527A0' },
-    C: { bg: '#E3F2FD', color: '#1565C0' },
-  };
-
-  const VT_LABEL: Record<string, string> = {
-    microbus: 'Микроавтобус',
-    minivan:  'Минивэн',
-    sedan:    'Седан',
-  };
-
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
 
@@ -95,10 +103,10 @@ export default function FamiliesPage() {
       {/* Toolbar */}
       <div style={{
         display: 'flex', alignItems: 'center', gap: 12,
-        padding: '10px 20px', background: '#fff',
+        padding: '12px 20px', background: '#fff',
         borderBottom: '1px solid var(--border)',
       }}>
-        <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
           <Search size={14} style={{
             position: 'absolute', left: 10, top: '50%',
             transform: 'translateY(-50%)', color: 'var(--text-2)',
@@ -108,17 +116,17 @@ export default function FamiliesPage() {
             onChange={e => setSearch(e.target.value)}
             placeholder="Имя, телефон, адрес..."
             style={{
-              width: '100%', padding: '7px 10px 7px 30px',
+              width: '100%', padding: '8px 10px 8px 32px',
               border: '1px solid var(--border)', borderRadius: 'var(--radius)',
-              fontSize: 13, background: 'var(--bg)', outline: 'none',
-              color: 'var(--text)',
+              fontSize: 13, fontWeight: 500, background: 'var(--bg)',
+              outline: 'none', color: 'var(--text)',
             }}
           />
         </div>
 
         <div style={{ flex: 1 }} />
 
-        <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
           {filtered.length} семей
         </span>
 
@@ -126,9 +134,9 @@ export default function FamiliesPage() {
           onClick={load}
           style={{
             display: 'flex', alignItems: 'center', gap: 6,
-            padding: '7px 12px', border: '1px solid var(--border)',
+            padding: '8px 14px', border: '1px solid var(--border)',
             borderRadius: 'var(--radius)', background: '#fff',
-            fontSize: 13, color: 'var(--text-2)',
+            fontSize: 13, fontWeight: 500, color: 'var(--text-2)',
           }}
         >
           <RefreshCw size={13} />
@@ -137,9 +145,9 @@ export default function FamiliesPage() {
 
         <button style={{
           display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 16px', border: 'none',
+          padding: '8px 18px', border: 'none',
           borderRadius: 'var(--radius)', background: 'var(--accent)',
-          color: '#fff', fontSize: 13, fontWeight: 600,
+          color: '#fff', fontSize: 13, fontWeight: 700,
         }}>
           <Plus size={14} />
           Новая заявка
@@ -149,11 +157,11 @@ export default function FamiliesPage() {
       {/* Table */}
       <div style={{ flex: 1, overflow: 'auto' }}>
         {loading ? (
-          <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-2)' }}>
+          <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-2)', fontWeight: 500 }}>
             Загрузка...
           </div>
         ) : filtered.length === 0 ? (
-          <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-2)' }}>
+          <div style={{ padding: 60, textAlign: 'center', color: 'var(--text-2)', fontWeight: 500 }}>
             Заявок не найдено
           </div>
         ) : (
@@ -162,10 +170,10 @@ export default function FamiliesPage() {
               <tr style={{ background: '#fff', borderBottom: '2px solid var(--border)' }}>
                 {['Родитель', 'Школа', 'Адрес', 'Зона', 'Транспорт', 'Сумма/мес', 'Статус'].map(h => (
                   <th key={h} style={{
-                    padding: '10px 16px', textAlign: 'left',
+                    padding: '11px 16px', textAlign: 'left',
                     fontSize: 12, color: 'var(--text-2)',
-                    fontWeight: 600, whiteSpace: 'nowrap',
-                    background: '#fff',
+                    fontWeight: 700, whiteSpace: 'nowrap',
+                    background: '#fff', letterSpacing: 0.3,
                   }}>{h}</th>
                 ))}
               </tr>
@@ -183,43 +191,43 @@ export default function FamiliesPage() {
                   onMouseEnter={e => (e.currentTarget.style.background = '#EEF2FF')}
                   onMouseLeave={e => (e.currentTarget.style.background = i % 2 === 0 ? '#fff' : 'var(--bg)')}
                 >
-                  <td style={{ padding: '10px 16px' }}>
-                    <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{f.parentName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{f.phone}</div>
+                  <td style={{ padding: '11px 16px' }}>
+                    <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{f.parentName}</div>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text-2)', marginTop: 2 }}>{f.phone}</div>
                   </td>
-                  <td style={{ padding: '10px 16px', fontSize: 13 }}>
-                    {schoolByCode(f.schoolCode)?.name ?? f.schoolCode}
+                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
+                    {SHORT_SCHOOL[f.schoolCode] ?? f.schoolCode}
                   </td>
-                  <td style={{ padding: '10px 16px', maxWidth: 200 }}>
-                    <div style={{ fontSize: 12, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <td style={{ padding: '11px 16px', maxWidth: 220 }}>
+                    <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {f.fullAddress}
                     </div>
                     {f.distanceKm && (
-                      <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{f.distanceKm} км</div>
+                      <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)', marginTop: 2 }}>{f.distanceKm} км</div>
                     )}
                   </td>
-                  <td style={{ padding: '10px 16px' }}>
+                  <td style={{ padding: '11px 16px' }}>
                     <span style={{
-                      display: 'inline-block', padding: '2px 9px',
-                      borderRadius: 4, fontSize: 12, fontWeight: 700,
+                      display: 'inline-block', padding: '3px 10px',
+                      borderRadius: 6, fontSize: 12, fontWeight: 700,
                       background: ZONE_STYLE[f.zone]?.bg,
                       color: ZONE_STYLE[f.zone]?.color,
                     }}>
                       Зона {f.zone}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 16px', fontSize: 13 }}>
+                  <td style={{ padding: '11px 16px', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
                     {VT_LABEL[f.vehicleType] ?? f.vehicleType}
                     {f.transferNumber && (
-                      <span style={{ fontSize: 11, color: 'var(--text-2)' }}>  №{f.transferNumber}</span>
+                      <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)' }}>  №{f.transferNumber}</span>
                     )}
                   </td>
-                  <td style={{ padding: '10px 16px' }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>
+                  <td style={{ padding: '11px 16px' }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
                       {money(f.monthlyPrice)}
                     </span>
                   </td>
-                  <td style={{ padding: '10px 16px' }}>
+                  <td style={{ padding: '11px 16px' }}>
                     <StatusBadge status={f.status} size="sm" />
                   </td>
                 </tr>
