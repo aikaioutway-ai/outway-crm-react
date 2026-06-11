@@ -7,7 +7,6 @@ import SchoolBar from '../../core/bars/SchoolBar';
 import StatusBadge from '../../core/cards/StatusBadge';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import '../../core/tables/DataTable.css';
-import FamilyDrawer from './FamilyDrawer';
 import { Search, Plus, RefreshCw } from 'lucide-react';
 
 const SHORT_SCHOOL: Record<string, string> = {
@@ -30,25 +29,56 @@ const VT_LABEL: Record<string, string> = {
   minivan: 'Минивэн', sedan: 'Седан', car: 'Седан',
 };
 
-interface FamilyRow extends Family {
+// Одна строка = один ребёнок
+interface ChildRow {
+  rowId: string;          // уникальный id строки (child.id)
+  familyId: string;
+  familyIndex: number;    // индекс семьи (для чередования цвета)
+  isFirstChild: boolean;  // показывать родителя только для первого ребёнка
+  childName: string;
+  childClass: string;
+  // поля семьи
+  parentName: string;
+  phone: string;
+  schoolCode: string;
   schoolLabel: string;
-  zoneLabel: string;
+  fullAddress: string;
+  distanceKm: number | null;
+  zone: string;
+  vehicleType: string;
   vehicleLabel2: string;
+  monthlyPrice: number;
+  status: string;
+  transferNumber: string | null;
 }
 
-const COLUMNS: ColumnDef<FamilyRow>[] = [
+const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'parentName',
     label: 'Родитель',
     type: 'text',
     width: 200,
-    render: (val, row) => (
+    render: (val, row) => row.isFirstChild ? (
       <div style={{ lineHeight: '1.35' }}>
         <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{val}</div>
         <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)' }}>{row.phone}</div>
       </div>
+    ) : (
+      <div style={{ fontSize: 11, color: 'var(--text-2)', paddingLeft: 10 }}>└ семья #{row.familyId.slice(-4)}</div>
     ),
     getValue: (row) => row.parentName,
+  },
+  {
+    key: 'childName',
+    label: 'Ребёнок',
+    type: 'text',
+    width: 160,
+    render: (val, row) => (
+      <div style={{ lineHeight: '1.35' }}>
+        <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{val || '—'}</div>
+        {row.childClass && <div style={{ fontSize: 11, color: 'var(--text-2)' }}>{row.childClass} класс</div>}
+      </div>
+    ),
   },
   {
     key: 'schoolLabel',
@@ -63,36 +93,34 @@ const COLUMNS: ColumnDef<FamilyRow>[] = [
     key: 'fullAddress',
     label: 'Адрес',
     type: 'text',
-    width: 220,
-    render: (val, row) => (
+    width: 200,
+    render: (val, row) => row.isFirstChild ? (
       <div>
-        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 200 }}>
+        <div style={{ fontSize: 12, fontWeight: 500, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 190 }}>
           {val}
         </div>
         {row.distanceKm && (
-          <div style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)', marginTop: 2 }}>
-            {row.distanceKm} км
-          </div>
+          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>{row.distanceKm} км</div>
         )}
       </div>
-    ),
+    ) : <span style={{ color: 'var(--text-2)', fontSize: 12 }}>—</span>,
+    getValue: (row) => row.fullAddress,
   },
   {
-    key: 'zoneLabel',
+    key: 'zone',
     label: 'Зона',
     type: 'select',
     width: 90,
-    render: (_, row) => (
+    render: (val) => (
       <span style={{
         display: 'inline-block', padding: '3px 10px',
         borderRadius: 6, fontSize: 12, fontWeight: 700,
-        background: ZONE_STYLE[row.zone]?.bg,
-        color: ZONE_STYLE[row.zone]?.color,
+        background: ZONE_STYLE[val]?.bg,
+        color: ZONE_STYLE[val]?.color,
       }}>
-        Зона {row.zone}
+        Зона {val}
       </span>
     ),
-    getValue: (row) => row.zone,
   },
   {
     key: 'vehicleLabel2',
@@ -103,9 +131,7 @@ const COLUMNS: ColumnDef<FamilyRow>[] = [
       <div>
         <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{val}</span>
         {row.transferNumber && (
-          <span style={{ fontSize: 11, fontWeight: 500, color: 'var(--text-2)', marginLeft: 4 }}>
-            №{row.transferNumber}
-          </span>
+          <span style={{ fontSize: 11, color: 'var(--text-2)', marginLeft: 4 }}>№{row.transferNumber}</span>
         )}
       </div>
     ),
@@ -116,9 +142,7 @@ const COLUMNS: ColumnDef<FamilyRow>[] = [
     type: 'currency',
     width: 120,
     render: (val) => (
-      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>
-        {money(val)}
-      </span>
+      <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{money(val)}</span>
     ),
   },
   {
@@ -142,94 +166,101 @@ const COLUMNS: ColumnDef<FamilyRow>[] = [
     width: 120,
     visible: false,
   },
-  {
-    key: 'createdAt',
-    label: 'Дата создания',
-    type: 'date',
-    width: 130,
-    visible: false,
-    render: (val) => (
-      <span style={{ fontSize: 12, color: 'var(--text-2)' }}>
-        {val ? new Date(val).toLocaleDateString('ru-RU') : '—'}
-      </span>
-    ),
-  },
 ];
 
 export default function FamiliesPage() {
-  const [families, setFamilies] = useState<FamilyRow[]>([]);
+  const [rows, setRows] = useState<ChildRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [school, setSchool] = useState<SchoolCode | 'ALL'>('ALL');
   const [search, setSearch] = useState('');
-  const [selected, setSelected] = useState<FamilyRow | null>(null);
 
   useEffect(() => { load(); }, []);
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase
-      .from('families')
-      .select('*')
-      .order('created_at', { ascending: false });
 
-    if (data) {
-      const mapped: FamilyRow[] = data.map((r: any) => {
-        const zone = r.zone === 1 ? 'A' : r.zone === 2 ? 'B' : 'C';
-        const vt = r.vehicle_type ?? 'microbus';
-        return {
-          id:             r.id,
-          schoolCode:     r.school_code,
-          parentName:     r.parent_name,
-          phone:          r.phone,
-          phoneTelegram:  r.phone_telegram,
-          secondPhone:    r.second_phone,
-          contactName:    r.contact_name,
-          contactPhone:   r.contact_phone,
-          fullAddress:    r.full_address,
-          latitude:       r.latitude,
-          longitude:      r.longitude,
-          distanceKm:     r.distance_km,
-          zone,
-          vehicleType:    vt,
-          vehicleLabel:   r.vehicle_label,
-          monthlyPrice:   r.monthly_price ?? 0,
-          comment:        r.comment,
-          createdAt:      r.created_at,
-          status:         r.status ?? 'new',
-          transferNumber: r.transfer_number,
-          stopNumber:     r.stop_number,
-          timeMorning:    r.time_morning,
-          timeEvening:    r.time_evening,
-          schoolLabel:    SHORT_SCHOOL[r.school_code] ?? r.school_code,
-          zoneLabel:      `Зона ${zone}`,
-          vehicleLabel2:  VT_LABEL[vt] ?? vt,
-        };
+    // Грузим families + children параллельно
+    const [{ data: famData }, { data: childData }] = await Promise.all([
+      supabase.from('families').select('*').order('created_at', { ascending: false }),
+      supabase.from('children').select('*'),
+    ]);
+
+    if (famData) {
+      const childMap: Record<string, any[]> = {};
+      (childData ?? []).forEach((c: any) => {
+        if (!childMap[c.family_id]) childMap[c.family_id] = [];
+        childMap[c.family_id].push(c);
       });
-      setFamilies(mapped);
+
+      const result: ChildRow[] = [];
+      let familyIndex = 0;
+
+      famData.forEach((f: any) => {
+        const zone = f.zone === 1 ? 'A' : f.zone === 2 ? 'B' : 'C';
+        const vt = f.vehicle_type ?? 'microbus';
+        const children = childMap[f.id] ?? [];
+
+        // Если детей нет — всё равно показываем строку семьи
+        const items = children.length > 0 ? children : [null];
+
+        items.forEach((c: any, idx: number) => {
+          result.push({
+            rowId:          c ? c.id : f.id + '_empty',
+            familyId:       f.id,
+            familyIndex,
+            isFirstChild:   idx === 0,
+            childName:      c?.child_name ?? '',
+            childClass:     c?.class ?? '',
+            parentName:     f.parent_name,
+            phone:          f.phone,
+            schoolCode:     f.school_code,
+            schoolLabel:    SHORT_SCHOOL[f.school_code] ?? f.school_code,
+            fullAddress:    f.full_address,
+            distanceKm:     f.distance_km,
+            zone,
+            vehicleType:    vt,
+            vehicleLabel2:  VT_LABEL[vt] ?? vt,
+            monthlyPrice:   f.monthly_price ?? 0,
+            status:         f.status ?? 'new',
+            transferNumber: f.transfer_number,
+          });
+        });
+
+        familyIndex++;
+      });
+
+      setRows(result);
     }
     setLoading(false);
   }
 
-  const filtered = families.filter(f => {
-    if (school !== 'ALL' && f.schoolCode !== school) return false;
+  // Фильтр по школе + поиск
+  const filtered = rows.filter(r => {
+    if (school !== 'ALL' && r.schoolCode !== school) return false;
     if (search) {
       const q = search.toLowerCase();
       return (
-        f.parentName.toLowerCase().includes(q) ||
-        f.phone.includes(q) ||
-        f.fullAddress.toLowerCase().includes(q)
+        r.parentName.toLowerCase().includes(q) ||
+        r.phone.includes(q) ||
+        r.childName.toLowerCase().includes(q) ||
+        r.fullAddress.toLowerCase().includes(q)
       );
     }
     return true;
   });
 
+  // Badges — уникальные семьи со статусом new
   const badges: Partial<Record<SchoolCode | 'ALL', number>> = {};
-  families.forEach(f => {
-    if (f.status === 'new') {
-      badges[f.schoolCode] = (badges[f.schoolCode] ?? 0) + 1;
+  const seenFamilies = new Set<string>();
+  rows.forEach(r => {
+    if (r.status === 'new' && !seenFamilies.has(r.familyId)) {
+      seenFamilies.add(r.familyId);
+      badges[r.schoolCode as SchoolCode] = (badges[r.schoolCode as SchoolCode] ?? 0) + 1;
       badges['ALL'] = (badges['ALL'] ?? 0) + 1;
     }
   });
+
+  const familyCount = new Set(filtered.map(r => r.familyId)).size;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
@@ -249,7 +280,7 @@ export default function FamiliesPage() {
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
-            placeholder="Имя, телефон, адрес..."
+            placeholder="Имя, телефон, ребёнок, адрес..."
             style={{
               width: '100%', padding: '8px 10px 8px 32px',
               border: '1px solid var(--border)', borderRadius: 'var(--radius)',
@@ -258,54 +289,42 @@ export default function FamiliesPage() {
             }}
           />
         </div>
-
         <div style={{ flex: 1 }} />
-
-        <button
-          onClick={load}
-          style={{
-            display: 'flex', alignItems: 'center', gap: 6,
-            padding: '8px 14px', border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)', background: '#fff',
-            fontSize: 13, fontWeight: 500, color: 'var(--text-2)', cursor: 'pointer',
-          }}
-        >
-          <RefreshCw size={13} />
-          Обновить
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)' }}>
+          {familyCount} семей · {filtered.length} детей
+        </span>
+        <button onClick={load} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '8px 14px', border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)', background: '#fff',
+          fontSize: 13, fontWeight: 500, color: 'var(--text-2)', cursor: 'pointer',
+        }}>
+          <RefreshCw size={13} /> Обновить
         </button>
-
         <button style={{
           display: 'flex', alignItems: 'center', gap: 6,
           padding: '8px 18px', border: 'none',
           borderRadius: 'var(--radius)', background: 'var(--accent)',
           color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer',
         }}>
-          <Plus size={14} />
-          Новая заявка
+          <Plus size={14} /> Новая заявка
         </button>
       </div>
 
       <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
-        <DataTable<FamilyRow>
+        <DataTable<ChildRow>
           columns={COLUMNS}
           data={filtered}
-          rowKey="id"
+          rowKey="rowId"
           storageKey="families_table"
           loading={loading}
           emptyText="Заявок не найдено"
-          onRowClick={(row) => setSelected(row)}
-          onRowDelete={(row) => console.log('delete family', row.id)}
-          onRowEdit={(row) => setSelected(row)}
+          groupColorKey="familyIndex"
+          onRowClick={(row) => console.log('open family', row.familyId)}
+          onRowDelete={(row) => console.log('delete', row.rowId)}
+          onRowEdit={(row) => console.log('edit', row.rowId)}
         />
       </div>
-
-      {selected && (
-        <FamilyDrawer
-          family={selected}
-          onClose={() => setSelected(null)}
-        />
-      )}
-
     </div>
   );
 }
