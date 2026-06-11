@@ -8,23 +8,6 @@ interface SchoolBarProps {
   badges?: Partial<Record<SchoolCode | 'ALL', number>>;
 }
 
-// Цвет точки для каждой школы
-const SCHOOL_COLORS: Record<string, string> = {
-  KINGS:   '#EF4444',
-  LIGHT:   '#F59E0B',
-  BILIM:   '#EF4444',
-  AES:     '#EF4444',
-  KAS:     '#EF4444',
-  EPSILON: '#10B981',
-  GENIUS:  '#10B981',
-  GENIUS4: '#10B981',
-  NOVA:    '#10B981',
-  INDIGO:  '#F59E0B',
-  ERUDIT:  '#EF4444',
-  TENSAY:  '#10B981',
-  EDISON:  '#10B981',
-};
-
 export default function SchoolBar({ active, onChange, badges = {} }: SchoolBarProps) {
   return (
     <div style={{
@@ -38,16 +21,12 @@ export default function SchoolBar({ active, onChange, badges = {} }: SchoolBarPr
       alignItems: 'center',
       flexShrink: 0,
     }}>
-
-      {/* Все школы */}
       <SchoolBtn
         label="Все школы"
         isActive={active === 'ALL'}
         onClick={() => onChange('ALL')}
         badge={badges['ALL']}
-        color={null}
       />
-
       {SCHOOLS.map(s => (
         <SchoolBtn
           key={s.code}
@@ -55,7 +34,6 @@ export default function SchoolBar({ active, onChange, badges = {} }: SchoolBarPr
           isActive={active === s.code}
           onClick={() => onChange(s.code)}
           badge={badges[s.code]}
-          color={SCHOOL_COLORS[s.code] ?? '#6B7280'}
         />
       ))}
     </div>
@@ -67,10 +45,12 @@ interface BtnProps {
   isActive: boolean;
   onClick: () => void;
   badge?: number;
-  color: string | null;
 }
 
-function SchoolBtn({ label, isActive, onClick, badge, color }: BtnProps) {
+function SchoolBtn({ label, isActive, onClick, badge }: BtnProps) {
+  const hasBadge = badge != null && badge > 0;
+  const dotColor = hasBadge ? '#EF4444' : '#10B981';
+
   return (
     <button
       onClick={onClick}
@@ -90,19 +70,20 @@ function SchoolBtn({ label, isActive, onClick, badge, color }: BtnProps) {
         transition: 'all 0.15s',
       }}
     >
-      {color && (
-        <span style={{
-          width: 8,
-          height: 8,
-          borderRadius: '50%',
-          background: isActive ? 'rgba(255,255,255,0.8)' : color,
-          flexShrink: 0,
-        }} />
-      )}
+      {/* dot: green by default, red if badge */}
+      <span style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: isActive ? 'rgba(255,255,255,0.85)' : dotColor,
+        flexShrink: 0,
+      }} />
+
       {label}
-      {badge != null && badge > 0 && (
+
+      {hasBadge && (
         <span style={{
-          background: isActive ? 'rgba(199,210,254,0.4)' : '#EF4444',
+          background: isActive ? 'rgba(255,255,255,0.25)' : '#EF4444',
           color: '#fff',
           borderRadius: 10,
           fontSize: 11,
