@@ -190,20 +190,8 @@ export function DataTable<T extends Record<string, any>>({
 
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
-  const calcBarRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    const wrap = wrapRef.current;
-    const bar  = calcBarRef.current;
-    if (!wrap || !bar) return;
-    const onWrapScroll = () => {
-      // Синхронизируем inner div внутри calc-bar
-      const inner = bar.firstElementChild as HTMLElement | null;
-      if (inner) inner.style.transform = `translateX(-${wrap.scrollLeft}px)`;
-    };
-    wrap.addEventListener('scroll', onWrapScroll);
-    return () => wrap.removeEventListener('scroll', onWrapScroll);
-  }, []);
+
 
   const visibleCols = useMemo(() => cols.filter(c => c.visible !== false), [cols]);
 
@@ -315,10 +303,14 @@ export function DataTable<T extends Record<string, any>>({
     <div className="dt-root">
 
       {/* ── OVERLAY для закрытия панелей кликом (003) ── */}
-      {(showFilterPanel || showSortPanel || showProps) && (
+      {(showFilterPanel || showSortPanel || showProps || rowMenu !== null || colMenu !== null || calcPopup !== null) && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 99 }}
-          onClick={() => { setShowFilterPanel(false); setShowSortPanel(false); setShowProps(false); }}
+          onClick={() => {
+            setShowFilterPanel(false); setShowSortPanel(false);
+            setShowProps(false); setRowMenu(null);
+            setColMenu(null); setCalcPopup(null);
+          }}
         />
       )}
 
@@ -616,11 +608,29 @@ export function DataTable<T extends Record<string, any>>({
                         setColMenu({ key: col.key, x: e.clientX, y: e.clientY });
                       }}
                     >
-                      <div className="dt-th-inner">
+                      <div className="dt-th-inner"
+                        onClick={e => {
+                          e.stopPropagation();
+                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                          setCalcPopup({ key: col.key, x: rect.left, y: rect.bottom + 4 });
+                        }}
+                        title="Нажмите для вычисления"
+                        style={{ cursor: 'pointer', userSelect: 'none', width: '100%' }}
+                      >
                         <span className="dt-th-label">{col.label}</span>
-                        {sortEntry && (
-                          <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>
-                        )}
+                        {sortEntry && <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>}
+                        {calcModes[col.key] && calcModes[col.key] !== 'none' && (() => {
+                          const result = calcColumnValues(processedData, col, calcModes[col.key] as any);
+                          return (
+                            <span style={{
+                              marginLeft: 5, fontSize: 10, fontWeight: 700,
+                              color: 'var(--dt-accent)', background: 'var(--dt-accent-l)',
+                              borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap',
+                            }}>
+                              {result}
+                            </span>
+                          );
+                        })()}
                       </div>
                       <div
                         className="dt-resize-handle"
@@ -683,32 +693,6 @@ export function DataTable<T extends Record<string, any>>({
         )}
       </div>
 
-      {/* ── CALCULATE ROW — синхронизирован с таблицей (002) ── */}
-      <div className="dt-calc-bar" ref={calcBarRef} style={{ overflowX: 'hidden' }}>
-        <div className="dt-calc-bar-inner" style={{ display: 'flex', width: 'max-content' }}>
-          {/* Checkbox col — точная ширина как в th */}
-          <div style={{ width: 36, minWidth: 36, flexShrink: 0, borderRight: '1px solid var(--dt-border)', background: '#F8F9FF' }} />
-          {/* # col */}
-          <div style={{ width: 50, minWidth: 50, flexShrink: 0, borderRight: '1px solid var(--dt-border)', background: '#F8F9FF' }} />
-          {visibleCols.map(col => {
-            const mode = calcModes[col.key] ?? 'none';
-            const result = mode !== 'none' ? calcColumnValues(processedData, col, mode) : '';
-            const w = col.width ?? col.minWidth ?? 140;
-            return (
-              <div key={col.key} className="dt-tf"
-                style={{ width: w, minWidth: w, flexShrink: 0, boxSizing: 'border-box' }}
-                onClick={e => { e.stopPropagation(); setCalcPopup({ key: col.key, x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top }); }}>
-                <div className="dt-calc-cell">
-                  {mode === 'none'
-                    ? <span className="dt-calc-hint">Вычислить</span>
-                    : <><span className="dt-calc-label">{CALC_OPTIONS.find(o => o.value === mode)?.label}</span><span className="dt-calc-value">{result}</span></>
-                  }
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* ── COLUMN CONTEXT MENU ── */}
       {colMenu && (
@@ -758,6 +742,20 @@ export function DataTable<T extends Record<string, any>>({
           }}>
             <span>📋</span> Копировать ID
           </button>
+          {visibleCols.filter(c => c.type === 'currency' || c.type === 'number').length > 0 && (
+            <>
+              <div className="dt-ctx-divider" />
+              <div className="dt-ctx-section">Σ Вычислить</div>
+              {visibleCols.filter(c => c.type === 'currency' || c.type === 'number').map(col => (
+                <button key={col.key} className="dt-ctx-item" onClick={() => {
+                  setCalcPopup({ key: col.key, x: rowMenu.x, y: rowMenu.y });
+                  setRowMenu(null);
+                }}>
+                  <span style={{ fontWeight: 700 }}>Σ</span> {col.label}
+                </button>
+              ))}
+            </>
+          )}
           <div className="dt-ctx-divider" />
           {onRowDelete && (
             <button className="dt-ctx-item dt-ctx-item--danger" onClick={() => { onRowDelete(rowMenu.row); setRowMenu(null); }}>
@@ -769,8 +767,8 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* ── CALC POPUP ── */}
       {calcPopup && (
-        <div className="dt-ctx-menu dt-calc-popup" style={{ left: calcPopup.x, top: calcPopup.y - 260 }} onClick={e => e.stopPropagation()}>
-          <div className="dt-ctx-section">Вычисление</div>
+        <div className="dt-ctx-menu dt-calc-popup" style={{ left: calcPopup.x, top: calcPopup.y, zIndex: 1000 }} onClick={e => e.stopPropagation()}>
+          <div className="dt-ctx-section">{visibleCols.find(c => c.key === calcPopup.key)?.label ?? "Вычисление"}</div>
           {CALC_OPTIONS.map(o => (
             <button key={o.value} className={`dt-ctx-item ${(calcModes[calcPopup.key] ?? 'none') === o.value ? 'dt-ctx-item--active' : ''}`}
               onClick={() => { setCalcModes(prev => ({ ...prev, [calcPopup.key]: o.value })); setCalcPopup(null); }}>
