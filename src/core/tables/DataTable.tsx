@@ -196,7 +196,11 @@ export function DataTable<T extends Record<string, any>>({
     const wrap = wrapRef.current;
     const bar  = calcBarRef.current;
     if (!wrap || !bar) return;
-    const onWrapScroll = () => { bar.scrollLeft = wrap.scrollLeft; };
+    const onWrapScroll = () => {
+      // Синхронизируем inner div внутри calc-bar
+      const inner = bar.firstElementChild as HTMLElement | null;
+      if (inner) inner.style.transform = `translateX(-${wrap.scrollLeft}px)`;
+    };
     wrap.addEventListener('scroll', onWrapScroll);
     return () => wrap.removeEventListener('scroll', onWrapScroll);
   }, []);
@@ -679,17 +683,20 @@ export function DataTable<T extends Record<string, any>>({
         )}
       </div>
 
-      {/* ── CALCULATE ROW (sticky bottom) ── */}
-      <div className="dt-calc-bar" ref={calcBarRef}>
-        <div className="dt-calc-bar-inner">
-          <div className="dt-tf dt-sticky-col" style={{ minWidth: 36 }} />
-          <div className="dt-tf dt-sticky-col dt-sticky-col--2" style={{ minWidth: 50 }} />
+      {/* ── CALCULATE ROW — синхронизирован с таблицей (002) ── */}
+      <div className="dt-calc-bar" ref={calcBarRef} style={{ overflowX: 'hidden' }}>
+        <div className="dt-calc-bar-inner" style={{ display: 'flex', width: 'max-content' }}>
+          {/* Checkbox col — точная ширина как в th */}
+          <div style={{ width: 36, minWidth: 36, flexShrink: 0, borderRight: '1px solid var(--dt-border)', background: '#F8F9FF' }} />
+          {/* # col */}
+          <div style={{ width: 50, minWidth: 50, flexShrink: 0, borderRight: '1px solid var(--dt-border)', background: '#F8F9FF' }} />
           {visibleCols.map(col => {
             const mode = calcModes[col.key] ?? 'none';
             const result = mode !== 'none' ? calcColumnValues(processedData, col, mode) : '';
+            const w = col.width ?? col.minWidth ?? 140;
             return (
               <div key={col.key} className="dt-tf"
-                style={{ width: col.width ?? col.minWidth ?? 140, minWidth: col.minWidth ?? 80, flexShrink: 0 }}
+                style={{ width: w, minWidth: w, flexShrink: 0, boxSizing: 'border-box' }}
                 onClick={e => { e.stopPropagation(); setCalcPopup({ key: col.key, x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top }); }}>
                 <div className="dt-calc-cell">
                   {mode === 'none'
