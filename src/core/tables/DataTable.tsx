@@ -308,7 +308,7 @@ export function DataTable<T extends Record<string, any>>({
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dt-root" onClick={() => { setShowProps(false); setShowFilterPanel(false); setShowSortPanel(false); }}>
+    <div className="dt-root" onClick={(e) => { if ((e.target as HTMLElement).closest('.dt-wrap')) return; setShowProps(false); setShowFilterPanel(false); setShowSortPanel(false); }}>
 
       {/* ── TOOLBAR ── */}
       <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
@@ -528,31 +528,7 @@ export function DataTable<T extends Record<string, any>>({
 
         return (
           <div className="dt-props-panel-v2" onClick={e => e.stopPropagation()}>
-            {/* Chips — видимые колонки сверху */}
-            {shownCols.length > 0 && !propsSearch && (
-              <div className="dt-props-visible-list">
-                <div className="dt-props-visible-title">Отображаемые колонки</div>
-                <div className="dt-props-visible-chips">
-                  {shownCols.map(col => {
-                    const globalIdx = cols.findIndex(c => c.key === col.key);
-                    return (
-                      <div key={col.key} className="dt-props-chip"
-                        draggable
-                        onDragStart={() => onDragStart(globalIdx)}
-                        onDragOver={e => onDragOver(e, globalIdx)}
-                        onDragEnd={onDragEnd}
-                      >
-                        <span className="dt-props-chip-drag">⠿</span>
-                        <span className="dt-props-chip-name">{col.label}</span>
-                        <button className="dt-props-chip-hide"
-                          onClick={e => { e.stopPropagation(); saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c)); }}
-                        >✕</button>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
+            {/* chips removed — 001 */}
 
             {/* Search */}
             <div className="dt-props-search">
