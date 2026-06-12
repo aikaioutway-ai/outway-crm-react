@@ -102,3 +102,26 @@ export function recalcFamilyPayments(payments: Payment[], newAmount: number): Pa
 ---
 
 *OutWay / АйКай Груп | Бишкек | 2026*
+---
+
+## ⚠️ VERCEL / ESLINT — ОБЯЗАТЕЛЬНО ПЕРЕД КАЖДЫМ ПУШЕМ
+
+Vercel деплоит с флагом `CI=true` — это значит **любой ESLint warning = ошибка сборки = деплой упал**.
+
+### Частые причины падения:
+- Импортировал переменную/функцию но не использовал → `no-unused-vars`
+- Объявил `useState` но не использовал одну из переменных → `no-unused-vars`
+- Убрал логику но оставил старый `import` → `no-unused-vars`
+
+### Чеклист перед пушем:
+1. Проверить все `import` — нет ли лишних
+2. Проверить все `useState`, `useRef`, `useEffect` — все ли используются
+3. Если убрал фичу — убрать и все связанные переменные и импорты
+4. Никогда не оставлять `const [foo, setFoo] = useState(...)` если `foo` или `setFoo` нигде не используется
+
+### Примеры ошибок которые уже были:
+```
+'openCats' is assigned a value but never used       @typescript-eslint/no-unused-vars
+'setOpenCats' is assigned a value but never used    @typescript-eslint/no-unused-vars
+'getFamilyPrice' is defined but never used          @typescript-eslint/no-unused-vars
+```
