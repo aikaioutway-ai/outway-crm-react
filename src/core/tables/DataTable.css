@@ -28,6 +28,8 @@
   font-family: var(--dt-font);
   font-size: 13px;
   color: var(--dt-text);
+  flex: 1;
+  min-height: 0;
 }
 
 /* ── TOOLBAR ── */
@@ -189,7 +191,8 @@
 .dt-wrap {
   overflow-x: auto;
   overflow-y: auto;
-  max-height: calc(100vh - 220px);
+  flex: 1;
+  min-height: 0;
   position: relative;
 }
 
