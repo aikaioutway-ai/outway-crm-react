@@ -273,8 +273,23 @@
 
 .dt-cell-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ── FOOTER (calculate) ── */
-.dt-tfoot-row { position: sticky; bottom: 0; z-index: 4; }
+/* ── FOOTER CALC BAR (вынесен из таблицы для надёжного sticky) ── */
+.dt-calc-bar {
+  flex-shrink: 0;
+  border-top: 2px solid var(--dt-border);
+  background: #F8F9FF;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+.dt-calc-bar::-webkit-scrollbar { display: none; }
+.dt-calc-bar-inner {
+  display: flex;
+  align-items: stretch;
+  min-width: max-content;
+}
+/* убираем старый tfoot */
+.dt-tfoot-row { display: none; }
 
 .dt-tf {
   padding: 0;
