@@ -15,6 +15,7 @@ export interface ColumnDef<T = any> {
   visible?: boolean;
   sortable?: boolean;
   filterable?: boolean;
+  category?: string;   // группировка в панели свойств
   render?: (value: any, row: T) => React.ReactNode;
   getValue?: (row: T) => any; // for sort/filter when render is custom
 }
@@ -183,6 +184,8 @@ export function DataTable<T extends Record<string, any>>({
 
   // ── Properties panel ──
   const [showProps, setShowProps] = useState(false);
+  const [propsSearch, setPropsSearch] = useState('');
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set(['all']));
 
   // ── Column calculate ──
   const [calcModes, setCalcModes] = useState<Record<string, CalcMode>>({});
@@ -398,7 +401,15 @@ export function DataTable<T extends Record<string, any>>({
             {sorts.map((s, i) => (
               <div key={s.key + i} className="dt-filter-row">
                 <select className="dt-select" value={s.key} onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
-                  {cols.filter(c => c.sortable !== false).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  {(() => {
+                    const sortable = cols.filter(c => c.sortable !== false);
+                    const cats = [...new Set(sortable.map(c => c.category ?? 'Основные'))];
+                    return cats.map(cat => (
+                      <optgroup key={cat} label={cat}>
+                        {sortable.filter(c => (c.category ?? 'Основные') === cat).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                      </optgroup>
+                    ));
+                  })()}
                 </select>
                 <select className="dt-select dt-select--sm" value={s.dir} onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, dir: e.target.value as 'asc' | 'desc' } : x))}>
                   <option value="asc">А → Я</option>
@@ -427,7 +438,15 @@ export function DataTable<T extends Record<string, any>>({
                 {i === 0 && <span className="dt-conj-label">Где</span>}
                 <select className="dt-select" value={f.key}
                   onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
-                  {cols.filter(c => c.filterable !== false).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                  {(() => {
+                    const filterable = cols.filter(c => c.filterable !== false);
+                    const cats = [...new Set(filterable.map(c => c.category ?? 'Основные'))];
+                    return cats.map(cat => (
+                      <optgroup key={cat} label={cat}>
+                        {filterable.filter(c => (c.category ?? 'Основные') === cat).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                      </optgroup>
+                    ));
+                  })()}
                 </select>
                 <select className="dt-select" value={f.operator}
                   onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, operator: e.target.value as FilterOperator } : x))}>
@@ -453,35 +472,89 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      {/* ── PROPERTIES PANEL ── */}
-      {showProps && (
-        <div className="dt-props-panel" onClick={e => e.stopPropagation()}>
-          <div className="dt-props-header">
-            <span>Свойства</span>
-            <button className="dt-link-btn" onClick={() => saveCols(initialColumns.map(c => ({ ...c, visible: true })))}>Сбросить</button>
+      {/* ── PROPERTIES PANEL (Notion-style) ── */}
+      {showProps && (() => {
+        const TYPE_ICON: Record<string, string> = {
+          text: '𝐓', number: '#', date: '📅', select: '≡', badge: '◉', currency: '₸',
+        };
+        const filtered = cols.filter(c =>
+          !propsSearch || c.label.toLowerCase().includes(propsSearch.toLowerCase())
+        );
+        // группируем по category
+        const catMap: Record<string, typeof cols> = {};
+        filtered.forEach(c => {
+          const cat = c.category ?? 'Основные';
+          if (!catMap[cat]) catMap[cat] = [];
+          catMap[cat].push(c);
+        });
+        const cats = Object.keys(catMap);
+        return (
+          <div className="dt-props-panel-v2" onClick={e => e.stopPropagation()}>
+            {/* Search */}
+            <div className="dt-props-search">
+              <input
+                autoFocus
+                placeholder="Поиск свойств..."
+                value={propsSearch}
+                onChange={e => setPropsSearch(e.target.value)}
+              />
+            </div>
+            {/* Body */}
+            <div className="dt-props-body">
+              {cats.map(cat => {
+                const isOpen = openCats.has(cat) || !!propsSearch;
+                const toggleCat = () => setOpenCats(prev => {
+                  const next = new Set(prev);
+                  next.has(cat) ? next.delete(cat) : next.add(cat);
+                  return next;
+                });
+                return (
+                  <div key={cat} className="dt-props-category">
+                    <div className="dt-props-cat-header" onClick={toggleCat}>
+                      <span>{cat}</span>
+                      <span style={{ color: 'var(--dt-text-2)', fontSize: 11 }}>({catMap[cat].length})</span>
+                      <span className={`dt-props-cat-arrow ${isOpen ? 'dt-props-cat-arrow--open' : ''}`}>▶</span>
+                    </div>
+                    {isOpen && (
+                      <div className="dt-props-cat-items">
+                        {catMap[cat].map(col => {
+                          const globalIdx = cols.findIndex(c => c.key === col.key);
+                          const isVisible = col.visible !== false;
+                          return (
+                            <div
+                              key={col.key}
+                              className={`dt-props-item-v2 ${!isVisible ? 'dt-props-item-v2--hidden' : ''}`}
+                              draggable
+                              onDragStart={() => onDragStart(globalIdx)}
+                              onDragOver={e => onDragOver(e, globalIdx)}
+                              onDragEnd={onDragEnd}
+                              onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: !c.visible } : c))}
+                            >
+                              <span className="dt-props-item-drag">⠿</span>
+                              <span className="dt-props-item-icon">{TYPE_ICON[col.type] ?? '○'}</span>
+                              <span className="dt-props-item-name">{col.label}</span>
+                              <span className="dt-props-item-eye" title={isVisible ? 'Скрыть' : 'Показать'}>
+                                {isVisible ? '👁' : '🙈'}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+            {/* Footer */}
+            <div className="dt-props-footer">
+              <button className="dt-link-btn" onClick={() => {
+                saveCols(initialColumns.map(c => ({ ...c, visible: true })));
+                setPropsSearch('');
+              }}>Показать все</button>
+            </div>
           </div>
-          <div className="dt-props-list">
-            {cols.map((col, i) => (
-              <div
-                key={col.key}
-                className="dt-props-item"
-                draggable
-                onDragStart={() => onDragStart(i)}
-                onDragOver={e => onDragOver(e, i)}
-                onDragEnd={onDragEnd}
-              >
-                <span className="dt-drag-handle">⠿</span>
-                <span className="dt-props-label">{col.label}</span>
-                <label className="dt-toggle">
-                  <input type="checkbox" checked={col.visible !== false}
-                    onChange={() => saveCols(cols.map((c, j) => j === i ? { ...c, visible: !c.visible } : c))} />
-                  <span className="dt-toggle-track" />
-                </label>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── TABLE WRAPPER ── */}
       <div className="dt-wrap">
@@ -587,7 +660,7 @@ export function DataTable<T extends Record<string, any>>({
 
             {/* ── CALCULATE ROW ── */}
             <tfoot>
-              <tr>
+              <tr className="dt-tfoot-row">
                 <td className="dt-tf dt-sticky-col" />
                 <td className="dt-tf dt-sticky-col dt-sticky-col--2" />
                 {visibleCols.map(col => {
