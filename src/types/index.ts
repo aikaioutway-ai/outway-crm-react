@@ -20,6 +20,7 @@ export type Zone = 'A' | 'B' | 'C';
 // ─── СЕМЬЯ ───────────────────────────────────────────────────────────────────
 
 export type FamilyStatus = 'active' | 'inactive' | 'new' | 'rejected';
+export type PaymentMethod = 'наличные' | 'безнал';
 
 export interface Family {
   id: string;
@@ -38,6 +39,8 @@ export interface Family {
   vehicleType: VehicleType;
   vehicleLabel?: string;
   monthlyPrice: number;
+  startDate?: string;        // дата начала трансфера
+  paymentMethod?: PaymentMethod; // наличные | безнал
   comment?: string;
   createdAt: string;
   status: FamilyStatus;
@@ -120,4 +123,3 @@ export interface User {
   role: UserRole;
   email: string;
 }
-
