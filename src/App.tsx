@@ -15,7 +15,7 @@ export default function App() {
   const [section, setSection] = useState<NavSection>('families');
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div style={{ display: 'flex', height: '100%' }}>
       <Sidebar active={section} onChange={setSection} />
 
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
