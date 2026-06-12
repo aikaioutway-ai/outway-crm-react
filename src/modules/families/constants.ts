@@ -1,5 +1,42 @@
 // Один источник правды для отображения школ, зон, транспорта
-// Используется в FamiliesPage, FamilyDrawer и всех дочерних компонентах
+
+// Маппинг branch_name из БД → короткое название в CRM
+export const BRANCH_SHORT: Record<string, string> = {
+  // INDIGO
+  'Индиго Kids':          'ING',
+  'Asylkech Girls School':'ING_A',
+  'Indigo Prime Academy': 'ING_P',
+  'Indigo West':          'ING_W',
+  // GENIUS
+  'Гениум — Чуйкова':    'GEN #2',
+  'Гениум — Авангард':   'GEN #4',
+  'Гениум Чуйкова':      'GEN #2',
+  'Гениум Авангард':     'GEN #4',
+  // Остальные
+  'Эдисон':                        'EDi',
+  'Эрудит-ISIT':                   'ERU',
+  'Тенсай':                        'TIS',
+  'American-European School':      'AES',
+  'Kyrgyz-American School':        'KAS',
+  'Билим Бишкек KG':               'BKG',
+  'Nova International School':     'NOVA',
+  'Эпсилон':                       'EPS',
+  'Light Academy':                 'LA',
+  'Kings International School':    'KNG',
+};
+
+// Группировка branch_name по school_code для SchoolBar
+// ING_A входит в ING (одна трансферная линия)
+export const BRANCH_TO_FILTER: Record<string, string> = {
+  'Индиго Kids':          'ING',
+  'Asylkech Girls School':'ING',   // ING_A едет с ING
+  'Indigo Prime Academy': 'ING_P',
+  'Indigo West':          'ING_W',
+  'Гениум — Чуйкова':    'GEN2',
+  'Гениум — Авангард':   'GEN4',
+  'Гениум Чуйкова':      'GEN2',
+  'Гениум Авангард':     'GEN4',
+};
 
 export const SCHOOL_NAME: Record<string, string> = {
   KINGS: 'Kings', LIGHT: 'Light Academy', BILIM: 'Bilim KG',
@@ -9,10 +46,10 @@ export const SCHOOL_NAME: Record<string, string> = {
 };
 
 export const SCHOOL_SHORT: Record<string, string> = {
-  KINGS: 'Kings', LIGHT: 'Light', BILIM: 'Bilim',
-  AES: 'AES', KAS: 'KAS', EPSILON: 'Eps',
-  GENIUS: 'Genius', GENIUS4: 'Gen4', NOVA: 'Nova',
-  INDIGO: 'Indigo', ERUDIT: 'Erudit', TENSAY: 'Tensay', EDISON: 'Edison',
+  KINGS: 'KNG', LIGHT: 'LA', BILIM: 'BKG',
+  AES: 'AES', KAS: 'KAS', EPSILON: 'EPS',
+  GENIUS: 'GEN #2', GENIUS4: 'GEN #4', NOVA: 'NOVA',
+  INDIGO: 'ING', ERUDIT: 'ERU', TENSAY: 'TIS', EDISON: 'EDi',
 };
 
 export const VT_LABEL: Record<string, string> = {
@@ -48,7 +85,6 @@ export const ALL_PERIODS = [
   { key: '5',       month: 5,  year: 2027, label: 'Май 2027' },
 ];
 
-// Нормализация зоны из БД (1/2/3) в код (A/B/C) и обратно
 export function normalizeZone(z: unknown, fallback = 'A'): string {
   if (z === 'A' || z === 'B' || z === 'C') return z as string;
   const n = Number(z);
@@ -62,9 +98,20 @@ export function zoneToNum(z: string): number {
   return z === 'A' ? 1 : z === 'B' ? 2 : 3;
 }
 
-// Нормализация типа ТС из старых значений БД в единый формат
 export function normalizeVehicle(vt: unknown): string {
   if (!vt) return 'microbus';
   if (vt === 'minibus' || vt === 'bus' || vt === 'mini-bus') return 'microbus';
   return String(vt);
+}
+
+// Получить короткое название по branch_name или school_code
+export function getBranchShort(branchName: string | null, schoolCode: string): string {
+  if (branchName && BRANCH_SHORT[branchName]) return BRANCH_SHORT[branchName];
+  return SCHOOL_SHORT[schoolCode] ?? schoolCode;
+}
+
+// Получить filter-ключ для SchoolBar
+export function getBranchFilter(branchName: string | null, schoolCode: string): string {
+  if (branchName && BRANCH_TO_FILTER[branchName]) return BRANCH_TO_FILTER[branchName];
+  return SCHOOL_SHORT[schoolCode] ?? schoolCode;
 }
