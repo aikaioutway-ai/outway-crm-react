@@ -181,7 +181,7 @@ export function DataTable<T extends Record<string, any>>({
   const [showSortPanel, setShowSortPanel] = useState(false);
   const [showProps, setShowProps] = useState(false);
   const [propsSearch, setPropsSearch] = useState('');
-  const [openCats, setOpenCats] = useState<Set<string>>(new Set<string>());
+  // openCats removed — props panel uses Shown/Hidden sections now
   const [calcModes, setCalcModes] = useState<Record<string, CalcMode>>({});
   const [colMenu, setColMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<{ row: T; x: number; y: number } | null>(null);
