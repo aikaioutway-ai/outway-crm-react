@@ -484,35 +484,59 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      {/* ── PROPERTIES PANEL (Notion-style) ── */}
+      {/* ── PROPERTIES PANEL — Shown/Hidden (006) ── */}
       {showProps && (() => {
         const TYPE_ICON: Record<string, string> = {
-          text: '𝐓', number: '#', date: '📅', select: '≡', badge: '◉', currency: '₸',
+          text: 'Aa', number: '#', date: '▦', select: '≡', badge: '◉', currency: '₸',
         };
-        const filteredCols = cols.filter(c =>
-          !propsSearch || c.label.toLowerCase().includes(propsSearch.toLowerCase())
+        const EyeOpen = () => (
+          <svg className="dt-eye-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/>
+            <circle cx="10" cy="10" r="2.5"/>
+          </svg>
         );
-        const catMap: Record<string, typeof cols> = {};
-        filteredCols.forEach(c => {
-          const cat = c.category ?? 'Основные';
-          if (!catMap[cat]) catMap[cat] = [];
-          catMap[cat].push(c);
-        });
-        const cats = Object.keys(catMap);
-        const visibleList = cols.filter(c => c.visible !== false);
+        const EyeOff = () => (
+          <svg className="dt-eye-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+            <path d="M3 3l14 14M8.5 8.6A2.5 2.5 0 0012.4 12M6.2 6.3C3.9 7.7 2 10 2 10s3.5 6 8 6c1.6 0 3-.5 4.2-1.3M10 4c4.5 0 8 6 8 6s-.9 1.5-2.3 3"/>
+          </svg>
+        );
+
+        const q = propsSearch.toLowerCase();
+        const shownCols  = cols.filter(c => c.visible !== false && (!q || c.label.toLowerCase().includes(q)));
+        const hiddenCols = cols.filter(c => c.visible === false  && (!q || c.label.toLowerCase().includes(q)));
+
+        const ColItem = ({ col, isVisible }: { col: ColumnDef<T>; isVisible: boolean }) => {
+          const globalIdx = cols.findIndex(c => c.key === col.key);
+          return (
+            <div
+              className={`dt-props-item-v2 ${!isVisible ? 'dt-props-item-v2--hidden' : ''}`}
+              draggable
+              onDragStart={() => onDragStart(globalIdx)}
+              onDragOver={e => onDragOver(e, globalIdx)}
+              onDragEnd={onDragEnd}
+              onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: !c.visible } : c))}
+            >
+              <span className="dt-props-item-drag">⠿</span>
+              <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
+                {TYPE_ICON[col.type] ?? '○'}
+              </span>
+              <span className="dt-props-item-name">{col.label}</span>
+              {isVisible ? <EyeOpen /> : <EyeOff />}
+            </div>
+          );
+        };
+
         return (
           <div className="dt-props-panel-v2" onClick={e => e.stopPropagation()}>
-            {/* Visible columns drag list */}
-            {visibleList.length > 0 && (
+            {/* Chips — видимые колонки сверху */}
+            {shownCols.length > 0 && !propsSearch && (
               <div className="dt-props-visible-list">
                 <div className="dt-props-visible-title">Отображаемые колонки</div>
                 <div className="dt-props-visible-chips">
-                  {visibleList.map((col, i) => {
+                  {shownCols.map(col => {
                     const globalIdx = cols.findIndex(c => c.key === col.key);
                     return (
-                      <div
-                        key={col.key}
-                        className="dt-props-chip"
+                      <div key={col.key} className="dt-props-chip"
                         draggable
                         onDragStart={() => onDragStart(globalIdx)}
                         onDragOver={e => onDragOver(e, globalIdx)}
@@ -520,10 +544,8 @@ export function DataTable<T extends Record<string, any>>({
                       >
                         <span className="dt-props-chip-drag">⠿</span>
                         <span className="dt-props-chip-name">{col.label}</span>
-                        <button
-                          className="dt-props-chip-hide"
-                          onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c))}
-                          title="Скрыть"
+                        <button className="dt-props-chip-hide"
+                          onClick={e => { e.stopPropagation(); saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c)); }}
                         >✕</button>
                       </div>
                     );
@@ -534,67 +556,38 @@ export function DataTable<T extends Record<string, any>>({
 
             {/* Search */}
             <div className="dt-props-search">
-              <input
-                autoFocus
-                placeholder="Поиск свойств..."
-                value={propsSearch}
-                onChange={e => setPropsSearch(e.target.value)}
-              />
+              <input autoFocus placeholder="Поиск свойств..."
+                value={propsSearch} onChange={e => setPropsSearch(e.target.value)} />
             </div>
 
-            {/* Body — grouped by category */}
+            {/* Shown in table */}
             <div className="dt-props-body">
-              {cats.map(cat => {
-                const isOpen = openCats.has(cat) || !!propsSearch;
-                const toggleCat = () => setOpenCats(prev => {
-                  const next = new Set(prev);
-                  next.has(cat) ? next.delete(cat) : next.add(cat);
-                  return next;
-                });
-                return (
-                  <div key={cat} className="dt-props-category">
-                    <div className="dt-props-cat-header" onClick={toggleCat}>
-                      <span>{cat}</span>
-                      <span style={{ color: 'var(--dt-text-2)', fontSize: 11 }}>({catMap[cat].length})</span>
-                      <span className={`dt-props-cat-arrow ${isOpen ? 'dt-props-cat-arrow--open' : ''}`}>▶</span>
-                    </div>
-                    {isOpen && (
-                      <div className="dt-props-cat-items">
-                        {catMap[cat].map(col => {
-                          const globalIdx = cols.findIndex(c => c.key === col.key);
-                          const isVisible = col.visible !== false;
-                          return (
-                            <div
-                              key={col.key}
-                              className={`dt-props-item-v2 ${!isVisible ? 'dt-props-item-v2--hidden' : ''}`}
-                              draggable
-                              onDragStart={() => onDragStart(globalIdx)}
-                              onDragOver={e => onDragOver(e, globalIdx)}
-                              onDragEnd={onDragEnd}
-                              onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: !c.visible } : c))}
-                            >
-                              <span className="dt-props-item-drag">⠿</span>
-                              <span className="dt-props-item-icon">{TYPE_ICON[col.type] ?? '○'}</span>
-                              <span className="dt-props-item-name">{col.label}</span>
-                              <span className="dt-props-item-eye" title={isVisible ? 'Скрыть' : 'Показать'}>
-                                {isVisible ? '👁' : '🙈'}
-                              </span>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
+              {shownCols.length > 0 && (
+                <>
+                  <div className="dt-props-section-title">
+                    <span>Shown in table</span>
+                    <button className="dt-props-section-action"
+                      onClick={() => saveCols(cols.map(c => ({ ...c, visible: false })))}>
+                      Hide all
+                    </button>
                   </div>
-                );
-              })}
-            </div>
+                  {shownCols.map(col => <ColItem key={col.key} col={col} isVisible={true} />)}
+                </>
+              )}
 
-            {/* Footer */}
-            <div className="dt-props-footer">
-              <button className="dt-link-btn" onClick={() => {
-                saveCols(initialColumns.map(c => ({ ...c, visible: true })));
-                setPropsSearch('');
-              }}>Показать все</button>
+              {/* Hidden in table */}
+              {hiddenCols.length > 0 && (
+                <>
+                  <div className="dt-props-section-title" style={{ marginTop: 8 }}>
+                    <span>Hidden in table</span>
+                    <button className="dt-props-section-action"
+                      onClick={() => saveCols(cols.map(c => ({ ...c, visible: true })))}>
+                      Show all
+                    </button>
+                  </div>
+                  {hiddenCols.map(col => <ColItem key={col.key} col={col} isVisible={false} />)}
+                </>
+              )}
             </div>
           </div>
         );
