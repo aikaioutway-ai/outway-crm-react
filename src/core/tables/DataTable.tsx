@@ -308,7 +308,15 @@ export function DataTable<T extends Record<string, any>>({
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dt-root" onClick={(e) => { if ((e.target as HTMLElement).closest('.dt-wrap')) return; setShowProps(false); setShowFilterPanel(false); setShowSortPanel(false); }}>
+    <div className="dt-root">
+
+      {/* ── OVERLAY для закрытия панелей кликом (003) ── */}
+      {(showFilterPanel || showSortPanel || showProps) && (
+        <div
+          style={{ position: 'fixed', inset: 0, zIndex: 99 }}
+          onClick={() => { setShowFilterPanel(false); setShowSortPanel(false); setShowProps(false); }}
+        />
+      )}
 
       {/* ── TOOLBAR ── */}
       <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
@@ -378,7 +386,7 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* ── COMPACT FILTER PANEL ── */}
       {showFilterPanel && (
-        <div className="dt-compact-panel" onClick={e => e.stopPropagation()}>
+        <div className="dt-compact-panel" style={{ position: "relative", zIndex: 100 }} onClick={e => e.stopPropagation()}>
           <div className="dt-compact-panel-header">
             <span className="dt-compact-panel-title">Фильтры</span>
             <button className="dt-compact-panel-close" onClick={() => setShowFilterPanel(false)}>✕</button>
@@ -435,7 +443,7 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* ── COMPACT SORT PANEL ── */}
       {showSortPanel && (
-        <div className="dt-compact-panel" onClick={e => e.stopPropagation()}>
+        <div className="dt-compact-panel" style={{ position: "relative", zIndex: 100 }} onClick={e => e.stopPropagation()}>
           <div className="dt-compact-panel-header">
             <span className="dt-compact-panel-title">Сортировка</span>
             <button className="dt-compact-panel-close" onClick={() => setShowSortPanel(false)}>✕</button>
@@ -527,7 +535,7 @@ export function DataTable<T extends Record<string, any>>({
         };
 
         return (
-          <div className="dt-props-panel-v2" onClick={e => e.stopPropagation()}>
+          <div className="dt-props-panel-v2" style={{ zIndex: 100 }} onClick={e => e.stopPropagation()}>
             {/* chips removed — 001 */}
 
             {/* Search */}
