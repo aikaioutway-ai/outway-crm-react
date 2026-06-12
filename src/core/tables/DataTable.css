@@ -620,3 +620,56 @@
 /* ── ROW CTX — payment item ── */
 .dt-ctx-item--payment       { color: #059669; }
 .dt-ctx-item--payment:hover { background: #ECFDF5; }
+
+/* ── 003: COMPACT ROWS — больше строк на экране ── */
+.dt-td {
+  padding: 5px 10px !important;
+}
+.dt-th {
+  padding: 6px 10px !important;
+}
+.dt-td--check,
+.dt-th--check {
+  padding: 5px 8px !important;
+}
+.dt-td--num,
+.dt-th--num {
+  padding: 5px 8px !important;
+}
+
+/* ── 006: SHOWN / HIDDEN панель свойств ── */
+.dt-props-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--dt-text-2);
+}
+.dt-props-section-action {
+  background: none;
+  border: none;
+  color: var(--dt-accent);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.dt-props-section-action:hover { text-decoration: underline; }
+
+.dt-props-item-v2 {
+  padding: 5px 14px 5px 12px !important;
+}
+
+/* SVG eye icon */
+.dt-eye-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--dt-text-2);
+  opacity: 0;
+  transition: opacity 0.1s;
+  flex-shrink: 0;
+}
+.dt-props-item-v2:hover .dt-eye-icon { opacity: 1; }
+.dt-props-item-v2--hidden .dt-eye-icon { opacity: 0.4; }
