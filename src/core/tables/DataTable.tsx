@@ -204,6 +204,18 @@ export function DataTable<T extends Record<string, any>>({
 
   // ── Column resize ──
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
+  const wrapRef   = useRef<HTMLDivElement>(null);
+  const calcBarRef = useRef<HTMLDivElement>(null);
+
+  // Синхронизируем горизонтальный скролл футера с таблицей
+  useEffect(() => {
+    const wrap = wrapRef.current;
+    const bar  = calcBarRef.current;
+    if (!wrap || !bar) return;
+    const onWrapScroll = () => { bar.scrollLeft = wrap.scrollLeft; };
+    wrap.addEventListener('scroll', onWrapScroll);
+    return () => wrap.removeEventListener('scroll', onWrapScroll);
+  }, []);
 
   // ── Visible cols ──
   const visibleCols = useMemo(() => cols.filter(c => c.visible !== false), [cols]);
@@ -557,7 +569,7 @@ export function DataTable<T extends Record<string, any>>({
       })()}
 
       {/* ── TABLE WRAPPER ── */}
-      <div className="dt-wrap">
+      <div className="dt-wrap" ref={wrapRef}>
         {loading ? (
           <div className="dt-skeleton">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -658,30 +670,32 @@ export function DataTable<T extends Record<string, any>>({
               })}
             </tbody>
 
-            {/* ── CALCULATE ROW ── */}
-            <tfoot>
-              <tr className="dt-tfoot-row">
-                <td className="dt-tf dt-sticky-col" />
-                <td className="dt-tf dt-sticky-col dt-sticky-col--2" />
-                {visibleCols.map(col => {
-                  const mode = calcModes[col.key] ?? 'none';
-                  const result = mode !== 'none' ? calcColumnValues(processedData, col, mode) : '';
-                  return (
-                    <td key={col.key} className="dt-tf"
-                      onClick={e => { e.stopPropagation(); setCalcPopup({ key: col.key, x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top }); }}>
-                      <div className="dt-calc-cell">
-                        {mode === 'none'
-                          ? <span className="dt-calc-hint">Вычислить</span>
-                          : <><span className="dt-calc-label">{CALC_OPTIONS.find(o => o.value === mode)?.label}</span><span className="dt-calc-value">{result}</span></>
-                        }
-                      </div>
-                    </td>
-                  );
-                })}
-              </tr>
-            </tfoot>
           </table>
         )}
+      </div>
+
+      {/* ── CALCULATE ROW (вне таблицы — sticky не работает внутри border-collapse) ── */}
+      <div className="dt-calc-bar" ref={calcBarRef}>
+        <div className="dt-calc-bar-inner">
+          <div className="dt-tf dt-sticky-col" style={{ minWidth: 36 }} />
+          <div className="dt-tf dt-sticky-col dt-sticky-col--2" style={{ minWidth: 50 }} />
+          {visibleCols.map(col => {
+            const mode = calcModes[col.key] ?? 'none';
+            const result = mode !== 'none' ? calcColumnValues(processedData, col, mode) : '';
+            return (
+              <div key={col.key} className="dt-tf"
+                style={{ width: col.width ?? col.minWidth ?? 140, minWidth: col.minWidth ?? 80, flexShrink: 0 }}
+                onClick={e => { e.stopPropagation(); setCalcPopup({ key: col.key, x: e.currentTarget.getBoundingClientRect().left, y: e.currentTarget.getBoundingClientRect().top }); }}>
+                <div className="dt-calc-cell">
+                  {mode === 'none'
+                    ? <span className="dt-calc-hint">Вычислить</span>
+                    : <><span className="dt-calc-label">{CALC_OPTIONS.find(o => o.value === mode)?.label}</span><span className="dt-calc-value">{result}</span></>
+                  }
+                </div>
+              </div>
+            );
+          })}
+        </div>
       </div>
 
       {/* ── COLUMN CONTEXT MENU ── */}
