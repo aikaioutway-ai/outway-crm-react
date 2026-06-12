@@ -673,3 +673,27 @@
 }
 .dt-props-item-v2:hover .dt-eye-icon { opacity: 1; }
 .dt-props-item-v2--hidden .dt-eye-icon { opacity: 0.4; }
+
+/* ── 002: CALC BAR — синхронизация с колонками ── */
+.dt-calc-bar {
+  overflow: hidden !important;
+  flex-shrink: 0;
+}
+.dt-calc-bar-inner {
+  display: table !important;
+  width: max-content;
+  min-width: 100%;
+}
+.dt-tf {
+  display: table-cell !important;
+  vertical-align: middle;
+}
+
+/* ── 003: панели поверх overlay ── */
+.dt-compact-panel {
+  position: relative;
+  z-index: 100;
+}
+.dt-props-panel-v2 {
+  z-index: 100 !important;
+}
