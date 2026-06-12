@@ -217,7 +217,7 @@ export default function FamiliesPage() {
         </button>
       </div>
 
-      <div style={{ flex: 1, overflow: 'auto', padding: '16px 20px' }}>
+      <div style={{ flex: 1, overflow: 'hidden', padding: '16px 20px', display: 'flex', flexDirection: 'column' }}>
         <DataTable<ChildRow>
           columns={COLUMNS} data={filtered} rowKey="rowId"
           storageKey="families_table" loading={loading}
