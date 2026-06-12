@@ -185,7 +185,7 @@ export function DataTable<T extends Record<string, any>>({
   // ── Properties panel ──
   const [showProps, setShowProps] = useState(false);
   const [propsSearch, setPropsSearch] = useState('');
-  const [openCats, setOpenCats] = useState<Set<string>>(new Set(['all']));
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set<string>(['all']));
 
   // ── Column calculate ──
   const [calcModes, setCalcModes] = useState<Record<string, CalcMode>>({});
@@ -403,7 +403,7 @@ export function DataTable<T extends Record<string, any>>({
                 <select className="dt-select" value={s.key} onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
                   {(() => {
                     const sortable = cols.filter(c => c.sortable !== false);
-                    const cats = [...new Set(sortable.map(c => c.category ?? 'Основные'))];
+                    const cats = Array.from(new Set(sortable.map(c => c.category ?? 'Основные')));
                     return cats.map(cat => (
                       <optgroup key={cat} label={cat}>
                         {sortable.filter(c => (c.category ?? 'Основные') === cat).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
@@ -440,7 +440,7 @@ export function DataTable<T extends Record<string, any>>({
                   onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
                   {(() => {
                     const filterable = cols.filter(c => c.filterable !== false);
-                    const cats = [...new Set(filterable.map(c => c.category ?? 'Основные'))];
+                    const cats = Array.from(new Set(filterable.map(c => c.category ?? 'Основные')));
                     return cats.map(cat => (
                       <optgroup key={cat} label={cat}>
                         {filterable.filter(c => (c.category ?? 'Основные') === cat).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
