@@ -23,7 +23,7 @@
   flex-direction: column;
   background: var(--dt-white);
   border: 1px solid var(--dt-border);
-  border-radius: var(--dt-radius);
+  border-radius: 0;
   overflow: hidden;
   font-family: var(--dt-font);
   font-size: 13px;
