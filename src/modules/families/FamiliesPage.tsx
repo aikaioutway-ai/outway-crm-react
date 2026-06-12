@@ -198,7 +198,7 @@ export default function FamiliesPage() {
   const familyCount = new Set(filtered.map(r => r.familyId)).size;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
       <SchoolBar active={school} onChange={setSchool} badges={badges} />
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 20px', background: '#fff', borderBottom: '1px solid var(--border)' }}>
