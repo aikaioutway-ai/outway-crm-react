@@ -115,11 +115,11 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'status', label: 'Статус', type: 'badge', category: 'Клиент', width: 100,
     render: (val) => <StatusBadge status={val} size="sm" />,
   },
-  { key: 'schoolCode',      label: 'Код школы',  type: 'text',   category: 'Клиент',  width: 90,  visible: false },
-  { key: 'branchName',      label: 'Филиал',      type: 'text',   category: 'Клиент',  width: 160, visible: false },
-  { key: 'vehicleType',     label: 'Тип ТС',      type: 'select', category: 'Маршрут', width: 100, visible: false },
-  { key: 'transferNumber',  label: '№ Трансфера', type: 'text',   category: 'Маршрут', width: 100, visible: false },
-  { key: 'familyId',        label: 'ID семьи',    type: 'text',   category: 'Система', width: 120, visible: false },
+  { key: 'schoolCode',     label: 'Код школы',   type: 'text',   category: 'Клиент',  width: 90,  visible: false },
+  { key: 'branchName',     label: 'Филиал',       type: 'text',   category: 'Клиент',  width: 160, visible: false },
+  { key: 'vehicleType',    label: 'Тип ТС',       type: 'select', category: 'Маршрут', width: 100, visible: false },
+  { key: 'transferNumber', label: '№ Трансфера',  type: 'text',   category: 'Маршрут', width: 100, visible: false },
+  { key: 'familyId',       label: 'ID семьи',     type: 'text',   category: 'Система', width: 120, visible: false },
 ];
 
 export default function FamiliesPage() {
@@ -149,37 +149,37 @@ export default function FamiliesPage() {
       let familyIndex = 0;
 
       famRes.data.forEach((f: any) => {
-        const zone        = normalizeZone(f.zone, 'A');
-        const vt          = f.vehicle_type ?? 'microbus';
-        const kids        = childMap[f.id] ?? [];
-        const items       = kids.length > 0 ? kids : [null];
-        const branchName  = f.branch_name ?? '';
+        const zone         = normalizeZone(f.zone, 'A');
+        const vt           = f.vehicle_type ?? 'microbus';
+        const kids         = childMap[f.id] ?? [];
+        const items        = kids.length > 0 ? kids : [null];
+        const branchName   = f.branch_name ?? '';
         const branchShort  = getBranchShort(branchName, f.school_code);
         const branchFilter = getBranchFilter(branchName, f.school_code);
         const streetAddr   = stripAddress(f.full_address);
 
         items.forEach((c: any, idx: number) => {
           result.push({
-            rowId:         c ? c.id : f.id + '_empty',
-            familyId:      f.id,
+            rowId:          c ? c.id : f.id + '_empty',
+            familyId:       f.id,
             familyIndex,
-            isFirstChild:  idx === 0,
-            childName:     c?.child_name ?? '',
-            childClass:    c?.class ?? '',
-            parentName:    f.parent_name,
-            phone:         f.phone,
-            schoolCode:    f.school_code,
+            isFirstChild:   idx === 0,
+            childName:      c?.child_name ?? '',
+            childClass:     c?.class ?? '',
+            parentName:     f.parent_name,
+            phone:          f.phone,
+            schoolCode:     f.school_code,
             branchName,
             branchShort,
             branchFilter,
-            streetAddress: streetAddr,
-            distanceKm:    f.distance_km,
+            streetAddress:  streetAddr,
+            distanceKm:     f.distance_km,
             zone,
-            vehicleType:   vt,
-            vehicleLabel:  VT_LABEL[vt] ?? vt,
-            monthlyPrice:  f.monthly_price ?? 0,
-            status:        f.status ?? 'new',
-            transferNumber:f.transfer_number,
+            vehicleType:    vt,
+            vehicleLabel:   VT_LABEL[vt] ?? vt,
+            monthlyPrice:   f.monthly_price ?? 0,
+            status:         f.status ?? 'new',
+            transferNumber: f.transfer_number,
           });
         });
         familyIndex++;
@@ -228,26 +228,30 @@ export default function FamiliesPage() {
   const counts: Record<string, number> = {};
   SCHOOL_TABS.forEach(t => { counts[t.key] = familyByTab[t.key]?.size ?? 0; });
 
-  // Фильтрация
-  const tab = SCHOOL_TABS.find(t => t.key === activeTab);
+  // Фильтрация — ALL показывает всё без фильтра
   const filtered = rows.filter(r => {
-    if (activeTab !== 'ALL' && tab) {
-      if (tab.branches.length > 0) {
-        if (!tab.branches.includes(r.branchName)) return false;
-      } else if (tab.codes.length > 0) {
-        if (['ING','ING_P','ING_W'].includes(activeTab)) {
-          if (r.branchFilter !== activeTab) return false;
-        } else {
-          if (!tab.codes.includes(r.schoolCode)) return false;
+    if (activeTab !== 'ALL') {
+      const tab = SCHOOL_TABS.find(t => t.key === activeTab);
+      if (tab) {
+        if (tab.branches.length > 0) {
+          if (!tab.branches.includes(r.branchName)) return false;
+        } else if (tab.codes.length > 0) {
+          if (['ING', 'ING_P', 'ING_W'].includes(activeTab)) {
+            if (r.branchFilter !== activeTab) return false;
+          } else {
+            if (!tab.codes.includes(r.schoolCode)) return false;
+          }
         }
       }
     }
     if (search) {
       const q = search.toLowerCase();
-      return r.parentName.toLowerCase().includes(q) ||
-             r.phone.includes(q) ||
-             r.childName.toLowerCase().includes(q) ||
-             r.streetAddress.toLowerCase().includes(q);
+      return (
+        r.parentName.toLowerCase().includes(q) ||
+        r.phone.includes(q) ||
+        r.childName.toLowerCase().includes(q) ||
+        r.streetAddress.toLowerCase().includes(q)
+      );
     }
     return true;
   });
@@ -255,13 +259,20 @@ export default function FamiliesPage() {
   const familyCount = new Set(filtered.filter(r => r.isFirstChild).map(r => r.familyId)).size;
   const childCount  = filtered.length;
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+  // Высота тулбара таблицы (Фильтр/Сортировка/Свойства) ≈ 44px
+  // Шапка (поиск) ≈ 52px
+  // Итого отступ сверху для SchoolSidebar = 52px (шапка) + 44px (тулбар) = 96px
+  const HEADER_H  = 52;  // шапка с поиском
+  const TOOLBAR_H = 44;  // тулбар таблицы
 
-      {/* ── ШАПКА — тёмный фон как сайдбар ── */}
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', background: 'var(--bg)' }}>
+
+      {/* ── ШАПКА — тёмный фон ── */}
       <div style={{
         background: '#312E81',
-        padding: '10px 16px',
+        padding: '0 16px',
+        height: HEADER_H,
         display: 'flex',
         alignItems: 'center',
         gap: 12,
@@ -274,10 +285,9 @@ export default function FamiliesPage() {
             placeholder="Имя, телефон, ребёнок, адрес..."
             style={{
               width: '100%', padding: '8px 10px 8px 32px',
-              border: '1px solid rgba(199,210,254,0.3)',
+              border: '1px solid rgba(199,210,254,0.25)',
               borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500,
-              background: 'rgba(255,255,255,0.1)', outline: 'none',
-              color: '#fff',
+              background: 'rgba(255,255,255,0.1)', outline: 'none', color: '#fff',
             }}
           />
         </div>
@@ -286,17 +296,16 @@ export default function FamiliesPage() {
           {familyCount} семей · {childCount} детей
         </span>
         <button onClick={load} style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 12px', borderRadius: 'var(--radius)',
-          border: '1px solid rgba(199,210,254,0.3)',
+          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px',
+          borderRadius: 'var(--radius)', border: '1px solid rgba(199,210,254,0.3)',
           background: 'rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 500,
           color: 'rgba(199,210,254,0.9)', cursor: 'pointer', whiteSpace: 'nowrap',
         }}>
           <RefreshCw size={13} /> Обновить
         </button>
         <button style={{
-          display: 'flex', alignItems: 'center', gap: 6,
-          padding: '7px 16px', border: 'none', borderRadius: 'var(--radius)',
+          display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px',
+          border: 'none', borderRadius: 'var(--radius)',
           background: '#fff', color: '#312E81', fontSize: 13, fontWeight: 700,
           cursor: 'pointer', whiteSpace: 'nowrap',
         }}>
@@ -304,110 +313,117 @@ export default function FamiliesPage() {
         </button>
       </div>
 
-      {/* ── ОСНОВНОЙ КОНТЕНТ: школы + таблица ── */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+      {/* ── КОНТЕНТ: school sidebar + таблица ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 10, padding: '10px 10px 10px 10px' }}>
 
-        {/* ── SCHOOL SIDEBAR ── */}
+        {/* ── SCHOOL SIDEBAR — отдельная карточка ── */}
         <div style={{
-          width: 140,
+          width: 150,
           flexShrink: 0,
           display: 'flex',
           flexDirection: 'column',
-          borderRight: '1px solid var(--border)',
           background: '#fff',
+          borderRadius: 10,
+          border: '1px solid var(--border)',
           overflow: 'hidden',
+          boxShadow: '0 1px 4px rgba(49,46,129,0.06)',
         }}>
-          {/* Заголовок */}
+          {/* Заголовок — высота совпадает с тулбаром таблицы */}
           <div style={{
-            padding: '10px 14px 8px',
-            borderBottom: '1px solid var(--border)',
-            fontSize: 11,
-            fontWeight: 700,
-            color: 'var(--text-2)',
-            textTransform: 'uppercase',
-            letterSpacing: '0.6px',
+            height: TOOLBAR_H,
+            display: 'flex',
+            alignItems: 'center',
+            padding: '0 14px',
+            borderBottom: '2px solid var(--border)',
             flexShrink: 0,
           }}>
-            Филиалы
+            <span style={{
+              fontSize: 12,
+              fontWeight: 800,
+              color: 'var(--accent)',
+              textTransform: 'uppercase',
+              letterSpacing: '0.8px',
+            }}>
+              Филиалы
+            </span>
           </div>
 
-          {/* Список школ */}
+          {/* Список школ — чередующийся фон */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {SCHOOL_TABS.map((tab, idx) => {
               const isActive = activeTab === tab.key;
               const count    = counts[tab.key] ?? 0;
               const badge    = badgeByTab[tab.key] ?? 0;
               const hasBadge = badge > 0;
-              const isAll    = tab.key === 'ALL';
+              const isEven   = idx % 2 === 0;
 
               return (
-                <React.Fragment key={tab.key}>
-                  <button
-                    onClick={() => setActiveTab(tab.key)}
-                    style={{
-                      width: '100%',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      padding: '8px 12px',
-                      border: 'none',
-                      borderLeft: isActive ? '3px solid #312E81' : '3px solid transparent',
-                      background: isActive ? '#EEF2FF' : 'transparent',
-                      cursor: 'pointer',
-                      transition: 'all 0.12s',
-                    }}
-                  >
-                    {/* Круглая точка статуса */}
-                    <span style={{
-                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
-                      background: hasBadge ? '#EF4444' : '#10B981',
-                    }} />
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  style={{
+                    width: '100%',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '9px 12px',
+                    border: 'none',
+                    borderLeft: isActive ? '3px solid #312E81' : '3px solid transparent',
+                    // Чередующийся фон
+                    background: isActive
+                      ? '#EEF2FF'
+                      : isEven ? '#fff' : '#F8F9FF',
+                    cursor: 'pointer',
+                    transition: 'all 0.12s',
+                  }}
+                >
+                  {/* Круглая точка */}
+                  <span style={{
+                    width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                    background: hasBadge ? '#EF4444' : '#10B981',
+                  }} />
 
+                  <span style={{
+                    flex: 1, fontSize: 13,
+                    fontWeight: isActive ? 700 : 500,
+                    color: isActive ? '#312E81' : 'var(--text)',
+                    textAlign: 'left',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                  }}>
+                    {tab.label}
+                  </span>
+
+                  {count > 0 && (
                     <span style={{
-                      flex: 1,
-                      fontSize: 13,
-                      fontWeight: isActive ? 700 : 500,
-                      color: isActive ? '#312E81' : 'var(--text)',
-                      textAlign: 'left',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
+                      fontSize: 11, fontWeight: 700, flexShrink: 0,
+                      color: hasBadge ? '#fff' : (isActive ? '#312E81' : 'var(--text-2)'),
+                      background: hasBadge ? '#EF4444' : (isActive ? '#C7D2FE' : 'transparent'),
+                      borderRadius: 10,
+                      padding: (hasBadge || isActive) ? '1px 6px' : '0',
+                      minWidth: 20, textAlign: 'center',
                     }}>
-                      {tab.label}
+                      {count}
                     </span>
-
-                    {/* Счётчик */}
-                    {count > 0 && (
-                      <span style={{
-                        fontSize: 11, fontWeight: 700, flexShrink: 0,
-                        color: hasBadge ? '#fff' : (isActive ? '#312E81' : 'var(--text-2)'),
-                        background: hasBadge ? '#EF4444' : (isActive ? '#C7D2FE' : 'transparent'),
-                        borderRadius: 10,
-                        padding: hasBadge || isActive ? '1px 6px' : '0',
-                        minWidth: 20,
-                        textAlign: 'center',
-                      }}>
-                        {count}
-                      </span>
-                    )}
-                  </button>
-
-                  {/* Разделитель */}
-                  {idx < SCHOOL_TABS.length - 1 && (
-                    <div style={{
-                      height: 1,
-                      background: 'var(--border)',
-                      margin: isAll ? '0' : '0 10px',
-                    }} />
                   )}
-                </React.Fragment>
+                </button>
               );
             })}
           </div>
         </div>
 
-        {/* ── ТАБЛИЦА ── */}
-        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '10px 14px' }}>
+        {/* ── ТАБЛИЦА — отдельная карточка ── */}
+        <div style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+          borderRadius: 10,
+          border: '1px solid var(--border)',
+          boxShadow: '0 1px 4px rgba(49,46,129,0.06)',
+          background: '#fff',
+        }}>
           <DataTable<ChildRow>
             columns={COLUMNS}
             data={filtered}
