@@ -224,7 +224,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 9px 10px;
+  padding: 6px 10px;
 }
 .dt-th-label        { flex: 1; overflow: hidden; text-overflow: ellipsis; }
 .dt-sort-indicator  { color: var(--dt-accent); font-size: 11px; font-weight: 900; }
@@ -255,7 +255,7 @@
 
 /* ── CELLS ── */
 .dt-td {
-  padding: 8px 10px;
+  padding: 5px 10px;
   border-right: 1px solid var(--dt-border);
   vertical-align: middle;
   overflow: hidden;
@@ -263,7 +263,7 @@
   white-space: nowrap;
   max-width: 0;
 }
-.dt-td--check { width: 36px; text-align: center; padding: 8px 0; }
+.dt-td--check { width: 36px; text-align: center; padding: 5px 0; }
 .dt-td--num   { width: 44px; text-align: center; font-weight: 700; color: var(--dt-text-2); font-size: 11px; }
 
 /* Sticky td */
@@ -293,7 +293,6 @@
 
 .dt-tf {
   padding: 0;
-  border-top: 2px solid var(--dt-border);
   border-right: 1px solid var(--dt-border);
   background: #F8F9FF;
   cursor: pointer;
