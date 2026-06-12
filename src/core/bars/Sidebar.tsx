@@ -34,23 +34,59 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
       position: 'relative',
     }}>
 
-      {/* Logo */}
+      {/* Logo + Toggle в одной строке */}
       <div style={{
-        padding: collapsed ? '20px 0 18px' : '20px 20px 18px',
+        padding: collapsed ? '14px 0' : '14px 20px',
         borderBottom: '1px solid rgba(199,210,254,0.2)',
         display: 'flex',
         alignItems: 'center',
         justifyContent: collapsed ? 'center' : 'space-between',
         gap: 8,
+        minHeight: 56,
       }}>
-        {!collapsed && (
-          <div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: '#fff', letterSpacing: 1 }}>OutWay</div>
-            <div style={{ fontSize: 11, color: 'var(--accent-l)', marginTop: 2 }}>CRM · Школьный трансфер</div>
-          </div>
-        )}
-        {collapsed && (
-          <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>OW</div>
+        {!collapsed ? (
+          <>
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: 1 }}>OutWay</div>
+              <div style={{ fontSize: 10, color: 'var(--accent-l)', marginTop: 1 }}>CRM · Школьный трансфер</div>
+            </div>
+            {/* 005 — кнопка сворачивания вверху */}
+            <button
+              onClick={() => setCollapsed(true)}
+              title="Свернуть"
+              style={{
+                background: 'rgba(199,210,254,0.12)',
+                border: 'none',
+                borderRadius: 6,
+                color: 'rgba(199,210,254,0.8)',
+                cursor: 'pointer',
+                padding: '5px 7px',
+                display: 'flex',
+                alignItems: 'center',
+                transition: 'all 0.15s',
+              }}
+            >
+              <ChevronLeft size={16} />
+            </button>
+          </>
+        ) : (
+          <button
+            onClick={() => setCollapsed(false)}
+            title="Развернуть"
+            style={{
+              background: 'rgba(199,210,254,0.12)',
+              border: 'none',
+              borderRadius: 6,
+              color: 'rgba(199,210,254,0.8)',
+              cursor: 'pointer',
+              padding: '5px 7px',
+              display: 'flex',
+              alignItems: 'center',
+              transition: 'all 0.15s',
+            }}
+          >
+            <ChevronRight size={16} />
+          </button>
         )}
       </div>
 
@@ -90,28 +126,6 @@ export default function Sidebar({ active, onChange }: SidebarProps) {
           );
         })}
       </nav>
-
-      {/* Toggle button */}
-      <button
-        onClick={() => setCollapsed(!collapsed)}
-        style={{
-          margin: '8px 6px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 6,
-          padding: '8px',
-          borderRadius: 'var(--radius)',
-          border: 'none',
-          background: 'rgba(199,210,254,0.12)',
-          color: 'rgba(199,210,254,0.8)',
-          cursor: 'pointer',
-          fontSize: 12,
-          transition: 'all 0.15s',
-        }}
-      >
-        {collapsed ? <ChevronRight size={16} /> : <><ChevronLeft size={16} /><span>Свернуть</span></>}
-      </button>
 
       {/* Bottom */}
       {!collapsed && (
