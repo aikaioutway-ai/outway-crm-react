@@ -369,6 +369,8 @@ export default function FamiliesPage() {
         <FamilyDrawer
           family={selectedFamily}
           onClose={() => setSelectedFamily(null)}
+          userRole="admin"
+          userName="Кайрат"
         />
       )}
     </div>
