@@ -800,7 +800,7 @@ function TabFinance({ payments, loading, family, editMode, isAdmin, isCashier, o
   const totalPaid    = monthly.reduce((s,p) => s + p.factAmount, 0);
   const totalDebt    = Math.max(0, totalCharged - totalPaid);
 
-  const existingKeys = new Set(payments.map(p => p.periodKey));
+  const existingKeys = new Set<string>(payments.map(p => p.periodKey));
   const availablePeriods = ALL_PERIODS.filter(p => !existingKeys.has(p.key));
 
   function handleAdd() {
