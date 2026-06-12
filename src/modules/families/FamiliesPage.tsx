@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '../../services/supabase';
 import { SchoolCode, Family } from '../../types';
-import { money, getFamilyPrice } from '../../utils/pricing';
+import { money } from '../../utils/pricing';
 import { SCHOOL_SHORT, VT_LABEL, ZONE_COLOR, normalizeZone } from './constants';
 import FamilyDrawer from './FamilyDrawer';
 import SchoolBar from '../../core/bars/SchoolBar';
