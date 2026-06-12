@@ -132,12 +132,14 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   }
 
   async function loadAudit() {
-    const { data } = await supabase
+    try {
+    const { data, error } = await supabase
       .from('audit_log')
       .select('*')
       .eq('family_id', family.id)
       .order('created_at', { ascending: false })
       .limit(50);
+    if (error) return; // таблица может ещё не существовать
     if (data) {
       setAudit(data.map((r: any) => ({
         id: String(r.id), familyId: String(r.family_id),
@@ -146,13 +148,16 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         createdAt: r.created_at ?? '',
       })));
     }
+    } catch { /* таблица не создана */ }
   }
 
   async function addAudit(action: string, field: string, oldVal: string, newVal: string) {
-    await supabase.from('audit_log').insert({
-      family_id: family.id, user_name: userName,
-      action, field, old_value: oldVal, new_value: newVal,
-    });
+    try {
+      await supabase.from('audit_log').insert({
+        family_id: family.id, user_name: userName,
+        action, field, old_value: oldVal, new_value: newVal,
+      });
+    } catch { /* таблица не создана */ }
   }
 
   // header debt
