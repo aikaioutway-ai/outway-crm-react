@@ -10,14 +10,14 @@ export interface ColumnDef<T = any> {
   key: string;
   label: string;
   type: ColumnType;
-  width?: number;          // px
+  width?: number;
   minWidth?: number;
   visible?: boolean;
   sortable?: boolean;
   filterable?: boolean;
-  category?: string;   // группировка в панели свойств
+  category?: string;
   render?: (value: any, row: T) => React.ReactNode;
-  getValue?: (row: T) => any; // for sort/filter when render is custom
+  getValue?: (row: T) => any;
 }
 
 export interface SortConfig {
@@ -42,14 +42,16 @@ export type CalcMode = 'none' | 'count' | 'sum' | 'avg' | 'min' | 'max' | 'empty
 export interface DataTableProps<T = any> {
   columns: ColumnDef<T>[];
   data: T[];
-  rowKey: keyof T;                         // unique id field
+  rowKey: keyof T;
   onRowClick?: (row: T) => void;
   onRowDelete?: (row: T) => void;
   onRowEdit?: (row: T) => void;
-  storageKey?: string;                     // localStorage key for preferences
+  onRowPayment?: (row: T) => void;
+  storageKey?: string;
   loading?: boolean;
   emptyText?: string;
-  groupColorKey?: string;  // field name whose value alternates row background color
+  groupColorKey?: string;
+  calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -64,7 +66,6 @@ function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined)
   const raw = getCellValue(row, col);
   const val = raw == null ? '' : String(raw).toLowerCase();
   const target = rule.value.toLowerCase();
-
   switch (rule.operator) {
     case 'eq':          return val === target;
     case 'neq':         return val !== target;
@@ -119,8 +120,6 @@ const CALC_OPTIONS: { value: CalcMode; label: string }[] = [
   { value: 'not_empty', label: 'Заполненных' },
 ];
 
-// ─── DRAG & DROP for Properties ───────────────────────────────────────────────
-
 function useDragList<T>(list: T[], onChange: (next: T[]) => void) {
   const dragIdx = useRef<number | null>(null);
   const onDragStart = (i: number) => { dragIdx.current = i; };
@@ -146,6 +145,7 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   onRowDelete,
   onRowEdit,
+  onRowPayment,
   storageKey = 'dt_prefs',
   loading = false,
   emptyText = 'Нет данных',
@@ -175,39 +175,23 @@ export function DataTable<T extends Record<string, any>>({
     ));
   }, [storageKey]);
 
-  // ── Sort (multi-level) ──
   const [sorts, setSorts] = useState<SortConfig[]>([]);
-
-  // ── Filters ──
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
-
-  // ── Properties panel ──
+  const [showSortPanel, setShowSortPanel] = useState(false);
   const [showProps, setShowProps] = useState(false);
   const [propsSearch, setPropsSearch] = useState('');
-  const [openCats, setOpenCats] = useState<Set<string>>(new Set<string>(['all']));
-
-  // ── Column calculate ──
+  const [openCats, setOpenCats] = useState<Set<string>>(new Set<string>());
   const [calcModes, setCalcModes] = useState<Record<string, CalcMode>>({});
-
-  // ── Column context menu ──
   const [colMenu, setColMenu] = useState<{ key: string; x: number; y: number } | null>(null);
-
-  // ── Row context menu ──
   const [rowMenu, setRowMenu] = useState<{ row: T; x: number; y: number } | null>(null);
-
-  // ── Calc popup ──
   const [calcPopup, setCalcPopup] = useState<{ key: string; x: number; y: number } | null>(null);
-
-  // ── Selected rows (bulk) ──
   const [selected, setSelected] = useState<Set<any>>(new Set());
 
-  // ── Column resize ──
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
   const calcBarRef = useRef<HTMLDivElement>(null);
 
-  // Синхронизируем горизонтальный скролл футера с таблицей
   useEffect(() => {
     const wrap = wrapRef.current;
     const bar  = calcBarRef.current;
@@ -217,14 +201,10 @@ export function DataTable<T extends Record<string, any>>({
     return () => wrap.removeEventListener('scroll', onWrapScroll);
   }, []);
 
-  // ── Visible cols ──
   const visibleCols = useMemo(() => cols.filter(c => c.visible !== false), [cols]);
 
-  // ── Filtered + sorted data ──
   const processedData = useMemo(() => {
     let rows = [...data];
-
-    // Apply filters
     if (filters.length > 0) {
       rows = rows.filter(row => {
         let result = true;
@@ -238,8 +218,6 @@ export function DataTable<T extends Record<string, any>>({
         return result;
       });
     }
-
-    // Apply sorts (multi-level, last sort wins first)
     if (sorts.length > 0) {
       rows.sort((a, b) => {
         for (const s of sorts) {
@@ -256,18 +234,15 @@ export function DataTable<T extends Record<string, any>>({
         return 0;
       });
     }
-
     return rows;
   }, [data, filters, sorts, cols]);
 
-  // ── Close menus on outside click ──
   useEffect(() => {
     const handler = () => { setColMenu(null); setRowMenu(null); setCalcPopup(null); };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
 
-  // ── Column resize mouse events ──
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
       if (!resizeRef.current) return;
@@ -281,10 +256,8 @@ export function DataTable<T extends Record<string, any>>({
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
   }, [cols, saveCols]);
 
-  // ── Drag cols in properties ──
   const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, saveCols);
 
-  // ── Helpers ──
   const toggleSort = (key: string, dir: 'asc' | 'desc') => {
     setSorts(prev => {
       const exists = prev.find(s => s.key === key);
@@ -299,6 +272,7 @@ export function DataTable<T extends Record<string, any>>({
     const id = String(Date.now());
     setFilters(prev => [...prev, { id, key, operator: 'contains', value: '', conjunction: 'AND' }]);
     setShowFilterPanel(true);
+    setShowSortPanel(false);
     setColMenu(null);
   };
 
@@ -329,17 +303,21 @@ export function DataTable<T extends Record<string, any>>({
     const a = document.createElement('a'); a.href = url; a.download = 'export.csv'; a.click();
   };
 
+  // ─── COMPACT CALC BAR (для вставки наверху снаружи) ───────────────────────
+  // Этот ref передаётся через calcBarRef — внешний компонент может его использовать
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dt-root" onClick={() => { setShowProps(false); }}>
+    <div className="dt-root" onClick={() => { setShowProps(false); setShowFilterPanel(false); setShowSortPanel(false); }}>
 
       {/* ── TOOLBAR ── */}
       <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
         <div className="dt-toolbar-left">
+
           {/* Filter button */}
           <button
             className={`dt-btn ${showFilterPanel ? 'dt-btn--active' : ''}`}
-            onClick={() => setShowFilterPanel(v => !v)}
+            onClick={() => { setShowFilterPanel(v => !v); setShowSortPanel(false); setShowProps(false); }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
@@ -350,18 +328,12 @@ export function DataTable<T extends Record<string, any>>({
 
           {/* Sort button */}
           <button
-            className={`dt-btn ${sorts.length > 0 ? 'dt-btn--active' : ''}`}
-            onClick={() => {
-              if (sorts.length === 0 && cols.length > 0) {
-                setSorts([{ key: cols[0].key, dir: 'asc' }]);
-                setShowFilterPanel(true);
-              } else {
-                setShowFilterPanel(v => !v);
-              }
-            }}
+            className={`dt-btn ${showSortPanel ? 'dt-btn--active' : ''}`}
+            onClick={() => { setShowSortPanel(v => !v); setShowFilterPanel(false); setShowProps(false); }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 5l4-3 4 3M6 2v10M10 11l4 3-4 3M14 14V4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 4h8M2 8h6M2 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+              <path d="M12 3v10M10 11l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
             Сортировка
             {sorts.length > 0 && <span className="dt-badge">{sorts.length}</span>}
@@ -370,7 +342,7 @@ export function DataTable<T extends Record<string, any>>({
           {/* Properties button */}
           <button
             className={`dt-btn ${showProps ? 'dt-btn--active' : ''}`}
-            onClick={e => { e.stopPropagation(); setShowProps(v => !v); }}
+            onClick={e => { e.stopPropagation(); setShowProps(v => !v); setShowFilterPanel(false); setShowSortPanel(false); }}
           >
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
@@ -404,42 +376,19 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       </div>
 
-      {/* ── FILTER / SORT PANEL ── */}
+      {/* ── COMPACT FILTER PANEL ── */}
       {showFilterPanel && (
-        <div className="dt-filter-panel" onClick={e => e.stopPropagation()}>
-          {/* Sorts */}
-          <div className="dt-filter-section">
-            <div className="dt-filter-section-title">Сортировка</div>
-            {sorts.map((s, i) => (
-              <div key={s.key + i} className="dt-filter-row">
-                <select className="dt-select" value={s.key} onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
-                  {(() => {
-                    const sortable = cols.filter(c => c.sortable !== false);
-                    const cats = Array.from(new Set(sortable.map(c => c.category ?? 'Основные')));
-                    return cats.map(cat => (
-                      <optgroup key={cat} label={cat}>
-                        {sortable.filter(c => (c.category ?? 'Основные') === cat).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
-                      </optgroup>
-                    ));
-                  })()}
-                </select>
-                <select className="dt-select dt-select--sm" value={s.dir} onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, dir: e.target.value as 'asc' | 'desc' } : x))}>
-                  <option value="asc">А → Я</option>
-                  <option value="desc">Я → А</option>
-                </select>
-                <button className="dt-icon-btn" onClick={() => setSorts(prev => prev.filter((_, j) => j !== i))}>✕</button>
-              </div>
-            ))}
-            <button className="dt-link-btn" onClick={() => setSorts(prev => [...prev, { key: cols[0]?.key ?? '', dir: 'asc' }])}>
-              + Добавить сортировку
-            </button>
+        <div className="dt-compact-panel" onClick={e => e.stopPropagation()}>
+          <div className="dt-compact-panel-header">
+            <span className="dt-compact-panel-title">Фильтры</span>
+            <button className="dt-compact-panel-close" onClick={() => setShowFilterPanel(false)}>✕</button>
           </div>
-
-          {/* Filters */}
-          <div className="dt-filter-section">
-            <div className="dt-filter-section-title">Фильтры</div>
+          <div className="dt-compact-panel-body">
+            {filters.length === 0 && (
+              <div className="dt-compact-empty">Фильтры не добавлены</div>
+            )}
             {filters.map((f, i) => (
-              <div key={f.id} className="dt-filter-row">
+              <div key={f.id} className="dt-compact-row">
                 {i > 0 && (
                   <select className="dt-select dt-select--xs" value={f.conjunction}
                     onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, conjunction: e.target.value as 'AND' | 'OR' } : x))}>
@@ -448,7 +397,7 @@ export function DataTable<T extends Record<string, any>>({
                   </select>
                 )}
                 {i === 0 && <span className="dt-conj-label">Где</span>}
-                <select className="dt-select" value={f.key}
+                <select className="dt-select dt-select--md" value={f.key}
                   onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
                   {(() => {
                     const filterable = cols.filter(c => c.filterable !== false);
@@ -460,26 +409,77 @@ export function DataTable<T extends Record<string, any>>({
                     ));
                   })()}
                 </select>
-                <select className="dt-select" value={f.operator}
+                <select className="dt-select dt-select--md" value={f.operator}
                   onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, operator: e.target.value as FilterOperator } : x))}>
                   {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
                 {!['empty', 'not_empty'].includes(f.operator) && (
-                  <input className="dt-input" placeholder="Значение" value={f.value}
+                  <input className="dt-input dt-input--sm" placeholder="Значение" value={f.value}
                     onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
                 )}
                 <button className="dt-icon-btn" onClick={() => setFilters(prev => prev.filter(x => x.id !== f.id))}>✕</button>
               </div>
             ))}
-            <div className="dt-filter-footer">
-              <button className="dt-link-btn" onClick={() => {
-                const id = String(Date.now());
-                setFilters(prev => [...prev, { id, key: cols[0]?.key ?? '', operator: 'contains', value: '', conjunction: 'AND' }]);
-              }}>+ Добавить фильтр</button>
-              {filters.length > 0 && (
-                <button className="dt-link-btn dt-link-btn--danger" onClick={() => setFilters([])}>Очистить всё</button>
-              )}
-            </div>
+          </div>
+          <div className="dt-compact-panel-footer">
+            <button className="dt-link-btn" onClick={() => {
+              const id = String(Date.now());
+              setFilters(prev => [...prev, { id, key: cols[0]?.key ?? '', operator: 'contains', value: '', conjunction: 'AND' }]);
+            }}>+ Добавить</button>
+            {filters.length > 0 && (
+              <button className="dt-link-btn dt-link-btn--danger" onClick={() => setFilters([])}>Очистить</button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── COMPACT SORT PANEL ── */}
+      {showSortPanel && (
+        <div className="dt-compact-panel" onClick={e => e.stopPropagation()}>
+          <div className="dt-compact-panel-header">
+            <span className="dt-compact-panel-title">Сортировка</span>
+            <button className="dt-compact-panel-close" onClick={() => setShowSortPanel(false)}>✕</button>
+          </div>
+          <div className="dt-compact-panel-body">
+            {sorts.length === 0 && (
+              <div className="dt-compact-empty">Сортировка не задана</div>
+            )}
+            {sorts.map((s, i) => (
+              <div key={s.key + i} className="dt-compact-row">
+                <span className="dt-sort-num">{i + 1}</span>
+                <select className="dt-select dt-select--md" value={s.key}
+                  onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
+                  {(() => {
+                    const sortable = cols.filter(c => c.sortable !== false);
+                    const cats = Array.from(new Set(sortable.map(c => c.category ?? 'Основные')));
+                    return cats.map(cat => (
+                      <optgroup key={cat} label={cat}>
+                        {sortable.filter(c => (c.category ?? 'Основные') === cat).map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                      </optgroup>
+                    ));
+                  })()}
+                </select>
+                <div className="dt-sort-dir-group">
+                  <button
+                    className={`dt-sort-dir-btn ${s.dir === 'asc' ? 'dt-sort-dir-btn--active' : ''}`}
+                    onClick={() => setSorts(prev => prev.map((x, j) => j === i ? { ...x, dir: 'asc' } : x))}
+                  >А→Я</button>
+                  <button
+                    className={`dt-sort-dir-btn ${s.dir === 'desc' ? 'dt-sort-dir-btn--active' : ''}`}
+                    onClick={() => setSorts(prev => prev.map((x, j) => j === i ? { ...x, dir: 'desc' } : x))}
+                  >Я→А</button>
+                </div>
+                <button className="dt-icon-btn" onClick={() => setSorts(prev => prev.filter((_, j) => j !== i))}>✕</button>
+              </div>
+            ))}
+          </div>
+          <div className="dt-compact-panel-footer">
+            <button className="dt-link-btn" onClick={() => setSorts(prev => [...prev, { key: cols[0]?.key ?? '', dir: 'asc' }])}>
+              + Добавить
+            </button>
+            {sorts.length > 0 && (
+              <button className="dt-link-btn dt-link-btn--danger" onClick={() => setSorts([])}>Очистить</button>
+            )}
           </div>
         </div>
       )}
@@ -489,19 +489,49 @@ export function DataTable<T extends Record<string, any>>({
         const TYPE_ICON: Record<string, string> = {
           text: '𝐓', number: '#', date: '📅', select: '≡', badge: '◉', currency: '₸',
         };
-        const filtered = cols.filter(c =>
+        const filteredCols = cols.filter(c =>
           !propsSearch || c.label.toLowerCase().includes(propsSearch.toLowerCase())
         );
-        // группируем по category
         const catMap: Record<string, typeof cols> = {};
-        filtered.forEach(c => {
+        filteredCols.forEach(c => {
           const cat = c.category ?? 'Основные';
           if (!catMap[cat]) catMap[cat] = [];
           catMap[cat].push(c);
         });
         const cats = Object.keys(catMap);
+        const visibleList = cols.filter(c => c.visible !== false);
         return (
           <div className="dt-props-panel-v2" onClick={e => e.stopPropagation()}>
+            {/* Visible columns drag list */}
+            {visibleList.length > 0 && (
+              <div className="dt-props-visible-list">
+                <div className="dt-props-visible-title">Отображаемые колонки</div>
+                <div className="dt-props-visible-chips">
+                  {visibleList.map((col, i) => {
+                    const globalIdx = cols.findIndex(c => c.key === col.key);
+                    return (
+                      <div
+                        key={col.key}
+                        className="dt-props-chip"
+                        draggable
+                        onDragStart={() => onDragStart(globalIdx)}
+                        onDragOver={e => onDragOver(e, globalIdx)}
+                        onDragEnd={onDragEnd}
+                      >
+                        <span className="dt-props-chip-drag">⠿</span>
+                        <span className="dt-props-chip-name">{col.label}</span>
+                        <button
+                          className="dt-props-chip-hide"
+                          onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c))}
+                          title="Скрыть"
+                        >✕</button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* Search */}
             <div className="dt-props-search">
               <input
@@ -511,7 +541,8 @@ export function DataTable<T extends Record<string, any>>({
                 onChange={e => setPropsSearch(e.target.value)}
               />
             </div>
-            {/* Body */}
+
+            {/* Body — grouped by category */}
             <div className="dt-props-body">
               {cats.map(cat => {
                 const isOpen = openCats.has(cat) || !!propsSearch;
@@ -557,6 +588,7 @@ export function DataTable<T extends Record<string, any>>({
                 );
               })}
             </div>
+
             {/* Footer */}
             <div className="dt-props-footer">
               <button className="dt-link-btn" onClick={() => {
@@ -584,13 +616,11 @@ export function DataTable<T extends Record<string, any>>({
           <table className="dt-table">
             <thead>
               <tr>
-                {/* Checkbox col */}
                 <th className="dt-th dt-th--check dt-sticky-col">
                   <input type="checkbox"
                     checked={selected.size === processedData.length && processedData.length > 0}
                     onChange={selectAll} />
                 </th>
-                {/* # col */}
                 <th className="dt-th dt-th--num dt-sticky-col dt-sticky-col--2">#</th>
 
                 {visibleCols.map(col => {
@@ -611,7 +641,6 @@ export function DataTable<T extends Record<string, any>>({
                           <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>
                         )}
                       </div>
-                      {/* resize handle */}
                       <div
                         className="dt-resize-handle"
                         onMouseDown={e => {
@@ -669,12 +698,11 @@ export function DataTable<T extends Record<string, any>>({
                 );
               })}
             </tbody>
-
           </table>
         )}
       </div>
 
-      {/* ── CALCULATE ROW (вне таблицы — sticky не работает внутри border-collapse) ── */}
+      {/* ── CALCULATE ROW (sticky bottom) ── */}
       <div className="dt-calc-bar" ref={calcBarRef}>
         <div className="dt-calc-bar-inner">
           <div className="dt-tf dt-sticky-col" style={{ minWidth: 36 }} />
@@ -735,6 +763,11 @@ export function DataTable<T extends Record<string, any>>({
               <span>✏</span> Редактировать
             </button>
           )}
+          {onRowPayment && (
+            <button className="dt-ctx-item dt-ctx-item--payment" onClick={() => { onRowPayment(rowMenu.row); setRowMenu(null); }}>
+              <span>💳</span> Новая оплата
+            </button>
+          )}
           <button className="dt-ctx-item" onClick={() => {
             navigator.clipboard.writeText(String(rowMenu.row[rowKey]));
             setRowMenu(null);
@@ -767,4 +800,3 @@ export function DataTable<T extends Record<string, any>>({
 }
 
 export default DataTable;
-
