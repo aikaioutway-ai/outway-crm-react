@@ -5,7 +5,7 @@ import { money } from '../../utils/pricing';
 import {
   ZONE_COLOR, VT_LABEL, normalizeZone, getBranchShort, getBranchFilter
 } from './constants';
-import SchoolSidebar, { SCHOOL_TABS } from '../../core/bars/SchoolSidebar';
+import { SCHOOL_TABS } from '../../core/bars/SchoolSidebar';
 import FamilyDrawer from './FamilyDrawer';
 import StatusBadge from '../../core/cards/StatusBadge';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
@@ -115,11 +115,11 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'status', label: 'Статус', type: 'badge', category: 'Клиент', width: 100,
     render: (val) => <StatusBadge status={val} size="sm" />,
   },
-  { key: 'schoolCode',     label: 'Код школы',   type: 'text',   category: 'Клиент',  width: 90,  visible: false },
-  { key: 'branchName',    label: 'Филиал',       type: 'text',   category: 'Клиент',  width: 160, visible: false },
-  { key: 'vehicleType',   label: 'Тип ТС',       type: 'select', category: 'Маршрут', width: 100, visible: false },
-  { key: 'transferNumber',label: '№ Трансфера',  type: 'text',   category: 'Маршрут', width: 100, visible: false },
-  { key: 'familyId',      label: 'ID семьи',     type: 'text',   category: 'Система', width: 120, visible: false },
+  { key: 'schoolCode',      label: 'Код школы',  type: 'text',   category: 'Клиент',  width: 90,  visible: false },
+  { key: 'branchName',      label: 'Филиал',      type: 'text',   category: 'Клиент',  width: 160, visible: false },
+  { key: 'vehicleType',     label: 'Тип ТС',      type: 'select', category: 'Маршрут', width: 100, visible: false },
+  { key: 'transferNumber',  label: '№ Трансфера', type: 'text',   category: 'Маршрут', width: 100, visible: false },
+  { key: 'familyId',        label: 'ID семьи',    type: 'text',   category: 'Система', width: 120, visible: false },
 ];
 
 export default function FamiliesPage() {
@@ -160,26 +160,26 @@ export default function FamiliesPage() {
 
         items.forEach((c: any, idx: number) => {
           result.push({
-            rowId:          c ? c.id : f.id + '_empty',
-            familyId:       f.id,
+            rowId:         c ? c.id : f.id + '_empty',
+            familyId:      f.id,
             familyIndex,
-            isFirstChild:   idx === 0,
-            childName:      c?.child_name ?? '',
-            childClass:     c?.class ?? '',
-            parentName:     f.parent_name,
-            phone:          f.phone,
-            schoolCode:     f.school_code,
+            isFirstChild:  idx === 0,
+            childName:     c?.child_name ?? '',
+            childClass:    c?.class ?? '',
+            parentName:    f.parent_name,
+            phone:         f.phone,
+            schoolCode:    f.school_code,
             branchName,
             branchShort,
             branchFilter,
-            streetAddress:  streetAddr,
-            distanceKm:     f.distance_km,
+            streetAddress: streetAddr,
+            distanceKm:    f.distance_km,
             zone,
-            vehicleType:    vt,
-            vehicleLabel:   VT_LABEL[vt] ?? vt,
-            monthlyPrice:   f.monthly_price ?? 0,
-            status:         f.status ?? 'new',
-            transferNumber: f.transfer_number,
+            vehicleType:   vt,
+            vehicleLabel:  VT_LABEL[vt] ?? vt,
+            monthlyPrice:  f.monthly_price ?? 0,
+            status:        f.status ?? 'new',
+            transferNumber:f.transfer_number,
           });
         });
         familyIndex++;
@@ -207,34 +207,26 @@ export default function FamiliesPage() {
     });
   }
 
-  // Подсчёт количества семей по табу
-  const familyByTab: Record<string, Set<string>> = {};
+  // Подсчёт семей по табу
+  const familyByTab: Record<string, Set<string>> = { ALL: new Set() };
   const badgeByTab: Record<string, number> = {};
-  const seenFamilies = new Set<string>();
+  const seenNew = new Set<string>();
 
   rows.forEach(r => {
     if (!r.isFirstChild) return;
-    // ALL
-    if (!familyByTab['ALL']) familyByTab['ALL'] = new Set();
     familyByTab['ALL'].add(r.familyId);
-
-    // По табу
-    const tabKey = r.branchFilter;
-    if (!familyByTab[tabKey]) familyByTab[tabKey] = new Set();
-    familyByTab[tabKey].add(r.familyId);
-
-    // Badges (новые заявки)
-    if (r.status === 'new' && !seenFamilies.has(r.familyId)) {
-      seenFamilies.add(r.familyId);
+    const tk = r.branchFilter;
+    if (!familyByTab[tk]) familyByTab[tk] = new Set();
+    familyByTab[tk].add(r.familyId);
+    if (r.status === 'new' && !seenNew.has(r.familyId)) {
+      seenNew.add(r.familyId);
       badgeByTab['ALL'] = (badgeByTab['ALL'] ?? 0) + 1;
-      badgeByTab[tabKey] = (badgeByTab[tabKey] ?? 0) + 1;
+      badgeByTab[tk] = (badgeByTab[tk] ?? 0) + 1;
     }
   });
 
   const counts: Record<string, number> = {};
-  SCHOOL_TABS.forEach(t => {
-    counts[t.key] = familyByTab[t.key]?.size ?? 0;
-  });
+  SCHOOL_TABS.forEach(t => { counts[t.key] = familyByTab[t.key]?.size ?? 0; });
 
   // Фильтрация
   const tab = SCHOOL_TABS.find(t => t.key === activeTab);
@@ -264,43 +256,158 @@ export default function FamiliesPage() {
   const childCount  = filtered.length;
 
   return (
-    <div style={{ display: 'flex', height: '100%', overflow: 'hidden' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
 
-      {/* ── SCHOOL SIDEBAR (004) ── */}
-      <SchoolSidebar
-        active={activeTab}
-        onChange={setActiveTab}
-        counts={counts}
-        badges={badgeByTab}
-      />
+      {/* ── ШАПКА — тёмный фон как сайдбар ── */}
+      <div style={{
+        background: '#312E81',
+        padding: '10px 16px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        flexShrink: 0,
+      }}>
+        <div style={{ position: 'relative', flex: 1, maxWidth: 340 }}>
+          <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'rgba(199,210,254,0.6)' }} />
+          <input
+            value={search} onChange={e => setSearch(e.target.value)}
+            placeholder="Имя, телефон, ребёнок, адрес..."
+            style={{
+              width: '100%', padding: '8px 10px 8px 32px',
+              border: '1px solid rgba(199,210,254,0.3)',
+              borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500,
+              background: 'rgba(255,255,255,0.1)', outline: 'none',
+              color: '#fff',
+            }}
+          />
+        </div>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 13, fontWeight: 600, color: 'rgba(199,210,254,0.85)', whiteSpace: 'nowrap' }}>
+          {familyCount} семей · {childCount} детей
+        </span>
+        <button onClick={load} style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 12px', borderRadius: 'var(--radius)',
+          border: '1px solid rgba(199,210,254,0.3)',
+          background: 'rgba(255,255,255,0.1)', fontSize: 13, fontWeight: 500,
+          color: 'rgba(199,210,254,0.9)', cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>
+          <RefreshCw size={13} /> Обновить
+        </button>
+        <button style={{
+          display: 'flex', alignItems: 'center', gap: 6,
+          padding: '7px 16px', border: 'none', borderRadius: 'var(--radius)',
+          background: '#fff', color: '#312E81', fontSize: 13, fontWeight: 700,
+          cursor: 'pointer', whiteSpace: 'nowrap',
+        }}>
+          <Plus size={14} /> Новая заявка
+        </button>
+      </div>
 
-      {/* ── MAIN CONTENT ── */}
-      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      {/* ── ОСНОВНОЙ КОНТЕНТ: школы + таблица ── */}
+      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
 
-        {/* ── TOOLBAR ── */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', background: '#fff', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-          <div style={{ position: 'relative', flex: 1, maxWidth: 320 }}>
-            <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-2)' }} />
-            <input
-              value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Имя, телефон, ребёнок, адрес..."
-              style={{ width: '100%', padding: '7px 10px 7px 32px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', fontSize: 13, fontWeight: 500, background: 'var(--bg)', outline: 'none', color: 'var(--text)' }}
-            />
+        {/* ── SCHOOL SIDEBAR ── */}
+        <div style={{
+          width: 140,
+          flexShrink: 0,
+          display: 'flex',
+          flexDirection: 'column',
+          borderRight: '1px solid var(--border)',
+          background: '#fff',
+          overflow: 'hidden',
+        }}>
+          {/* Заголовок */}
+          <div style={{
+            padding: '10px 14px 8px',
+            borderBottom: '1px solid var(--border)',
+            fontSize: 11,
+            fontWeight: 700,
+            color: 'var(--text-2)',
+            textTransform: 'uppercase',
+            letterSpacing: '0.6px',
+            flexShrink: 0,
+          }}>
+            Филиалы
           </div>
-          <div style={{ flex: 1 }} />
-          <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--text-2)', whiteSpace: 'nowrap' }}>
-            {familyCount} семей · {childCount} детей
-          </span>
-          <button onClick={load} style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 12px', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: '#fff', fontSize: 13, fontWeight: 500, color: 'var(--text-2)', cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <RefreshCw size={13} /> Обновить
-          </button>
-          <button style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '7px 16px', border: 'none', borderRadius: 'var(--radius)', background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>
-            <Plus size={14} /> Новая заявка
-          </button>
+
+          {/* Список школ */}
+          <div style={{ overflowY: 'auto', flex: 1 }}>
+            {SCHOOL_TABS.map((tab, idx) => {
+              const isActive = activeTab === tab.key;
+              const count    = counts[tab.key] ?? 0;
+              const badge    = badgeByTab[tab.key] ?? 0;
+              const hasBadge = badge > 0;
+              const isAll    = tab.key === 'ALL';
+
+              return (
+                <React.Fragment key={tab.key}>
+                  <button
+                    onClick={() => setActiveTab(tab.key)}
+                    style={{
+                      width: '100%',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 8,
+                      padding: '8px 12px',
+                      border: 'none',
+                      borderLeft: isActive ? '3px solid #312E81' : '3px solid transparent',
+                      background: isActive ? '#EEF2FF' : 'transparent',
+                      cursor: 'pointer',
+                      transition: 'all 0.12s',
+                    }}
+                  >
+                    {/* Круглая точка статуса */}
+                    <span style={{
+                      width: 8, height: 8, borderRadius: '50%', flexShrink: 0,
+                      background: hasBadge ? '#EF4444' : '#10B981',
+                    }} />
+
+                    <span style={{
+                      flex: 1,
+                      fontSize: 13,
+                      fontWeight: isActive ? 700 : 500,
+                      color: isActive ? '#312E81' : 'var(--text)',
+                      textAlign: 'left',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                    }}>
+                      {tab.label}
+                    </span>
+
+                    {/* Счётчик */}
+                    {count > 0 && (
+                      <span style={{
+                        fontSize: 11, fontWeight: 700, flexShrink: 0,
+                        color: hasBadge ? '#fff' : (isActive ? '#312E81' : 'var(--text-2)'),
+                        background: hasBadge ? '#EF4444' : (isActive ? '#C7D2FE' : 'transparent'),
+                        borderRadius: 10,
+                        padding: hasBadge || isActive ? '1px 6px' : '0',
+                        minWidth: 20,
+                        textAlign: 'center',
+                      }}>
+                        {count}
+                      </span>
+                    )}
+                  </button>
+
+                  {/* Разделитель */}
+                  {idx < SCHOOL_TABS.length - 1 && (
+                    <div style={{
+                      height: 1,
+                      background: 'var(--border)',
+                      margin: isAll ? '0' : '0 10px',
+                    }} />
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </div>
         </div>
 
         {/* ── ТАБЛИЦА ── */}
-        <div style={{ flex: 1, overflow: 'hidden', padding: '10px 14px', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: '10px 14px' }}>
           <DataTable<ChildRow>
             columns={COLUMNS}
             data={filtered}
