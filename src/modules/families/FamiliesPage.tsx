@@ -58,6 +58,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'parentName',
     label: 'Родитель',
     type: 'text',
+    category: 'Клиент',
     width: 200,
     render: (val, row) => row.isFirstChild ? (
       <div style={{ lineHeight: '1.35' }}>
@@ -85,6 +86,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'schoolLabel',
     label: 'Школа',
     type: 'select',
+    category: 'Клиент',
     width: 90,
     render: (val) => (
       <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{val}</span>
@@ -94,6 +96,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'fullAddress',
     label: 'Адрес',
     type: 'text',
+    category: 'Адрес',
     width: 200,
     render: (val, row) => row.isFirstChild ? (
       <div>
@@ -127,6 +130,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'vehicleLabel2',
     label: 'Транспорт',
     type: 'select',
+    category: 'Маршрут',
     width: 130,
     render: (val, row) => (
       <div>
@@ -141,6 +145,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'monthlyPrice',
     label: 'Сумма/мес',
     type: 'currency',
+    category: 'Финансы',
     width: 120,
     render: (val) => (
       <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--accent)' }}>{money(val)}</span>
@@ -150,6 +155,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'status',
     label: 'Статус',
     type: 'badge',
+    category: 'Клиент',
     width: 100,
     render: (val) => <StatusBadge status={val} size="sm" />,
   },
@@ -157,6 +163,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'phone',
     label: 'Телефон',
     type: 'text',
+    category: 'Клиент',
     width: 130,
     visible: false,
   },
@@ -164,6 +171,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     key: 'distanceKm',
     label: 'Дистанция (км)',
     type: 'number',
+    category: 'Адрес',
     width: 120,
     visible: false,
   },
