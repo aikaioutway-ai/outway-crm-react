@@ -159,16 +159,27 @@ export default function FamiliesPage() {
       let familyIndex = 0;
 
       famRes.data.forEach((f: any) => {
-        const zone        = normalizeZone(f.zone, 'A');
-        const vt          = f.vehicle_type ?? 'microbus';
-        const kids        = childMap[f.id] ?? [];
-        const items       = kids.length > 0 ? kids : [null];
-        const branchName  = f.branch_name ?? '';
-        const branchShort  = getBranchShort(branchName, f.school_code);
-        const branchFilter = getBranchFilter(branchName, f.school_code);
-        const streetAddr   = stripAddress(f.full_address);
+        const kids = childMap[f.id] ?? [];
+        const items = kids.length > 0 ? kids : [null];
+
+        // Адрес берём из семьи или из первого ребёнка
+        const streetAddr = stripAddress(f.full_address ?? kids[0]?.address ?? null);
+        const distanceKm = f.distance_km ?? kids[0]?.distance_km ?? null;
+        const familyStatus = f.status ?? 'new';
 
         items.forEach((c: any, idx: number) => {
+          // school_code: приоритет у ребёнка, fallback у семьи (для старых записей)
+          const schoolCode  = c?.school_code ?? f.school_code ?? '';
+          const branchName  = c?.branch_name ?? f.branch_name ?? '';
+          const branchShort = getBranchShort(branchName, schoolCode);
+          const branchFilter = getBranchFilter(branchName, schoolCode);
+
+          const zone = normalizeZone(c?.zone ?? f.zone, 'A');
+          const vt   = c?.vehicle_type ?? f.vehicle_type ?? 'microbus';
+
+          // Цена: из ребёнка или из семьи
+          const monthlyPrice = c?.monthly_price ?? f.monthly_price ?? 0;
+
           result.push({
             rowId:         c ? c.id : f.id + '_empty',
             familyId:      f.id,
@@ -178,18 +189,18 @@ export default function FamiliesPage() {
             childClass:    c?.class ?? '',
             parentName:    formatName(f.parent_name),
             phone:         formatPhone(f.phone),
-            schoolCode:    f.school_code,
+            schoolCode,
             branchName,
             branchShort,
             branchFilter,
-            streetAddress: streetAddr,
-            distanceKm:    f.distance_km,
+            streetAddress: idx === 0 ? streetAddr : '',
+            distanceKm:    idx === 0 ? distanceKm : null,
             zone,
             vehicleType:   vt,
             vehicleLabel:  VT_LABEL[vt] ?? vt,
-            monthlyPrice:  f.monthly_price ?? 0,
-            status:        f.status ?? 'new',
-            transferNumber: f.transfer_number,
+            monthlyPrice,
+            status:        familyStatus,
+            transferNumber: c?.transfer_number ?? f.transfer_number ?? null,
           });
         });
         familyIndex++;
@@ -203,17 +214,28 @@ export default function FamiliesPage() {
   async function openFamily(familyId: string) {
     const { data: f } = await supabase.from('families').select('*').eq('id', familyId).single();
     if (!f) return;
+    const { data: kids } = await supabase.from('children').select('*').eq('family_id', familyId);
+    const firstKid = kids?.[0];
     setSelectedFamily({
-      id: f.id, schoolCode: f.school_code, parentName: f.parent_name,
+      id: f.id,
+      schoolCode: firstKid?.school_code ?? f.school_code,
+      parentName: f.parent_name,
       phone: f.phone, phoneTelegram: f.phone_telegram, secondPhone: f.second_phone,
       contactName: f.contact_name, contactPhone: f.contact_phone,
-      fullAddress: f.full_address, latitude: f.latitude, longitude: f.longitude,
-      distanceKm: f.distance_km, zone: normalizeZone(f.zone, 'A') as any,
-      vehicleType: f.vehicle_type, vehicleLabel: f.vehicle_label,
-      monthlyPrice: f.monthly_price ?? 0, comment: f.comment,
+      fullAddress: f.full_address ?? firstKid?.address,
+      latitude: f.latitude ?? firstKid?.latitude,
+      longitude: f.longitude ?? firstKid?.longitude,
+      distanceKm: f.distance_km ?? firstKid?.distance_km,
+      zone: normalizeZone(firstKid?.zone ?? f.zone, 'A') as any,
+      vehicleType: firstKid?.vehicle_type ?? f.vehicle_type,
+      vehicleLabel: f.vehicle_label,
+      monthlyPrice: f.monthly_price ?? 0,
+      comment: f.comment,
       createdAt: f.created_at, status: f.status ?? 'new',
-      transferNumber: f.transfer_number, stopNumber: f.stop_number,
-      timeMorning: f.time_morning, timeEvening: f.time_evening,
+      transferNumber: firstKid?.transfer_number ?? f.transfer_number,
+      stopNumber: firstKid?.stop_number ?? f.stop_number,
+      timeMorning: firstKid?.time_morning ?? f.time_morning,
+      timeEvening: f.time_evening,
     });
   }
 
@@ -316,7 +338,7 @@ export default function FamiliesPage() {
       {/* ── ОСНОВНОЙ КОНТЕНТ ── */}
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', gap: 8, padding: '8px 8px 8px 8px' }}>
 
-        {/* ── SCHOOL SIDEBAR — отдельная форма с отступом ── */}
+        {/* ── SCHOOL SIDEBAR ── */}
         <div style={{
           width: 148,
           flexShrink: 0,
@@ -327,7 +349,7 @@ export default function FamiliesPage() {
           borderRadius: 8,
           overflow: 'hidden',
         }}>
-          {/* Шапка ФИЛИАЛЫ — высота = тулбар таблицы */}
+          {/* Шапка ФИЛИАЛЫ */}
           <div style={{
             height: H_TOOLBAR,
             display: 'flex',
@@ -345,7 +367,7 @@ export default function FamiliesPage() {
             </span>
           </div>
 
-          {/* Кнопка ВСЕ — высота = заголовок таблицы */}
+          {/* Кнопка ВСЕ */}
           {(() => {
             const allTab = SCHOOL_TABS[0];
             const isActive = activeTab === 'ALL';
@@ -383,7 +405,7 @@ export default function FamiliesPage() {
             );
           })()}
 
-          {/* Список школ — высота строки = строка таблицы, чередующийся цвет */}
+          {/* Список школ */}
           <div style={{ overflowY: 'auto', flex: 1 }}>
             {SCHOOL_TABS.slice(1).map((t, idx) => {
               const isActive = activeTab === t.key;
@@ -440,7 +462,30 @@ export default function FamiliesPage() {
             onRowClick={(row) => openFamily(row.familyId)}
             onRowDelete={(row) => console.log('delete', row.rowId)}
             onRowEdit={(row) => console.log('edit', row.rowId)}
-            onRowPayment={async (row) => { const { data: f } = await supabase.from('families').select('*').eq('id', row.familyId).single(); if (f) setPaymentFamily({ id: f.id, schoolCode: f.school_code, parentName: f.parent_name, phone: f.phone, phoneTelegram: f.phone_telegram, secondPhone: f.second_phone, contactName: f.contact_name, contactPhone: f.contact_phone, fullAddress: f.full_address, latitude: f.latitude, longitude: f.longitude, distanceKm: f.distance_km, zone: normalizeZone(f.zone, 'A') as any, vehicleType: f.vehicle_type, vehicleLabel: f.vehicle_label, monthlyPrice: f.monthly_price ?? 0, comment: f.comment, createdAt: f.created_at, status: f.status ?? 'new', transferNumber: f.transfer_number, stopNumber: f.stop_number, timeMorning: f.time_morning, timeEvening: f.time_evening }); }}
+            onRowPayment={async (row) => {
+              const { data: f } = await supabase.from('families').select('*').eq('id', row.familyId).single();
+              const { data: kids } = await supabase.from('children').select('*').eq('family_id', row.familyId);
+              const firstKid = kids?.[0];
+              if (f) setPaymentFamily({
+                id: f.id,
+                schoolCode: firstKid?.school_code ?? f.school_code,
+                parentName: f.parent_name, phone: f.phone, phoneTelegram: f.phone_telegram,
+                secondPhone: f.second_phone, contactName: f.contact_name, contactPhone: f.contact_phone,
+                fullAddress: f.full_address ?? firstKid?.address,
+                latitude: f.latitude ?? firstKid?.latitude,
+                longitude: f.longitude ?? firstKid?.longitude,
+                distanceKm: f.distance_km ?? firstKid?.distance_km,
+                zone: normalizeZone(firstKid?.zone ?? f.zone, 'A') as any,
+                vehicleType: firstKid?.vehicle_type ?? f.vehicle_type,
+                vehicleLabel: f.vehicle_label,
+                monthlyPrice: f.monthly_price ?? 0, comment: f.comment,
+                createdAt: f.created_at, status: f.status ?? 'new',
+                transferNumber: firstKid?.transfer_number ?? f.transfer_number,
+                stopNumber: firstKid?.stop_number ?? f.stop_number,
+                timeMorning: firstKid?.time_morning ?? f.time_morning,
+                timeEvening: f.time_evening,
+              });
+            }}
           />
         </div>
       </div>
@@ -456,7 +501,6 @@ export default function FamiliesPage() {
       {showNewFamily && (
         <NewFamilyModal
           onClose={() => setShowNewFamily(false)}
-          
         />
       )}
       {paymentFamily && (
