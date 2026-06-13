@@ -1,28 +1,32 @@
-import React from 'react';
-import { X } from 'lucide-react';
+import React, { useState } from 'react';
+import { X, ChevronDown } from 'lucide-react';
 
 const SCHOOL_LINKS: { name: string; code: string; url: string }[] = [
-  { name: 'Edison',                    code: 'EDI',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1001' },
-  { name: 'Эрудит-ISIT',              code: 'ERU',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
-  { name: 'Тенсай',                   code: 'TIS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
-  { name: 'American-European School', code: 'AES',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
-  { name: 'Kyrgyz-American School',   code: 'KAS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
-  { name: 'Билим Бишкек KG',          code: 'BKG',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
-  { name: 'Индиго Kids',              code: 'ING',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
-  { name: 'Nova International School',code: 'NOVA', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1007' },
-  { name: 'Эпсилон',                  code: 'EPS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
-  { name: 'Гениум Чуйкова',           code: 'GEN2', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
-  { name: 'Light Academy',            code: 'LA',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
-  { name: 'Kings International School',code:'KNG',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1011' },
+  { name: 'Edison',                     code: 'EDI',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1001' },
+  { name: 'Эрудит-ISIT',               code: 'ERU',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
+  { name: 'Тенсай',                    code: 'TIS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
+  { name: 'American-European School',  code: 'AES',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
+  { name: 'Kyrgyz-American School',    code: 'KAS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
+  { name: 'Билим Бишкек KG',           code: 'BKG',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
+  { name: 'Индиго Kids',               code: 'ING',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
+  { name: 'Nova International School', code: 'NOVA', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1007' },
+  { name: 'Эпсилон',                   code: 'EPS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
+  { name: 'Гениум Чуйкова',            code: 'GEN2', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
+  { name: 'Light Academy',             code: 'LA',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
+  { name: 'Kings International School',code: 'KNG',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1011' },
 ];
 
-interface Props {
-  onClose: () => void;
-}
+interface Props { onClose: () => void; }
 
 export default function NewFamilyModal({ onClose }: Props) {
-  function openForm(url: string) {
-    window.open(url, '_blank');
+  const [selected, setSelected] = useState('');
+  const [open, setOpen]         = useState(false);
+
+  const school = SCHOOL_LINKS.find(s => s.code === selected);
+
+  function handleOpen() {
+    if (!school) return;
+    window.open(school.url, '_blank');
     onClose();
   }
 
@@ -32,58 +36,102 @@ export default function NewFamilyModal({ onClose }: Props) {
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 480, background: '#fff', zIndex: 501,
+        width: 420, background: '#fff', zIndex: 501,
         borderRadius: 16, boxShadow: '0 20px 60px rgba(49,46,129,0.22)',
-        display: 'flex', flexDirection: 'column', overflow: 'hidden',
+        overflow: 'visible',
       }}>
-
         {/* Header */}
-        <div style={{ background: 'var(--accent)', padding: '18px 22px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ background: 'var(--accent)', padding: '18px 22px', borderRadius: '16px 16px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <div>
             <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Новая заявка</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>Выберите школу — откроется форма</div>
+            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>Выберите школу</div>
           </div>
           <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
             <X size={16} />
           </button>
         </div>
 
-        {/* School list */}
-        <div style={{ padding: '14px 16px', display: 'flex', flexDirection: 'column', gap: 6, maxHeight: '70vh', overflowY: 'auto' }}>
-          {SCHOOL_LINKS.map(s => (
-            <button
-              key={s.code}
-              onClick={() => openForm(s.url)}
+        {/* Body */}
+        <div style={{ padding: '20px 20px 24px', position: 'relative' }}>
+
+          {/* Custom select */}
+          <div style={{ position: 'relative', marginBottom: 16 }}>
+            <div
+              onClick={() => setOpen(o => !o)}
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '12px 16px', background: '#F8F9FF',
-                border: '1px solid var(--border)', borderRadius: 10,
-                cursor: 'pointer', textAlign: 'left',
-                transition: 'all 0.15s',
-              }}
-              onMouseEnter={e => {
-                (e.currentTarget as HTMLButtonElement).style.background = '#EEF2FF';
-                (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--accent)';
-              }}
-              onMouseLeave={e => {
-                (e.currentTarget as HTMLButtonElement).style.background = '#F8F9FF';
-                (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)';
+                padding: '0 14px', height: 48,
+                border: `2px solid ${open ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 10, cursor: 'pointer', background: '#fff',
+                transition: 'border-color 0.15s',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                <div style={{
-                  width: 36, height: 36, borderRadius: 8,
-                  background: 'var(--accent)', color: '#fff',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 10, fontWeight: 700, flexShrink: 0,
-                }}>
-                  {s.code}
+              {school ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <div style={{ width: 32, height: 32, borderRadius: 7, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
+                    {school.code}
+                  </div>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{school.name}</span>
                 </div>
-                <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{s.name}</span>
-              </div>
-              <span style={{ fontSize: 18, color: 'var(--accent)' }}>→</span>
-            </button>
-          ))}
+              ) : (
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>Выберите школу...</span>
+              )}
+              <ChevronDown size={16} color="var(--text-2)" style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s' }} />
+            </div>
+
+            {/* Dropdown */}
+            {open && (
+              <>
+                <div onClick={() => setOpen(false)} style={{ position: 'fixed', inset: 0, zIndex: 10 }} />
+                <div style={{
+                  position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0,
+                  background: '#fff', borderRadius: 12, zIndex: 11,
+                  boxShadow: '0 8px 32px rgba(49,46,129,0.16)',
+                  border: '1px solid var(--border)',
+                  overflow: 'hidden', maxHeight: 360, overflowY: 'auto',
+                }}>
+                  {SCHOOL_LINKS.map((s, i) => (
+                    <div
+                      key={s.code + i}
+                      onClick={() => { setSelected(s.code); setOpen(false); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 12,
+                        padding: '10px 14px', cursor: 'pointer',
+                        background: selected === s.code ? '#EEF2FF' : i % 2 === 0 ? '#fff' : '#F8F9FF',
+                        borderLeft: selected === s.code ? '3px solid var(--accent)' : '3px solid transparent',
+                        transition: 'background 0.1s',
+                      }}
+                      onMouseEnter={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = '#F0F4FF'; }}
+                      onMouseLeave={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = i % 2 === 0 ? '#fff' : '#F8F9FF'; }}
+                    >
+                      <div style={{ width: 34, height: 34, borderRadius: 8, background: selected === s.code ? 'var(--accent)' : '#EEF2FF', color: selected === s.code ? '#fff' : 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
+                        {s.code}
+                      </div>
+                      <span style={{ fontSize: 13, fontWeight: selected === s.code ? 700 : 500, color: 'var(--text)' }}>{s.name}</span>
+                      {selected === s.code && <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontSize: 14 }}>✓</span>}
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
+          {/* Button */}
+          <button
+            onClick={handleOpen}
+            disabled={!school}
+            style={{
+              width: '100%', height: 48,
+              background: school ? 'var(--accent)' : '#E5E7EB',
+              color: school ? '#fff' : '#9CA3AF',
+              border: 'none', borderRadius: 10,
+              fontSize: 14, fontWeight: 700, cursor: school ? 'pointer' : 'not-allowed',
+              transition: 'background 0.15s',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+            }}
+          >
+            {school ? `Открыть форму — ${school.name} →` : 'Сначала выберите школу'}
+          </button>
         </div>
       </div>
     </>
