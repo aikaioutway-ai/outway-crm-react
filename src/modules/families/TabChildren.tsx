@@ -25,11 +25,12 @@ interface Props {
   family: Family;
   editMode: boolean;
   isAdmin: boolean;
+  onReload?: () => void;
 }
 
-export default function TabChildren({ children, loading, family, editMode, isAdmin }: Props) {
+export default function TabChildren({ children, loading, family, editMode, isAdmin, onReload }: Props) {
   const [kids, setKids] = useState<KidState[]>([]);
-  const [saving, setSaving] = useState(false);
+  const [saving, setSaving] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
   useEffect(() => {
@@ -61,8 +62,8 @@ export default function TabChildren({ children, loading, family, editMode, isAdm
   const familyTotal = prices.reduce((s, p) => s + p.final, 0);
 
   async function saveKid(kid: KidState) {
-    setSaving(true);
-    await supabase.from('children').update({
+    setSaving(kid.id);
+    const { error } = await supabase.from('children').update({
       child_name:        kid.childName,
       class:             kid.cls,
       vehicle_type:      kid.vehicleType,
@@ -71,21 +72,28 @@ export default function TabChildren({ children, loading, family, editMode, isAdm
       transfer_number:   kid.transferNumber,
       self_exit_allowed: kid.selfExitAllowed,
     }).eq('id', kid.id);
-    setSaving(false);
-    setMsg('Сохранено ✓');
-    setTimeout(() => setMsg(''), 2000);
+    setSaving(null);
+    if (!error) {
+      setMsg('Сохранено ✓');
+      setTimeout(() => setMsg(''), 2000);
+      onReload?.();
+    } else {
+      setMsg('Ошибка сохранения');
+      setTimeout(() => setMsg(''), 3000);
+    }
   }
 
   async function deleteKid(kid: KidState) {
     if (!window.confirm(`Удалить ${kid.childName}?`)) return;
     await supabase.from('children').delete().eq('id', kid.id);
     setKids(ks => ks.filter(k => k.id !== kid.id));
+    onReload?.();
   }
 
   return (
     <div>
       {msg && (
-        <div style={{ background: '#E8F5E9', color: '#2E7D32', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
+        <div style={{ background: msg.includes('Ошибка') ? '#FFEBEE' : '#E8F5E9', color: msg.includes('Ошибка') ? '#C62828' : '#2E7D32', borderRadius: 8, padding: '8px 14px', marginBottom: 12, fontSize: 13, fontWeight: 600 }}>
           {msg}
         </div>
       )}
@@ -98,6 +106,7 @@ export default function TabChildren({ children, loading, family, editMode, isAdm
           {kids.map((kid, i) => {
             const { base, discount, final } = prices[i];
             const setKid = (patch: Partial<KidState>) => setKids(ks => ks.map((k, j) => j === i ? { ...k, ...patch } : k));
+            const isSavingThis = saving === kid.id;
             return (
               <div key={kid.id} style={{ background: 'var(--bg)', borderRadius: 10, padding: '14px 16px', border: '1px solid var(--border)' }}>
                 {/* Header */}
@@ -126,8 +135,8 @@ export default function TabChildren({ children, loading, family, editMode, isAdm
                     </div>
                     {editMode && (
                       <div style={{ display: 'flex', gap: 4 }}>
-                        <button onClick={() => saveKid(kid)} disabled={saving} style={{ padding: '5px 10px', background: 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}>
-                          {saving ? '...' : 'Сохр.'}
+                        <button onClick={() => saveKid(kid)} disabled={isSavingThis} style={{ padding: '5px 10px', background: isSavingThis ? '#C7D2FE' : 'var(--accent)', color: '#fff', border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: isSavingThis ? 'default' : 'pointer' }}>
+                          {isSavingThis ? '...' : 'Сохр.'}
                         </button>
                         {isAdmin && (
                           <button onClick={() => deleteKid(kid)} style={{ padding: '5px 8px', background: '#FFEBEE', color: '#C62828', border: 'none', borderRadius: 6, cursor: 'pointer' }}>
