@@ -68,7 +68,6 @@ export default function TabChildren({ children, loading, family, editMode, isAdm
       class:             kid.cls,
       vehicle_type:      kid.vehicleType,
       zone:              zoneToNum(kid.zone),
-      school_code:       kid.schoolCode,
       transfer_number:   kid.transferNumber,
       self_exit_allowed: kid.selfExitAllowed,
     }).eq('id', kid.id);
