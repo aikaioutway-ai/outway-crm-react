@@ -78,8 +78,10 @@ export default function TabChildren({ children, loading, family, editMode, isAdm
       setTimeout(() => setMsg(''), 2000);
       onReload?.();
     } else {
-      setMsg('Ошибка сохранения');
-      setTimeout(() => setMsg(''), 3000);
+      const errMsg = error?.message || error?.details || JSON.stringify(error);
+      setMsg(`Ошибка: ${errMsg}`);
+      console.error('saveKid error:', error);
+      setTimeout(() => setMsg(''), 6000);
     }
   }
 
