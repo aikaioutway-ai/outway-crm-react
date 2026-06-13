@@ -7,6 +7,8 @@ import {
 } from './constants';
 import { SCHOOL_TABS } from '../../core/bars/SchoolSidebar';
 import FamilyDrawer from './FamilyDrawer';
+import NewFamilyModal from './NewFamilyModal';
+import PaymentModal from './PaymentModal';
 import StatusBadge from '../../core/cards/StatusBadge';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import '../../core/tables/DataTable.css';
@@ -133,6 +135,8 @@ export default function FamiliesPage() {
   const [activeTab, setActiveTab] = useState<string>('ALL');
   const [search, setSearch]       = useState('');
   const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
+  const [showNewFamily, setShowNewFamily]     = useState(false);
+  const [paymentFamily, setPaymentFamily]     = useState<Family | null>(null);
 
   useEffect(() => { load(); }, []);
 
@@ -298,7 +302,7 @@ export default function FamiliesPage() {
         }}>
           <RefreshCw size={13} /> Обновить
         </button>
-        <button style={{
+        <button onClick={() => setShowNewFamily(true)} style={{
           display: 'flex', alignItems: 'center', gap: 6, padding: '6px 16px',
           border: 'none', borderRadius: 'var(--radius)',
           background: '#fff', color: '#312E81', fontSize: 13, fontWeight: 700,
@@ -435,7 +439,7 @@ export default function FamiliesPage() {
             onRowClick={(row) => openFamily(row.familyId)}
             onRowDelete={(row) => console.log('delete', row.rowId)}
             onRowEdit={(row) => console.log('edit', row.rowId)}
-            onRowPayment={(row) => console.log('new payment', row.familyId)}
+            onRowPayment={async (row) => { const { data: f } = await supabase.from('families').select('*').eq('id', row.familyId).single(); if (f) setPaymentFamily({ id: f.id, schoolCode: f.school_code, parentName: f.parent_name, phone: f.phone, phoneTelegram: f.phone_telegram, secondPhone: f.second_phone, contactName: f.contact_name, contactPhone: f.contact_phone, fullAddress: f.full_address, latitude: f.latitude, longitude: f.longitude, distanceKm: f.distance_km, zone: normalizeZone(f.zone, 'A') as any, vehicleType: f.vehicle_type, vehicleLabel: f.vehicle_label, monthlyPrice: f.monthly_price ?? 0, comment: f.comment, createdAt: f.created_at, status: f.status ?? 'new', transferNumber: f.transfer_number, stopNumber: f.stop_number, timeMorning: f.time_morning, timeEvening: f.time_evening }); }}
           />
         </div>
       </div>
@@ -444,6 +448,20 @@ export default function FamiliesPage() {
         <FamilyDrawer
           family={selectedFamily}
           onClose={() => setSelectedFamily(null)}
+          userRole="admin"
+          userName="Кайрат"
+        />
+      )}
+      {showNewFamily && (
+        <NewFamilyModal
+          onClose={() => setShowNewFamily(false)}
+          onCreated={() => { setShowNewFamily(false); load(); }}
+        />
+      )}
+      {paymentFamily && (
+        <PaymentModal
+          family={paymentFamily}
+          onClose={() => setPaymentFamily(null)}
           userRole="admin"
           userName="Кайрат"
         />
