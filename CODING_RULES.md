@@ -1,127 +1,386 @@
-# OutWay CRM — Правила написания кода
+# OutWay CRM — Инструкция для нового чата
+### Обязательно прочитать перед любой работой
 
-## ⚡ ОБЯЗАТЕЛЬНО для каждого файла
+---
 
-### 1. Шапка файла
-Каждый файл начинается с комментария — что это и за что отвечает:
+## ⚡ ГЛАВНЫЙ ПРИНЦИП
 
-```ts
-// ─── AccrualService.ts ────────────────────────────────────────────────────────
-// Сервис начислений: создание периодов, пересчёт, ручное редактирование
-// Используется в: FamilyDrawer, AccrualsModule
-// Роли: чтение — все, редактирование — admin/director
-// ─────────────────────────────────────────────────────────────────────────────
+**OutWay = Организатор школьного трансфера. НИКОГДА не Перевозчик.**
+
+- ❌ Запрещено: «мы перевозим», «наши водители», «наш транспорт»
+- ✅ Правильно: «организуем трансфер», «независимые лицензированные Исполнители»
+
+---
+
+## ⚡ СТИЛЬ РАБОТЫ
+
+- **"фиксируй"** — записать задачу, не выполнять
+- **"делай"** — выполнить все накопленные задачи сразу
+- Перед изменением файла — всегда загружай актуальную версию из GitHub
+- После изменения — проверяй что нет дублей
+- Если сломалось — откатись к предыдущему коммиту
+
+---
+
+## 🔑 ДОСТУПЫ
+
 ```
+GitHub токен:      ghp_XXXX_см_у_Кайрата
+GitHub репо NEW:   aikaioutway-ai/outway-crm-react        ← АКТИВНЫЙ (React)
+GitHub репо OLD:   aikaioutway-ai/outway-crm              ← старый HTML (не трогать)
+Vercel:            задеплоить из outway-crm-react
 
-### 2. Каждая функция
-```ts
-// Возвращает цену за одного ребёнка с учётом школы, зоны и типа ТС
-export function getPriceByZone(...) { ... }
+Supabase project:  mmcxugtxnfsafgxbpbix
+Supabase URL:      https://mmcxugtxnfsafgxbpbix.supabase.co
+Supabase key:      sb_publishable_0JXvCHTIc984oEoFBloemQ_kCgDF6Bb
 
-// Считает суммарную цену семьи: первый ребёнок — полная цена, 2+ — скидка 5%
-export function getFamilyPrice(...) { ... }
-```
-
-### 3. Каждый компонент React
-```tsx
-// FamilyDrawer — боковая карточка семьи
-// Открывается по клику на строку в таблице FamiliesPage
-// Содержит секции: Дети / Адрес / Баланс
-// Props: familyId, onClose
-```
-
-### 4. Сложные блоки логики
-```ts
-// Пересчитываем только неоплаченные и незамороженные периоды
-// Оплаченные ('Оплачено', 'Частично оплачено') и isFrozen — не трогаем
-payments.filter(p => !isPaid(p) && !p.isFrozen).forEach(...)
-```
-
-### 5. Константы и типы
-```ts
-// Статусы оплаты — строго эта цепочка, не менять порядок
-export type PaymentStatus = 'Не оплачено' | 'На проверке' | ...
-
-// Ключи периодов: deposit = депозит, 9-12 = осень 2026, 1-5 = весна 2027
-export type PeriodKey = 'deposit' | '9' | '10' | ...
+Apps Script URL:   https://script.google.com/macros/s/AKfycbz6JUZVRd7qIgGsCCvdReIzcTRKNo65T6l12qA5cSO7K3CRSkUHh0-oia52nj-CT3VP/exec
+Google Sheets ID:  1pI1oTTmqgnSEV_Al1dvWs9AXJ7mfDfiu2pRgBTXnmnw
+Netlify:           https://clinquant-sprite-ec8c20.netlify.app
 ```
 
 ---
 
-## 📋 Структура комментариев
+## 🏢 КОМПАНИЯ
 
-| Где | Что писать |
-|-----|-----------|
-| Шапка файла | Назначение файла, кто использует, роли |
-| Функция/хук | Что делает, что возвращает |
-| Компонент | Назначение, пропсы, где используется |
-| if/else блок | Почему именно это условие |
-| Supabase запрос | Что грузим, какие поля, маппинг snake→camel |
-| Константа | Откуда значение, когда меняется |
+- **ООО «АйКай Груп»** / бренд OutWay
+- **Директор:** Мамазаирова Айгерим Эсеналиевна
+- **Адрес:** г. Бишкек, ул. Аалы Токомбаева, 21/2
+- **Деятельность:** Школьный развоз, 13 школ, ~109 ТС, сезон сентябрь–май
 
----
+## 👥 КОМАНДА
 
-## 🚫 Запрещено
-
-- Писать код без шапки файла
-- Оставлять функции без комментария если она > 5 строк
-- Хардкодить числа без объяснения (писать `* 0.95 // скидка 5% на 2+ детей`)
-- Создавать компонент > 500 строк без разбивки
+| Имя | Роль |
+|-----|------|
+| Кайрат | Основатель |
+| Нурсултан | Логистика |
+| Зуля | Менеджеры, клиенты |
+| Маэрим | Финансы, зарплата |
+| Бактыгул, Мирлан, Беку | Бригадиры |
 
 ---
 
-## ✅ Пример хорошего файла
+## 🛠️ ТЕХНОЛОГИИ
 
-```ts
-// ─── accrualService.ts ────────────────────────────────────────────────────────
-// Логика начислений OutWay CRM
-// - создание периодов при новой заявке (депозит + сентябрь)
-// - ежемесячное начисление (октябрь–апрель)
-// - пересчёт при смене ТС / зоны / детей
-// - ручное редактирование суммы (только admin/director, шаг 100 сом)
-// ─────────────────────────────────────────────────────────────────────────────
+```
+Frontend:  React + TypeScript
+Стили:     CSS переменные (без Tailwind, без styled-components)
+Backend:   Supabase (PostgreSQL)
+Хостинг:   Vercel (CRM) + Netlify (форма регистрации)
+```
 
-import { Payment, PeriodKey } from '../types';
-import { getFamilyPrice } from './pricing';
+---
 
-// Периоды сезона по порядку (без мая — он покрывается депозитом)
-const SEASON_PERIODS: PeriodKey[] = ['9','10','11','12','1','2','3','4'];
+## 📁 СТРУКТУРА ПРОЕКТА
 
-// Создаёт начальные записи для новой семьи: депозит + сентябрь
-export function initFamilyPayments(familyId: string, amount: number): Payment[] {
-  ...
-}
+```
+outway-crm-react/src/
+├── types/
+│   └── index.ts              ← все TypeScript типы
+├── utils/
+│   ├── pricing.ts            ← getPriceByZone, getFamilyPrice, calcPenalty, money()
+│   └── schools.ts            ← SCHOOLS[], schoolByCode()
+├── services/
+│   └── supabase.ts           ← клиент Supabase
+├── core/                     ← ОБЩИЕ компоненты (переиспользуются везде)
+│   ├── bars/
+│   │   ├── Sidebar.tsx       ← боковое меню
+│   │   └── SchoolBar.tsx     ← табы школ сверху
+│   ├── cards/
+│   │   └── StatusBadge.tsx   ← бейджи статусов
+│   ├── tables/               ← DataTable (общая таблица)
+│   ├── drawers/              ← боковые панели
+│   └── modals/               ← модальные окна
+└── modules/                  ← модули по функциям
+    ├── families/
+    │   └── FamiliesPage.tsx  ← ✅ ГОТОВО — список семей
+    ├── finance/              ← 🟡 следующий
+    ├── logistics/            ← 🔴 планируется
+    ├── drivers/              ← 🔴 планируется
+    └── payroll/              ← 🔴 планируется
+```
 
-// Пересчитывает все неоплаченные периоды при смене данных семьи
-// Оплаченные и замороженные периоды — НЕ ТРОГАТЬ
-export function recalcFamilyPayments(payments: Payment[], newAmount: number): Payment[] {
-  ...
-}
+**ПРАВИЛО:** Перед созданием нового компонента — проверь `src/core/`.
+Если похожий есть — используй его. Не дублировать.
+
+---
+
+## 🎨 ДИЗАЙН
+
+```css
+--bg:        #F0F4FF
+--white:     #FFFFFF
+--accent:    #312E81
+--accent-h:  #27246B
+--accent-l:  #C7D2FE
+--text:      #1A1A2E
+--text-2:    #6B6B8A
+--border:    #DDE3F5
+--radius:    8px
+--font:      Arial, sans-serif
+```
+
+- Sidebar — тёмно-индиго `#312E81`
+- Hover на строках таблицы — `#EEF2FF`
+- Тёмный фон — НИКОГДА
+- Все элементы симметричны, тексты жирные (700 для важного, 600 для вторичного)
+- Компонент максимум 300–500 строк. Если больше — разбивать.
+
+---
+
+## 🏫 ШКОЛЫ
+
+| Код в БД | Название | access_key (форма) |
+|----------|----------|-------------------|
+| KINGS    | Kings International School | 1011 |
+| LIGHT    | Light Academy | 1010 |
+| BILIM    | Bilim KG | 1005 |
+| AES      | American-European School | 1004 |
+| KAS      | Kyrgyz-American School | 1004 |
+| EPSILON  | Epsilon | 1008 |
+| GENIUS   | Genius (Чуйкова) | 1009 |
+| GENIUS4  | Genius 4 (Авангард) | 1009 |
+| NOVA     | Nova International School | 1007 |
+| INDIGO   | Indigo | 1006 |
+| ERUDIT   | Эрудит-ISIT | 1002 |
+| TENSAY   | Тенсай | 1003 |
+| EDISON   | Edison | 1001 |
+
+Школы управляются через Google Sheets (лист Schools). Форма загружает динамически через Apps Script `?action=schools`.
+
+---
+
+## 🗃️ БАЗА ДАННЫХ SUPABASE (актуальная схема)
+
+### families — только контакты семьи
+```
+id (FAM-XXXXXX), parent_name, phone, phone_telegram,
+second_phone, second_phone_telegram,
+contact_name, contact_phone,
+status, comment, created_at,
+start_date, payment_method
+```
+
+### children — каждый ребёнок полностью независим
+```
+id, family_id,
+child_name, class,
+school_code, zone (1/2/3), vehicle_type,
+address, latitude, longitude, distance_km,
+route_source, transfer_number, stop_number,
+time_morning, self_exit_allowed,
+status, discount_type, discount_value,
+created_at
+```
+
+### charges — начисления (создаются автоматически)
+```
+id, child_id, family_id,
+period_month, period_year,
+amount, paid_amount, debt_amount,
+penalty_amount, status, is_frozen,
+created_at, updated_at
+```
+
+### payments — факт поступления денег от семьи
+```
+id, family_id,
+period_month, period_year,
+amount, payment_type,
+receipt_url, payment_date,
+status, created_by, confirmed_by,
+confirmed_at, comment, created_at
+```
+
+### payment_items — разбивка платежа по детям (авто)
+```
+id, payment_id, child_id, family_id,
+period_month, period_year,
+charged_amount, paid_amount,
+debt_amount, status, created_at
+```
+
+### audit_log — история изменений
+```
+id, family_id, child_id,
+user_name, action, field,
+old_value, new_value, created_at
+```
+
+### schools — в Google Sheets (не в Supabase)
+```
+code, name, lat, lng, address, manager,
+zone1_price, zone2_price, zone3_price,
+access_key, active
+```
+
+**ВАЖНО:**
+- Цена НЕ хранится в БД — считается из school_code + zone + vehicle_type
+- zone в БД = число (1/2/3), в коде = буква (A/B/C) — маппинг при загрузке
+- families и children джойнятся при отображении в CRM
+
+---
+
+## 💰 ТАРИФЫ 2026–2027
+
+```javascript
+const PRICE_RULES = {
+  KINGS:   { zone1: 5000, zone2: 5500, zone3: 6000 },
+  LIGHT:   { zone1: 5000, zone2: 5500, zone3: 6000 },
+  BILIM:   { zone1: 5000, zone2: 5500, zone3: 6500 },
+  AES:     { zone1: 5500, zone2: 6000, zone3: 6500 },
+  KAS:     { zone1: 5500, zone2: 6000, zone3: 6500 },
+  EPSILON: { zone1: 5500, zone2: 6000, zone3: 6500 },
+  GENIUS:  { zone1: 5500, zone2: 6000, zone3: 6500 },
+  GENIUS4: { zone1: 5500, zone2: 6000, zone3: 6500 },
+  NOVA:    { zone1: 5500, zone2: 6000, zone3: 6500 },
+  INDIGO:  { zone1: 5500, zone2: 6000, zone3: 6500 },
+  ERUDIT:  { zone1: 6000, zone2: 6500, zone3: null },
+  TENSAY:  { zone1: 6400, zone2: 6800, zone3: null },
+  EDISON:  { zone1: 6500, zone2: 7000, zone3: null },
+};
+```
+
+**Зоны по дистанции:**
+- Зона A (zone=1) → до 3.3 км
+- Зона B (zone=2) → 3.3–6.3 км
+- Зона C (zone=3) → свыше 6.3 км
+
+**Альтернативный транспорт:**
+- Минивэн → 9 500 сом/мес
+- Седан → 10 500 сом/мес
+
+**Скидка:** 5% на второго и каждого последующего ребёнка в семье.
+
+---
+
+## 💳 ЛОГИКА ОПЛАТ
+
+### Цепочка статусов
+```
+Не оплачено
+  → менеджер ввёл сумму       → На проверке
+  → менеджер прикрепил чек    → На проверке (чек)
+  → кассир подтвердил         → Оплачено
+  → кассир отклонил           → Не оплачено
+Просрочено — авто после 5-го числа
+Частично оплачено — кассир подтвердил меньше начисленного
+```
+
+### Логика платежа
+- Клиент платит одну сумму за семью
+- Система распределяет по детям: сначала первый ребёнок, остаток второму и т.д.
+- Депозит = цена семьи за 1 месяц
+
+### Пеня
+- До 5-го числа → 0
+- С 6-го числа → +100 сом/день
+- Максимум → 15% от суммы долга
+- На депозит → пеня НЕ начисляется
+- Статус "На проверке" → пеня ЗАМОРОЖЕНА
+
+### Периоды
+```
+deposit → Депозит
+9  → Сентябрь 2026
+10 → Октябрь 2026
+11 → Ноябрь 2026
+12 → Декабрь 2026
+1  → Январь 2027
+2  → Февраль 2027
+3  → Март 2027
+4  → Апрель 2027
+5  → Май 2027 (покрывается депозитом)
+```
+
+---
+
+## 👤 РОЛИ И ПРАВА
+
+| Роль | Права |
+|------|-------|
+| admin / Директор | Всё + редактирование начислений |
+| manager / Менеджер | Видит всё, вводит оплаты, прикрепляет чеки |
+| cashier / Кассир | Подтверждает / отклоняет оплаты |
+| logist / Логист | Только логистика, финансы не видит |
+
+---
+
+## 📋 ФОРМА РЕГИСТРАЦИИ (Netlify)
+
+**URL:** https://clinquant-sprite-ec8c20.netlify.app/?s=XXXX
+
+**Как работает:**
+1. Форма загружает школы динамически через Apps Script `?action=schools`
+2. Родитель заполняет адрес → OSRM считает расстояние → определяется зона
+3. Форма отправляет данные в Apps Script `doPost`
+4. Apps Script проверяет дубли → пишет в Google Sheets → синхронизирует в Supabase
+
+**Логика дублей (3 шага):**
+1. Есть ли ребёнок с таким именем в БД?
+2. Совпадает ли телефон?
+3. Совпадает ли адрес?
+→ Все три совпали = дубль, игнорируем
+
+**Apps Script пишет:**
+- `families` — только контакты (НЕ адрес, НЕ школу)
+- `children` — school_code, zone, vehicle_type, address, lat, lng, distance_km
+
+---
+
+## 🚀 СТАТУС РАЗРАБОТКИ
+
+### ✅ Сделано
+- React + TypeScript проект (`outway-crm-react`)
+- Типы, бизнес-логика, Supabase подключение
+- Sidebar, SchoolBar, StatusBadge
+- FamiliesPage — список семей
+- Форма регистрации (Netlify) — динамические школы из Sheets
+- Apps Script — дубли + новая схема БД
+- БД мигрирована на новую схему (207 семей, 240 детей)
+
+### 🟡 Следующий шаг
+- FamiliesPage — обновить запрос: джойнить families + children
+- Карточка семьи (Drawer) — показывать детей с их школой/зоной/адресом
+
+### 🔴 Планируется
+- Модуль Финансы (charges, payments)
+- Модуль Кассир
+- Авторизация по ролям
+- Модуль Логистика
+- Telegram бот
+
+---
+
+## 📋 КАК РАБОТАТЬ В НОВОМ ЧАТЕ
+
+1. Прочитай этот файл полностью
+2. Загрузи актуальные файлы из GitHub репо `aikaioutway-ai/outway-crm-react`
+3. Проверь структуру — что уже есть в `src/core/` и `src/modules/`
+4. Только потом пиши новый код
+5. Пуш в `main` ветку — Vercel задеплоит автоматически
+
+### Как пушить через bash
+```python
+import urllib.request, json, base64
+
+TOKEN = "ghp_XXXX_см_у_Кайрата"
+REPO  = "aikaioutway-ai/outway-crm-react"
+
+def push(path, local_file):
+    url = f"https://api.github.com/repos/{REPO}/contents/{path}"
+    h = {"Authorization": f"token {TOKEN}", "Content-Type": "application/json"}
+    try:
+        with urllib.request.urlopen(urllib.request.Request(url, headers=h)) as r:
+            sha = json.loads(r.read()).get("sha", "")
+    except:
+        sha = ""
+    with open(local_file, "rb") as f:
+        c = base64.b64encode(f.read()).decode()
+    d = json.dumps({"message": "Update", "content": c, "sha": sha}).encode()
+    urllib.request.urlopen(urllib.request.Request(url, data=d, headers=h, method="PUT"))
 ```
 
 ---
 
 *OutWay / АйКай Груп | Бишкек | 2026*
----
-
-## ⚠️ VERCEL / ESLINT — ОБЯЗАТЕЛЬНО ПЕРЕД КАЖДЫМ ПУШЕМ
-
-Vercel деплоит с флагом `CI=true` — это значит **любой ESLint warning = ошибка сборки = деплой упал**.
-
-### Частые причины падения:
-- Импортировал переменную/функцию но не использовал → `no-unused-vars`
-- Объявил `useState` но не использовал одну из переменных → `no-unused-vars`
-- Убрал логику но оставил старый `import` → `no-unused-vars`
-
-### Чеклист перед пушем:
-1. Проверить все `import` — нет ли лишних
-2. Проверить все `useState`, `useRef`, `useEffect` — все ли используются
-3. Если убрал фичу — убрать и все связанные переменные и импорты
-4. Никогда не оставлять `const [foo, setFoo] = useState(...)` если `foo` или `setFoo` нигде не используется
-
-### Примеры ошибок которые уже были:
-```
-'openCats' is assigned a value but never used       @typescript-eslint/no-unused-vars
-'setOpenCats' is assigned a value but never used    @typescript-eslint/no-unused-vars
-'getFamilyPrice' is defined but never used          @typescript-eslint/no-unused-vars
-```
