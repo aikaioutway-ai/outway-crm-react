@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { Child, Family } from '../../types';
-import { getPriceByZone, money } from '../../utils/pricing';
+import { getChildPrice, getPriceByZone, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import { ZONE_COLOR, VT_LABEL } from './constants';
 import { Section, Tag, PriceCell, Spinner } from './DrawerUI';
@@ -42,9 +42,12 @@ export default function TabChildren({ children, loading, family, isAdmin, onRelo
 
   // Цена берётся из family (зона/транспорт/школа хранятся там)
   function getPrice(index: number) {
-    const base = getPriceByZone(family.schoolCode as any, family.zone as any, family.vehicleType as any);
-    const discount = index > 0 ? Math.round(base * 0.05) : 0;
-    return { base, discount, final: base - discount };
+    const child = children[index];
+    const priceInput = child ?? family;
+    const base = getPriceByZone(priceInput.schoolCode as any, priceInput.zone as any, priceInput.vehicleType as any);
+    const final = child ? getChildPrice(child, index) : getChildPrice(family as any, index);
+    const discount = Math.max(0, base - final);
+    return { base, discount, final };
   }
 
   const familyTotal = kids.reduce((s, _, i) => s + getPrice(i).final, 0);
@@ -98,7 +101,7 @@ export default function TabChildren({ children, loading, family, isAdmin, onRelo
       {/* Инфо о тарифе семьи */}
       <div style={{ background: '#EEF2FF', borderRadius: 8, padding: '10px 14px', marginBottom: 16, display: 'flex', gap: 16 }}>
         <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
-          <b style={{ color: 'var(--text)' }}>Школа:</b> {family.schoolCode}
+          <b style={{ color: 'var(--text)' }}>Тариф:</b> считается по каждому ребёнку
         </div>
         <div style={{ fontSize: 12, color: 'var(--text-2)' }}>
           <b style={{ color: 'var(--text)' }}>Зона:</b> {family.zone}
@@ -195,8 +198,8 @@ export default function TabChildren({ children, loading, family, isAdmin, onRelo
 
                 {/* Теги */}
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 12 }}>
-                  <Tag label={VT_LABEL[family.vehicleType] ?? family.vehicleType} />
-                  <Tag label={`Зона ${family.zone}`} color={ZONE_COLOR[family.zone]} />
+                  <Tag label={VT_LABEL[children[i]?.vehicleType ?? family.vehicleType] ?? (children[i]?.vehicleType ?? family.vehicleType)} />
+                  <Tag label={`Зона ${children[i]?.zone ?? family.zone}`} color={ZONE_COLOR[children[i]?.zone ?? family.zone]} />
                   {kid.selfExitAllowed && <Tag label="Самовыход ✓" color={{ bg: '#E8F5E9', color: '#2E7D32' }} />}
                 </div>
 
