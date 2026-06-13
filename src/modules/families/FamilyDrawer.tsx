@@ -4,6 +4,7 @@ import { Family, Child, Payment } from '../../types';
 import { getFamilyPrice, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import { SCHOOL_NAME, ZONE_COLOR, normalizeZone, normalizeVehicle, zoneToNum, PERIOD_LABEL } from './constants';
+import { formatName, formatPhone } from '../../utils/format';
 import TabInfo      from './TabInfo';
 import TabChildren  from './TabChildren';
 import TabLogistics from './TabLogistics';
@@ -218,12 +219,12 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: -0.3, lineHeight: 1.2 }}>
-                {savedFamily.parentName}
+                {formatName(savedFamily.parentName)}
               </div>
               <div style={{ marginTop: 5, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
                 {savedFamily.phone && (
                   <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
-                    📞 {savedFamily.phone}
+                    📞 {formatPhone(savedFamily.phone)}
                   </span>
                 )}
                 {savedFamily.phoneTelegram && (
