@@ -239,17 +239,15 @@ export default function FamiliesPage() {
     });
   }
 
-  // Подсчёт семей по табу
-  const familyByTab: Record<string, Set<string>> = { ALL: new Set() };
+  // Подсчёт детей по табу
+  const countByTab: Record<string, number> = { ALL: 0 };
   const badgeByTab: Record<string, number> = {};
   const seenNew = new Set<string>();
 
   rows.forEach(r => {
-    if (!r.isFirstChild) return;
-    familyByTab['ALL'].add(r.familyId);
+    countByTab['ALL'] = (countByTab['ALL'] ?? 0) + 1;
     const tk = r.branchFilter;
-    if (!familyByTab[tk]) familyByTab[tk] = new Set();
-    familyByTab[tk].add(r.familyId);
+    countByTab[tk] = (countByTab[tk] ?? 0) + 1;
     if (r.status === 'new' && !seenNew.has(r.familyId)) {
       seenNew.add(r.familyId);
       badgeByTab['ALL'] = (badgeByTab['ALL'] ?? 0) + 1;
@@ -258,7 +256,7 @@ export default function FamiliesPage() {
   });
 
   const counts: Record<string, number> = {};
-  SCHOOL_TABS.forEach(t => { counts[t.key] = familyByTab[t.key]?.size ?? 0; });
+  SCHOOL_TABS.forEach(t => { counts[t.key] = countByTab[t.key] ?? 0; });
 
   // Фильтрация
   const tab = SCHOOL_TABS.find(t => t.key === activeTab);
@@ -514,3 +512,4 @@ export default function FamiliesPage() {
     </div>
   );
 }
+
