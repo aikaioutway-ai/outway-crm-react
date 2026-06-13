@@ -1,10 +1,17 @@
 import React, { useEffect, useState } from 'react';
 import { X, User, Users, Truck, CreditCard, Pencil, Check, History } from 'lucide-react';
-import { Family, Child, Payment } from '../../types';
+import { Family, Child, Charge, FamilyPayment, PaymentItem } from '../../types';
 import { getFamilyPrice, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import { SCHOOL_NAME, ZONE_COLOR, normalizeZone, normalizeVehicle, zoneToNum, PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
+import {
+  createChargesForPeriod,
+  createFamilyPayment,
+  deleteCharge,
+  fetchFinanceSnapshot,
+  updateCharge,
+} from '../../services/financeService';
 import TabInfo      from './TabInfo';
 import TabChildren  from './TabChildren';
 import TabLogistics from './TabLogistics';
@@ -36,10 +43,12 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 export default function FamilyDrawer({ family, onClose, userRole = 'manager', userName = 'Менеджер' }: Props) {
   const [tab, setTab]               = useState<Tab>('info');
   const [children, setChildren]     = useState<Child[]>([]);
-  const [payments, setPayments]     = useState<Payment[]>([]);
+  const [charges, setCharges]       = useState<Charge[]>([]);
+  const [payments, setPayments]     = useState<FamilyPayment[]>([]);
+  const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
   const [audit, setAudit]           = useState<AuditEntry[]>([]);
   const [loadingKids, setLoadingKids]         = useState(true);
-  const [loadingPayments, setLoadingPayments] = useState(true);
+  const [loadingFinance, setLoadingFinance] = useState(true);
   const [editMode, setEditMode]     = useState(false);
   const [saving, setSaving]         = useState(false);
   const [savedFamily, setSavedFamily] = useState<Family>(family);
@@ -51,17 +60,22 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   useEffect(() => {
     setSavedFamily(family);
     setEditMode(false);
-    loadChildren();
-    loadPayments();
+    loadAll();
     loadAudit();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
-  async function loadChildren() {
+  async function loadAll() {
+    const loadedChildren = await loadChildren();
+    await loadFinance(loadedChildren);
+  }
+
+  async function loadChildren(): Promise<Child[]> {
     setLoadingKids(true);
     const { data } = await supabase.from('children').select('*').eq('family_id', family.id);
+    let next: Child[] = [];
     if (data) {
-      setChildren(data.map((r: any) => ({
+      next = data.map((r: any) => ({
         id: r.id, familyId: r.family_id, childName: r.child_name,
         class: r.class, selfExitAllowed: r.self_exit_allowed ?? false,
         routeSource: r.route_source, transferNumber: r.transfer_number,
@@ -70,28 +84,27 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         zone: normalizeZone(r.zone, family.zone) as any,
         vehicleType: normalizeVehicle(r.vehicle_type) as any,
         timeMorning: r.time_morning,
-      })));
+        status: r.status ?? 'active',
+        address: r.address ?? family.fullAddress,
+        latitude: r.latitude ?? family.latitude,
+        longitude: r.longitude ?? family.longitude,
+        distanceKm: r.distance_km ?? family.distanceKm,
+        discountType: r.discount_type ?? 'none',
+        discountValue: Number(r.discount_value ?? 0),
+      }));
+      setChildren(next);
     }
     setLoadingKids(false);
+    return next;
   }
 
-  async function loadPayments() {
-    setLoadingPayments(true);
-    const { data } = await supabase.from('payments').select('*').eq('family_id', family.id);
-    if (data) {
-      setPayments(data.map((r: any) => ({
-        id: String(r.id), familyId: String(r.family_id),
-        schoolCode: r.school_code || family.schoolCode,
-        periodKey: (r.month === 0 ? 'deposit' : String(r.month)) as import('../../types').PeriodKey,
-        month: Number(r.month), year: Number(r.year),
-        amount: Number(r.amount ?? 0), managerAmount: Number(r.manager_amount ?? 0),
-        managerDate: r.manager_date ?? '', hasReceipt: Boolean(r.has_receipt),
-        accountantStatus: r.accountant_status ?? 'Не оплачено',
-        factAmount: Number(r.fact_amount ?? 0), factDate: r.fact_date ?? '',
-        isFrozen: Boolean(r.is_frozen), comment: r.comment ?? '',
-      })));
-    }
-    setLoadingPayments(false);
+  async function loadFinance(loadedChildren = children) {
+    setLoadingFinance(true);
+    const snapshot = await fetchFinanceSnapshot(family.id, loadedChildren);
+    setCharges(snapshot.charges);
+    setPayments(snapshot.payments);
+    setPaymentItems(snapshot.paymentItems);
+    setLoadingFinance(false);
   }
 
   async function loadAudit() {
@@ -141,54 +154,59 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     setSaving(false);
   }
 
-  async function handleSavePayment(p: Payment, updates: Partial<Payment>): Promise<boolean> {
-    const { error } = await supabase.from('payments').update({
-      amount:            updates.amount ?? p.amount,
-      manager_amount:    updates.managerAmount ?? p.managerAmount,
-      manager_date:      updates.managerDate ?? p.managerDate,
-      has_receipt:       updates.hasReceipt ?? p.hasReceipt,
-      accountant_status: updates.accountantStatus ?? p.accountantStatus,
-      fact_amount:       updates.factAmount ?? p.factAmount,
-      fact_date:         updates.factDate ?? p.factDate,
-      is_frozen:         updates.isFrozen ?? p.isFrozen,
-      comment:           updates.comment ?? p.comment,
-    }).eq('id', p.id);
-
-    if (!error) {
-      await loadPayments();
-      await addAudit('Изменение платежа', PERIOD_LABEL[p.periodKey] ?? p.periodKey,
-        `статус: ${p.accountantStatus}, сумма: ${p.amount}`,
-        `статус: ${updates.accountantStatus ?? p.accountantStatus}, факт: ${updates.factAmount ?? p.factAmount}`);
+  async function handleSaveCharge(charge: Charge, updates: Partial<Charge>): Promise<boolean> {
+    try {
+      await updateCharge(charge.id, updates);
+      await loadFinance();
+      await addAudit('Изменение начисления', PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth),
+        `статус: ${charge.status}, сумма: ${charge.amount}`,
+        `статус: ${updates.status ?? charge.status}, сумма: ${updates.amount ?? charge.amount}`);
       await loadAudit();
+      return true;
+    } catch {
+      return false;
     }
-    return !error;
   }
 
-  async function handleDeletePayment(p: Payment) {
-    if (!window.confirm(`Удалить "${PERIOD_LABEL[p.periodKey]}"?`)) return;
-    await supabase.from('payments').delete().eq('id', p.id);
-    await addAudit('Удаление платежа', PERIOD_LABEL[p.periodKey] ?? p.periodKey, money(p.amount), '—');
-    await loadPayments();
+  async function handleDeleteCharge(charge: Charge) {
+    if (!window.confirm('Удалить начисление?')) return;
+    await deleteCharge(charge.id);
+    await addAudit('Удаление начисления', PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth), money(charge.amount), '—');
+    await loadFinance();
     await loadAudit();
   }
 
-  async function handleAddPayment(periodKey: string, month: number, year: number, amount: number) {
-    const { error } = await supabase.from('payments').insert({
-      family_id: family.id, school_code: family.schoolCode, month, year, amount,
-      manager_amount: 0, accountant_status: 'Не оплачено', fact_amount: 0,
-      is_frozen: false, has_receipt: false,
-    });
-    if (!error) {
-      await loadPayments();
-      await addAudit('Добавление платежа', PERIOD_LABEL[periodKey] ?? periodKey, '—', money(amount));
+  async function handleAddCharges(month: number, year: number) {
+    await createChargesForPeriod(family.id, children, month, year);
+    await addAudit('Добавление начислений', PERIOD_LABEL[String(month)] ?? String(month), '—', `${children.length} детей`);
+    await loadFinance();
+    await loadAudit();
+  }
+
+  async function handleCreatePayment(amount: number, paymentType: any, comment: string): Promise<boolean> {
+    try {
+      await createFamilyPayment({
+        familyId: family.id,
+        amount,
+        paymentType,
+        paymentDate: new Date().toISOString().slice(0, 10),
+        comment,
+        createdBy: userName,
+        charges,
+      });
+      await addAudit('Внесение платежа', 'family_payment', '—', money(amount));
+      await loadFinance();
       await loadAudit();
+      return true;
+    } catch {
+      return false;
     }
   }
 
   // Долг по платежам (исключая депозит)
   const totalDebt = payments
-    .filter(p => p.periodKey !== 'deposit' && ['Не оплачено', 'Просрочено', 'Частично оплачено'].includes(p.accountantStatus))
-    .reduce((s, p) => s + Math.max(0, p.amount - p.factAmount), 0);
+    ? charges.reduce((s, c) => s + c.debtAmount, 0)
+    : 0;
 
   // Правильная цена семьи = getFamilyPrice от детей
   const familyMonthlyPrice = children.length > 0
@@ -299,9 +317,23 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         {/* ─── CONTENT ─── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', background: '#FAFBFF' }}>
           {tab === 'info'      && <TabInfo      family={savedFamily} editMode={editMode} saving={saving} onSave={handleSaveFamily} />}
-          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} editMode={editMode} isAdmin={isAdmin} onReload={loadChildren} />}
+          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} editMode={editMode} isAdmin={isAdmin} onReload={loadAll} />}
           {tab === 'logistics' && <TabLogistics family={savedFamily} children={children} loading={loadingKids} editMode={editMode} saving={saving} onSave={handleSaveFamily} onSaveChildren={async (updatedKids) => { for (const k of updatedKids) { await supabase.from('children').update({ transfer_number: k.transferNumber, stop_number: (k as any).stopNumber, time_morning: (k as any).timeMorning }).eq('id', k.id); } await loadChildren(); }} />}
-          {tab === 'finance'   && <TabFinance   payments={payments} loading={loadingPayments} family={savedFamily} children={children} editMode={editMode} isAdmin={isAdmin} isCashier={isCashier} onSavePayment={handleSavePayment} onDeletePayment={handleDeletePayment} onAddPayment={handleAddPayment} />}
+          {tab === 'finance'   && <TabFinance
+            charges={charges}
+            payments={payments}
+            paymentItems={paymentItems}
+            loading={loadingFinance}
+            family={savedFamily}
+            children={children}
+            editMode={editMode}
+            isAdmin={isAdmin}
+            isCashier={isCashier}
+            onSaveCharge={handleSaveCharge}
+            onDeleteCharge={handleDeleteCharge}
+            onAddCharges={handleAddCharges}
+            onCreatePayment={handleCreatePayment}
+          />}
           {tab === 'history'   && <TabHistory   audit={audit} />}
         </div>
       </div>
