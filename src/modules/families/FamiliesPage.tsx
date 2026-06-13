@@ -13,6 +13,7 @@ import StatusBadge from '../../core/cards/StatusBadge';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import '../../core/tables/DataTable.css';
 import { Search, Plus, RefreshCw } from 'lucide-react';
+import { formatName, formatPhone } from '../../utils/format';
 
 interface ChildRow {
   rowId: string;
@@ -175,8 +176,8 @@ export default function FamiliesPage() {
             isFirstChild:  idx === 0,
             childName:     c?.child_name ?? '',
             childClass:    c?.class ?? '',
-            parentName:    f.parent_name,
-            phone:         f.phone,
+            parentName:    formatName(f.parent_name),
+            phone:         formatPhone(f.phone),
             schoolCode:    f.school_code,
             branchName,
             branchShort,
