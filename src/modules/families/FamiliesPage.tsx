@@ -455,7 +455,7 @@ export default function FamiliesPage() {
       {showNewFamily && (
         <NewFamilyModal
           onClose={() => setShowNewFamily(false)}
-          onCreated={() => { setShowNewFamily(false); load(); }}
+          
         />
       )}
       {paymentFamily && (
