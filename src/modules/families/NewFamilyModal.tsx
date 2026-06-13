@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { X, MapPin, User, Users, ChevronRight } from 'lucide-react';
-import { Family, Child, SchoolCode, Zone, VehicleType } from '../../types';
+import { SchoolCode, Zone, VehicleType } from '../../types';
 import { getFamilyPrice, getZoneByDistance, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import { SCHOOL_NAME } from './constants';
@@ -71,7 +71,7 @@ export default function NewFamilyModal({ onClose, onCreated, defaultSchool = 'IN
   const [distanceKm, setDistanceKm]       = useState<number | null>(null);
   const [zone, setZone]                   = useState<Zone>('A');
   const [geoLoading, setGeoLoading]       = useState(false);
-  const [mapReady, setMapReady]           = useState(false);
+  // mapReady removed
 
   // School & vehicle (family level)
   const [schoolCode, setSchoolCode]       = useState<SchoolCode>(defaultSchool);
@@ -109,7 +109,7 @@ export default function NewFamilyModal({ onClose, onCreated, defaultSchool = 'IN
       controls: ['zoomControl'],
     });
     mapRef.current = map;
-    setMapReady(true);
+    
 
     map.events.add('click', (e: any) => {
       const coords = e.get('coords');
