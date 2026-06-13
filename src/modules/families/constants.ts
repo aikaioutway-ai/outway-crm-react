@@ -26,10 +26,9 @@ export const BRANCH_SHORT: Record<string, string> = {
 };
 
 // Группировка branch_name по school_code для SchoolBar
-// ING_A входит в ING (одна трансферная линия)
 export const BRANCH_TO_FILTER: Record<string, string> = {
   'Индиго Kids':          'ING',
-  'Asylkech Girls School':'ING',   // ING_A едет с ING
+  'Asylkech Girls School':'ING',
   'Indigo Prime Academy': 'ING_P',
   'Indigo West':          'ING_W',
   'Гениум — Чуйкова':    'GEN2',
@@ -102,6 +101,54 @@ export function normalizeVehicle(vt: unknown): string {
   if (!vt) return 'microbus';
   if (vt === 'minibus' || vt === 'bus' || vt === 'mini-bus') return 'microbus';
   return String(vt);
+}
+
+// Нормализация school_code из БД → канонический код
+// Обрабатывает случаи когда в БД записано полное название школы вместо кода
+const SCHOOL_CODE_MAP: Record<string, string> = {
+  // Полные английские названия
+  'Kings International School':    'KINGS',
+  'Light Academy':                 'LIGHT',
+  'Bilim KG':                      'BILIM',
+  'Билим Бишкек KG':               'BILIM',
+  'American-European School':      'AES',
+  'Kyrgyz-American School':        'KAS',
+  'Epsilon':                       'EPSILON',
+  'Эпсилон':                       'EPSILON',
+  'Nova International School':     'NOVA',
+  'Эрудит-ISIT':                   'ERUDIT',
+  'Эрудит':                        'ERUDIT',
+  'Тенсай':                        'TENSAY',
+  'ТЕНСАЙ':                        'TENSAY',
+  'Tensai':                        'TENSAY',
+  'TENSAI':                        'TENSAY',
+  'Эдисон':                        'EDISON',
+  'Edison':                        'EDISON',
+  'ЭДИСОН':                        'EDISON',
+  // Indigo варианты
+  'Индиго Kids':                   'INDIGO',
+  'Indigo Prime Academy':          'INDIGO',
+  'Indigo West':                   'INDIGO',
+  'Asylkech Girls School':         'INDIGO',
+  // Genius варианты
+  'Гениум — Чуйкова':              'GENIUS',
+  'Гениум Чуйкова':                'GENIUS',
+  'GENIUS #2':                     'GENIUS',
+  'GENIUS2':                       'GENIUS',
+  'Гениум — Авангард':             'GENIUS4',
+  'Гениум Авангард':               'GENIUS4',
+  'GENIUS #4':                     'GENIUS4',
+  // Уже правильные коды — пропускаем через identity
+  'KINGS': 'KINGS', 'LIGHT': 'LIGHT', 'BILIM': 'BILIM',
+  'AES': 'AES', 'KAS': 'KAS', 'EPSILON': 'EPSILON',
+  'GENIUS': 'GENIUS', 'GENIUS4': 'GENIUS4', 'NOVA': 'NOVA',
+  'INDIGO': 'INDIGO', 'ERUDIT': 'ERUDIT', 'TENSAY': 'TENSAY', 'EDISON': 'EDISON',
+};
+
+export function normalizeSchoolCode(raw: string | null | undefined): string {
+  if (!raw) return '';
+  const trimmed = raw.trim();
+  return SCHOOL_CODE_MAP[trimmed] ?? trimmed.toUpperCase();
 }
 
 // Получить короткое название по branch_name или school_code
