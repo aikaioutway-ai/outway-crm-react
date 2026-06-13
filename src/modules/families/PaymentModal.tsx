@@ -3,7 +3,6 @@ import { X, CreditCard } from 'lucide-react';
 import { Family, Payment } from '../../types';
 import { money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
-import StatusBadge from '../../core/cards/StatusBadge';
 import { PERIOD_LABEL, PERIOD_ORDER } from './constants';
 
 interface Props {
@@ -31,8 +30,8 @@ export default function PaymentModal({ family, onClose, userRole = 'manager', us
   const [saving, setSaving]         = useState(false);
   const [msg, setMsg]               = useState('');
 
-  const isAdmin   = userRole === 'admin' || userRole === 'director';
-  const isCashier = userRole === 'cashier';
+  
+  
 
   useEffect(() => {
     load();
