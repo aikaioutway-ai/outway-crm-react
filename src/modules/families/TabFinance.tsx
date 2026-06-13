@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
 import { Family, Payment, Child } from '../../types';
 import { calcPenalty, getFamilyPrice, money } from '../../utils/pricing';
-import StatusBadge from '../../core/cards/StatusBadge';
 import { PERIOD_LABEL, PERIOD_ORDER, ALL_PERIODS } from './constants';
 import { Section, Spinner, Empty } from './DrawerUI';
 
