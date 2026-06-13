@@ -3,7 +3,7 @@ import { supabase } from '../../services/supabase';
 import { Family } from '../../types';
 import { money } from '../../utils/pricing';
 import {
-  ZONE_COLOR, VT_LABEL, normalizeZone, getBranchShort, getBranchFilter
+  ZONE_COLOR, VT_LABEL, normalizeZone, getBranchShort, getBranchFilter, normalizeSchoolCode
 } from './constants';
 import { SCHOOL_TABS } from '../../core/bars/SchoolSidebar';
 import FamilyDrawer from './FamilyDrawer';
@@ -169,7 +169,7 @@ export default function FamiliesPage() {
 
         items.forEach((c: any, idx: number) => {
           // school_code: приоритет у ребёнка, fallback у семьи (для старых записей)
-          const schoolCode  = c?.school_code ?? f.school_code ?? '';
+          const schoolCode  = normalizeSchoolCode(c?.school_code ?? f.school_code);
           const branchName  = c?.branch_name ?? f.branch_name ?? '';
           const branchShort = getBranchShort(branchName, schoolCode);
           const branchFilter = getBranchFilter(branchName, schoolCode);
@@ -218,7 +218,7 @@ export default function FamiliesPage() {
     const firstKid = kids?.[0];
     setSelectedFamily({
       id: f.id,
-      schoolCode: firstKid?.school_code ?? f.school_code,
+      schoolCode: normalizeSchoolCode(firstKid?.school_code ?? f.school_code),
       parentName: f.parent_name,
       phone: f.phone, phoneTelegram: f.phone_telegram, secondPhone: f.second_phone,
       contactName: f.contact_name, contactPhone: f.contact_phone,
@@ -468,7 +468,7 @@ export default function FamiliesPage() {
               const firstKid = kids?.[0];
               if (f) setPaymentFamily({
                 id: f.id,
-                schoolCode: firstKid?.school_code ?? f.school_code,
+                schoolCode: normalizeSchoolCode(firstKid?.school_code ?? f.school_code),
                 parentName: f.parent_name, phone: f.phone, phoneTelegram: f.phone_telegram,
                 secondPhone: f.second_phone, contactName: f.contact_name, contactPhone: f.contact_phone,
                 fullAddress: f.full_address ?? firstKid?.address,
