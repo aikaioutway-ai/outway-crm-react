@@ -298,7 +298,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         {/* ─── CONTENT ─── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', background: '#FAFBFF' }}>
           {tab === 'info'      && <TabInfo      family={savedFamily} editMode={editMode} saving={saving} onSave={handleSaveFamily} />}
-          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} editMode={editMode} isAdmin={isAdmin} />}
+          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} editMode={editMode} isAdmin={isAdmin} onReload={loadChildren} />}
           {tab === 'logistics' && <TabLogistics family={savedFamily} children={children} loading={loadingKids} editMode={editMode} saving={saving} onSave={handleSaveFamily} onSaveChildren={async (updatedKids) => { for (const k of updatedKids) { await supabase.from('children').update({ transfer_number: k.transferNumber, stop_number: (k as any).stopNumber, time_morning: (k as any).timeMorning }).eq('id', k.id); } await loadChildren(); }} />}
           {tab === 'finance'   && <TabFinance   payments={payments} loading={loadingPayments} family={savedFamily} children={children} editMode={editMode} isAdmin={isAdmin} isCashier={isCashier} onSavePayment={handleSavePayment} onDeletePayment={handleDeletePayment} onAddPayment={handleAddPayment} />}
           {tab === 'history'   && <TabHistory   audit={audit} />}
