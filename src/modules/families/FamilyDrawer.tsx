@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { X, User, Users, Truck, CreditCard, Pencil, Check, History } from 'lucide-react';
 import { Family, Child, Payment } from '../../types';
-import { money } from '../../utils/pricing';
+import { getFamilyPrice, money } from '../../utils/pricing';
 import { supabase } from '../../services/supabase';
 import { SCHOOL_NAME, ZONE_COLOR, normalizeZone, normalizeVehicle, zoneToNum, PERIOD_LABEL } from './constants';
 import TabInfo      from './TabInfo';
@@ -37,7 +37,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   const [children, setChildren]     = useState<Child[]>([]);
   const [payments, setPayments]     = useState<Payment[]>([]);
   const [audit, setAudit]           = useState<AuditEntry[]>([]);
-  const [loadingKids, setLoadingKids]       = useState(true);
+  const [loadingKids, setLoadingKids]         = useState(true);
   const [loadingPayments, setLoadingPayments] = useState(true);
   const [editMode, setEditMode]     = useState(false);
   const [saving, setSaving]         = useState(false);
@@ -56,8 +56,6 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
-  // ─── Загрузка данных ─────────────────────────────────────────────────────
-
   async function loadChildren() {
     setLoadingKids(true);
     const { data } = await supabase.from('children').select('*').eq('family_id', family.id);
@@ -66,9 +64,11 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         id: r.id, familyId: r.family_id, childName: r.child_name,
         class: r.class, selfExitAllowed: r.self_exit_allowed ?? false,
         routeSource: r.route_source, transferNumber: r.transfer_number,
+        stopNumber: r.stop_number,
         schoolCode: r.school_code || family.schoolCode,
         zone: normalizeZone(r.zone, family.zone) as any,
         vehicleType: normalizeVehicle(r.vehicle_type) as any,
+        timeMorning: r.time_morning,
       })));
     }
     setLoadingKids(false);
@@ -114,8 +114,6 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     } catch { /* таблица ещё не создана */ }
   }
 
-  // ─── Обработчики ─────────────────────────────────────────────────────────
-
   async function handleSaveFamily(updated: Family) {
     setSaving(true);
     const { error } = await supabase.from('families').update({
@@ -126,7 +124,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
       school_code: updated.schoolCode, vehicle_type: updated.vehicleType,
       zone: zoneToNum(updated.zone), transfer_number: updated.transferNumber,
       stop_number: updated.stopNumber, time_morning: updated.timeMorning,
-      time_evening: updated.timeEvening, status: updated.status,
+      status: updated.status,
     }).eq('id', family.id);
 
     if (!error) {
@@ -186,32 +184,56 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     }
   }
 
-  // ─── Сводка долга для шапки ───────────────────────────────────────────────
-
+  // Долг по платежам (исключая депозит)
   const totalDebt = payments
     .filter(p => p.periodKey !== 'deposit' && ['Не оплачено', 'Просрочено', 'Частично оплачено'].includes(p.accountantStatus))
     .reduce((s, p) => s + Math.max(0, p.amount - p.factAmount), 0);
 
-  const statusLabel = { active: 'Активный', new: 'Новый', inactive: 'Неактивный', rejected: 'Отказ' }[savedFamily.status] ?? savedFamily.status;
+  // Правильная цена семьи = getFamilyPrice от детей
+  const familyMonthlyPrice = children.length > 0
+    ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
+    : savedFamily.monthlyPrice;
 
-  // ─── Render ──────────────────────────────────────────────────────────────
+  const statusLabel = { active: 'Активный', new: 'Новый', inactive: 'Неактивный', rejected: 'Отказ' }[savedFamily.status] ?? savedFamily.status;
+  const statusColor: Record<string, { bg: string; color: string }> = {
+    active:   { bg: '#D1FAE5', color: '#065F46' },
+    new:      { bg: '#DBEAFE', color: '#1E40AF' },
+    inactive: { bg: '#F3F4F6', color: '#4B5563' },
+    rejected: { bg: '#FEE2E2', color: '#991B1B' },
+  };
+  const sc = statusColor[savedFamily.status] ?? { bg: 'rgba(255,255,255,0.15)', color: '#fff' };
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.18)', zIndex: 400 }} />
-      <div style={{ position: 'fixed', top: 0, right: 0, bottom: 0, width: 660, background: '#fff', zIndex: 401, display: 'flex', flexDirection: 'column', boxShadow: '-4px 0 32px rgba(49,46,129,0.13)', animation: 'slideIn 0.22s ease' }}>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.25)', zIndex: 400 }} />
+      <div style={{
+        position: 'fixed', top: 0, right: 0, bottom: 0, width: 700,
+        background: '#fff', zIndex: 401, display: 'flex', flexDirection: 'column',
+        boxShadow: '-8px 0 40px rgba(49,46,129,0.18)', animation: 'slideIn 0.2s ease',
+      }}>
 
-        {/* HEADER */}
-        <div style={{ background: 'var(--accent)', padding: '18px 22px 16px', flexShrink: 0 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 14 }}>
-            <div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: '#fff' }}>{savedFamily.parentName}</div>
-              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.7)', marginTop: 3 }}>
-                {savedFamily.phone}
-                {savedFamily.phoneTelegram && <span style={{ marginLeft: 10 }}>TG: {savedFamily.phoneTelegram}</span>}
+        {/* ─── HEADER ─── */}
+        <div style={{ background: 'var(--accent)', padding: '20px 24px 0', flexShrink: 0 }}>
+          {/* Top row: name + actions */}
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: -0.3, lineHeight: 1.2 }}>
+                {savedFamily.parentName}
+              </div>
+              <div style={{ marginTop: 5, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+                {savedFamily.phone && (
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                    📞 {savedFamily.phone}
+                  </span>
+                )}
+                {savedFamily.phoneTelegram && (
+                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                    ✈ {savedFamily.phoneTelegram}
+                  </span>
+                )}
               </div>
             </div>
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, marginLeft: 12 }}>
               {saveMsg && <span style={{ fontSize: 12, color: '#A5D6A7', fontWeight: 600 }}>{saveMsg}</span>}
               <HeaderBtn onClick={() => setEditMode(e => !e)} active={editMode}>
                 {editMode ? <Check size={16} /> : <Pencil size={15} />}
@@ -219,70 +241,111 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
               <HeaderBtn onClick={onClose}><X size={16} /></HeaderBtn>
             </div>
           </div>
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-            <HChip label="Школа" value={SCHOOL_NAME[savedFamily.schoolCode] ?? savedFamily.schoolCode} />
-            <HChip label="Зона" value={`Зона ${savedFamily.zone}`} chipStyle={{ background: ZONE_COLOR[savedFamily.zone]?.bg, color: ZONE_COLOR[savedFamily.zone]?.color }} />
-            {totalDebt > 0
-              ? <HChip label="Долг" value={money(totalDebt)} chipStyle={{ background: '#FFEBEE', color: '#C62828' }} />
-              : <HChip label="Баланс" value="✓ Нет долга" chipStyle={{ background: '#E8F5E9', color: '#2E7D32' }} />
-            }
-            <HChip label="Статус" value={statusLabel} />
+
+          {/* Chips row — stretched */}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 0 }}>
+            <HeaderChip
+              label="ШКОЛА"
+              value={SCHOOL_NAME[savedFamily.schoolCode] ?? savedFamily.schoolCode}
+              icon="🏫"
+            />
+            <HeaderChip
+              label="ЗОНА"
+              value={`Зона ${savedFamily.zone}`}
+              sub={savedFamily.distanceKm ? `${savedFamily.distanceKm} км` : undefined}
+              icon="📍"
+              chipBg={ZONE_COLOR[savedFamily.zone]?.bg}
+              chipColor={ZONE_COLOR[savedFamily.zone]?.color}
+            />
+            <HeaderChip
+              label={totalDebt > 0 ? 'ДОЛГ' : 'БАЛАНС'}
+              value={totalDebt > 0 ? money(totalDebt) : '✓ Нет долга'}
+              sub={familyMonthlyPrice > 0 ? `${money(familyMonthlyPrice)}/мес` : undefined}
+              icon={totalDebt > 0 ? '⚠' : '✓'}
+              chipBg={totalDebt > 0 ? '#FFEBEE' : '#E8F5E9'}
+              chipColor={totalDebt > 0 ? '#C62828' : '#1B5E20'}
+            />
+            <HeaderChip
+              label="СТАТУС"
+              value={statusLabel}
+              icon="●"
+              chipBg={sc.bg}
+              chipColor={sc.color}
+            />
+          </div>
+
+          {/* TABS */}
+          <div style={{ display: 'flex', marginTop: 16 }}>
+            {TABS.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} style={{
+                flex: 1, padding: '10px 4px 9px', border: 'none', whiteSpace: 'nowrap',
+                borderBottom: tab === t.key ? '3px solid #fff' : '3px solid transparent',
+                background: 'none',
+                color: tab === t.key ? '#fff' : 'rgba(255,255,255,0.55)',
+                fontSize: 11, fontWeight: tab === t.key ? 700 : 500,
+                cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
+                transition: 'color 0.15s',
+              }}>
+                {t.icon}{t.label}
+                {t.key === 'history' && audit.length > 0 && (
+                  <span style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', borderRadius: 10, fontSize: 9, padding: '1px 5px', fontWeight: 700 }}>{audit.length}</span>
+                )}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* TABS */}
-        <div style={{ display: 'flex', borderBottom: '2px solid var(--border)', background: '#fff', flexShrink: 0, overflowX: 'auto' }}>
-          {TABS.map(t => (
-            <button key={t.key} onClick={() => setTab(t.key)} style={{
-              flex: 1, padding: '11px 4px 10px', border: 'none', whiteSpace: 'nowrap',
-              borderBottom: tab === t.key ? '2px solid var(--accent)' : '2px solid transparent',
-              marginBottom: -2, background: 'none',
-              color: tab === t.key ? 'var(--accent)' : 'var(--text-2)',
-              fontSize: 11, fontWeight: tab === t.key ? 700 : 500,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5,
-            }}>
-              {t.icon}{t.label}
-              {t.key === 'history' && audit.length > 0 && (
-                <span style={{ background: 'var(--accent)', color: '#fff', borderRadius: 10, fontSize: 9, padding: '1px 5px', fontWeight: 700 }}>{audit.length}</span>
-              )}
-            </button>
-          ))}
-        </div>
-
-        {/* CONTENT */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '20px 22px' }}>
+        {/* ─── CONTENT ─── */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', background: '#FAFBFF' }}>
           {tab === 'info'      && <TabInfo      family={savedFamily} editMode={editMode} saving={saving} onSave={handleSaveFamily} />}
           {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} editMode={editMode} isAdmin={isAdmin} />}
-          {tab === 'logistics' && <TabLogistics family={savedFamily} children={children} loading={loadingKids} editMode={editMode} saving={saving} onSave={handleSaveFamily} />}
-          {tab === 'finance'   && <TabFinance   payments={payments} loading={loadingPayments} family={savedFamily} editMode={editMode} isAdmin={isAdmin} isCashier={isCashier} onSavePayment={handleSavePayment} onDeletePayment={handleDeletePayment} onAddPayment={handleAddPayment} />}
+          {tab === 'logistics' && <TabLogistics family={savedFamily} children={children} loading={loadingKids} editMode={editMode} saving={saving} onSave={handleSaveFamily} onSaveChildren={async (updatedKids) => { for (const k of updatedKids) { await supabase.from('children').update({ transfer_number: k.transferNumber, stop_number: (k as any).stopNumber, time_morning: (k as any).timeMorning }).eq('id', k.id); } await loadChildren(); }} />}
+          {tab === 'finance'   && <TabFinance   payments={payments} loading={loadingPayments} family={savedFamily} children={children} editMode={editMode} isAdmin={isAdmin} isCashier={isCashier} onSavePayment={handleSavePayment} onDeletePayment={handleDeletePayment} onAddPayment={handleAddPayment} />}
           {tab === 'history'   && <TabHistory   audit={audit} />}
         </div>
       </div>
 
-      <style>{`@keyframes slideIn { from { transform:translateX(40px); opacity:0 } to { transform:translateX(0); opacity:1 } }`}</style>
+      <style>{`
+        @keyframes slideIn { from { transform:translateX(40px); opacity:0 } to { transform:translateX(0); opacity:1 } }
+      `}</style>
     </>
   );
 }
-
-// ─── Мелкие компоненты шапки ─────────────────────────────────────────────────
 
 function HeaderBtn({ onClick, active, children }: { onClick: () => void; active?: boolean; children: React.ReactNode }) {
   return (
     <button onClick={onClick} style={{
       background: active ? '#fff' : 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8,
-      width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', color: active ? 'var(--accent)' : '#fff', flexShrink: 0,
+      transition: 'background 0.15s',
     }}>
       {children}
     </button>
   );
 }
 
-function HChip({ label, value, chipStyle }: { label: string; value: string; chipStyle?: React.CSSProperties }) {
+function HeaderChip({ label, value, sub, icon, chipBg, chipColor }: {
+  label: string; value: string; sub?: string; icon?: string;
+  chipBg?: string; chipColor?: string;
+}) {
   return (
-    <div style={{ background: 'rgba(255,255,255,0.13)', borderRadius: 8, padding: '5px 11px', ...chipStyle }}>
-      <span style={{ fontSize: 10, fontWeight: 600, color: chipStyle?.color ?? 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: 0.5, display: 'block', marginBottom: 1 }}>{label}</span>
-      <span style={{ fontSize: 13, fontWeight: 700, color: chipStyle?.color ?? '#fff' }}>{value}</span>
+    <div style={{
+      background: chipBg ?? 'rgba(255,255,255,0.13)',
+      borderRadius: 10, padding: '10px 14px',
+      display: 'flex', flexDirection: 'column', gap: 2,
+    }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: chipColor ? chipColor + 'AA' : 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        {label}
+      </div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: chipColor ?? '#fff', lineHeight: 1.2 }}>
+        {value}
+      </div>
+      {sub && (
+        <div style={{ fontSize: 10, fontWeight: 500, color: chipColor ? chipColor + '99' : 'rgba(255,255,255,0.5)', marginTop: 1 }}>
+          {sub}
+        </div>
+      )}
     </div>
   );
 }
