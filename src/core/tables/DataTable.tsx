@@ -58,6 +58,9 @@ export interface DataTableProps<T = any> {
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
   toolbarExtra?: React.ReactNode;
   canManageProperties?: boolean;
+  expandedRowKey?: any;
+  onExpandedRowKeyChange?: (key: any) => void;
+  renderExpandedRow?: (row: T) => React.ReactNode;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -173,6 +176,9 @@ export function DataTable<T extends Record<string, any>>({
   groupColorKey,
   toolbarExtra,
   canManageProperties = true,
+  expandedRowKey,
+  onExpandedRowKeyChange,
+  renderExpandedRow,
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
@@ -725,7 +731,12 @@ export function DataTable<T extends Record<string, any>>({
                     key={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
                     data-group-even={groupColorKey ? (((row as any)[groupColorKey] ?? 0) % 2 === 0 ? 'true' : 'false') : undefined}
-                    onClick={() => undefined}
+                    onClick={() => {
+                      if (renderExpandedRow && onExpandedRowKeyChange) {
+                        onExpandedRowKeyChange(expandedRowKey === id ? null : id);
+                      }
+                    }}
+                    style={{ cursor: renderExpandedRow ? 'pointer' : undefined }}
                     onContextMenu={e => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -785,6 +796,25 @@ export function DataTable<T extends Record<string, any>>({
                         )}
                       </td>
                     ))}
+                  </tr>
+                );
+              })}
+              {renderExpandedRow && processedData.map((row) => {
+                const id = row[rowKey];
+                if (expandedRowKey !== id) return null;
+                const totalCols = visibleCols.length + 2;
+                return (
+                  <tr key={String(id) + '_expand'} style={{ background: 'var(--dt-bg, #FAFBFF)' }}>
+                    <td colSpan={totalCols} style={{ padding: 0, border: 'none' }}>
+                      <div style={{
+                        borderTop: '2px solid #312E81',
+                        borderBottom: '1px solid var(--dt-border, #DDE3F5)',
+                        background: '#FAFBFF',
+                        animation: 'dtExpandIn 0.18s ease',
+                      }}>
+                        {renderExpandedRow(row)}
+                      </div>
+                    </td>
                   </tr>
                 );
               })}
@@ -850,4 +880,6 @@ export function DataTable<T extends Record<string, any>>({
   );
 }
 
+// @keyframes dtExpandIn добавлены в DataTable.css
 export default DataTable;
+
