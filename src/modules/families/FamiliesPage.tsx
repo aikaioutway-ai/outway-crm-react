@@ -328,7 +328,19 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
     }
   }
 
-  async function openFamily(familyId: string) {
+  async function toggleExpandedFamily(key: React.Key | null, row?: ChildRow) {
+    if (!key || !row) {
+      setExpandedFamilyId(null);
+      setExpandedFamily(null);
+      return;
+    }
+    const familyId = String(key);
+    if (expandedFamilyId === familyId) {
+      setExpandedFamilyId(null);
+      setExpandedFamily(null);
+      return;
+    }
+    setExpandedFamilyId(familyId);
     const family = await fetchV2Family(familyId);
     if (family) setExpandedFamily(family);
   }
@@ -426,7 +438,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
       void load(false);
       if (expandedFamilyId === row.familyId) {
         void fetchV2Family(row.familyId).then(family => {
-          if (family) setExpandedFamily(family);
+          if (family) setExpandedFamily(family ?? null);
         });
       }
       return true;
@@ -627,13 +639,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
         <button
           onClick={(event) => {
             event.stopPropagation();
-            if (expandedFamilyId === row.familyId) {
-              setExpandedFamilyId(null);
-              setExpandedFamily(null);
-            } else {
-              setExpandedFamilyId(row.familyId);
-              openFamily(row.familyId);
-            }
+            toggleExpandedFamily(row.familyId, row);
           }}
           style={{
             height: 24,
@@ -1032,26 +1038,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
             emptyText="Заявок не найдено"
             groupColorKey="familyIndex"
             canManageProperties={canManageProperties}
-            onRowClick={(row) => {
-              if (expandedFamilyId === row.familyId) {
-                setExpandedFamilyId(null);
-                setExpandedFamily(null);
-              } else {
-                setExpandedFamilyId(row.familyId);
-                openFamily(row.familyId);
-              }
-            }}
+            onRowClick={(row) => toggleExpandedFamily(row.familyId, row)}
             onRowDelete={(row) => console.log('delete', row.rowId)}
             onRowEdit={(row) => console.log('edit', row.rowId)}
-            expandedRowKey={expandedFamilyId ? filtered.find(r => r.familyId === expandedFamilyId && r.isFirstChild)?.rowId ?? null : null}
-            onExpandedRowKeyChange={(key) => {
-              if (!key) { setExpandedFamilyId(null); setExpandedFamily(null); return; }
-              const row = filtered.find(r => r.rowId === key);
-              if (row) { setExpandedFamilyId(row.familyId); openFamily(row.familyId); }
-            }}
+            expandedRowKey={expandedFamilyId}
+            getExpandedRowKey={(row) => row.familyId}
+            onExpandedRowKeyChange={(key, row) => toggleExpandedFamily(key, row as ChildRow | undefined)}
             renderExpandedRow={(row) => {
               if (!row.isFirstChild) return null;
-              if (expandedFamily && expandedFamily.id === row.familyId) {
+              if (expandedFamilyId === row.familyId && expandedFamily) {
                 return (
                   <InlineFamilyCard
                     family={expandedFamily}
@@ -1061,7 +1056,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
                   />
                 );
               }
-              return <div style={{padding:16,color:'#999',fontSize:13}}>Загрузка...</div>;
+              if (expandedFamilyId === row.familyId) {
+                return <div style={{padding:16,color:'#999',fontSize:13}}>Загрузка...</div>;
+              }
+              return null;
             }}
             onCellSave={handleCellSave}
             toolbarExtra={(
@@ -1092,4 +1090,5 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
     </div>
   );
 }
+
 
