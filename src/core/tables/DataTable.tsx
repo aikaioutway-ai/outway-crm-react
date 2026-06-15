@@ -537,6 +537,7 @@ export function DataTable<T extends Record<string, any>>({
 
         return (
           <div className="dt-props-panel-v2" style={{ zIndex: 100 }} onClick={e => e.stopPropagation()}>
+            <div className="dt-props-title">Колонки по категориям</div>
             {/* chips removed — 001 */}
 
             {/* Search */}
