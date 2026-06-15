@@ -274,19 +274,6 @@ export function DataTable<T extends Record<string, any>>({
 
   const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, saveCols);
 
-  const toggleSelect = (id: any) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    if (selected.size === processedData.length) setSelected(new Set());
-    else setSelected(new Set(processedData.map(r => r[rowKey])));
-  };
-
   const startCellEdit = (row: T, col: ColumnDef<T>) => {
     if (!col.editable || !onCellSave) return;
     setEditingCell({ rowId: row[rowKey], key: col.key });
