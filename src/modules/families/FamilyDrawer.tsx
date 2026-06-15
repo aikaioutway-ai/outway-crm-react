@@ -203,10 +203,8 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     }
   }
 
-  // Долг по платежам (исключая депозит)
-  const totalDebt = payments
-    ? charges.reduce((s, c) => s + c.debtAmount, 0)
-    : 0;
+  // Долг по начислениям (сумма всех долгов по charges)
+  const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
 
   // Правильная цена семьи = getFamilyPrice от детей
   const familyMonthlyPrice = children.length > 0
