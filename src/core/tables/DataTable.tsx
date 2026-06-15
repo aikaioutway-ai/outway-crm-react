@@ -714,8 +714,8 @@ export function DataTable<T extends Record<string, any>>({
                 const isExpanded = expandedRowKey != null && String(expandedRowKey) === String(expandKey);
                 const isSelected = selected.has(id);
                 return (
+                  <React.Fragment key={String(id)}>
                   <tr
-                    key={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
                     data-group-even={groupColorKey ? (((row as any)[groupColorKey] ?? 0) % 2 === 0 ? 'true' : 'false') : undefined}
                     onClick={() => undefined}
@@ -795,6 +795,21 @@ export function DataTable<T extends Record<string, any>>({
                       </td>
                     ))}
                   </tr>
+                  {isExpanded && renderExpandedRow && (
+                    <tr>
+                      <td colSpan={visibleCols.length + 2} style={{ padding: 0, border: 'none' }}>
+                        <div style={{
+                          borderTop: '2px solid #312E81',
+                          borderBottom: '1px solid #DDE3F5',
+                          background: '#FAFBFF',
+                          animation: 'dtExpandIn 0.18s ease',
+                        }}>
+                          {renderExpandedRow(row)}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
 
