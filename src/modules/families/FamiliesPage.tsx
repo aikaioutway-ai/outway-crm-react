@@ -1043,20 +1043,26 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
             }}
             onRowDelete={(row) => console.log('delete', row.rowId)}
             onRowEdit={(row) => console.log('edit', row.rowId)}
-            expandedRowKey={expandedFamilyId}
+            expandedRowKey={expandedFamilyId ? filtered.find(r => r.familyId === expandedFamilyId && r.isFirstChild)?.rowId ?? null : null}
             onExpandedRowKeyChange={(key) => {
               if (!key) { setExpandedFamilyId(null); setExpandedFamily(null); return; }
-              const row = filtered.find(r => r.rowId === key || r.familyId === key);
-              if (row) { setExpandedFamilyId(key); openFamily(row.familyId); }
+              const row = filtered.find(r => r.rowId === key);
+              if (row) { setExpandedFamilyId(row.familyId); openFamily(row.familyId); }
             }}
-            renderExpandedRow={(row) => expandedFamily && expandedFamily.id === row.familyId ? (
-              <InlineFamilyCard
-                family={expandedFamily}
-                userRole={userRole}
-                userName="Кайрат"
-                onClose={() => { setExpandedFamilyId(null); setExpandedFamily(null); }}
-              />
-            ) : <div style={{padding:16,color:'#999',fontSize:13}}>Загрузка...</div>}
+            renderExpandedRow={(row) => {
+              if (!row.isFirstChild) return null;
+              if (expandedFamily && expandedFamily.id === row.familyId) {
+                return (
+                  <InlineFamilyCard
+                    family={expandedFamily}
+                    userRole={userRole}
+                    userName="Кайрат"
+                    onClose={() => { setExpandedFamilyId(null); setExpandedFamily(null); }}
+                  />
+                );
+              }
+              return <div style={{padding:16,color:'#999',fontSize:13}}>Загрузка...</div>;
+            }}
             onCellSave={handleCellSave}
             toolbarExtra={(
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
