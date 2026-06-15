@@ -11,7 +11,7 @@ export function formatName(name: string | null | undefined): string {
 }
 
 /**
- * Форматирует телефон в +996 XXX XXX XXX
+ * Форматирует телефон в +996555121314 без пробелов
  * Если начинается с другого кода страны — оставляет как есть
  */
 export function formatPhone(phone: string | null | undefined): string {
@@ -20,18 +20,22 @@ export function formatPhone(phone: string | null | undefined): string {
 
   // Кыргызстан: 996 + 9 цифр = 12 цифр итого
   if (digits.startsWith('996') && digits.length === 12) {
-    const n = digits.slice(3); // 9 цифр номера
-    return `+996 ${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+    return `+${digits}`;
   }
   // Локальный номер без кода (0xxx): добавляем +996
   if (digits.startsWith('0') && digits.length === 10) {
-    const n = digits.slice(1);
-    return `+996 ${n.slice(0, 3)} ${n.slice(3, 6)} ${n.slice(6)}`;
+    return `+996${digits.slice(1)}`;
   }
   // Просто 9 цифр без нуля
   if (digits.length === 9 && !digits.startsWith('0')) {
-    return `+996 ${digits.slice(0, 3)} ${digits.slice(3, 6)} ${digits.slice(6)}`;
+    return `+996${digits}`;
   }
   // Другая страна или непонятный формат — оставляем
   return phone.trim();
+}
+
+export function formatClassName(value: string | number | null | undefined): string {
+  if (value === null || value === undefined) return '';
+  const match = String(value).match(/\d+/);
+  return match ? match[0] : '';
 }
