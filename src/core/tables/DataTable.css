@@ -697,3 +697,71 @@
 .dt-props-panel-v2 {
   z-index: 100 !important;
 }
+
+/* ── Активные колонки (шторка сверху) ── */
+.dt-props-active-cols {
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-props-active-title {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--dt-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.dt-props-active-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dt-props-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--dt-accent-l, #C7D2FE);
+  color: var(--dt-accent, #312E81);
+  border-radius: 6px;
+  padding: 3px 6px 3px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: grab;
+  user-select: none;
+}
+.dt-props-active-chip:active { cursor: grabbing; }
+.dt-props-chip-drag {
+  font-size: 12px;
+  opacity: 0.5;
+  cursor: grab;
+}
+.dt-props-chip-label {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-props-chip-hide {
+  background: none;
+  border: none;
+  color: var(--dt-accent, #312E81);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.6;
+}
+.dt-props-chip-hide:hover { opacity: 1; }
+
+/* ── Иконки шторки категорий ── */
+.dt-props-section-action {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+}
+.dt-props-section-action:hover { opacity: 1; background: var(--dt-hover, #EEF2FF); }
