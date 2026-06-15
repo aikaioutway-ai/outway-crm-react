@@ -586,7 +586,6 @@ export function DataTable<T extends Record<string, any>>({
               )}
               {propGroups.map(group => {
                 const visibleCount = group.items.filter(col => col.visible !== false).length;
-                const groupKeys = new Set(group.items.map(col => col.key));
                 return (
                   <div key={group.category} className="dt-props-category-group">
                     <div
