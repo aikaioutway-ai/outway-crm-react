@@ -725,25 +725,23 @@ export function DataTable<T extends Record<string, any>>({
                       setRowMenu({ row, x: e.clientX, y: e.clientY });
                     }}
                   >
-                    <td className="dt-td dt-td--check dt-sticky-col" style={{ width: 36, padding: '0 8px' }}
-                      onClick={e => {
-                        e.stopPropagation();
-                        if (renderExpandedRow && onExpandedRowKeyChange) {
-                          onExpandedRowKeyChange(expandedRowKey === id ? null : id);
-                        }
-                      }}
-                    >
-                      {renderExpandedRow ? (
-                        <span style={{
-                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                          width: 20, height: 20, borderRadius: 4, cursor: 'pointer',
-                          background: expandedRowKey === id ? '#312E81' : 'transparent',
-                          color: expandedRowKey === id ? '#fff' : '#94A3B8',
-                          fontSize: 10, fontWeight: 700, transition: 'all 0.15s',
-                          border: expandedRowKey === id ? 'none' : '1px solid #CBD5E1',
-                        }}>
-                          {expandedRowKey === id ? '▲' : '▼'}
-                        </span>
+                    <td className="dt-td dt-td--check dt-sticky-col" style={{ width: 36, padding: '0 4px' }}>
+                      {renderExpandedRow && onExpandedRowKeyChange ? (
+                        <button
+                          onClick={e => {
+                            e.stopPropagation();
+                            onExpandedRowKeyChange(isExpanded ? null : expandKey, isExpanded ? undefined : row);
+                          }}
+                          style={{
+                            width: 24, height: 24, border: isExpanded ? 'none' : '1px solid #CBD5E1',
+                            background: isExpanded ? '#312E81' : 'transparent',
+                            cursor: 'pointer', color: isExpanded ? '#fff' : '#94A3B8',
+                            fontSize: 10, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            margin: '0 auto', borderRadius: 4, transition: 'all 0.15s',
+                          }}
+                        >
+                          {isExpanded ? '▲' : '▼'}
+                        </button>
                       ) : null}
                     </td>
                     <td className="dt-td dt-td--num dt-sticky-col dt-sticky-col--2">{idx + 1}</td>
