@@ -58,8 +58,9 @@ export interface DataTableProps<T = any> {
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
   toolbarExtra?: React.ReactNode;
   canManageProperties?: boolean;
-  expandedRowKey?: any;
-  onExpandedRowKeyChange?: (key: any) => void;
+  expandedRowKey?: React.Key | null;
+  getExpandedRowKey?: (row: T) => React.Key;
+  onExpandedRowKeyChange?: (key: React.Key | null, row?: T) => void;
   renderExpandedRow?: (row: T) => React.ReactNode;
 }
 
@@ -177,6 +178,7 @@ export function DataTable<T extends Record<string, any>>({
   toolbarExtra,
   canManageProperties = true,
   expandedRowKey,
+  getExpandedRowKey,
   onExpandedRowKeyChange,
   renderExpandedRow,
 }: DataTableProps<T>) {
@@ -708,6 +710,8 @@ export function DataTable<T extends Record<string, any>>({
                 </tr>
               ) : processedData.map((row, idx) => {
                 const id = row[rowKey];
+                const expandKey = getExpandedRowKey ? getExpandedRowKey(row) : id;
+                const isExpanded = expandedRowKey != null && String(expandedRowKey) === String(expandKey);
                 const isSelected = selected.has(id);
                 return (
                   <tr
@@ -795,25 +799,7 @@ export function DataTable<T extends Record<string, any>>({
                   </tr>
                 );
               })}
-              {renderExpandedRow && processedData.map((row) => {
-                const id = row[rowKey];
-                if (expandedRowKey !== id) return null;
-                const totalCols = visibleCols.length + 2;
-                return (
-                  <tr key={String(id) + '_expand'} style={{ background: 'var(--dt-bg, #FAFBFF)' }}>
-                    <td colSpan={totalCols} style={{ padding: 0, border: 'none' }}>
-                      <div style={{
-                        borderTop: '2px solid #312E81',
-                        borderBottom: '1px solid var(--dt-border, #DDE3F5)',
-                        background: '#FAFBFF',
-                        animation: 'dtExpandIn 0.18s ease',
-                      }}>
-                        {renderExpandedRow(row)}
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
+
             </tbody>
           </table>
         )}
@@ -838,8 +824,10 @@ export function DataTable<T extends Record<string, any>>({
         <div className="dt-ctx-menu" style={{ left: rowMenu.x, top: rowMenu.y }} onClick={e => e.stopPropagation()}>
           {renderExpandedRow && onExpandedRowKeyChange && (
             <button className="dt-ctx-item" onClick={() => {
-              const id = rowMenu.row[rowKey];
-              onExpandedRowKeyChange(expandedRowKey === id ? null : id);
+              const row = rowMenu.row;
+              const expandKey = getExpandedRowKey ? getExpandedRowKey(row) : row[rowKey];
+              const isExp = expandedRowKey != null && String(expandedRowKey) === String(expandKey);
+              onExpandedRowKeyChange(isExp ? null : expandKey, isExp ? undefined : row);
               setRowMenu(null);
             }}>
               <span>↗</span> Открыть карточку
@@ -871,4 +859,5 @@ export function DataTable<T extends Record<string, any>>({
 
 // @keyframes dtExpandIn добавлены в DataTable.css
 export default DataTable;
+
 
