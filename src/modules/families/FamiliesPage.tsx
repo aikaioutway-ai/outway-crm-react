@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Family, FamilyPayment, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
@@ -622,7 +622,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
     fontWeight: 600,
     outline: 'none',
   };
-  const tableColumns = useMemo<ColumnDef<ChildRow>[]>(() => [
+  const tableColumns: ColumnDef<ChildRow>[] = [
     {
       key: 'openCard',
       label: 'Оплата',
@@ -732,7 +732,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     },
     ...COLUMNS,
-  ], [mode, confirmingPaymentId]);
+  ];
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
