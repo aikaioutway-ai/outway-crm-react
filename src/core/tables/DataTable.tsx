@@ -539,6 +539,40 @@ export function DataTable<T extends Record<string, any>>({
           <div className="dt-props-panel-v2" style={{ zIndex: 100 }} onClick={e => e.stopPropagation()}>
             {/* chips removed — 001 */}
 
+            {/* Активные колонки */}
+            {(() => {
+              const activeCols = cols.filter(c => c.visible !== false && c.showInProperties !== false);
+              if (activeCols.length === 0) return null;
+              return (
+                <div className="dt-props-active-cols">
+                  <div className="dt-props-active-title">Отображается</div>
+                  <div className="dt-props-active-list">
+                    {activeCols.map(col => {
+                      const globalIdx = cols.findIndex(c => c.key === col.key);
+                      return (
+                        <div
+                          key={col.key}
+                          className="dt-props-active-chip"
+                          draggable
+                          onDragStart={() => onDragStart(globalIdx)}
+                          onDragOver={e => onDragOver(e, globalIdx)}
+                          onDragEnd={onDragEnd}
+                        >
+                          <span className="dt-props-chip-drag">⠿</span>
+                          <span className="dt-props-chip-label">{col.label}</span>
+                          <button
+                            className="dt-props-chip-hide"
+                            title="Скрыть"
+                            onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c))}
+                          >✕</button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Search */}
             <div className="dt-props-search">
               <input autoFocus placeholder="Поиск свойств..."
@@ -561,15 +595,17 @@ export function DataTable<T extends Record<string, any>>({
                     <div className="dt-props-section-actions">
                       <button
                         className="dt-props-section-action"
+                        title="Показать все в категории"
                         onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: true } : c))}
                       >
-                        Показать
+                        👁
                       </button>
                       <button
                         className="dt-props-section-action"
+                        title="Скрыть все в категории"
                         onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: false } : c))}
                       >
-                        Скрыть
+                        🚫
                       </button>
                     </div>
                     {group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
