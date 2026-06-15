@@ -765,3 +765,27 @@
   opacity: 0.6;
 }
 .dt-props-section-action:hover { opacity: 1; background: var(--dt-hover, #EEF2FF); }
+
+/* ── Сворачиваемые категории ── */
+.dt-props-section-title--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.dt-props-section-title--clickable:hover {
+  background: var(--dt-hover, #EEF2FF);
+  border-radius: 6px;
+}
+.dt-props-cat-arrow {
+  font-size: 9px;
+  color: var(--dt-text-2);
+  margin-right: 4px;
+}
+
+/* ── Чип ×  ── */
+.dt-props-chip-x {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.5;
+  line-height: 1;
+}
+.dt-props-active-chip:hover .dt-props-chip-x { opacity: 1; }
