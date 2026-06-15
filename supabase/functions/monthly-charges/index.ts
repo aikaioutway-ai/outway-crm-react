@@ -1,5 +1,5 @@
 // supabase/functions/monthly-charges/index.ts
-// Автоначисление платежей — запускается 1-го числа каждого месяца в 06:00
+// Автоначисление charges — запускается 1-го числа каждого месяца в 06:00
 // Cron: "0 6 1 * *"
 //
 // Деплой:
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
   // Получаем все активные семьи
   const { data: families, error: famErr } = await supabase
     .from('families')
-    .select('id, school_code, zone, vehicle_type')
+    .select('id')
     .eq('status', 'active');
 
   if (famErr) return Response.json({ ok: false, error: famErr.message }, { status: 500 });
@@ -92,18 +92,18 @@ Deno.serve(async (req) => {
   const familyIds = families.map((f: any) => f.id);
   const { data: allChildren } = await supabase
     .from('children')
-    .select('family_id, school_code, zone, vehicle_type')
+    .select('id, family_id, school_code, zone, vehicle_type')
     .in('family_id', familyIds);
 
   // Проверяем какие семьи уже имеют запись за этот период
   const { data: existing } = await supabase
-    .from('payments')
-    .select('family_id')
-    .eq('period_key', periodKey)
+    .from('charges')
+    .select('child_id')
+    .eq('period_month', targetMonth)
     .eq('year', targetYear)
     .in('family_id', familyIds);
 
-  const alreadyCharged = new Set((existing ?? []).map((p: any) => p.family_id));
+  const alreadyCharged = new Set((existing ?? []).map((p: any) => p.child_id));
 
   // Группируем детей по семьям
   const childrenByFamily = new Map<string, any[]>();
@@ -112,38 +112,31 @@ Deno.serve(async (req) => {
     childrenByFamily.get(c.family_id)!.push(c);
   });
 
-  // Создаём начисления
+  // Создаём начисления по каждому ребёнку
   const toInsert: any[] = [];
   let skipped = 0;
 
   for (const family of families as any[]) {
-    if (alreadyCharged.has(family.id)) {
-      skipped++;
-      continue;
-    }
-
     const kids = childrenByFamily.get(family.id) ?? [];
-    // Если нет детей — считаем по данным семьи
-    const price = kids.length > 0
-      ? getFamilyPrice(kids)
-      : getPriceByZone(family.school_code, family.zone, family.vehicle_type);
-
-    toInsert.push({
-      family_id:         family.id,
-      school_code:       family.school_code,
-      period_key:        periodKey,
-      month:             targetMonth,
-      year:              targetYear,
-      amount:            price,
-      manager_amount:    0,
-      manager_date:      null,
-      has_receipt:       false,
-      accountant_status: 'Не оплачено',
-      fact_amount:       0,
-      fact_date:         null,
-      is_frozen:         false,
-      comment:           '',
-    });
+    for (const [index, kid] of kids.entries()) {
+      if (alreadyCharged.has(kid.id)) {
+        skipped++;
+        continue;
+      }
+      const base = getPriceByZone(kid.school_code, kid.zone, kid.vehicle_type);
+      const price = index === 0 ? base : Math.round(base * 0.95);
+      toInsert.push({
+        child_id:      kid.id,
+        family_id:     family.id,
+        period_month:  targetMonth,
+        year:          targetYear,
+        amount:        price,
+        paid_amount:   0,
+        penalty_amount: 0,
+        status:        'Не оплачено',
+        is_frozen:     false,
+      });
+    }
   }
 
   if (toInsert.length === 0) {
@@ -155,17 +148,17 @@ Deno.serve(async (req) => {
     });
   }
 
-  const { error: insertErr } = await supabase.from('payments').insert(toInsert);
+  const { error: insertErr } = await supabase.from('charges').insert(toInsert);
   if (insertErr) return Response.json({ ok: false, error: insertErr.message }, { status: 500 });
 
   // Также проставить Просрочено для старых неоплаченных (если после 5-го)
   if (now.getDate() > 5) {
     await supabase
-      .from('payments')
-      .update({ accountant_status: 'Просрочено' })
-      .eq('accountant_status', 'Не оплачено')
-      .neq('period_key', 'deposit')
-      .neq('period_key', periodKey)
+      .from('charges')
+      .update({ status: 'Просрочено' })
+      .eq('status', 'Не оплачено')
+      .neq('period_month', 0)
+      .neq('period_month', targetMonth)
       .lt('year', targetYear);
   }
 

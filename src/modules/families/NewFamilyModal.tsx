@@ -2,18 +2,18 @@ import React, { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
 const SCHOOL_LINKS: { name: string; code: string; url: string }[] = [
-  { name: 'Edison',                     code: 'EDI',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1001' },
-  { name: 'Эрудит-ISIT',               code: 'ERU',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
-  { name: 'Тенсай',                    code: 'TIS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
+  { name: 'Edison',                     code: 'EDISON',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1001' },
+  { name: 'Эрудит-ISIT',               code: 'ERUDIT',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
+  { name: 'Тенсай',                    code: 'TENSAY',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
   { name: 'American-European School',  code: 'AES',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
   { name: 'Kyrgyz-American School',    code: 'KAS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
-  { name: 'Билим Бишкек KG',           code: 'BKG',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
-  { name: 'Индиго Kids',               code: 'ING',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
+  { name: 'Билим Бишкек KG',           code: 'BILIM',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
+  { name: 'Индиго Kids',               code: 'INDIGO',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
   { name: 'Nova International School', code: 'NOVA', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1007' },
-  { name: 'Эпсилон',                   code: 'EPS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
-  { name: 'Гениум Чуйкова',            code: 'GEN2', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
-  { name: 'Light Academy',             code: 'LA',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
-  { name: 'Kings International School',code: 'KNG',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1011' },
+  { name: 'Эпсилон',                   code: 'EPSILON',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
+  { name: 'Гениум Чуйкова',            code: 'GENIUS', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
+  { name: 'Light Academy',             code: 'LIGHT',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
+  { name: 'Kings International School',code: 'KINGS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1011' },
 ];
 
 interface Props { onClose: () => void; }

@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { X, CreditCard } from 'lucide-react';
-import { Family, Payment } from '../../types';
+import { X, CreditCard, Paperclip } from 'lucide-react';
+import { Charge, Child, Family, PaymentType } from '../../types';
 import { money } from '../../utils/pricing';
-import { supabase } from '../../services/supabase';
-import { PERIOD_LABEL, PERIOD_ORDER } from './constants';
+import { PERIOD_LABEL } from './constants';
+import { createFamilyPayment, fetchFinanceSnapshot } from '../../services/financeService';
+import { addV2Audit, fetchV2Children } from '../../services/crmV2Service';
 
 interface Props {
   family: Family;
@@ -12,26 +13,17 @@ interface Props {
   userName?: string;
 }
 
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  'Оплачено':           { bg: '#D1FAE5', color: '#065F46' },
-  'Частично оплачено':  { bg: '#FEF3C7', color: '#92400E' },
-  'На проверке':        { bg: '#DBEAFE', color: '#1E40AF' },
-  'На проверке (чек)':  { bg: '#E0E7FF', color: '#3730A3' },
-  'Просрочено':         { bg: '#FEE2E2', color: '#991B1B' },
-  'Не оплачено':        { bg: '#F3F4F6', color: '#374151' },
-};
-
-export default function PaymentModal({ family, onClose, userRole = 'manager', userName = 'Менеджер' }: Props) {
-  const [payments, setPayments] = useState<Payment[]>([]);
-  const [loading, setLoading]   = useState(true);
-  const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [managerAmt, setManagerAmt] = useState('');
-  const [comment, setComment]       = useState('');
-  const [saving, setSaving]         = useState(false);
-  const [msg, setMsg]               = useState('');
-
-  
-  
+export default function PaymentModal({ family, onClose, userName = 'Менеджер' }: Props) {
+  const [children, setChildren] = useState<Child[]>([]);
+  const [charges, setCharges] = useState<Charge[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [amount, setAmount] = useState('');
+  const [paymentType, setPaymentType] = useState<PaymentType>('cash');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [comment, setComment] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState('');
 
   useEffect(() => {
     load();
@@ -40,54 +32,60 @@ export default function PaymentModal({ family, onClose, userRole = 'manager', us
 
   async function load() {
     setLoading(true);
-    const { data } = await supabase.from('payments').select('*').eq('family_id', family.id);
-    if (data) {
-      setPayments(data.map((r: any) => ({
-        id: String(r.id), familyId: String(r.family_id),
-        schoolCode: r.school_code || family.schoolCode,
-        periodKey: (r.month === 0 ? 'deposit' : String(r.month)) as any,
-        month: Number(r.month), year: Number(r.year),
-        amount: Number(r.amount ?? 0), managerAmount: Number(r.manager_amount ?? 0),
-        managerDate: r.manager_date ?? '', hasReceipt: Boolean(r.has_receipt),
-        accountantStatus: r.accountant_status ?? 'Не оплачено',
-        factAmount: Number(r.fact_amount ?? 0), factDate: r.fact_date ?? '',
-        isFrozen: Boolean(r.is_frozen), comment: r.comment ?? '',
-      })));
+    const loadedChildren: Child[] = await fetchV2Children(family);
+    setChildren(loadedChildren);
+
+    const snapshot = await fetchFinanceSnapshot(family.id, loadedChildren);
+    setCharges(snapshot.charges);
+    const debt = snapshot.charges.reduce((s, c) => s + c.debtAmount, 0);
+    if (debt > 0) {
+      setAmount(prev => prev || String(debt));
     }
     setLoading(false);
   }
 
-  const sorted = [...payments].sort((a, b) => PERIOD_ORDER.indexOf(a.periodKey) - PERIOD_ORDER.indexOf(b.periodKey));
-  const unpaid = sorted.filter(p => !['Оплачено'].includes(p.accountantStatus));
-  const selected = payments.find(p => p.id === selectedId);
+  const unpaid = charges
+    .filter(c => c.debtAmount > 0)
+    .sort((a, b) => (a.year - b.year) || (a.periodMonth - b.periodMonth));
+  const totalDebt = unpaid.reduce((s, c) => s + c.debtAmount, 0);
 
   async function handleSubmit() {
-    if (!selected || !managerAmt) return;
+    const numericAmount = Number(amount);
+    if (!numericAmount || numericAmount <= 0) return;
+
     setSaving(true);
-    await supabase.from('payments').update({
-      manager_amount: Number(managerAmt),
-      manager_date: new Date().toISOString().slice(0, 10),
-      accountant_status: 'На проверке',
-      is_frozen: true,
-      comment,
-    }).eq('id', selected.id);
-
     try {
-      await supabase.from('audit_log').insert({
-        family_id: family.id, user_name: userName,
-        action: 'Внесение оплаты', field: PERIOD_LABEL[selected.periodKey] ?? selected.periodKey,
-        old_value: `Не оплачено, сумма: ${selected.amount}`,
-        new_value: `На проверке, внесено: ${managerAmt}`,
+      await createFamilyPayment({
+        familyId: family.id,
+        amount: numericAmount,
+        paymentType,
+        paymentDate,
+        receiptFile,
+        comment,
+        createdBy: userName,
       });
-    } catch { /* ignore */ }
 
+      try {
+        await addV2Audit({
+          actorName: userName,
+          action: 'create_payment',
+          entityType: 'payment',
+          entityId: family.id,
+          oldValue: { debt: totalDebt },
+          newValue: { pending: numericAmount },
+          comment: 'Payment submitted for cashier review',
+        });
+      } catch { /* audit is optional during setup */ }
+
+      setMsg('Платёж отправлен кассиру на проверку');
+      setAmount('');
+      setReceiptFile(null);
+      setComment('');
+      await load();
+    } catch (e: any) {
+      setMsg(e?.message ?? 'Не удалось внести платёж');
+    }
     setSaving(false);
-    setMsg('Отправлено на проверку ✓');
-    setSelectedId(null);
-    setManagerAmt('');
-    setComment('');
-    await load();
-    setTimeout(() => setMsg(''), 2500);
   }
 
   return (
@@ -96,15 +94,13 @@ export default function PaymentModal({ family, onClose, userRole = 'manager', us
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 520, maxHeight: '85vh',
+        width: 'min(824px, calc(100vw - 32px))', maxHeight: '85vh',
         background: '#fff', zIndex: 501, borderRadius: 14,
         boxShadow: '0 16px 50px rgba(49,46,129,0.2)',
         display: 'flex', flexDirection: 'column',
         overflow: 'hidden',
       }}>
-
-        {/* Header */}
-        <div style={{ background: 'var(--accent)', padding: '18px 22px', flexShrink: 0 }}>
+        <div style={{ background: 'var(--accent)', padding: '14px 18px', flexShrink: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -119,101 +115,82 @@ export default function PaymentModal({ family, onClose, userRole = 'manager', us
           </div>
         </div>
 
-        {/* Content */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: 22 }}>
-
+        <div style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
           {msg && (
-            <div style={{ background: '#D1FAE5', color: '#065F46', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, fontWeight: 700 }}>
+            <div style={{ background: msg.includes('Не удалось') ? '#FEE2E2' : '#D1FAE5', color: msg.includes('Не удалось') ? '#991B1B' : '#065F46', borderRadius: 8, padding: '10px 14px', marginBottom: 14, fontSize: 13, fontWeight: 700 }}>
               {msg}
             </div>
           )}
 
-          {loading && <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-2)' }}>Загрузка...</div>}
-
-          {!loading && (
+          {loading ? (
+            <div style={{ textAlign: 'center', padding: 30, color: 'var(--text-2)' }}>Загрузка...</div>
+          ) : (
             <>
-              {/* Список периодов */}
-              <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 10 }}>
-                Выберите период
-              </div>
-              {unpaid.length === 0 && (
-                <div style={{ textAlign: 'center', padding: '20px 0', color: 'var(--text-2)', fontSize: 13 }}>Нет неоплаченных периодов 🎉</div>
-              )}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 16 }}>
-                {unpaid.map(p => {
-                  const sc = STATUS_COLORS[p.accountantStatus] ?? STATUS_COLORS['Не оплачено'];
-                  const isSelected = selectedId === p.id;
-                  return (
-                    <div
-                      key={p.id}
-                      onClick={() => { setSelectedId(isSelected ? null : p.id); setManagerAmt(String(p.amount)); }}
-                      style={{
-                        padding: '12px 14px', borderRadius: 9, cursor: 'pointer',
-                        border: `2px solid ${isSelected ? 'var(--accent)' : sc.bg}`,
-                        background: isSelected ? '#EEF2FF' : '#fff',
-                        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                        transition: 'border-color 0.15s, background 0.15s',
-                      }}
-                    >
-                      <div>
-                        <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{PERIOD_LABEL[p.periodKey] ?? p.periodKey}</div>
-                        {p.year > 0 && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>{p.year}</div>}
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                        <div style={{ fontWeight: 700, fontSize: 14, color: isSelected ? 'var(--accent)' : 'var(--text)' }}>
-                          {money(p.amount)}
-                        </div>
-                        <div style={{ background: sc.bg, color: sc.color, borderRadius: 5, padding: '2px 8px', fontSize: 11, fontWeight: 700 }}>
-                          {p.accountantStatus}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div style={{ background: '#F3F4F6', borderRadius: 8, padding: '10px 14px', marginBottom: 12 }}>
+                <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.6 }}>Текущий долг</div>
+                <div style={{ fontSize: 22, fontWeight: 700, color: totalDebt > 0 ? '#991B1B' : '#065F46', marginTop: 4 }}>{money(totalDebt)}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>{children.length} детей · {unpaid.length} открытых начислений</div>
               </div>
 
-              {/* Форма оплаты */}
-              {selected && (
-                <div style={{ background: '#F8F9FF', borderRadius: 10, padding: 16, border: '1px solid var(--border)' }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 12 }}>
-                    Оплата: {PERIOD_LABEL[selected.periodKey]} · начислено {money(selected.amount)}
+              {unpaid.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.6, marginBottom: 8 }}>
+                    Будет закрываться по очереди
                   </div>
-                  <div style={{ marginBottom: 10 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
-                      Сумма оплаты
+                  {unpaid.slice(0, 6).map(charge => (
+                    <div key={charge.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '7px 0', borderBottom: '1px solid var(--border)', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text)' }}>{charge.childName ?? 'Ребёнок'} · {PERIOD_LABEL[String(charge.periodMonth)] ?? charge.periodMonth}/{charge.year}</span>
+                      <b>{money(charge.debtAmount)}</b>
                     </div>
-                    <input
-                      type="number"
-                      value={managerAmt}
-                      onChange={e => setManagerAmt(e.target.value)}
-                      placeholder={String(selected.amount)}
-                      style={{ width: '100%', padding: '9px 12px', border: '1.5px solid var(--accent)', borderRadius: 8, fontSize: 14, fontWeight: 600, color: 'var(--text)', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
-                      Комментарий
-                    </div>
-                    <input
-                      value={comment}
-                      onChange={e => setComment(e.target.value)}
-                      placeholder="Необязательно"
-                      style={{ width: '100%', padding: '8px 12px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, color: 'var(--text)', boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <button
-                    onClick={handleSubmit}
-                    disabled={saving || !managerAmt}
-                    style={{
-                      width: '100%', padding: '11px', background: 'var(--accent)', color: '#fff',
-                      border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
-                      cursor: 'pointer', opacity: saving || !managerAmt ? 0.6 : 1,
-                    }}
-                  >
-                    {saving ? 'Отправка...' : 'Отправить на проверку →'}
-                  </button>
+                  ))}
                 </div>
               )}
+
+              <div style={{ background: '#F8F9FF', borderRadius: 8, padding: 12, border: '1px solid var(--border)' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 130px', gap: 10, marginBottom: 10 }}>
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={e => setAmount(e.target.value)}
+                    placeholder="Сумма платежа"
+                    style={inputStyle}
+                  />
+                  <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
+                    <option value="cash">Наличные</option>
+                    <option value="transfer">Безналичный QR</option>
+                  </select>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: '180px 1fr', gap: 10, marginBottom: 10 }}>
+                  <input
+                    type="date"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    style={inputStyle}
+                  />
+                  <label style={fileInputStyle}>
+                    <Paperclip size={14} />
+                    <span>{receiptFile ? receiptFile.name : 'Прикрепить чек'}</span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                </div>
+                <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{ ...inputStyle, width: '100%', marginBottom: 10 }} />
+                <button
+                  onClick={handleSubmit}
+                  disabled={saving || !amount}
+                  style={{
+                    width: '100%', padding: '11px', background: 'var(--accent)', color: '#fff',
+                    border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
+                    cursor: 'pointer', opacity: saving || !amount ? 0.6 : 1,
+                  }}
+                >
+                  {saving ? 'Сохраняем...' : 'Отправить на проверку'}
+                </button>
+              </div>
             </>
           )}
         </div>
@@ -221,3 +198,30 @@ export default function PaymentModal({ family, onClose, userRole = 'manager', us
     </>
   );
 }
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '9px 12px',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  fontSize: 13,
+  color: 'var(--text)',
+  background: '#fff',
+  boxSizing: 'border-box',
+};
+
+const fileInputStyle: React.CSSProperties = {
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  padding: '9px 12px',
+  border: '1px solid var(--border)',
+  borderRadius: 8,
+  fontSize: 13,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  background: '#fff',
+  cursor: 'pointer',
+  overflow: 'hidden',
+};

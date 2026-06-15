@@ -228,6 +228,7 @@ Deno.serve(async (req) => {
   for (const [key, fam] of sheetFamilies) {
     try {
       let familyId = existingMap.get(key);
+      let createdThisFamily = false;
 
       if (!familyId) {
         // ── Новая семья ────────────────────────────────────────────────────
@@ -266,28 +267,18 @@ Deno.serve(async (req) => {
         familyId = newFam.id;
         existingMap.set(key, familyId);
         familiesCreated++;
-
-        // Начисления: депозит + сентябрь
-        const basePayment = {
-          family_id: familyId, school_code: fam.schoolCode,
-          amount: price, manager_amount: 0, manager_date: null,
-          has_receipt: false, accountant_status: 'Не оплачено',
-          fact_amount: 0, fact_date: null, is_frozen: false, comment: '',
-        };
-        await supabase.from('payments').insert([
-          { ...basePayment, period_key: 'deposit', month: 0, year: 2026 },
-          { ...basePayment, period_key: '9',       month: 9, year: 2026 },
-        ]);
+        createdThisFamily = true;
       }
 
       // ── Добавить новых детей (и для новой семьи, и для существующей) ────────
       let addedForThisFamily = 0;
+      const insertedChildren: any[] = [];
 
       for (const child of fam.children) {
         const childKey = `${familyId}__${child.childName}`;
         if (existingChildKeys.has(childKey)) continue; // уже есть
 
-        await supabase.from('children').insert({
+        const { data: newChild, error: childErr } = await supabase.from('children').insert({
           family_id:         familyId,
           child_name:        child.childName,
           class:             child.childClass || null,
@@ -295,15 +286,34 @@ Deno.serve(async (req) => {
           zone:              child.zone,
           vehicle_type:      child.vehicleType,
           self_exit_allowed: false,
-        });
+        }).select('id, school_code, zone, vehicle_type').single();
+
+        if (childErr) {
+          errors.push(`${fam.phone} / ${child.childName}: ${childErr.message}`);
+          continue;
+        }
 
         existingChildKeys.add(childKey);
+        if (newChild) insertedChildren.push(newChild);
         childrenAdded++;
         addedForThisFamily++;
       }
 
+      if (insertedChildren.length > 0) {
+        const chargeRows: any[] = [];
+        for (const [index, child] of insertedChildren.entries()) {
+          const base = getPriceByZone(child.school_code, child.zone, child.vehicle_type);
+          const amount = index === 0 ? base : Math.round(base * 0.95);
+          chargeRows.push(
+            { child_id: child.id, family_id: familyId, period_month: 0, year: 2026, amount, paid_amount: 0, penalty_amount: 0, status: 'Не оплачено', is_frozen: false },
+            { child_id: child.id, family_id: familyId, period_month: 9, year: 2026, amount, paid_amount: 0, penalty_amount: 0, status: 'Не оплачено', is_frozen: false },
+          );
+        }
+        await supabase.from('charges').upsert(chargeRows, { onConflict: 'child_id,period_month,year', ignoreDuplicates: true });
+      }
+
       // Если добавили ребёнка к уже существующей семье — пересчитать цену
-      if (addedForThisFamily > 0 && familiesCreated === 0) {
+      if (addedForThisFamily > 0 && !createdThisFamily) {
         familiesUpdated++;
         // Получаем всех детей семьи для пересчёта
         const { data: allKids } = await supabase
@@ -313,15 +323,9 @@ Deno.serve(async (req) => {
 
         if (allKids?.length) {
           const newPrice = getFamilyPrice(allKids);
-          // Обновляем monthly_price семьи
+          // Обновляем только справочную monthly_price семьи.
+          // Существующие charges остаются по детям; новые charges созданы выше.
           await supabase.from('families').update({ monthly_price: newPrice }).eq('id', familyId);
-          // Пересчитываем неоплаченные платежи
-          await supabase
-            .from('payments')
-            .update({ amount: newPrice })
-            .eq('family_id', familyId)
-            .not('accountant_status', 'in', '("Оплачено","Частично оплачено")')
-            .eq('is_frozen', false);
         }
       }
 

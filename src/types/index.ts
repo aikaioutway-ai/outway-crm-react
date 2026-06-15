@@ -25,12 +25,18 @@ export type PaymentMethod = 'наличные' | 'безнал';
 export interface Family {
   id: string;
   schoolCode: SchoolCode;
+  branchId?: string;
+  branchCode?: string;
+  branchName?: string;
+  branchShort?: string;
   parentName: string;
   phone: string;
   phoneTelegram?: string;
   secondPhone?: string;
+  secondPhoneTelegram?: boolean;
   contactName?: string;
   contactPhone?: string;
+  contactPhoneTelegram?: boolean;
   fullAddress: string;
   latitude?: number;
   longitude?: number;
@@ -60,9 +66,28 @@ export interface Child {
   selfExitAllowed: boolean;
   routeSource?: string;
   transferNumber?: number;
+  stopNumber?: number;
+  timeMorning?: string;
+  status?: ChildStatus;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
+  distanceKm?: number;
+  discountType?: DiscountType;
+  discountValue?: number;
   schoolCode: SchoolCode;
+  schoolId?: string;
+  branchId?: string;
+  branchCode?: string;
+  branchName?: string;
+  branchShort?: string;
   zone: Zone;
   vehicleType: VehicleType;
+  basePrice?: number;
+  siblingDiscountPercent?: number;
+  manualDiscountPercent?: number;
+  manualDiscountAmount?: number;
+  finalPrice?: number;
 }
 
 // ─── ОПЛАТЫ ──────────────────────────────────────────────────────────────────
@@ -74,12 +99,22 @@ export type PeriodKey =
 
 export type PaymentStatus =
   | 'Не оплачено'
-  | 'На проверке'
-  | 'На проверке (чек)'
   | 'Оплачено'
   | 'Частично оплачено'
-  | 'Просрочено';
+  | 'Просрочено'
+  | 'Заморожено';
 
+export type PaymentReviewStatus =
+  | 'Черновик'
+  | 'На проверке'
+  | 'Подтверждено'
+  | 'Отклонено';
+
+export type PaymentType = 'cash' | 'transfer' | 'card' | 'other';
+export type ChildStatus = 'new' | 'waiting' | 'boarded' | 'rejected' | 'paused';
+export type DiscountType = 'none' | 'percent' | 'fixed';
+
+// Legacy shape kept for old code paths during migration.
 export interface Payment {
   id: string;
   familyId: string;
@@ -96,6 +131,64 @@ export interface Payment {
   factDate: string;
   isFrozen: boolean;       // пеня заморожена
   comment: string;
+}
+
+export interface Charge {
+  id: string;
+  childId: string;
+  familyId: string;
+  childName?: string;
+  periodMonth: number;
+  year: number;
+  amount: number;
+  paidAmount: number;
+  debtAmount: number;
+  penaltyAmount: number;
+  status: PaymentStatus;
+  isFrozen: boolean;
+  comment?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface FamilyPayment {
+  id: string;
+  familyId: string;
+  periodMonth?: number;
+  year?: number;
+  amount: number;
+  paymentType: PaymentType;
+  receiptUrl?: string;
+  paymentDate: string;
+  actualPaymentDate?: string;
+  status: PaymentReviewStatus;
+  createdBy?: string;
+  confirmedBy?: string;
+  confirmedAt?: string;
+  comment?: string;
+  createdAt: string;
+}
+
+export interface PaymentItem {
+  id: string;
+  paymentId: string;
+  childId: string;
+  familyId: string;
+  periodMonth: number;
+  year: number;
+  chargedAmount: number;
+  paidAmount: number;
+  debtAmount: number;
+  status: PaymentStatus;
+  createdAt: string;
+}
+
+export interface FinanceSnapshot {
+  charges: Charge[];
+  payments: FamilyPayment[];
+  paymentItems: PaymentItem[];
+  mainBalance?: number;
+  depositBalance?: number;
 }
 
 // ─── АУДИТ ───────────────────────────────────────────────────────────────────

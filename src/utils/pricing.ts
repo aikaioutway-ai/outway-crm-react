@@ -44,15 +44,27 @@ interface KidPriceInput {
   schoolCode: SchoolCode;
   zone: Zone;
   vehicleType: VehicleType;
+  discountType?: 'none' | 'percent' | 'fixed';
+  discountValue?: number;
+}
+
+export function getChildPrice(kid: KidPriceInput, index = 0): number {
+  const base = getPriceByZone(kid.schoolCode, kid.zone, kid.vehicleType);
+  let price = index === 0 ? base : Math.round(base * 0.95);
+
+  if (kid.discountType === 'percent' && kid.discountValue) {
+    price = Math.round(price * (1 - kid.discountValue / 100));
+  }
+  if (kid.discountType === 'fixed' && kid.discountValue) {
+    price = Math.max(0, price - kid.discountValue);
+  }
+
+  return price;
 }
 
 export function getFamilyPrice(kids: KidPriceInput[]): number {
   if (!kids.length) return 0;
-  return kids.reduce((sum, kid, index) => {
-    const base = getPriceByZone(kid.schoolCode, kid.zone, kid.vehicleType);
-    const price = index === 0 ? base : Math.round(base * 0.95);
-    return sum + price;
-  }, 0);
+  return kids.reduce((sum, kid, index) => sum + getChildPrice(kid, index), 0);
 }
 
 // ─── ПЕНЯ ────────────────────────────────────────────────────────────────────

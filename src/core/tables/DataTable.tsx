@@ -18,6 +18,9 @@ export interface ColumnDef<T = any> {
   category?: string;
   render?: (value: any, row: T) => React.ReactNode;
   getValue?: (row: T) => any;
+  editable?: boolean;
+  editOptions?: { value: string; label: string }[];
+  showInProperties?: boolean;
 }
 
 export interface SortConfig {
@@ -47,11 +50,14 @@ export interface DataTableProps<T = any> {
   onRowDelete?: (row: T) => void;
   onRowEdit?: (row: T) => void;
   onRowPayment?: (row: T) => void;
+  onCellSave?: (row: T, key: string, value: any) => Promise<boolean> | boolean;
   storageKey?: string;
   loading?: boolean;
   emptyText?: string;
   groupColorKey?: string;
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
+  toolbarExtra?: React.ReactNode;
+  canManageProperties?: boolean;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -136,6 +142,20 @@ function useDragList<T>(list: T[], onChange: (next: T[]) => void) {
   return { onDragStart, onDragOver, onDragEnd };
 }
 
+function buildColumns<T>(initialColumns: ColumnDef<T>[], storageKey: string): ColumnDef<T>[] {
+  try {
+    const saved = localStorage.getItem(storageKey + '_cols');
+    if (saved) {
+      const parsed: { key: string; visible: boolean; width?: number }[] = JSON.parse(saved);
+      const map = Object.fromEntries(parsed.map((p, i) => [p.key, { ...p, order: i }]));
+      return initialColumns
+        .map(c => ({ ...c, visible: map[c.key]?.visible ?? c.visible ?? true, width: map[c.key]?.width ?? c.width }))
+        .sort((a, b) => (map[a.key]?.order ?? 999) - (map[b.key]?.order ?? 999));
+    }
+  } catch {}
+  return initialColumns.map(c => ({ ...c, visible: c.visible ?? true }));
+}
+
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
 
 export function DataTable<T extends Record<string, any>>({
@@ -146,27 +166,21 @@ export function DataTable<T extends Record<string, any>>({
   onRowDelete,
   onRowEdit,
   onRowPayment,
+  onCellSave,
   storageKey = 'dt_prefs',
   loading = false,
   emptyText = 'Нет данных',
   groupColorKey,
+  toolbarExtra,
+  canManageProperties = true,
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
-  const [cols, setCols] = useState<ColumnDef<T>[]>(() => {
-    try {
-      const saved = localStorage.getItem(storageKey + '_cols');
-      if (saved) {
-        const parsed: { key: string; visible: boolean; width?: number }[] = JSON.parse(saved);
-        const map = Object.fromEntries(parsed.map((p, i) => [p.key, { ...p, order: i }]));
-        const merged = initialColumns
-          .map(c => ({ ...c, visible: map[c.key]?.visible ?? c.visible ?? true, width: map[c.key]?.width ?? c.width }))
-          .sort((a, b) => (map[a.key]?.order ?? 999) - (map[b.key]?.order ?? 999));
-        return merged;
-      }
-    } catch {}
-    return initialColumns.map(c => ({ ...c, visible: c.visible ?? true }));
-  });
+  const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, storageKey));
+
+  useEffect(() => {
+    setCols(buildColumns(initialColumns, storageKey));
+  }, [initialColumns, storageKey]);
 
   const saveCols = useCallback((next: ColumnDef<T>[]) => {
     setCols(next);
@@ -187,6 +201,9 @@ export function DataTable<T extends Record<string, any>>({
   const [rowMenu, setRowMenu] = useState<{ row: T; x: number; y: number } | null>(null);
   const [calcPopup, setCalcPopup] = useState<{ key: string; x: number; y: number } | null>(null);
   const [selected, setSelected] = useState<Set<any>>(new Set());
+  const [editingCell, setEditingCell] = useState<{ rowId: any; key: string } | null>(null);
+  const [draftValue, setDraftValue] = useState('');
+  const [savingCell, setSavingCell] = useState(false);
 
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
@@ -250,24 +267,6 @@ export function DataTable<T extends Record<string, any>>({
 
   const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, saveCols);
 
-  const toggleSort = (key: string, dir: 'asc' | 'desc') => {
-    setSorts(prev => {
-      const exists = prev.find(s => s.key === key);
-      if (exists && exists.dir === dir) return prev.filter(s => s.key !== key);
-      if (exists) return prev.map(s => s.key === key ? { ...s, dir } : s);
-      return [...prev, { key, dir }];
-    });
-    setColMenu(null);
-  };
-
-  const addFilterFromCol = (key: string) => {
-    const id = String(Date.now());
-    setFilters(prev => [...prev, { id, key, operator: 'contains', value: '', conjunction: 'AND' }]);
-    setShowFilterPanel(true);
-    setShowSortPanel(false);
-    setColMenu(null);
-  };
-
   const toggleSelect = (id: any) => {
     setSelected(prev => {
       const next = new Set(prev);
@@ -279,6 +278,25 @@ export function DataTable<T extends Record<string, any>>({
   const selectAll = () => {
     if (selected.size === processedData.length) setSelected(new Set());
     else setSelected(new Set(processedData.map(r => r[rowKey])));
+  };
+
+  const startCellEdit = (row: T, col: ColumnDef<T>) => {
+    if (!col.editable || !onCellSave) return;
+    setEditingCell({ rowId: row[rowKey], key: col.key });
+    setDraftValue(String(getCellValue(row, col) ?? ''));
+  };
+
+  const commitCellEdit = async (row: T, col: ColumnDef<T>, nextValue = draftValue) => {
+    if (!editingCell || !onCellSave) return;
+    setSavingCell(true);
+    const ok = await Promise.resolve(onCellSave(row, col.key, nextValue));
+    setSavingCell(false);
+    if (ok) setEditingCell(null);
+  };
+
+  const cancelCellEdit = () => {
+    setEditingCell(null);
+    setDraftValue('');
   };
 
   const exportCSV = () => {
@@ -317,45 +335,22 @@ export function DataTable<T extends Record<string, any>>({
       {/* ── TOOLBAR ── */}
       <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
         <div className="dt-toolbar-left">
+          {toolbarExtra}
 
-          {/* Filter button */}
-          <button
-            className={`dt-btn ${showFilterPanel ? 'dt-btn--active' : ''}`}
-            onClick={() => { setShowFilterPanel(v => !v); setShowSortPanel(false); setShowProps(false); }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4h12M4 8h8M6 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            Фильтр
-            {filters.length > 0 && <span className="dt-badge">{filters.length}</span>}
-          </button>
-
-          {/* Sort button */}
-          <button
-            className={`dt-btn ${showSortPanel ? 'dt-btn--active' : ''}`}
-            onClick={() => { setShowSortPanel(v => !v); setShowFilterPanel(false); setShowProps(false); }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M2 4h8M2 8h6M2 12h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-              <path d="M12 3v10M10 11l2 2 2-2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-            Сортировка
-            {sorts.length > 0 && <span className="dt-badge">{sorts.length}</span>}
-          </button>
-
-          {/* Properties button */}
-          <button
-            className={`dt-btn ${showProps ? 'dt-btn--active' : ''}`}
-            onClick={e => { e.stopPropagation(); setShowProps(v => !v); setShowFilterPanel(false); setShowSortPanel(false); }}
-          >
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-              <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-              <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-              <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
-            </svg>
-            Свойства
-          </button>
+          {canManageProperties && (
+            <button
+              className={`dt-btn ${showProps ? 'dt-btn--active' : ''}`}
+              onClick={e => { e.stopPropagation(); setShowProps(v => !v); setShowFilterPanel(false); setShowSortPanel(false); }}
+            >
+              <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+                <rect x="2" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+                <rect x="9" y="2" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+                <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+                <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
+              </svg>
+              Свойства
+            </button>
+          )}
         </div>
 
         <div className="dt-toolbar-right">
@@ -505,9 +500,19 @@ export function DataTable<T extends Record<string, any>>({
           </svg>
         );
 
-        const q = propsSearch.toLowerCase();
-        const shownCols  = cols.filter(c => c.visible !== false && (!q || c.label.toLowerCase().includes(q)));
-        const hiddenCols = cols.filter(c => c.visible === false  && (!q || c.label.toLowerCase().includes(q)));
+        const q = propsSearch.trim().toLowerCase();
+        const propertyCols = cols.filter(c => c.showInProperties !== false);
+        const filteredPropertyCols = propertyCols.filter(c => {
+          const category = c.category ?? 'Основные';
+          return !q || c.label.toLowerCase().includes(q) || category.toLowerCase().includes(q);
+        });
+        const propGroups = filteredPropertyCols.reduce<{ category: string; items: ColumnDef<T>[] }[]>((acc, col) => {
+          const category = col.category ?? 'Основные';
+          const group = acc.find(item => item.category === category);
+          if (group) group.items.push(col);
+          else acc.push({ category, items: [col] });
+          return acc;
+        }, []);
 
         const ColItem = ({ col, isVisible }: { col: ColumnDef<T>; isVisible: boolean }) => {
           const globalIdx = cols.findIndex(c => c.key === col.key);
@@ -540,33 +545,52 @@ export function DataTable<T extends Record<string, any>>({
                 value={propsSearch} onChange={e => setPropsSearch(e.target.value)} />
             </div>
 
-            {/* Shown in table */}
             <div className="dt-props-body">
-              {shownCols.length > 0 && (
-                <>
-                  <div className="dt-props-section-title">
-                    <span>Shown in table</span>
-                    <button className="dt-props-section-action"
-                      onClick={() => saveCols(cols.map(c => ({ ...c, visible: false })))}>
-                      Hide all
-                    </button>
-                  </div>
-                  {shownCols.map(col => <ColItem key={col.key} col={col} isVisible={true} />)}
-                </>
+              {propGroups.length === 0 && (
+                <div className="dt-props-empty">Ничего не найдено</div>
               )}
-
-              {/* Hidden in table */}
-              {hiddenCols.length > 0 && (
-                <>
-                  <div className="dt-props-section-title" style={{ marginTop: 8 }}>
-                    <span>Hidden in table</span>
-                    <button className="dt-props-section-action"
-                      onClick={() => saveCols(cols.map(c => ({ ...c, visible: true })))}>
-                      Show all
-                    </button>
+              {propGroups.map(group => {
+                const visibleCount = group.items.filter(col => col.visible !== false).length;
+                const groupKeys = new Set(group.items.map(col => col.key));
+                return (
+                  <div key={group.category} className="dt-props-category-group">
+                    <div className="dt-props-section-title">
+                      <span>{group.category}</span>
+                      <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
+                    </div>
+                    <div className="dt-props-section-actions">
+                      <button
+                        className="dt-props-section-action"
+                        onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: true } : c))}
+                      >
+                        Показать
+                      </button>
+                      <button
+                        className="dt-props-section-action"
+                        onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: false } : c))}
+                      >
+                        Скрыть
+                      </button>
+                    </div>
+                    {group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
                   </div>
-                  {hiddenCols.map(col => <ColItem key={col.key} col={col} isVisible={false} />)}
-                </>
+                );
+              })}
+              {propertyCols.length > 0 && (
+                <div className="dt-props-footer-actions">
+                  <button
+                    className="dt-props-section-action"
+                    onClick={() => saveCols(cols.map(c => c.showInProperties !== false ? { ...c, visible: true } : c))}
+                  >
+                    Показать все
+                  </button>
+                  <button
+                    className="dt-props-section-action"
+                    onClick={() => saveCols(cols.map(c => c.showInProperties !== false ? { ...c, visible: false } : c))}
+                  >
+                    Скрыть все
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -667,7 +691,7 @@ export function DataTable<T extends Record<string, any>>({
                     key={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
                     data-group-even={groupColorKey ? (((row as any)[groupColorKey] ?? 0) % 2 === 0 ? 'true' : 'false') : undefined}
-                    onClick={() => onRowClick?.(row)}
+                    onClick={() => undefined}
                     onContextMenu={e => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -679,8 +703,50 @@ export function DataTable<T extends Record<string, any>>({
                     </td>
                     <td className="dt-td dt-td--num dt-sticky-col dt-sticky-col--2">{idx + 1}</td>
                     {visibleCols.map(col => (
-                      <td key={col.key} className="dt-td">
-                        {col.render ? col.render(getCellValue(row, col), row) : (
+                      <td
+                        key={col.key}
+                        className={`dt-td ${col.editable ? 'dt-td--editable' : ''}`}
+                        onClick={e => {
+                          e.stopPropagation();
+                          startCellEdit(row, col);
+                        }}
+                      >
+                        {editingCell?.rowId === id && editingCell.key === col.key ? (
+                          col.editOptions ? (
+                            <select
+                              autoFocus
+                              className="dt-cell-input"
+                              value={draftValue}
+                              disabled={savingCell}
+                              onChange={e => {
+                                const nextValue = e.target.value;
+                                setDraftValue(nextValue);
+                                commitCellEdit(row, col, nextValue);
+                              }}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') commitCellEdit(row, col);
+                                if (e.key === 'Escape') cancelCellEdit();
+                              }}
+                            >
+                              {col.editOptions.map(option => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input
+                              autoFocus
+                              className="dt-cell-input"
+                              value={draftValue}
+                              disabled={savingCell}
+                              onChange={e => setDraftValue(e.target.value)}
+                              onBlur={() => commitCellEdit(row, col)}
+                              onKeyDown={e => {
+                                if (e.key === 'Enter') commitCellEdit(row, col);
+                                if (e.key === 'Escape') cancelCellEdit();
+                              }}
+                            />
+                          )
+                        ) : col.render ? col.render(getCellValue(row, col), row) : (
                           <span className="dt-cell-text">{getCellValue(row, col) ?? '—'}</span>
                         )}
                       </td>
@@ -697,18 +763,7 @@ export function DataTable<T extends Record<string, any>>({
       {/* ── COLUMN CONTEXT MENU ── */}
       {colMenu && (
         <div className="dt-ctx-menu" style={{ left: colMenu.x, top: colMenu.y }} onClick={e => e.stopPropagation()}>
-          <div className="dt-ctx-section">Сортировка</div>
-          <button className="dt-ctx-item" onClick={() => toggleSort(colMenu.key, 'asc')}>
-            <span>↑</span> А → Я {sorts.find(s => s.key === colMenu.key && s.dir === 'asc') && '✓'}
-          </button>
-          <button className="dt-ctx-item" onClick={() => toggleSort(colMenu.key, 'desc')}>
-            <span>↓</span> Я → А {sorts.find(s => s.key === colMenu.key && s.dir === 'desc') && '✓'}
-          </button>
-          <div className="dt-ctx-divider" />
-          <button className="dt-ctx-item" onClick={() => addFilterFromCol(colMenu.key)}>
-            <span>⚙</span> Фильтр по колонке
-          </button>
-          <div className="dt-ctx-divider" />
+          <div className="dt-ctx-section">Колонка</div>
           <button className="dt-ctx-item" onClick={() => {
             saveCols(cols.map(c => c.key === colMenu.key ? { ...c, visible: false } : c));
             setColMenu(null);
@@ -731,32 +786,12 @@ export function DataTable<T extends Record<string, any>>({
               <span>✏</span> Редактировать
             </button>
           )}
-          {onRowPayment && (
-            <button className="dt-ctx-item dt-ctx-item--payment" onClick={() => { onRowPayment(rowMenu.row); setRowMenu(null); }}>
-              <span>💳</span> Новая оплата
-            </button>
-          )}
           <button className="dt-ctx-item" onClick={() => {
             navigator.clipboard.writeText(String(rowMenu.row[rowKey]));
             setRowMenu(null);
           }}>
             <span>📋</span> Копировать ID
           </button>
-          {visibleCols.filter(c => c.type === 'currency' || c.type === 'number').length > 0 && (
-            <>
-              <div className="dt-ctx-divider" />
-              <div className="dt-ctx-section">Σ Вычислить</div>
-              {visibleCols.filter(c => c.type === 'currency' || c.type === 'number').map(col => (
-                <button key={col.key} className="dt-ctx-item" onClick={() => {
-                  setCalcPopup({ key: col.key, x: rowMenu.x, y: rowMenu.y });
-                  setRowMenu(null);
-                }}>
-                  <span style={{ fontWeight: 700 }}>Σ</span> {col.label}
-                </button>
-              ))}
-            </>
-          )}
-          <div className="dt-ctx-divider" />
           {onRowDelete && (
             <button className="dt-ctx-item dt-ctx-item--danger" onClick={() => { onRowDelete(rowMenu.row); setRowMenu(null); }}>
               <span>🗑</span> Удалить

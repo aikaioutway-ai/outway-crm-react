@@ -6,12 +6,12 @@ export function Section({ title, children, action }: {
   action?: React.ReactNode;
 }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div style={{ marginBottom: 14 }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 12, paddingBottom: 7, borderBottom: '1px solid var(--border)',
+        marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border)',
       }}>
-        <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.65 }}>
           {title}
         </div>
         {action}
@@ -116,11 +116,11 @@ export function SummaryCard({ label, value, color, bg }: {
 }
 
 export function Spinner() {
-  return <div style={{ textAlign: 'center', padding: '40px 0', color: 'var(--text-2)', fontSize: 13 }}>Загрузка...</div>;
+  return <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-2)', fontSize: 12 }}>Загрузка...</div>;
 }
 
 export function Empty({ text }: { text: string }) {
-  return <div style={{ textAlign: 'center', padding: '30px 0', color: 'var(--text-2)', fontSize: 13 }}>{text}</div>;
+  return <div style={{ textAlign: 'center', padding: '18px 0', color: 'var(--text-2)', fontSize: 12 }}>{text}</div>;
 }
 
 export function SaveBtn({ onClick, saving, label = 'Сохранить изменения' }: {

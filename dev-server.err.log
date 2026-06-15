@@ -1,0 +1,147 @@
+(node:3588) [DEP0176] DeprecationWarning: fs.F_OK is deprecated, use fs.constants.F_OK instead
+(Use `node --trace-deprecation ...` to show where the warning was created)
+(node:3588) [DEP_WEBPACK_DEV_SERVER_ON_AFTER_SETUP_MIDDLEWARE] DeprecationWarning: 'onAfterSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+(node:3588) [DEP_WEBPACK_DEV_SERVER_ON_BEFORE_SETUP_MIDDLEWARE] DeprecationWarning: 'onBeforeSetupMiddleware' option is deprecated. Please use the 'setupMiddlewares' option.
+ERROR in src/modules/families/FamilyDrawer.tsx:195:9
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: any; paymentDate: string; comment: string; createdBy: string; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 193 |[39m         comment[33m,[39m
+   [90m 194 |[39m         createdBy[33m:[39m userName[33m,[39m
+  [31m[1m>[22m[39m[90m 195 |[39m         charges[33m,[39m
+   [90m     |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 196 |[39m       })[33m;[39m
+   [90m 197 |[39m       [36mawait[39m addAudit([32m'Внесение платежа'[39m[33m,[39m [32m'family_payment'[39m[33m,[39m [32m'—'[39m[33m,[39m money(amount))[33m;[39m
+   [90m 198 |[39m       [36mawait[39m loadFinance()[33m;[39m[0m
+
+ERROR in src/modules/families/PaymentModal.tsx:69:9
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string; createdBy: string; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 67 |[39m         comment[33m,[39m
+   [90m 68 |[39m         createdBy[33m:[39m userName[33m,[39m
+  [31m[1m>[22m[39m[90m 69 |[39m         charges[33m,[39m
+   [90m    |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 70 |[39m       })[33m;[39m
+   [90m 71 |[39m
+   [90m 72 |[39m       [36mtry[39m {[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+
+ERROR in src/modules/families/FamilyDrawer.tsx:348:13
+TS2322: Type '{ charges: Charge[]; payments: FamilyPayment[]; paymentItems: PaymentItem[]; loading: boolean; family: Family; children: Child[]; editMode: boolean; ... 6 more ...; onConfirmPayment: (payment: FamilyPayment) => Promise<...>; }' is not assignable to type 'IntrinsicAttributes & Props'.
+  Property 'onConfirmPayment' does not exist on type 'IntrinsicAttributes & Props'.
+  [0m [90m 346 |[39m             onAddCharges[33m=[39m{handleAddCharges}
+   [90m 347 |[39m             onCreatePayment[33m=[39m{handleCreatePayment}
+  [31m[1m>[22m[39m[90m 348 |[39m             onConfirmPayment[33m=[39m{handleConfirmPayment}
+   [90m     |[39m             [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 349 |[39m           [33m/[39m[33m>[39m}
+   [90m 350 |[39m           {tab [33m===[39m [32m'history'[39m   [33m&&[39m [33m<[39m[33mTabHistory[39m   audit[33m=[39m{audit} [33m/[39m[33m>[39m}
+   [90m 351 |[39m         [33m<[39m[33m/[39m[33mdiv[39m[33m>[39m[0m
+
+ERROR in src/modules/families/PaymentModal.tsx:69:9
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string; createdBy: string; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 67 |[39m         comment[33m,[39m
+   [90m 68 |[39m         createdBy[33m:[39m userName[33m,[39m
+  [31m[1m>[22m[39m[90m 69 |[39m         charges[33m,[39m
+   [90m    |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 70 |[39m       })[33m;[39m
+   [90m 71 |[39m
+   [90m 72 |[39m       [36mtry[39m {[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+
+ERROR in src/modules/families/PaymentModal.tsx:69:9
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string; createdBy: string; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 67 |[39m         comment[33m,[39m
+   [90m 68 |[39m         createdBy[33m:[39m userName[33m,[39m
+  [31m[1m>[22m[39m[90m 69 |[39m         charges[33m,[39m
+   [90m    |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 70 |[39m       })[33m;[39m
+   [90m 71 |[39m
+   [90m 72 |[39m       [36mtry[39m {[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+
+ERROR in src/modules/families/PaymentModal.tsx:69:9
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string; createdBy: string; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 67 |[39m         comment[33m,[39m
+   [90m 68 |[39m         createdBy[33m:[39m userName[33m,[39m
+  [31m[1m>[22m[39m[90m 69 |[39m         charges[33m,[39m
+   [90m    |[39m         [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 70 |[39m       })[33m;[39m
+   [90m 71 |[39m
+   [90m 72 |[39m       [36mtry[39m {[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+
+ERROR in src/services/paymentService.ts:53:5
+TS2345: Argument of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment: string | undefined; createdBy: string | undefined; charges: Charge[]; }' is not assignable to parameter of type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  Object literal may only specify known properties, and 'charges' does not exist in type '{ familyId: string; amount: number; paymentType: PaymentType; paymentDate: string; comment?: string | undefined; createdBy?: string | undefined; }'.
+  [0m [90m 51 |[39m     comment[33m:[39m params[33m.[39mcomment[33m,[39m
+   [90m 52 |[39m     createdBy[33m:[39m params[33m.[39mcreatedBy[33m,[39m
+  [31m[1m>[22m[39m[90m 53 |[39m     charges[33m:[39m params[33m.[39mcharges[33m,[39m
+   [90m    |[39m     [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+   [90m 54 |[39m   })[33m;[39m
+   [90m 55 |[39m }
+   [90m 56 |[39m[0m
+

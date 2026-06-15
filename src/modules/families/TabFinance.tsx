@@ -1,384 +1,614 @@
-import React, { useState } from 'react';
-import { Plus, Trash2, ChevronDown, ChevronUp } from 'lucide-react';
-import { Family, Payment, Child } from '../../types';
-import { calcPenalty, getFamilyPrice, money } from '../../utils/pricing';
-import { PERIOD_LABEL, PERIOD_ORDER, ALL_PERIODS } from './constants';
+import React, { useMemo, useState } from 'react';
+import { Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentStatus, PaymentType } from '../../types';
+import { money } from '../../utils/pricing';
+import { ALL_PERIODS, PERIOD_LABEL, PERIOD_ORDER } from './constants';
 import { Section, Spinner, Empty } from './DrawerUI';
 
-type PayStatus = Payment['accountantStatus'];
-
-const STATUS_CHAIN: PayStatus[] = [
-  'Не оплачено', 'Просрочено', 'На проверке', 'На проверке (чек)', 'Частично оплачено', 'Оплачено',
-];
-
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  'Оплачено':           { bg: '#D1FAE5', color: '#065F46' },
-  'Частично оплачено':  { bg: '#FEF3C7', color: '#92400E' },
-  'На проверке':        { bg: '#DBEAFE', color: '#1E40AF' },
-  'На проверке (чек)':  { bg: '#E0E7FF', color: '#3730A3' },
-  'Просрочено':         { bg: '#FEE2E2', color: '#991B1B' },
-  'Не оплачено':        { bg: '#F3F4F6', color: '#374151' },
+  'Оплачено':          { bg: '#D1FAE5', color: '#065F46' },
+  'Частично оплачено': { bg: '#FEF3C7', color: '#92400E' },
+  'Просрочено':        { bg: '#FEE2E2', color: '#991B1B' },
+  'Заморожено':        { bg: '#E0E7FF', color: '#3730A3' },
+  'Не оплачено':       { bg: '#F3F4F6', color: '#374151' },
 };
 
-// ─── PayRow ─────────────────────────────────────────────────────────────────
-
-function PayRow({ payment: p, isDeposit, isAdmin, isCashier, onSave, onDelete }: {
-  payment: Payment; isDeposit?: boolean;
-  isAdmin: boolean; isCashier: boolean;
-  onSave: (u: Partial<Payment>) => Promise<boolean>;
-  onDelete: () => void;
-}) {
-  const [expanded, setExpanded]     = useState(false);
-  const [managerAmt, setManagerAmt] = useState(String(p.managerAmount || ''));
-  const [factAmt, setFactAmt]       = useState(String(p.factAmount || ''));
-  const [comment, setComment]       = useState(p.comment ?? '');
-  const [editAmount, setEditAmount] = useState(String(p.amount));
-  const [saving, setSaving]         = useState(false);
-  const [msg, setMsg]               = useState('');
-
-  const dueDate = p.month > 0 ? new Date(p.year, p.month - 1, 1) : null;
-  const needsPenalty = !isDeposit && dueDate && !p.isFrozen &&
-    ['Не оплачено', 'Просрочено', 'Частично оплачено'].includes(p.accountantStatus);
-  const penalty = needsPenalty ? calcPenalty(p.amount - p.factAmount, dueDate!, new Date()) : 0;
-  const paid    = p.accountantStatus === 'Оплачено';
-  const inReview = p.accountantStatus === 'На проверке' || p.accountantStatus === 'На проверке (чек)';
-  const sc = STATUS_COLORS[p.accountantStatus] ?? STATUS_COLORS['Не оплачено'];
-  const debt = Math.max(0, p.amount - p.factAmount);
-
-  async function save(updates: Partial<Payment>) {
-    setSaving(true);
-    const ok = await onSave(updates);
-    setSaving(false);
-    if (ok) { setMsg('✓'); setTimeout(() => setMsg(''), 1500); }
-  }
-
-  async function managerSubmit() {
-    const amt = Number(managerAmt);
-    if (!amt) return;
-    await save({ managerAmount: amt, managerDate: new Date().toISOString().slice(0, 10), accountantStatus: 'На проверке', isFrozen: true });
-    setExpanded(false);
-  }
-
-  async function cashierConfirm() {
-    const amt = Number(factAmt) || p.managerAmount;
-    await save({ factAmount: amt, factDate: new Date().toISOString().slice(0, 10), accountantStatus: amt < p.amount ? 'Частично оплачено' : 'Оплачено', isFrozen: false, comment });
-    setExpanded(false);
-  }
-
-  async function cashierReject() {
-    await save({ accountantStatus: 'Не оплачено', isFrozen: false, managerAmount: 0, managerDate: '' });
-    setExpanded(false);
-  }
-
-  return (
-    <div style={{
-      border: `1px solid ${sc.bg}`,
-      borderLeft: `3px solid ${sc.color}`,
-      borderRadius: 10, background: '#fff',
-      overflow: 'hidden', marginBottom: 6,
-    }}>
-      {/* Main row */}
-      <div
-        style={{ display: 'flex', alignItems: 'center', padding: '12px 14px', cursor: 'pointer', gap: 10 }}
-        onClick={() => setExpanded(e => !e)}
-      >
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{PERIOD_LABEL[p.periodKey] ?? p.periodKey}</div>
-          {!isDeposit && p.year && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>{p.year}</div>}
-        </div>
-
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: paid ? '#065F46' : 'var(--text)' }}>{money(p.amount)}</div>
-          {p.factAmount > 0 && p.factAmount < p.amount && (
-            <div style={{ fontSize: 11, color: '#92400E', fontWeight: 600 }}>оплач. {money(p.factAmount)}</div>
-          )}
-          {penalty > 0 && (
-            <div style={{ fontSize: 11, color: '#991B1B', fontWeight: 600 }}>+{money(penalty)} пеня</div>
-          )}
-        </div>
-
-        {msg && <span style={{ fontSize: 12, color: '#065F46', fontWeight: 700 }}>{msg}</span>}
-
-        <div style={{
-          background: sc.bg, color: sc.color,
-          borderRadius: 6, padding: '3px 9px', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
-        }}>
-          {p.accountantStatus}
-        </div>
-
-        {saving
-          ? <div style={{ width: 20, textAlign: 'center', fontSize: 11, color: 'var(--text-2)' }}>...</div>
-          : expanded
-            ? <ChevronUp size={14} color="var(--text-2)" />
-            : <ChevronDown size={14} color="var(--text-2)" />
-        }
-      </div>
-
-      {/* Manager info strip */}
-      {p.managerAmount > 0 && !paid && (
-        <div style={{ padding: '0 14px 10px', fontSize: 11, color: 'var(--text-2)', display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span style={{ background: '#EEF2FF', borderRadius: 4, padding: '2px 7px', color: 'var(--accent)', fontWeight: 600 }}>
-            Менеджер: {money(p.managerAmount)}
-          </span>
-          {p.managerDate && <span>{new Date(p.managerDate).toLocaleDateString('ru-RU')}</span>}
-          {p.hasReceipt && <span>📎 чек</span>}
-        </div>
-      )}
-
-      {/* Expanded panel */}
-      {expanded && (
-        <div style={{ borderTop: `1px solid ${sc.bg}`, padding: 16, background: '#FAFBFF' }}>
-
-          {/* Admin: edit amount */}
-          {isAdmin && !paid && (
-            <div style={{ marginBottom: 14 }}>
-              <Label>Изменить начисление (Админ)</Label>
-              <div style={{ display: 'flex', gap: 8 }}>
-                <input type="number" value={editAmount} onChange={e => setEditAmount(e.target.value)}
-                  style={inputStyle} />
-                <ActionBtn color="var(--accent)" onClick={() => save({ amount: Number(editAmount) })}>
-                  Изменить
-                </ActionBtn>
-              </div>
-            </div>
-          )}
-
-          {/* Manager: внести оплату */}
-          {!isCashier && !paid && !inReview && (
-            <div style={{ marginBottom: 14 }}>
-              <Label>Внести оплату</Label>
-              <input type="number" value={managerAmt} onChange={e => setManagerAmt(e.target.value)}
-                placeholder={`Начислено: ${money(p.amount)}${debt < p.amount ? `, остаток: ${money(debt)}` : ''}`}
-                style={{ ...inputStyle, width: '100%', marginBottom: 8 }} />
-              <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий"
-                style={{ ...inputStyle, width: '100%', marginBottom: 8 }} />
-              <ActionBtn color="var(--accent)" onClick={managerSubmit} full>
-                Отправить на проверку →
-              </ActionBtn>
-            </div>
-          )}
-
-          {/* Cashier: подтвердить/отклонить */}
-          {(isCashier || isAdmin) && inReview && (
-            <div style={{ marginBottom: 14 }}>
-              <Label>Подтверждение кассира · менеджер внёс {money(p.managerAmount)}</Label>
-              <input type="number" value={factAmt || String(p.managerAmount)} onChange={e => setFactAmt(e.target.value)}
-                placeholder="Фактическая сумма"
-                style={{ ...inputStyle, width: '100%', marginBottom: 8 }} />
-              <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий"
-                style={{ ...inputStyle, width: '100%', marginBottom: 8 }} />
-              <div style={{ display: 'flex', gap: 8 }}>
-                <ActionBtn color="#065F46" bg="#D1FAE5" onClick={cashierConfirm} full>✓ Подтвердить</ActionBtn>
-                <ActionBtn color="#991B1B" bg="#FEE2E2" onClick={cashierReject} full>✗ Отклонить</ActionBtn>
-              </div>
-            </div>
-          )}
-
-          {/* Admin: статусы */}
-          {isAdmin && (
-            <div style={{ marginBottom: 10 }}>
-              <Label>Установить статус</Label>
-              <div style={{ display: 'flex', gap: 5, flexWrap: 'wrap' }}>
-                {STATUS_CHAIN.map(s => {
-                  const c = STATUS_COLORS[s];
-                  const active = p.accountantStatus === s;
-                  return (
-                    <button key={s} onClick={() => save({ accountantStatus: s, isFrozen: s.includes('проверке') })}
-                      style={{ padding: '4px 10px', border: `1px solid ${active ? c.color : 'transparent'}`, borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer', background: active ? c.bg : '#F3F4F6', color: active ? c.color : 'var(--text-2)' }}>
-                      {s}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Admin: удалить */}
-          {isAdmin && (
-            <button onClick={onDelete} style={{ marginTop: 8, width: '100%', padding: '8px', background: '#FEE2E2', color: '#991B1B', border: 'none', borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
-              <Trash2 size={13} /> Удалить запись
-            </button>
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── TabFinance ──────────────────────────────────────────────────────────────
+const PAYMENT_TYPE_LABEL: Record<string, string> = {
+  cash: 'Наличные',
+  transfer: 'Безналичный QR',
+  card: 'Безналичный QR',
+  other: 'Другое',
+};
 
 interface Props {
-  payments: Payment[];
+  charges: Charge[];
+  payments: FamilyPayment[];
+  paymentItems: PaymentItem[];
   loading: boolean;
   family: Family;
   children: Child[];
-  editMode: boolean;
+  mainBalance: number;
+  depositBalance: number;
   isAdmin: boolean;
   isCashier: boolean;
-  onSavePayment: (p: Payment, updates: Partial<Payment>) => Promise<boolean>;
-  onDeletePayment: (p: Payment) => void;
-  onAddPayment: (periodKey: string, month: number, year: number, amount: number) => void;
+  onSaveCharge: (charge: Charge, updates: Partial<Charge>) => Promise<boolean>;
+  onDeleteCharge: (charge: Charge) => void;
+  onAddCharges: (month: number, year: number) => void | Promise<void>;
+  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null) => Promise<boolean>;
+  onConfirmPayment: (payment: FamilyPayment, actualPaymentDate: string) => Promise<boolean>;
+  onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
+  onDeletePayment: (payment: FamilyPayment) => Promise<boolean>;
 }
 
-export default function TabFinance({ payments, loading, family, children, editMode, isAdmin, isCashier, onSavePayment, onDeletePayment, onAddPayment }: Props) {
+export default function TabFinance({
+  charges,
+  payments,
+  paymentItems,
+  loading,
+  children,
+  mainBalance,
+  depositBalance,
+  isAdmin,
+  isCashier,
+  onSaveCharge,
+  onDeleteCharge,
+  onAddCharges,
+  onCreatePayment,
+  onConfirmPayment,
+  onSavePayment,
+  onDeletePayment,
+}: Props) {
+  const [subTab, setSubTab] = useState<'overview' | 'charges' | 'payments'>('overview');
   const [addingPeriod, setAddingPeriod] = useState(false);
   const [newPeriodKey, setNewPeriodKey] = useState('9');
-  const [newAmount, setNewAmount]       = useState('');
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentType, setPaymentType] = useState<PaymentType>('cash');
+  const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
+  const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [comment, setComment] = useState('');
+  const [savingPayment, setSavingPayment] = useState(false);
+  const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
+  const [msg, setMsg] = useState('');
+
+  const sortedCharges = useMemo(() => {
+    return [...charges].sort((a, b) => (
+      PERIOD_ORDER.indexOf(String(a.periodMonth === 0 ? 'deposit' : a.periodMonth)) -
+      PERIOD_ORDER.indexOf(String(b.periodMonth === 0 ? 'deposit' : b.periodMonth))
+    ) || a.childName?.localeCompare(b.childName ?? '', 'ru') || 0);
+  }, [charges]);
+
+  const totalCharged = charges.reduce((s, c) => s + c.amount + c.penaltyAmount, 0);
+  const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
+  const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
+  const totalPenalty = charges.reduce((s, c) => s + c.penaltyAmount, 0);
+  const monthlyPlan = children.reduce((s, c) => s + Number(c.finalPrice ?? 0), 0);
+  const depositPlan = monthlyPlan;
+  const canCreatePayment = !isCashier || isAdmin;
+  const canConfirmPayment = isCashier || isAdmin;
+
+  const existingPeriodKeys = new Set(charges.map(c => `${c.periodMonth}:${c.year}`));
+  const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(`${p.month}:${p.year}`));
 
   if (loading) return <Spinner />;
 
-  // Правильная цена семьи — считается от детей
-  const correctFamilyPrice = children.length > 0
-    ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
-    : family.monthlyPrice;
+  async function submitPayment() {
+    const amount = Number(paymentAmount);
+    if (!amount || amount <= 0) return;
+    setSavingPayment(true);
+    const ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile);
+    setSavingPayment(false);
+    if (ok) {
+      setMsg('Платёж отправлен кассиру на проверку');
+      setPaymentAmount('');
+      setReceiptFile(null);
+      setComment('');
+      setTimeout(() => setMsg(''), 2500);
+    } else {
+      setMsg('Не удалось внести платёж');
+    }
+  }
 
-  const sorted  = [...payments].sort((a, b) => PERIOD_ORDER.indexOf(a.periodKey) - PERIOD_ORDER.indexOf(b.periodKey));
-  const deposit = sorted.find(p => p.periodKey === 'deposit');
-  const monthly = sorted.filter(p => p.periodKey !== 'deposit');
-
-  const totalCharged = monthly.reduce((s, p) => s + p.amount, 0);
-  const totalPaid    = monthly.reduce((s, p) => s + p.factAmount, 0);
-  const totalDebt    = Math.max(0, totalCharged - totalPaid);
-  const pendingCount = monthly.filter(p => p.accountantStatus === 'На проверке' || p.accountantStatus === 'На проверке (чек)').length;
-
-  const existingKeys   = new Set<string>(payments.map(p => p.periodKey));
-  const availablePeriods = ALL_PERIODS.filter(p => !existingKeys.has(p.key));
-
-  function handleAdd() {
+  function addSelectedPeriod() {
     const period = ALL_PERIODS.find(p => p.key === newPeriodKey);
     if (!period) return;
-    // Используем правильную цену семьи
-    const amount = Number(newAmount) || correctFamilyPrice;
-    onAddPayment(period.key, period.month, period.year, amount);
+    onAddCharges(period.month, period.year);
     setAddingPeriod(false);
-    setNewAmount('');
+  }
+
+  async function confirmPayment(payment: FamilyPayment, actualPaymentDate: string) {
+    setConfirmingPaymentId(payment.id);
+    const ok = await onConfirmPayment(payment, actualPaymentDate);
+    setConfirmingPaymentId(null);
+    setMsg(ok ? 'Платёж подтверждён и распределён' : 'Не удалось подтвердить платёж');
+    setTimeout(() => setMsg(''), 2500);
   }
 
   return (
     <div>
-      {/* ─── Сводка ─── */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 20 }}>
-        <SummaryTile label="Начислено" value={money(totalCharged)} sub={`${monthly.length} периодов`} />
+      {msg && (
+        <div style={{ background: msg.includes('Не удалось') ? '#FEE2E2' : '#D1FAE5', color: msg.includes('Не удалось') ? '#991B1B' : '#065F46', borderRadius: 8, padding: '7px 12px', marginBottom: 8, fontSize: 12, fontWeight: 700 }}>
+          {msg}
+        </div>
+      )}
+
+      <div style={subTabsStyle}>
+        <SubTabButton active={subTab === 'overview'} onClick={() => setSubTab('overview')}>Обзор</SubTabButton>
+        <SubTabButton active={subTab === 'charges'} onClick={() => setSubTab('charges')}>Начисления</SubTabButton>
+        <SubTabButton active={subTab === 'payments'} onClick={() => setSubTab('payments')}>Платежи</SubTabButton>
+      </div>
+
+      {subTab === 'overview' && (
+        <>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 8 }}>
+        <SummaryTile label="Начислено" value={money(totalCharged)} />
         <SummaryTile label="Оплачено" value={money(totalPaid)} color="#065F46" bg="#D1FAE5" />
-        {totalDebt > 0
-          ? <SummaryTile label="Долг" value={money(totalDebt)} color="#991B1B" bg="#FEE2E2" />
-          : <SummaryTile label="Баланс" value="✓ Чисто" color="#065F46" bg="#D1FAE5" />
-        }
-      </div>
-
-      {/* Цена семьи */}
-      <div style={{ background: 'var(--accent)', borderRadius: 10, padding: '12px 16px', marginBottom: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div>
-          <div style={{ fontSize: 11, fontWeight: 700, color: 'rgba(255,255,255,0.65)', textTransform: 'uppercase', letterSpacing: 0.6 }}>
-            Ежемесячное начисление
+        <SummaryTile label="Долг" value={money(totalDebt)} color={totalDebt > 0 ? '#991B1B' : '#065F46'} bg={totalDebt > 0 ? '#FEE2E2' : '#D1FAE5'} />
+        <SummaryTile label="Пеня" value={money(totalPenalty)} sub={`${children.length} детей`} />
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', marginTop: 2 }}>
-            {children.length} {children.length === 1 ? 'ребёнок' : 'детей'} · по тарифу
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 12 }}>
+        <SummaryTile label="Баланс" value={money(mainBalance)} color={mainBalance < 0 ? '#991B1B' : '#065F46'} bg={mainBalance < 0 ? '#FEE2E2' : '#D1FAE5'} />
+        <SummaryTile label="Депозит" value={money(depositBalance)} color="#3730A3" bg="#E0E7FF" />
+        <SummaryTile label="План / месяц" value={money(monthlyPlan)} />
+        <SummaryTile label="План депозит" value={money(depositPlan)} />
           </div>
-        </div>
-        <div style={{ fontSize: 22, fontWeight: 700, color: '#fff' }}>{money(correctFamilyPrice)}</div>
-      </div>
 
-      {pendingCount > 0 && (
-        <div style={{ background: '#DBEAFE', color: '#1E40AF', borderRadius: 8, padding: '10px 14px', marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
-          ⏳ {pendingCount} платёж{pendingCount > 1 ? 'а' : ''} ожидают подтверждения кассира
-        </div>
-      )}
+          <Section title={`План по детям (${children.length})`}>
+        {children.length === 0 ? <Empty text="Детей нет" /> : (
+          <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, overflow: 'hidden' }}>
+            {children.map(child => (
+              <div key={child.id} style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr 92px 92px',
+                gap: 8,
+                alignItems: 'center',
+                padding: '7px 12px',
+                borderBottom: '1px solid var(--border)',
+              }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {child.childName || 'Без имени'}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
+                    {child.class ? `${child.class} кл.` : 'класс не указан'} · {child.branchShort || child.schoolCode}
+                  </div>
+                </div>
+                <PlanCell label="Месяц" value={money(Number(child.finalPrice ?? 0))} />
+                <PlanCell label="Депозит" value={money(Number(child.finalPrice ?? 0))} />
+              </div>
+            ))}
+          </div>
+        )}
+          </Section>
 
-      {/* ─── Депозит ─── */}
-      {deposit && (
-        <Section title="Депозит">
-          <PayRow payment={deposit} isDeposit isAdmin={isAdmin} isCashier={isCashier}
-            onSave={u => onSavePayment(deposit, u)} onDelete={() => onDeletePayment(deposit)} />
-        </Section>
-      )}
-
-      {/* ─── Периоды ─── */}
-      <Section
-        title={`Начисления (${monthly.length})`}
-        action={
-          <button onClick={() => setAddingPeriod(p => !p)} style={{
-            display: 'flex', alignItems: 'center', gap: 4,
-            padding: '5px 12px', background: 'var(--accent)', color: '#fff',
-            border: 'none', borderRadius: 6, fontSize: 11, fontWeight: 700, cursor: 'pointer',
+          {canCreatePayment && <Section title="Внести платёж семьи">
+        <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 135px', gap: 8, marginBottom: 8 }}>
+            <input
+              type="number"
+              value={paymentAmount}
+              onChange={e => setPaymentAmount(e.target.value)}
+              placeholder={totalDebt > 0 ? `Долг: ${totalDebt}` : 'Сумма платежа'}
+              style={inputStyle}
+            />
+            <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
+              <option value="cash">Наличные</option>
+              <option value="transfer">Безналичный QR</option>
+            </select>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '145px 1fr', gap: 8, marginBottom: 8 }}>
+            <input
+              type="date"
+              value={paymentDate}
+              onChange={e => setPaymentDate(e.target.value)}
+              style={inputStyle}
+            />
+            <label style={fileInputStyle}>
+              <Paperclip size={14} />
+              <span>{receiptFile ? receiptFile.name : 'Прикрепить чек'}</span>
+              <input
+                type="file"
+                accept="image/*,.pdf"
+                onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                style={{ display: 'none' }}
+              />
+            </label>
+          </div>
+          <input
+            value={comment}
+            onChange={e => setComment(e.target.value)}
+            placeholder="Комментарий"
+            style={{ ...inputStyle, width: '100%', marginBottom: 8 }}
+          />
+          <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={{
+            width: '100%', padding: '8px 12px', border: 'none', borderRadius: 8,
+            background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 700,
+            cursor: savingPayment || !paymentAmount ? 'default' : 'pointer', opacity: savingPayment || !paymentAmount ? 0.6 : 1,
           }}>
-            <Plus size={11} /> Добавить
+            {savingPayment ? 'Сохраняем...' : 'Отправить на проверку'}
           </button>
-        }
+        </div>
+          </Section>}
+        </>
+      )}
+
+      {subTab === 'charges' && <Section
+        title={`Начисления по детям (${charges.length})`}
+        action={isAdmin && (
+          <button onClick={() => setAddingPeriod(p => !p)} style={smallAccentBtn}>
+            <Plus size={11} /> Период
+          </button>
+        )}
       >
         {addingPeriod && (
-          <div style={{ background: '#EEF2FF', borderRadius: 10, padding: 14, marginBottom: 14 }}>
-            <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', marginBottom: 10 }}>Новое начисление</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 10 }}>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 4, fontWeight: 600 }}>Период</div>
-                <select value={newPeriodKey} onChange={e => setNewPeriodKey(e.target.value)}
-                  style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, fontSize: 13, color: 'var(--text)', background: '#fff' }}>
-                  {availablePeriods.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{ fontSize: 11, color: 'var(--text-2)', marginBottom: 4, fontWeight: 600 }}>
-                  Сумма (авто: {money(correctFamilyPrice)})
-                </div>
-                <input type="number" value={newAmount} onChange={e => setNewAmount(e.target.value)}
-                  placeholder={String(correctFamilyPrice)}
-                  style={{ width: '100%', padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7, fontSize: 13, color: 'var(--text)', background: '#fff', boxSizing: 'border-box' }} />
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8 }}>
-              <ActionBtn color="var(--accent)" onClick={handleAdd} full>Создать</ActionBtn>
-              <ActionBtn color="var(--text-2)" bg="#F3F4F6" onClick={() => setAddingPeriod(false)} full>Отмена</ActionBtn>
+          <div style={{ background: '#EEF2FF', borderRadius: 8, padding: 10, marginBottom: 10 }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--accent)', marginBottom: 8 }}>Создать начисления всем детям</div>
+            <div style={{ display: 'flex', gap: 7 }}>
+              <select value={newPeriodKey} onChange={e => setNewPeriodKey(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                {availablePeriods.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
+              </select>
+              <button onClick={addSelectedPeriod} style={smallAccentBtn}>Создать</button>
             </div>
           </div>
         )}
 
-        {monthly.length === 0
+        {sortedCharges.length === 0
           ? <Empty text="Начислений нет" />
-          : monthly.map(p => (
-            <PayRow key={p.id} payment={p} isAdmin={isAdmin} isCashier={isCashier}
-              onSave={u => onSavePayment(p, u)} onDelete={() => onDeletePayment(p)} />
+          : sortedCharges.map(charge => (
+            <ChargeRow
+              key={charge.id}
+              charge={charge}
+              isAdmin={isAdmin}
+              onSave={updates => onSaveCharge(charge, updates)}
+              onDelete={() => onDeleteCharge(charge)}
+            />
           ))
         }
-      </Section>
+      </Section>}
+
+      {subTab === 'payments' && <Section title={`Платежи семьи (${payments.length})`}>
+        {payments.length === 0 ? <Empty text="Платежей нет" /> : payments.map(payment => (
+          <PaymentRow
+            key={payment.id}
+            payment={payment}
+            items={paymentItems.filter(i => i.paymentId === payment.id)}
+            canConfirm={canConfirmPayment && payment.status === 'На проверке'}
+            confirming={confirmingPaymentId === payment.id}
+            onConfirm={(actualPaymentDate) => confirmPayment(payment, actualPaymentDate)}
+            onSave={updates => onSavePayment(payment, updates)}
+            onDelete={() => onDeletePayment(payment)}
+            isAdmin={isAdmin}
+          />
+        ))}
+      </Section>}
     </div>
   );
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-const inputStyle: React.CSSProperties = {
-  padding: '7px 10px', border: '1px solid var(--border)', borderRadius: 7,
-  fontSize: 13, color: 'var(--text)', background: '#fff', boxSizing: 'border-box',
-};
-
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 7 }}>
-      {children}
-    </div>
-  );
-}
-
-function ActionBtn({ children, onClick, color, bg, full }: { children: React.ReactNode; onClick: () => void; color: string; bg?: string; full?: boolean }) {
+function SubTabButton({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button onClick={onClick} style={{
-      padding: '8px 16px', border: 'none', borderRadius: 7,
-      background: bg ?? color, color: bg ? color : '#fff',
-      fontSize: 12, fontWeight: 700, cursor: 'pointer',
-      width: full ? '100%' : undefined,
+      border: 'none',
+      borderRadius: 7,
+      padding: '7px 10px',
+      background: active ? 'var(--accent)' : '#EEF2FF',
+      color: active ? '#fff' : 'var(--accent)',
+      fontSize: 12,
+      fontWeight: 800,
+      cursor: 'pointer',
     }}>
       {children}
     </button>
   );
 }
 
+function ChargeRow({ charge, isAdmin, onSave, onDelete }: {
+  charge: Charge;
+  isAdmin: boolean;
+  onSave: (updates: Partial<Charge>) => Promise<boolean>;
+  onDelete: () => void;
+}) {
+  const [amount, setAmount] = useState(String(charge.amount));
+  const [status, setStatus] = useState<PaymentStatus>(charge.status);
+  const [reason, setReason] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const sc = STATUS_COLORS[charge.status] ?? STATUS_COLORS['Не оплачено'];
+  const period = charge.periodMonth === 0 ? 'Депозит' : PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth);
+
+  async function save() {
+    if (!reason.trim()) {
+      window.alert('Напишите комментарий: почему меняете начисление.');
+      return;
+    }
+    setSaving(true);
+    const ok = await onSave({ amount: Number(amount), status, isFrozen: status === 'Заморожено', comment: reason });
+    setSaving(false);
+    if (ok) {
+      setReason('');
+      setEditing(false);
+    }
+  }
+
+  function cancel() {
+    setAmount(String(charge.amount));
+    setStatus(charge.status);
+    setReason('');
+    setEditing(false);
+  }
+
+  return (
+    <div style={{ border: `1px solid ${sc.bg}`, borderLeft: `3px solid ${sc.color}`, borderRadius: 8, background: '#fff', padding: '9px 12px', marginBottom: 7 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 105px 105px auto', gap: 8, alignItems: 'center' }}>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{charge.childName ?? charge.childId}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>{period} {charge.year}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(charge.amount)}</div>
+          <div style={{ fontSize: 10, color: '#065F46' }}>опл. {money(charge.paidAmount)}</div>
+        </div>
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: charge.debtAmount > 0 ? '#991B1B' : '#065F46' }}>{money(charge.debtAmount)}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-2)' }}>долг</div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
+          <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: '3px 7px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+            {charge.status}
+          </span>
+          {isAdmin && !editing && (
+            <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {isAdmin && editing && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 155px auto auto auto', gap: 7, marginTop: 8 }}>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={inputStyle} />
+          <select value={status} onChange={e => setStatus(e.target.value as PaymentStatus)} style={inputStyle}>
+            {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+          <button onClick={save} disabled={saving} title="Сохранить" style={smallAccentBtn}>
+            {saving ? '...' : <><Save size={12} /> Сохранить</>}
+          </button>
+          <button onClick={cancel} title="Закрыть" style={{ ...smallAccentBtn, background: '#F3F4F6', color: 'var(--text)' }}>
+            <X size={12} />
+          </button>
+          <button onClick={onDelete} style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}>
+            <Trash2 size={12} />
+          </button>
+          <input
+            value={reason}
+            onChange={e => setReason(e.target.value)}
+            placeholder="Комментарий к изменению"
+            style={{ ...inputStyle, gridColumn: '1 / -1' }}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave, onDelete, isAdmin }: {
+  payment: FamilyPayment;
+  items: PaymentItem[];
+  canConfirm: boolean;
+  confirming: boolean;
+  onConfirm: (actualPaymentDate: string) => void;
+  onSave: (updates: Partial<FamilyPayment>) => Promise<boolean>;
+  onDelete: () => Promise<boolean>;
+  isAdmin: boolean;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [amount, setAmount] = useState(String(payment.amount));
+  const [paymentType, setPaymentType] = useState<PaymentType>(payment.paymentType);
+  const [paymentDate, setPaymentDate] = useState(payment.paymentDate ? payment.paymentDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
+  const [actualPaymentDate, setActualPaymentDate] = useState(
+    payment.actualPaymentDate
+      ? payment.actualPaymentDate.slice(0, 10)
+      : new Date().toISOString().slice(0, 10)
+  );
+  const [status, setStatus] = useState(payment.status);
+  const [comment, setComment] = useState(payment.comment ?? '');
+  const [saving, setSaving] = useState(false);
+  const statusStyle = payment.status === 'Подтверждено'
+    ? { background: '#D1FAE5', color: '#065F46' }
+    : payment.status === 'Отклонено'
+      ? { background: '#FEE2E2', color: '#991B1B' }
+      : { background: '#FEF3C7', color: '#92400E' };
+
+  async function save() {
+    setSaving(true);
+    const ok = await onSave({
+      amount: Number(amount),
+      paymentType,
+      paymentDate,
+      actualPaymentDate,
+      status,
+      comment,
+    });
+    setSaving(false);
+    if (ok) setEditing(false);
+  }
+
+  async function remove() {
+    if (!window.confirm('Удалить платёж?')) return;
+    setSaving(true);
+    const ok = await onDelete();
+    setSaving(false);
+    if (!ok) window.alert('Подтверждённый платёж нельзя удалить простым удалением: сначала нужен откат.');
+  }
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginBottom: 7 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(payment.amount)}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
+            {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ru-RU') : 'без даты'} · {PAYMENT_TYPE_LABEL[payment.paymentType] ?? payment.paymentType}
+            {payment.actualPaymentDate && <> · факт {new Date(payment.actualPaymentDate).toLocaleDateString('ru-RU')}</>}
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>
+            {payment.status}
+          </div>
+          {canConfirm && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <input
+                type="date"
+                value={actualPaymentDate}
+                onChange={e => setActualPaymentDate(e.target.value)}
+                title="Факт дата оплаты"
+                style={{ ...inputStyle, width: 130, height: 28, padding: '4px 7px' }}
+              />
+              <button onClick={() => onConfirm(actualPaymentDate)} disabled={confirming || !actualPaymentDate} style={smallAccentBtn}>
+                {confirming ? '...' : 'Подтвердить'}
+              </button>
+            </div>
+          )}
+          {isAdmin && !editing && (
+            <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
+              <Pencil size={13} />
+            </button>
+          )}
+        </div>
+      </div>
+      {isAdmin && editing && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 135px 145px', gap: 7, marginTop: 8 }}>
+          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={inputStyle} />
+          <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
+            <option value="cash">Наличные</option>
+            <option value="transfer">Безналичный QR</option>
+          </select>
+          <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
+          <input type="date" value={actualPaymentDate} onChange={e => setActualPaymentDate(e.target.value)} style={inputStyle} />
+          <select value={status} onChange={e => setStatus(e.target.value as any)} style={inputStyle}>
+            <option value="На проверке">На проверке</option>
+            <option value="Отклонено">Отклонено</option>
+            <option value="Черновик">Черновик</option>
+            {payment.status === 'Подтверждено' && <option value="Подтверждено">Подтверждено</option>}
+          </select>
+          <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{ ...inputStyle, gridColumn: '2 / -1' }} />
+          <div style={{ display: 'flex', gap: 7, gridColumn: '1 / -1' }}>
+            <button onClick={save} disabled={saving} style={smallAccentBtn}>{saving ? '...' : 'Сохранить'}</button>
+            <button onClick={() => setEditing(false)} style={{ ...smallAccentBtn, background: '#F3F4F6', color: 'var(--text)' }}>Закрыть</button>
+            <button onClick={remove} disabled={saving} style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}>
+              <Trash2 size={12} /> Удалить
+            </button>
+          </div>
+        </div>
+      )}
+      {payment.comment && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 6 }}>{payment.comment}</div>}
+      {payment.receiptUrl && (
+        <a href={payment.receiptUrl} target="_blank" rel="noreferrer" style={receiptLinkStyle}>
+          <Paperclip size={12} /> Чек
+        </a>
+      )}
+      {items.length > 0 && (
+        <div style={{ marginTop: 7, borderTop: '1px solid var(--border)', paddingTop: 6 }}>
+          {items.map(item => (
+            <div key={item.id} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 11, color: 'var(--text-2)', padding: '2px 0' }}>
+              <span>{PERIOD_LABEL[String(item.periodMonth)] ?? item.periodMonth}/{item.year}</span>
+              <span>{money(item.paidAmount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PlanCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div style={{ textAlign: 'right' }}>
+      <div style={{ fontSize: 9, fontWeight: 800, color: 'var(--text-2)', textTransform: 'uppercase', marginBottom: 1 }}>{label}</div>
+      <div style={{ fontSize: 12, fontWeight: 800, color: 'var(--text)' }}>{value}</div>
+    </div>
+  );
+}
+
+const inputStyle: React.CSSProperties = {
+  padding: '7px 9px',
+  border: '1px solid var(--border)',
+  borderRadius: 7,
+  fontSize: 12,
+  color: 'var(--text)',
+  background: '#fff',
+  boxSizing: 'border-box',
+};
+
+const subTabsStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(3, 1fr)',
+  gap: 8,
+  marginBottom: 12,
+};
+
+const smallAccentBtn: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 4,
+  padding: '6px 10px',
+  background: 'var(--accent)',
+  color: '#fff',
+  border: 'none',
+  borderRadius: 7,
+  fontSize: 11,
+  fontWeight: 700,
+  cursor: 'pointer',
+};
+
+const fileInputStyle: React.CSSProperties = {
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 7,
+  padding: '7px 9px',
+  border: '1px solid var(--border)',
+  borderRadius: 7,
+  fontSize: 12,
+  fontWeight: 700,
+  color: 'var(--accent)',
+  background: '#fff',
+  cursor: 'pointer',
+  overflow: 'hidden',
+};
+
+const receiptLinkStyle: React.CSSProperties = {
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 5,
+  marginTop: 6,
+  fontSize: 11,
+  fontWeight: 800,
+  color: 'var(--accent)',
+  textDecoration: 'none',
+};
+
+const iconBtnStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  border: 'none',
+  borderRadius: 7,
+  background: 'var(--accent)',
+  color: '#fff',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+  flexShrink: 0,
+};
+
 function SummaryTile({ label, value, sub, color, bg }: { label: string; value: string; sub?: string; color?: string; bg?: string }) {
   return (
-    <div style={{ background: bg ?? '#F3F4F6', borderRadius: 10, padding: '12px 14px' }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: color ? color + 'AA' : 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: color ?? 'var(--text)', marginTop: 4 }}>{value}</div>
-      {sub && <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 2 }}>{sub}</div>}
+    <div style={{ background: bg ?? '#F3F4F6', borderRadius: 8, padding: '9px 11px' }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: color ? color + 'AA' : 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
+      <div style={{ fontSize: 13, fontWeight: 700, color: color ?? 'var(--text)', marginTop: 3 }}>{value}</div>
+      {sub && <div style={{ fontSize: 9, color: 'var(--text-2)', marginTop: 1 }}>{sub}</div>}
     </div>
   );
 }
