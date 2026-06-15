@@ -5,9 +5,8 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
 import { fetchV2FamiliesTable, fetchV2Family, updateV2Child, updateV2ChildRoute, updateV2Family } from '../../services/crmV2Service';
-import FamilyDrawer from './FamilyDrawer';
+import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
-import PaymentModal from './PaymentModal';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import '../../core/tables/DataTable.css';
@@ -283,9 +282,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
     cashier: { ...DEFAULT_MODE_FILTERS },
     logistics: { ...DEFAULT_MODE_FILTERS },
   });
-  const [selectedFamily, setSelectedFamily] = useState<Family | null>(null);
-  const [showNewFamily, setShowNewFamily]     = useState(false);
-  const [paymentFamily, setPaymentFamily]     = useState<Family | null>(null);
+  const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
+  const [expandedFamily, setExpandedFamily]     = useState<Family | null>(null);
+  const [showNewFamily, setShowNewFamily]       = useState(false);
   const [showSchools, setShowSchools] = useState(() => localStorage.getItem('families_show_schools') !== 'false');
   const [showTransfers, setShowTransfers] = useState(() => localStorage.getItem('families_show_transfers') !== 'false');
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
@@ -331,12 +330,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
 
   async function openFamily(familyId: string) {
     const family = await fetchV2Family(familyId);
-    if (family) setSelectedFamily(family);
-  }
-
-  async function openPayment(familyId: string) {
-    const family = await fetchV2Family(familyId);
-    if (family) setPaymentFamily(family);
+    if (family) setExpandedFamily(family);
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
@@ -633,7 +627,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
         <button
           onClick={(event) => {
             event.stopPropagation();
-            openPayment(row.familyId);
+            if (expandedFamilyId === row.familyId) {
+              setExpandedFamilyId(null);
+              setExpandedFamily(null);
+            } else {
+              setExpandedFamilyId(row.familyId);
+              openFamily(row.familyId);
+            }
           }}
           style={{
             height: 24,
@@ -1032,10 +1032,31 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
             emptyText="Заявок не найдено"
             groupColorKey="familyIndex"
             canManageProperties={canManageProperties}
-            onRowClick={(row) => openFamily(row.familyId)}
+            onRowClick={(row) => {
+              if (expandedFamilyId === row.familyId) {
+                setExpandedFamilyId(null);
+                setExpandedFamily(null);
+              } else {
+                setExpandedFamilyId(row.familyId);
+                openFamily(row.familyId);
+              }
+            }}
             onRowDelete={(row) => console.log('delete', row.rowId)}
             onRowEdit={(row) => console.log('edit', row.rowId)}
-            onRowPayment={(row) => openPayment(row.familyId)}
+            expandedRowKey={expandedFamilyId}
+            onExpandedRowKeyChange={(key) => {
+              if (!key) { setExpandedFamilyId(null); setExpandedFamily(null); return; }
+              const row = filtered.find(r => r.rowId === key || r.familyId === key);
+              if (row) { setExpandedFamilyId(key); openFamily(row.familyId); }
+            }}
+            renderExpandedRow={(row) => expandedFamily && expandedFamily.id === row.familyId ? (
+              <InlineFamilyCard
+                family={expandedFamily}
+                userRole={userRole}
+                userName="Кайрат"
+                onClose={() => { setExpandedFamilyId(null); setExpandedFamily(null); }}
+              />
+            ) : <div style={{padding:16,color:'#999',fontSize:13}}>Загрузка...</div>}
             onCellSave={handleCellSave}
             toolbarExtra={(
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -1055,28 +1076,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
         </div>
       </div>
 
-      {selectedFamily && (
-        <FamilyDrawer
-          family={selectedFamily}
-          onClose={() => setSelectedFamily(null)}
-          userRole={userRole}
-          userName="Кайрат"
-        />
-      )}
       {showNewFamily && (
         <NewFamilyModal
           onClose={() => setShowNewFamily(false)}
           
         />
       )}
-      {paymentFamily && (
-        <PaymentModal
-          family={paymentFamily}
-          onClose={() => setPaymentFamily(null)}
-          userRole={userRole}
-          userName="Кайрат"
-        />
-      )}
+
     </div>
   );
 }
+
