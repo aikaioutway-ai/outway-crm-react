@@ -596,9 +596,11 @@ export function DataTable<T extends Record<string, any>>({
                         return next;
                       })}
                     >
-                      <span className="dt-props-cat-arrow">{collapsedCats.has(group.category) ? '▶' : '▼'}</span>
                       <span>{group.category}</span>
-                      <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
+                        <span className="dt-props-cat-arrow">{collapsedCats.has(group.category) ? '▶' : '▼'}</span>
+                      </div>
                     </div>
                     {!collapsedCats.has(group.category) && group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
                   </div>
