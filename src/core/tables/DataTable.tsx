@@ -653,11 +653,7 @@ export function DataTable<T extends Record<string, any>>({
           <table className="dt-table">
             <thead>
               <tr>
-                <th className="dt-th dt-th--check dt-sticky-col">
-                  <input type="checkbox"
-                    checked={selected.size === processedData.length && processedData.length > 0}
-                    onChange={selectAll} />
-                </th>
+                <th className="dt-th dt-th--check dt-sticky-col" style={{ width: 36, minWidth: 36 }} />
                 <th className="dt-th dt-th--num dt-sticky-col dt-sticky-col--2">#</th>
 
                 {visibleCols.map(col => {
@@ -731,20 +727,33 @@ export function DataTable<T extends Record<string, any>>({
                     key={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
                     data-group-even={groupColorKey ? (((row as any)[groupColorKey] ?? 0) % 2 === 0 ? 'true' : 'false') : undefined}
-                    onClick={() => {
-                      if (renderExpandedRow && onExpandedRowKeyChange) {
-                        onExpandedRowKeyChange(expandedRowKey === id ? null : id);
-                      }
-                    }}
-                    style={{ cursor: renderExpandedRow ? 'pointer' : undefined }}
+                    onClick={() => undefined}
                     onContextMenu={e => {
                       e.preventDefault();
                       e.stopPropagation();
                       setRowMenu({ row, x: e.clientX, y: e.clientY });
                     }}
                   >
-                    <td className="dt-td dt-td--check dt-sticky-col" onClick={e => { e.stopPropagation(); toggleSelect(id); }}>
-                      <input type="checkbox" checked={isSelected} onChange={() => {}} />
+                    <td className="dt-td dt-td--check dt-sticky-col" style={{ width: 36, padding: '0 8px' }}
+                      onClick={e => {
+                        e.stopPropagation();
+                        if (renderExpandedRow && onExpandedRowKeyChange) {
+                          onExpandedRowKeyChange(expandedRowKey === id ? null : id);
+                        }
+                      }}
+                    >
+                      {renderExpandedRow ? (
+                        <span style={{
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                          width: 20, height: 20, borderRadius: 4, cursor: 'pointer',
+                          background: expandedRowKey === id ? '#312E81' : 'transparent',
+                          color: expandedRowKey === id ? '#fff' : '#94A3B8',
+                          fontSize: 10, fontWeight: 700, transition: 'all 0.15s',
+                          border: expandedRowKey === id ? 'none' : '1px solid #CBD5E1',
+                        }}>
+                          {expandedRowKey === id ? '▲' : '▼'}
+                        </span>
+                      ) : null}
                     </td>
                     <td className="dt-td dt-td--num dt-sticky-col dt-sticky-col--2">{idx + 1}</td>
                     {visibleCols.map(col => (
@@ -840,22 +849,15 @@ export function DataTable<T extends Record<string, any>>({
       {/* ── ROW CONTEXT MENU ── */}
       {rowMenu && (
         <div className="dt-ctx-menu" style={{ left: rowMenu.x, top: rowMenu.y }} onClick={e => e.stopPropagation()}>
-          {onRowClick && (
-            <button className="dt-ctx-item" onClick={() => { onRowClick(rowMenu.row); setRowMenu(null); }}>
+          {renderExpandedRow && onExpandedRowKeyChange && (
+            <button className="dt-ctx-item" onClick={() => {
+              const id = rowMenu.row[rowKey];
+              onExpandedRowKeyChange(expandedRowKey === id ? null : id);
+              setRowMenu(null);
+            }}>
               <span>↗</span> Открыть карточку
             </button>
           )}
-          {onRowEdit && (
-            <button className="dt-ctx-item" onClick={() => { onRowEdit(rowMenu.row); setRowMenu(null); }}>
-              <span>✏</span> Редактировать
-            </button>
-          )}
-          <button className="dt-ctx-item" onClick={() => {
-            navigator.clipboard.writeText(String(rowMenu.row[rowKey]));
-            setRowMenu(null);
-          }}>
-            <span>📋</span> Копировать ID
-          </button>
           {onRowDelete && (
             <button className="dt-ctx-item dt-ctx-item--danger" onClick={() => { onRowDelete(rowMenu.row); setRowMenu(null); }}>
               <span>🗑</span> Удалить
