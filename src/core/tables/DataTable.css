@@ -840,3 +840,9 @@
   flex-shrink: 0;
 }
 .dt-props-active-row:hover .dt-props-active-row-hide { opacity: 1; }
+
+
+@keyframes dtExpandIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
