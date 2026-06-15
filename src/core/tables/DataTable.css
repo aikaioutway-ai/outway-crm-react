@@ -789,3 +789,46 @@
   line-height: 1;
 }
 .dt-props-active-chip:hover .dt-props-chip-x { opacity: 1; }
+
+/* ── Активные колонки — строки ── */
+.dt-props-active-cols {
+  border-bottom: 1px solid var(--dt-border);
+  padding-bottom: 4px;
+}
+.dt-props-active-title {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--dt-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px 4px;
+}
+.dt-props-active-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  cursor: grab;
+  user-select: none;
+  border-radius: 6px;
+  margin: 0 4px;
+}
+.dt-props-active-row:hover { background: var(--dt-hover, #EEF2FF); }
+.dt-props-active-row:active { cursor: grabbing; }
+.dt-props-active-row-label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dt-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-props-active-row-hide {
+  opacity: 0.4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.dt-props-active-row:hover .dt-props-active-row-hide { opacity: 1; }
