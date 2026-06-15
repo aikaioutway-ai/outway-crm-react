@@ -540,36 +540,40 @@ export function DataTable<T extends Record<string, any>>({
           <div className="dt-props-panel-v2" style={{ zIndex: 100 }} onClick={e => e.stopPropagation()}>
             {/* chips removed — 001 */}
 
-            {/* Активные колонки */}
+            {/* Активные колонки — список */}
             {(() => {
               const activeCols = cols.filter(c => c.visible !== false && c.showInProperties !== false);
               if (activeCols.length === 0) return null;
               return (
                 <div className="dt-props-active-cols">
                   <div className="dt-props-active-title">Отображается</div>
-                  <div className="dt-props-active-list">
-                    {activeCols.map(col => {
-                      const globalIdx = cols.findIndex(c => c.key === col.key);
-                      return (
-                        <div
-                          key={col.key}
-                          className="dt-props-active-chip"
-                          draggable
-                          onDragStart={() => onDragStart(globalIdx)}
-                          onDragOver={e => onDragOver(e, globalIdx)}
-                          onDragEnd={onDragEnd}
+                  {activeCols.map(col => {
+                    const globalIdx = cols.findIndex(c => c.key === col.key);
+                    return (
+                      <div
+                        key={col.key}
+                        className="dt-props-active-row"
+                        draggable
+                        title="Перетащи чтобы переместить"
+                        onDragStart={() => onDragStart(globalIdx)}
+                        onDragOver={e => onDragOver(e, globalIdx)}
+                        onDragEnd={onDragEnd}
+                      >
+                        <span className="dt-props-item-drag">⠿</span>
+                        <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
+                          {TYPE_ICON[col.type] ?? '○'}
+                        </span>
+                        <span className="dt-props-active-row-label">{col.label}</span>
+                        <span
+                          className="dt-props-active-row-hide"
+                          title="Скрыть"
+                          onClick={e => { e.stopPropagation(); saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c)); }}
                         >
-                          <span className="dt-props-chip-drag">⠿</span>
-                          <span className="dt-props-chip-label">{col.label}</span>
-                          <button
-                            className="dt-props-chip-hide"
-                            title="Скрыть"
-                            onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c))}
-                          >✕</button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                          <EyeOpen />
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
               );
             })()}
