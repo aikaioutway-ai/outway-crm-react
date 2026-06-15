@@ -1,20 +1,22 @@
 import React, { useEffect, useState } from 'react';
-import { X, User, Users, Truck, CreditCard, Pencil, Check, History } from 'lucide-react';
+import { X, User, Users, CreditCard, History } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem } from '../../types';
 import { getFamilyPrice, money } from '../../utils/pricing';
-import { supabase } from '../../services/supabase';
-import { SCHOOL_NAME, ZONE_COLOR, normalizeZone, normalizeVehicle, zoneToNum, PERIOD_LABEL } from './constants';
+import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
+import { addV2Audit, fetchV2Children, updateV2Family } from '../../services/crmV2Service';
 import {
+  confirmFamilyPayment,
   createChargesForPeriod,
   createFamilyPayment,
+  deleteFamilyPayment,
   deleteCharge,
   fetchFinanceSnapshot,
+  updateFamilyPayment,
   updateCharge,
 } from '../../services/financeService';
 import TabInfo      from './TabInfo';
 import TabChildren  from './TabChildren';
-import TabLogistics from './TabLogistics';
 import TabFinance   from './TabFinance';
 import TabHistory   from './TabHistory';
 
@@ -30,12 +32,11 @@ interface Props {
   userName?: string;
 }
 
-type Tab = 'info' | 'children' | 'logistics' | 'finance' | 'history';
+type Tab = 'info' | 'children' | 'finance' | 'history';
 
 const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
   { key: 'info',      label: 'Основная',    icon: <User size={13} /> },
-  { key: 'children',  label: 'Дети и цена', icon: <Users size={13} /> },
-  { key: 'logistics', label: 'Логистика',   icon: <Truck size={13} /> },
+  { key: 'children',  label: 'Дети', icon: <Users size={13} /> },
   { key: 'finance',   label: 'Финансы',     icon: <CreditCard size={13} /> },
   { key: 'history',   label: 'История',     icon: <History size={13} /> },
 ];
@@ -46,10 +47,11 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   const [charges, setCharges]       = useState<Charge[]>([]);
   const [payments, setPayments]     = useState<FamilyPayment[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
+  const [mainBalance, setMainBalance] = useState(0);
+  const [depositBalance, setDepositBalance] = useState(0);
   const [audit, setAudit]           = useState<AuditEntry[]>([]);
   const [loadingKids, setLoadingKids]         = useState(true);
   const [loadingFinance, setLoadingFinance] = useState(true);
-  const [editMode, setEditMode]     = useState(false);
   const [saving, setSaving]         = useState(false);
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [saveMsg, setSaveMsg]       = useState('');
@@ -59,7 +61,6 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
 
   useEffect(() => {
     setSavedFamily(family);
-    setEditMode(false);
     loadAll();
     loadAudit();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -72,28 +73,8 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
 
   async function loadChildren(): Promise<Child[]> {
     setLoadingKids(true);
-    const { data } = await supabase.from('children').select('*').eq('family_id', family.id);
-    let next: Child[] = [];
-    if (data) {
-      next = data.map((r: any) => ({
-        id: r.id, familyId: r.family_id, childName: r.child_name,
-        class: r.class, selfExitAllowed: r.self_exit_allowed ?? false,
-        routeSource: r.route_source, transferNumber: r.transfer_number,
-        stopNumber: r.stop_number,
-        schoolCode: r.school_code || family.schoolCode,
-        zone: normalizeZone(r.zone, family.zone) as any,
-        vehicleType: normalizeVehicle(r.vehicle_type) as any,
-        timeMorning: r.time_morning,
-        status: r.status ?? 'active',
-        address: r.address ?? family.fullAddress,
-        latitude: r.latitude ?? family.latitude,
-        longitude: r.longitude ?? family.longitude,
-        distanceKm: r.distance_km ?? family.distanceKm,
-        discountType: r.discount_type ?? 'none',
-        discountValue: Number(r.discount_value ?? 0),
-      }));
-      setChildren(next);
-    }
+    const next = await fetchV2Children(family);
+    setChildren(next);
     setLoadingKids(false);
     return next;
   }
@@ -104,18 +85,21 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     setCharges(snapshot.charges);
     setPayments(snapshot.payments);
     setPaymentItems(snapshot.paymentItems);
+    setMainBalance(snapshot.mainBalance ?? 0);
+    setDepositBalance(snapshot.depositBalance ?? 0);
     setLoadingFinance(false);
   }
 
   async function loadAudit() {
     try {
-      const { data } = await supabase.from('audit_log').select('*').eq('family_id', family.id)
+      const { supabase } = await import('../../services/supabase');
+      const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
         .order('created_at', { ascending: false }).limit(50);
       if (data) {
         setAudit(data.map((r: any) => ({
-          id: String(r.id), familyId: String(r.family_id),
-          userName: r.user_name ?? 'Система', action: r.action ?? '',
-          field: r.field ?? '', oldValue: r.old_value ?? '', newValue: r.new_value ?? '',
+          id: String(r.id), familyId: String(r.entity_id),
+          userName: r.actor_name ?? 'Система', action: r.action ?? '',
+          field: r.entity_type ?? '', oldValue: JSON.stringify(r.old_value ?? ''), newValue: JSON.stringify(r.new_value ?? ''),
           createdAt: r.created_at ?? '',
         })));
       }
@@ -124,31 +108,27 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
 
   async function addAudit(action: string, field: string, oldVal: string, newVal: string) {
     try {
-      await supabase.from('audit_log').insert({ family_id: family.id, user_name: userName, action, field, old_value: oldVal, new_value: newVal });
+      await addV2Audit({
+        actorName: userName,
+        action,
+        entityType: field,
+        entityId: family.id,
+        oldValue: oldVal,
+        newValue: newVal,
+      });
     } catch { /* таблица ещё не создана */ }
   }
 
   async function handleSaveFamily(updated: Family) {
     setSaving(true);
-    const { error } = await supabase.from('families').update({
-      parent_name: updated.parentName, phone: updated.phone,
-      phone_telegram: updated.phoneTelegram, second_phone: updated.secondPhone,
-      contact_name: updated.contactName, contact_phone: updated.contactPhone,
-      full_address: updated.fullAddress, comment: updated.comment,
-      school_code: updated.schoolCode, vehicle_type: updated.vehicleType,
-      zone: zoneToNum(updated.zone), transfer_number: updated.transferNumber,
-      stop_number: updated.stopNumber, time_morning: updated.timeMorning,
-      status: updated.status,
-    }).eq('id', family.id);
-
-    if (!error) {
+    try {
+      await updateV2Family(family.id, updated);
       setSavedFamily(updated);
-      setEditMode(false);
       setSaveMsg('Сохранено ✓');
       setTimeout(() => setSaveMsg(''), 2000);
       await addAudit('Редактирование семьи', 'family', JSON.stringify(family), JSON.stringify(updated));
       await loadAudit();
-    } else {
+    } catch {
       setSaveMsg('Ошибка сохранения');
     }
     setSaving(false);
@@ -161,6 +141,37 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
       await addAudit('Изменение начисления', PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth),
         `статус: ${charge.status}, сумма: ${charge.amount}`,
         `статус: ${updates.status ?? charge.status}, сумма: ${updates.amount ?? charge.amount}`);
+      await loadAudit();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleSavePayment(payment: FamilyPayment, updates: Partial<FamilyPayment>): Promise<boolean> {
+    try {
+      await updateFamilyPayment(payment.id, {
+        amount: updates.amount,
+        paymentType: updates.paymentType,
+        paymentDate: updates.paymentDate,
+        actualPaymentDate: updates.actualPaymentDate,
+        status: updates.status,
+        comment: updates.comment,
+      });
+      await addAudit('Изменение платежа', 'family_payment', JSON.stringify(payment), JSON.stringify(updates));
+      await loadFinance();
+      await loadAudit();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  async function handleDeletePayment(payment: FamilyPayment): Promise<boolean> {
+    try {
+      await deleteFamilyPayment(payment);
+      await addAudit('Удаление платежа', 'family_payment', money(payment.amount), '—');
+      await loadFinance();
       await loadAudit();
       return true;
     } catch {
@@ -183,18 +194,18 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     await loadAudit();
   }
 
-  async function handleCreatePayment(amount: number, paymentType: any, comment: string): Promise<boolean> {
+  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null): Promise<boolean> {
     try {
       await createFamilyPayment({
         familyId: family.id,
         amount,
         paymentType,
-        paymentDate: new Date().toISOString().slice(0, 10),
+        paymentDate,
+        receiptFile,
         comment,
         createdBy: userName,
-        charges,
       });
-      await addAudit('Внесение платежа', 'family_payment', '—', money(amount));
+      await addAudit('Внесение платежа', 'family_payment', '—', `${money(amount)} на проверке`);
       await loadFinance();
       await loadAudit();
       return true;
@@ -203,22 +214,29 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     }
   }
 
-  // Долг по начислениям (сумма всех долгов по charges)
-  const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
+  async function handleConfirmPayment(payment: FamilyPayment, actualPaymentDate: string): Promise<boolean> {
+    try {
+      await confirmFamilyPayment({ payment, charges, confirmedBy: userName, actualPaymentDate });
+      await addAudit('Подтверждение платежа', 'family_payment', payment.status, `${money(payment.amount)} подтверждено, факт дата ${actualPaymentDate}`);
+      await loadFinance();
+      await loadAudit();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Долг по платежам (исключая депозит)
+  const totalDebt = payments
+    ? charges.reduce((s, c) => s + c.debtAmount, 0)
+    : 0;
 
   // Правильная цена семьи = getFamilyPrice от детей
   const familyMonthlyPrice = children.length > 0
     ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
     : savedFamily.monthlyPrice;
-
-  const statusLabel = { active: 'Активный', new: 'Новый', inactive: 'Неактивный', rejected: 'Отказ' }[savedFamily.status] ?? savedFamily.status;
-  const statusColor: Record<string, { bg: string; color: string }> = {
-    active:   { bg: '#D1FAE5', color: '#065F46' },
-    new:      { bg: '#DBEAFE', color: '#1E40AF' },
-    inactive: { bg: '#F3F4F6', color: '#4B5563' },
-    rejected: { bg: '#FEE2E2', color: '#991B1B' },
-  };
-  const sc = statusColor[savedFamily.status] ?? { bg: 'rgba(255,255,255,0.15)', color: '#fff' };
+  const totalCharged = charges.reduce((s, c) => s + c.amount + c.penaltyAmount, 0);
+  const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
 
   return (
     <>
@@ -230,21 +248,21 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
       }}>
 
         {/* ─── HEADER ─── */}
-        <div style={{ background: 'var(--accent)', padding: '20px 24px 0', flexShrink: 0 }}>
+        <div style={{ background: 'var(--accent)', padding: '12px 20px 0', flexShrink: 0 }}>
           {/* Top row: name + actions */}
-          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 10 }}>
             <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: 20, fontWeight: 700, color: '#fff', letterSpacing: -0.3, lineHeight: 1.2 }}>
+              <div style={{ fontSize: 18, fontWeight: 700, color: '#fff', letterSpacing: -0.3, lineHeight: 1.15 }}>
                 {formatName(savedFamily.parentName)}
               </div>
-              <div style={{ marginTop: 5, display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+              <div style={{ marginTop: 3, display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
                 {savedFamily.phone && (
-                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
                     📞 {formatPhone(savedFamily.phone)}
                   </span>
                 )}
                 {savedFamily.phoneTelegram && (
-                  <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
+                  <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.8)', fontWeight: 500 }}>
                     ✈ {savedFamily.phoneTelegram}
                   </span>
                 )}
@@ -252,9 +270,6 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
             </div>
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexShrink: 0, marginLeft: 12 }}>
               {saveMsg && <span style={{ fontSize: 12, color: '#A5D6A7', fontWeight: 600 }}>{saveMsg}</span>}
-              <HeaderBtn onClick={() => setEditMode(e => !e)} active={editMode}>
-                {editMode ? <Check size={16} /> : <Pencil size={15} />}
-              </HeaderBtn>
               <HeaderBtn onClick={onClose}><X size={16} /></HeaderBtn>
             </div>
           </div>
@@ -262,41 +277,36 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
           {/* Chips row — stretched */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 0 }}>
             <HeaderChip
-              label="ШКОЛА"
-              value={SCHOOL_NAME[savedFamily.schoolCode] ?? savedFamily.schoolCode}
-              icon="🏫"
+              label="НАЧИСЛЕНО"
+              value={money(totalCharged)}
             />
             <HeaderChip
-              label="ЗОНА"
-              value={`Зона ${savedFamily.zone}`}
-              sub={savedFamily.distanceKm ? `${savedFamily.distanceKm} км` : undefined}
-              icon="📍"
-              chipBg={ZONE_COLOR[savedFamily.zone]?.bg}
-              chipColor={ZONE_COLOR[savedFamily.zone]?.color}
+              label="ПЛАТЕЖИ"
+              value={money(totalPaid)}
+              chipBg="#D1FAE5"
+              chipColor="#065F46"
             />
             <HeaderChip
-              label={totalDebt > 0 ? 'ДОЛГ' : 'БАЛАНС'}
-              value={totalDebt > 0 ? money(totalDebt) : '✓ Нет долга'}
-              sub={familyMonthlyPrice > 0 ? `${money(familyMonthlyPrice)}/мес` : undefined}
-              icon={totalDebt > 0 ? '⚠' : '✓'}
+              label="ДОЛГ"
+              value={money(totalDebt)}
               chipBg={totalDebt > 0 ? '#FFEBEE' : '#E8F5E9'}
               chipColor={totalDebt > 0 ? '#C62828' : '#1B5E20'}
             />
             <HeaderChip
-              label="СТАТУС"
-              value={statusLabel}
-              icon="●"
-              chipBg={sc.bg}
-              chipColor={sc.color}
+              label="БАЛАНС"
+              value={money(mainBalance)}
+              sub={familyMonthlyPrice > 0 ? `${money(familyMonthlyPrice)}/мес` : undefined}
+              chipBg={mainBalance < 0 ? '#FFEBEE' : 'rgba(255,255,255,0.13)'}
+              chipColor={mainBalance < 0 ? '#C62828' : undefined}
             />
           </div>
 
           {/* TABS */}
-          <div style={{ display: 'flex', marginTop: 16 }}>
+          <div style={{ display: 'flex', marginTop: 10 }}>
             {TABS.map(t => (
               <button key={t.key} onClick={() => setTab(t.key)} style={{
-                flex: 1, padding: '10px 4px 9px', border: 'none', whiteSpace: 'nowrap',
-                borderBottom: tab === t.key ? '3px solid #fff' : '3px solid transparent',
+                flex: 1, padding: '7px 4px 6px', border: 'none', whiteSpace: 'nowrap',
+                borderBottom: tab === t.key ? '2px solid #fff' : '2px solid transparent',
                 background: 'none',
                 color: tab === t.key ? '#fff' : 'rgba(255,255,255,0.55)',
                 fontSize: 11, fontWeight: tab === t.key ? 700 : 500,
@@ -313,10 +323,9 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         </div>
 
         {/* ─── CONTENT ─── */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '22px 24px', background: '#FAFBFF' }}>
-          {tab === 'info'      && <TabInfo      family={savedFamily} editMode={editMode} saving={saving} onSave={handleSaveFamily} />}
-          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} editMode={editMode} isAdmin={isAdmin} onReload={loadAll} />}
-          {tab === 'logistics' && <TabLogistics family={savedFamily} children={children} loading={loadingKids} editMode={editMode} saving={saving} onSave={handleSaveFamily} onSaveChildren={async (updatedKids) => { for (const k of updatedKids) { await supabase.from('children').update({ transfer_number: k.transferNumber, stop_number: (k as any).stopNumber, time_morning: (k as any).timeMorning }).eq('id', k.id); } await loadChildren(); }} />}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px', background: '#FAFBFF' }}>
+          {tab === 'info'      && <TabInfo      family={savedFamily} saving={saving} onSave={handleSaveFamily} />}
+          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} onReload={loadAll} />}
           {tab === 'finance'   && <TabFinance
             charges={charges}
             payments={payments}
@@ -324,13 +333,17 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
             loading={loadingFinance}
             family={savedFamily}
             children={children}
-            editMode={editMode}
+            mainBalance={mainBalance}
+            depositBalance={depositBalance}
             isAdmin={isAdmin}
             isCashier={isCashier}
             onSaveCharge={handleSaveCharge}
             onDeleteCharge={handleDeleteCharge}
             onAddCharges={handleAddCharges}
             onCreatePayment={handleCreatePayment}
+            onConfirmPayment={handleConfirmPayment}
+            onSavePayment={handleSavePayment}
+            onDeletePayment={handleDeletePayment}
           />}
           {tab === 'history'   && <TabHistory   audit={audit} />}
         </div>
@@ -347,7 +360,7 @@ function HeaderBtn({ onClick, active, children }: { onClick: () => void; active?
   return (
     <button onClick={onClick} style={{
       background: active ? '#fff' : 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8,
-      width: 36, height: 36, display: 'flex', alignItems: 'center', justifyContent: 'center',
+      width: 30, height: 30, display: 'flex', alignItems: 'center', justifyContent: 'center',
       cursor: 'pointer', color: active ? 'var(--accent)' : '#fff', flexShrink: 0,
       transition: 'background 0.15s',
     }}>
@@ -363,17 +376,17 @@ function HeaderChip({ label, value, sub, icon, chipBg, chipColor }: {
   return (
     <div style={{
       background: chipBg ?? 'rgba(255,255,255,0.13)',
-      borderRadius: 10, padding: '10px 14px',
+      borderRadius: 8, padding: '8px 12px',
       display: 'flex', flexDirection: 'column', gap: 2,
     }}>
-      <div style={{ fontSize: 9, fontWeight: 700, color: chipColor ? chipColor + 'AA' : 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: 0.8 }}>
+      <div style={{ fontSize: 9, fontWeight: 700, color: chipColor ? chipColor + 'AA' : 'rgba(255,255,255,0.55)', textTransform: 'uppercase', letterSpacing: 0.65 }}>
         {label}
       </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: chipColor ?? '#fff', lineHeight: 1.2 }}>
+      <div style={{ fontSize: 12, fontWeight: 700, color: chipColor ?? '#fff', lineHeight: 1.15 }}>
         {value}
       </div>
       {sub && (
-        <div style={{ fontSize: 10, fontWeight: 500, color: chipColor ? chipColor + '99' : 'rgba(255,255,255,0.5)', marginTop: 1 }}>
+        <div style={{ fontSize: 10, fontWeight: 500, color: chipColor ? chipColor + '99' : 'rgba(255,255,255,0.5)', marginTop: 0 }}>
           {sub}
         </div>
       )}
