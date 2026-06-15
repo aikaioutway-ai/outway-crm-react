@@ -424,9 +424,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
         });
       }
       void load(false);
-      if (selectedFamily?.id === row.familyId) {
+      if (expandedFamilyId === row.familyId) {
         void fetchV2Family(row.familyId).then(family => {
-          if (family) setSelectedFamily(family);
+          if (family) setExpandedFamily(family);
         });
       }
       return true;
