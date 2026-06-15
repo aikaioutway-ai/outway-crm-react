@@ -204,7 +204,13 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   { key: 'schoolCode',     label: 'Код школы',   type: 'text',   category: 'Система',  width: 90,  visible: false, filterable: false, sortable: false, showInProperties: false },
   { key: 'branchName',     label: 'Филиал',       type: 'text',   category: 'Система',  width: 160, visible: false, filterable: false, sortable: false, showInProperties: false },
   { key: 'vehicleType',    label: 'Тип ТС',       type: 'select', category: 'Система', width: 100, visible: false, filterable: false, sortable: false, showInProperties: false },
-  { key: 'familyId',       label: 'ID семьи',     type: 'text',   category: 'Система', width: 120, visible: false, filterable: false, sortable: false, showInProperties: false },
+  {
+    key: 'familyId', label: 'ID семьи', type: 'text', category: 'Система', width: 150, visible: false,
+    render: (val, row) => row.isFirstChild
+      ? <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)' }}>{String(val ?? '—')}</span>
+      : <span style={{ color: 'var(--text-2)', fontSize: 12 }}>—</span>,
+    getValue: (row) => row.familyId,
+  },
 ];
 
 let familiesRowsCache: ChildRow[] | null = null;
