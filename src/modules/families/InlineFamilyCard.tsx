@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { User, Users, CreditCard, History, X } from 'lucide-react';
+import { X, Phone, CreditCard, Users, Clock, ChevronRight } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem } from '../../types';
 import { getFamilyPrice, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
@@ -24,15 +24,8 @@ interface Props {
 }
 type Tab = 'info' | 'children' | 'finance' | 'history';
 
-const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-  { key: 'info',     label: 'Основная', icon: <User size={12} /> },
-  { key: 'children', label: 'Дети',     icon: <Users size={12} /> },
-  { key: 'finance',  label: 'Финансы',  icon: <CreditCard size={12} /> },
-  { key: 'history',  label: 'История',  icon: <History size={12} /> },
-];
-
 export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер' }: Props) {
-  const [tab, setTab]                   = useState<Tab>('info');
+  const [tab, setTab]                   = useState<Tab>('finance');
   const [children, setChildren]         = useState<Child[]>([]);
   const [charges, setCharges]           = useState<Charge[]>([]);
   const [payments, setPayments]         = useState<FamilyPayment[]>([]);
@@ -51,16 +44,13 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
   useEffect(() => {
     setSavedFamily(family);
-    setTab('info');
+    setTab('finance');
     loadAll();
     loadAudit();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
-  async function loadAll() {
-    const kids = await loadChildren();
-    await loadFinance(kids);
-  }
+  async function loadAll() { const k = await loadChildren(); await loadFinance(k); }
   async function loadChildren(): Promise<Child[]> {
     setLoadingKids(true);
     const next = await fetchV2Children(family);
@@ -87,8 +77,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       })));
     } catch {}
   }
-  async function addAudit(action: string, field: string, oldVal: string, newVal: string) {
-    try { await addV2Audit({ actorName: userName, action, entityType: field, entityId: family.id, oldValue: oldVal, newValue: newVal }); } catch {}
+  async function addAudit(action: string, field: string, o: string, n: string) {
+    try { await addV2Audit({ actorName: userName, action, entityType: field, entityId: family.id, oldValue: o, newValue: n }); } catch {}
   }
   async function handleSaveFamily(updated: Family) {
     setSaving(true);
@@ -127,7 +117,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function handleDeleteCharge(charge: Charge) {
     if (!window.confirm('Удалить начисление?')) return;
     await deleteCharge(charge.id);
-    await addAudit('Удаление начисления', PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth), money(charge.amount), '—');
+    await addAudit('Удаление', PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth), money(charge.amount), '—');
     await loadFinance(); await loadAudit();
   }
   async function handleAddCharges(month: number, year: number) {
@@ -145,70 +135,158 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function handleConfirmPayment(payment: FamilyPayment, actualPaymentDate: string): Promise<boolean> {
     try {
       await confirmFamilyPayment({ payment, charges, confirmedBy: userName, actualPaymentDate });
-      await addAudit('Подтверждение платежа', 'family_payment', payment.status, `${money(payment.amount)} подтверждено`);
+      await addAudit('Подтверждение', 'family_payment', payment.status, `${money(payment.amount)} подтверждено`);
       await loadFinance(); await loadAudit(); return true;
     } catch { return false; }
   }
 
-  const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
+  const totalDebt    = charges.reduce((s, c) => s + c.debtAmount, 0);
+  const totalCharged = charges.reduce((s, c) => s + c.amount + c.penaltyAmount, 0);
+  const totalPaid    = charges.reduce((s, c) => s + c.paidAmount, 0);
   const familyMonthlyPrice = children.length > 0
     ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
     : savedFamily.monthlyPrice;
-  const totalCharged = charges.reduce((s, c) => s + c.amount + c.penaltyAmount, 0);
-  const totalPaid    = charges.reduce((s, c) => s + c.paidAmount, 0);
+
+  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+    { key: 'finance',  label: 'Финансы',  icon: <CreditCard size={11} /> },
+    { key: 'children', label: 'Дети',     icon: <Users size={11} /> },
+    { key: 'info',     label: 'Инфо',     icon: <ChevronRight size={11} /> },
+    { key: 'history',  label: 'История',  icon: <Clock size={11} /> },
+  ];
 
   return (
-    <div style={{ background: '#F8F9FF', borderTop: '2px solid #312E81' }}>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '280px 1fr',
+      background: '#fff',
+      borderTop: '1px solid #E5E7EB',
+      borderBottom: '1px solid #E5E7EB',
+      minHeight: 220,
+      maxHeight: 420,
+    }}>
 
-      {/* ─── КОМПАКТНЫЙ ХЕДЕР ─── */}
+      {/* ─── ЛЕВАЯ ПАНЕЛЬ — идентификация ─── */}
       <div style={{
-        background: '#312E81',
-        padding: '8px 16px',
+        borderRight: '1px solid #E5E7EB',
+        padding: '16px 20px',
         display: 'flex',
-        alignItems: 'center',
-        gap: 16,
+        flexDirection: 'column',
+        gap: 14,
+        background: '#FAFAFA',
+        overflowY: 'auto',
       }}>
-        {/* Имя + телефон */}
-        <div style={{ minWidth: 0, flex: '0 0 220px' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {formatName(savedFamily.parentName)}
+        {/* Аватар + имя */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 40, height: 40, borderRadius: '50%',
+            background: 'linear-gradient(135deg, #312E81 0%, #4F46E5 100%)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0,
+            letterSpacing: -0.5,
+          }}>
+            {(savedFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
           </div>
-          <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.65)', marginTop: 1 }}>
-            {formatPhone(savedFamily.phone)}
-            {saveMsg && <span style={{ marginLeft: 8, color: '#A5D6A7' }}>{saveMsg}</span>}
+          <div style={{ minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {formatName(savedFamily.parentName)}
+            </div>
+            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>
+              {savedFamily.id?.slice(-6).toUpperCase()}
+              {saveMsg && <span style={{ marginLeft: 6, color: '#059669', fontWeight: 600 }}>{saveMsg}</span>}
+            </div>
           </div>
+          <button onClick={onClose} style={{
+            marginLeft: 'auto', background: 'none', border: '1px solid #E5E7EB',
+            borderRadius: 6, width: 24, height: 24, cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            color: '#9CA3AF', flexShrink: 0,
+          }}>
+            <X size={12} />
+          </button>
         </div>
 
-        {/* Финансовые чипы — компактные */}
-        <div style={{ display: 'flex', gap: 6, flex: 1 }}>
-          <MiniChip label="Начислено" value={money(totalCharged)} />
-          <MiniChip label="Оплачено"  value={money(totalPaid)}    color="#6EE7B7" />
-          <MiniChip
+        {/* Контакты */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {savedFamily.phone && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Phone size={11} color="#9CA3AF" />
+              <span style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{formatPhone(savedFamily.phone)}</span>
+            </div>
+          )}
+          {savedFamily.secondPhone && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Phone size={11} color="#D1D5DB" />
+              <span style={{ fontSize: 12, color: '#6B7280' }}>{formatPhone(savedFamily.secondPhone)}</span>
+            </div>
+          )}
+        </div>
+
+        {/* Финансовые метрики */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+          <Metric label="Начислено" value={money(totalCharged)} />
+          <Metric label="Оплачено"  value={money(totalPaid)}    valueColor="#059669" />
+          <Metric
             label="Долг" value={money(totalDebt)}
-            color={totalDebt > 0 ? '#FCA5A5' : '#6EE7B7'}
+            valueColor={totalDebt > 0 ? '#DC2626' : '#059669'}
+            highlight={totalDebt > 0}
           />
-          <MiniChip
+          <Metric
             label="Баланс" value={money(mainBalance)}
+            valueColor={mainBalance < 0 ? '#DC2626' : '#374151'}
             sub={familyMonthlyPrice > 0 ? `${money(familyMonthlyPrice)}/мес` : undefined}
-            color={mainBalance < 0 ? '#FCA5A5' : 'rgba(255,255,255,0.9)'}
           />
         </div>
 
-        {/* Табы */}
-        <div style={{ display: 'flex', gap: 2, flex: '0 0 auto' }}>
+        {/* Дети — краткий список */}
+        {children.length > 0 && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <div style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+              Дети ({children.length})
+            </div>
+            {children.map((ch, i) => (
+              <div key={ch.id} style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+                padding: '4px 8px', background: '#F3F4F6', borderRadius: 6,
+              }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{ch.childName}</span>
+                <span style={{ fontSize: 10, color: '#6B7280' }}>
+                  {ch.schoolCode} · Зона {ch.zone}{i > 0 ? ' · −5%' : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ─── ПРАВАЯ ПАНЕЛЬ — контент с табами ─── */}
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+        {/* Таб-бар */}
+        <div style={{
+          display: 'flex',
+          borderBottom: '1px solid #E5E7EB',
+          background: '#fff',
+          paddingLeft: 4,
+          flexShrink: 0,
+        }}>
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '5px 10px', border: 'none', borderRadius: 6,
-              background: tab === t.key ? 'rgba(255,255,255,0.2)' : 'transparent',
-              color: tab === t.key ? '#fff' : 'rgba(255,255,255,0.5)',
-              fontSize: 11, fontWeight: tab === t.key ? 700 : 400,
-              cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-              borderBottom: tab === t.key ? '2px solid #fff' : '2px solid transparent',
+              padding: '8px 14px',
+              border: 'none',
+              borderBottom: tab === t.key ? '2px solid #312E81' : '2px solid transparent',
+              background: 'none',
+              color: tab === t.key ? '#312E81' : '#6B7280',
+              fontSize: 12, fontWeight: tab === t.key ? 700 : 400,
+              cursor: 'pointer',
+              display: 'flex', alignItems: 'center', gap: 5,
               transition: 'all 0.15s',
+              whiteSpace: 'nowrap',
             }}>
-              {t.icon}{t.label}
+              {t.icon} {t.label}
               {t.key === 'history' && audit.length > 0 && (
-                <span style={{ background: 'rgba(255,255,255,0.25)', color: '#fff', borderRadius: 8, fontSize: 9, padding: '1px 4px', fontWeight: 700 }}>
+                <span style={{
+                  background: '#EEF2FF', color: '#312E81',
+                  borderRadius: 8, fontSize: 9, padding: '1px 5px', fontWeight: 700,
+                }}>
                   {audit.length}
                 </span>
               )}
@@ -216,51 +294,45 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           ))}
         </div>
 
-        {/* Закрыть */}
-        <button onClick={onClose} style={{
-          background: 'rgba(255,255,255,0.12)', border: 'none', borderRadius: 6,
-          width: 26, height: 26, display: 'flex', alignItems: 'center', justifyContent: 'center',
-          cursor: 'pointer', color: '#fff', flexShrink: 0,
-        }}>
-          <X size={14} />
-        </button>
-      </div>
-
-      {/* ─── КОНТЕНТ ─── */}
-      <div style={{ padding: '12px 16px', maxHeight: 460, overflowY: 'auto' }}>
-        {tab === 'info'     && <TabInfo     family={savedFamily} saving={saving} onSave={handleSaveFamily} />}
-        {tab === 'children' && <TabChildren children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} onReload={loadAll} />}
-        {tab === 'finance'  && (
-          <TabFinance
-            charges={charges} payments={payments} paymentItems={paymentItems}
-            loading={loadingFinance} family={savedFamily} children={children}
-            mainBalance={mainBalance} depositBalance={depositBalance}
-            isAdmin={isAdmin} isCashier={isCashier}
-            onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
-            onAddCharges={handleAddCharges} onCreatePayment={handleCreatePayment}
-            onConfirmPayment={handleConfirmPayment} onSavePayment={handleSavePayment}
-            onDeletePayment={handleDeletePayment}
-          />
-        )}
-        {tab === 'history'  && <TabHistory audit={audit} />}
+        {/* Контент таба */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+          {tab === 'info'     && <TabInfo     family={savedFamily} saving={saving} onSave={handleSaveFamily} />}
+          {tab === 'children' && <TabChildren children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} onReload={loadAll} />}
+          {tab === 'finance'  && (
+            <TabFinance
+              charges={charges} payments={payments} paymentItems={paymentItems}
+              loading={loadingFinance} family={savedFamily} children={children}
+              mainBalance={mainBalance} depositBalance={depositBalance}
+              isAdmin={isAdmin} isCashier={isCashier}
+              onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
+              onAddCharges={handleAddCharges} onCreatePayment={handleCreatePayment}
+              onConfirmPayment={handleConfirmPayment} onSavePayment={handleSavePayment}
+              onDeletePayment={handleDeletePayment}
+            />
+          )}
+          {tab === 'history'  && <TabHistory audit={audit} />}
+        </div>
       </div>
     </div>
   );
 }
 
-function MiniChip({ label, value, sub, color }: { label: string; value: string; sub?: string; color?: string }) {
+function Metric({ label, value, sub, valueColor, highlight }: {
+  label: string; value: string; sub?: string; valueColor?: string; highlight?: boolean;
+}) {
   return (
     <div style={{
-      background: 'rgba(255,255,255,0.08)', borderRadius: 6, padding: '4px 10px',
-      display: 'flex', flexDirection: 'column', gap: 1, minWidth: 90,
+      background: highlight ? '#FEF2F2' : '#F9FAFB',
+      border: `1px solid ${highlight ? '#FECACA' : '#E5E7EB'}`,
+      borderRadius: 8, padding: '6px 10px',
     }}>
-      <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.45)', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
+      <div style={{ fontSize: 9, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
         {label}
       </div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: color ?? 'rgba(255,255,255,0.9)', lineHeight: 1.2 }}>
+      <div style={{ fontSize: 13, fontWeight: 700, color: valueColor ?? '#111827', marginTop: 1 }}>
         {value}
       </div>
-      {sub && <div style={{ fontSize: 9, color: 'rgba(255,255,255,0.4)' }}>{sub}</div>}
+      {sub && <div style={{ fontSize: 9, color: '#9CA3AF', marginTop: 1 }}>{sub}</div>}
     </div>
   );
 }
