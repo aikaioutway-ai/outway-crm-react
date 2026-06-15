@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { X, Phone, CreditCard, Users, Clock, ChevronRight } from 'lucide-react';
+import { X, Phone, CreditCard, Users, Clock, Info } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem } from '../../types';
 import { getFamilyPrice, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
@@ -22,7 +22,14 @@ interface AuditEntry {
 interface Props {
   family: Family; onClose: () => void; userRole?: string; userName?: string;
 }
-type Tab = 'info' | 'children' | 'finance' | 'history';
+type Tab = 'finance' | 'children' | 'info' | 'history';
+
+const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
+  { key: 'finance',  label: 'Финансы', icon: <CreditCard size={11} /> },
+  { key: 'children', label: 'Дети',    icon: <Users size={11} /> },
+  { key: 'info',     label: 'Инфо',    icon: <Info size={11} /> },
+  { key: 'history',  label: 'История', icon: <Clock size={11} /> },
+];
 
 export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер' }: Props) {
   const [tab, setTab]                   = useState<Tab>('finance');
@@ -43,10 +50,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const isCashier = userRole === 'cashier';
 
   useEffect(() => {
-    setSavedFamily(family);
-    setTab('finance');
-    loadAll();
-    loadAudit();
+    setSavedFamily(family); setTab('finance');
+    loadAll(); loadAudit();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
@@ -85,7 +90,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     try {
       await updateV2Family(family.id, updated); setSavedFamily(updated);
       setSaveMsg('Сохранено ✓'); setTimeout(() => setSaveMsg(''), 2000);
-      await addAudit('Редактирование семьи', 'family', JSON.stringify(family), JSON.stringify(updated));
+      await addAudit('Редактирование', 'family', JSON.stringify(family), JSON.stringify(updated));
       await loadAudit();
     } catch { setSaveMsg('Ошибка'); }
     setSaving(false);
@@ -122,13 +127,13 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
   async function handleAddCharges(month: number, year: number) {
     await createChargesForPeriod(family.id, children, month, year);
-    await addAudit('Добавление начислений', PERIOD_LABEL[String(month)] ?? String(month), '—', `${children.length} детей`);
+    await addAudit('Начисления', PERIOD_LABEL[String(month)] ?? String(month), '—', `${children.length} детей`);
     await loadFinance(); await loadAudit();
   }
   async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null): Promise<boolean> {
     try {
       await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentDate, receiptFile, comment, createdBy: userName });
-      await addAudit('Внесение платежа', 'family_payment', '—', `${money(amount)} на проверке`);
+      await addAudit('Платёж', 'family_payment', '—', `${money(amount)} на проверке`);
       await loadFinance(); await loadAudit(); return true;
     } catch { return false; }
   }
@@ -147,138 +152,125 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
     : savedFamily.monthlyPrice;
 
-  const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
-    { key: 'finance',  label: 'Финансы',  icon: <CreditCard size={11} /> },
-    { key: 'children', label: 'Дети',     icon: <Users size={11} /> },
-    { key: 'info',     label: 'Инфо',     icon: <ChevronRight size={11} /> },
-    { key: 'history',  label: 'История',  icon: <Clock size={11} /> },
-  ];
+  const initials = (savedFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
 
   return (
     <div style={{
       display: 'grid',
-      gridTemplateColumns: '280px 1fr',
+      gridTemplateColumns: '220px 1fr',
       background: '#fff',
-      borderTop: '1px solid #E5E7EB',
-      borderBottom: '1px solid #E5E7EB',
-      minHeight: 220,
-      maxHeight: 420,
+      borderTop: '3px solid #312E81',
+      borderBottom: '2px solid #E5E7EB',
+      boxShadow: '0 4px 16px rgba(49,46,129,0.10)',
+      maxHeight: 400,
     }}>
 
-      {/* ─── ЛЕВАЯ ПАНЕЛЬ — идентификация ─── */}
+      {/* ─── ЛЕВАЯ УЗКАЯ ПАНЕЛЬ ─── */}
       <div style={{
         borderRight: '1px solid #E5E7EB',
-        padding: '16px 20px',
+        padding: '14px 16px',
         display: 'flex',
         flexDirection: 'column',
-        gap: 14,
+        gap: 12,
         background: '#FAFAFA',
         overflowY: 'auto',
       }}>
-        {/* Аватар + имя */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+
+        {/* Аватар + имя + закрыть */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
           <div style={{
-            width: 40, height: 40, borderRadius: '50%',
-            background: 'linear-gradient(135deg, #312E81 0%, #4F46E5 100%)',
+            width: 36, height: 36, borderRadius: '50%',
+            background: '#312E81',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 14, fontWeight: 700, color: '#fff', flexShrink: 0,
-            letterSpacing: -0.5,
+            fontSize: 12, fontWeight: 700, color: '#fff', flexShrink: 0,
           }}>
-            {(savedFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase()}
+            {initials}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontSize: 13, fontWeight: 700, color: '#111827', lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#111827', lineHeight: 1.3 }}>
               {formatName(savedFamily.parentName)}
             </div>
-            <div style={{ fontSize: 11, color: '#6B7280', marginTop: 1 }}>
-              {savedFamily.id?.slice(-6).toUpperCase()}
-              {saveMsg && <span style={{ marginLeft: 6, color: '#059669', fontWeight: 600 }}>{saveMsg}</span>}
-            </div>
+            {saveMsg && <div style={{ fontSize: 10, color: '#059669', fontWeight: 600 }}>{saveMsg}</div>}
           </div>
           <button onClick={onClose} style={{
-            marginLeft: 'auto', background: 'none', border: '1px solid #E5E7EB',
-            borderRadius: 6, width: 24, height: 24, cursor: 'pointer',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: '#9CA3AF', flexShrink: 0,
+            background: 'none', border: 'none', cursor: 'pointer',
+            color: '#9CA3AF', padding: 2, flexShrink: 0,
           }}>
-            <X size={12} />
+            <X size={13} />
           </button>
         </div>
 
-        {/* Контакты */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-          {savedFamily.phone && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Phone size={11} color="#9CA3AF" />
-              <span style={{ fontSize: 12, color: '#374151', fontWeight: 500 }}>{formatPhone(savedFamily.phone)}</span>
-            </div>
-          )}
-          {savedFamily.secondPhone && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <Phone size={11} color="#D1D5DB" />
-              <span style={{ fontSize: 12, color: '#6B7280' }}>{formatPhone(savedFamily.secondPhone)}</span>
-            </div>
-          )}
-        </div>
-
-        {/* Финансовые метрики */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-          <Metric label="Начислено" value={money(totalCharged)} />
-          <Metric label="Оплачено"  value={money(totalPaid)}    valueColor="#059669" />
-          <Metric
-            label="Долг" value={money(totalDebt)}
-            valueColor={totalDebt > 0 ? '#DC2626' : '#059669'}
-            highlight={totalDebt > 0}
-          />
-          <Metric
-            label="Баланс" value={money(mainBalance)}
-            valueColor={mainBalance < 0 ? '#DC2626' : '#374151'}
-            sub={familyMonthlyPrice > 0 ? `${money(familyMonthlyPrice)}/мес` : undefined}
-          />
-        </div>
-
-        {/* Дети — краткий список */}
-        {children.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <div style={{ fontSize: 10, fontWeight: 600, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-              Дети ({children.length})
-            </div>
-            {children.map((ch, i) => (
-              <div key={ch.id} style={{
-                display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                padding: '4px 8px', background: '#F3F4F6', borderRadius: 6,
-              }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: '#111827' }}>{ch.childName}</span>
-                <span style={{ fontSize: 10, color: '#6B7280' }}>
-                  {ch.schoolCode} · Зона {ch.zone}{i > 0 ? ' · −5%' : ''}
-                </span>
-              </div>
-            ))}
+        {/* Телефон */}
+        {savedFamily.phone && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <Phone size={10} color="#9CA3AF" />
+            <span style={{ fontSize: 11, color: '#374151', fontWeight: 500 }}>{formatPhone(savedFamily.phone)}</span>
           </div>
         )}
+
+        {/* Дети */}
+        {children.length > 0 && (
+          <div>
+            <div style={{ fontSize: 9, fontWeight: 700, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
+              Дети · {children.length}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
+              {children.map((ch, i) => (
+                <div key={ch.id} style={{
+                  padding: '5px 8px', background: '#F3F4F6',
+                  borderRadius: 6, borderLeft: '2px solid #312E81',
+                }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#111827' }}>{ch.childName}</div>
+                  <div style={{ fontSize: 10, color: '#6B7280', marginTop: 1 }}>
+                    {ch.schoolCode} · Зона {ch.zone}{i > 0 ? ' · −5%' : ''}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Финансовый дайджест — 4 маленьких метрики */}
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, marginTop: 'auto' }}>
+          {[
+            { label: 'Начислено', val: money(totalCharged), color: '#374151' },
+            { label: 'Оплачено',  val: money(totalPaid),    color: '#059669' },
+            { label: 'Долг',      val: money(totalDebt),    color: totalDebt > 0 ? '#DC2626' : '#059669', highlight: totalDebt > 0 },
+            { label: '/мес',      val: money(familyMonthlyPrice), color: '#374151' },
+          ].map(m => (
+            <div key={m.label} style={{
+              background: m.highlight ? '#FEF2F2' : '#F3F4F6',
+              borderRadius: 6, padding: '5px 7px',
+              border: m.highlight ? '1px solid #FECACA' : 'none',
+            }}>
+              <div style={{ fontSize: 8, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.4, fontWeight: 600 }}>{m.label}</div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: m.color, marginTop: 1 }}>{m.val}</div>
+            </div>
+          ))}
+        </div>
       </div>
 
-      {/* ─── ПРАВАЯ ПАНЕЛЬ — контент с табами ─── */}
-      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+      {/* ─── ПРАВАЯ ПАНЕЛЬ ─── */}
+      <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
+
         {/* Таб-бар */}
         <div style={{
           display: 'flex',
           borderBottom: '1px solid #E5E7EB',
           background: '#fff',
-          paddingLeft: 4,
           flexShrink: 0,
         }}>
           {TABS.map(t => (
             <button key={t.key} onClick={() => setTab(t.key)} style={{
-              padding: '8px 14px',
+              padding: '7px 14px',
               border: 'none',
               borderBottom: tab === t.key ? '2px solid #312E81' : '2px solid transparent',
+              marginBottom: -1,
               background: 'none',
               color: tab === t.key ? '#312E81' : '#6B7280',
-              fontSize: 12, fontWeight: tab === t.key ? 700 : 400,
+              fontSize: 11, fontWeight: tab === t.key ? 700 : 400,
               cursor: 'pointer',
               display: 'flex', alignItems: 'center', gap: 5,
-              transition: 'all 0.15s',
               whiteSpace: 'nowrap',
             }}>
               {t.icon} {t.label}
@@ -294,8 +286,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           ))}
         </div>
 
-        {/* Контент таба */}
-        <div style={{ flex: 1, overflowY: 'auto', padding: '12px 16px' }}>
+        {/* Контент */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '10px 14px' }}>
           {tab === 'info'     && <TabInfo     family={savedFamily} saving={saving} onSave={handleSaveFamily} />}
           {tab === 'children' && <TabChildren children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} onReload={loadAll} />}
           {tab === 'finance'  && (
@@ -313,26 +305,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           {tab === 'history'  && <TabHistory audit={audit} />}
         </div>
       </div>
-    </div>
-  );
-}
-
-function Metric({ label, value, sub, valueColor, highlight }: {
-  label: string; value: string; sub?: string; valueColor?: string; highlight?: boolean;
-}) {
-  return (
-    <div style={{
-      background: highlight ? '#FEF2F2' : '#F9FAFB',
-      border: `1px solid ${highlight ? '#FECACA' : '#E5E7EB'}`,
-      borderRadius: 8, padding: '6px 10px',
-    }}>
-      <div style={{ fontSize: 9, color: '#9CA3AF', textTransform: 'uppercase', letterSpacing: 0.5, fontWeight: 600 }}>
-        {label}
-      </div>
-      <div style={{ fontSize: 13, fontWeight: 700, color: valueColor ?? '#111827', marginTop: 1 }}>
-        {value}
-      </div>
-      {sub && <div style={{ fontSize: 9, color: '#9CA3AF', marginTop: 1 }}>{sub}</div>}
     </div>
   );
 }
