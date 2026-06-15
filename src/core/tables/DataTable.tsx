@@ -192,6 +192,7 @@ export function DataTable<T extends Record<string, any>>({
   const [sorts, setSorts] = useState<SortConfig[]>([]);
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [showSortPanel, setShowSortPanel] = useState(false);
   const [showProps, setShowProps] = useState(false);
   const [propsSearch, setPropsSearch] = useState('');
@@ -588,27 +589,19 @@ export function DataTable<T extends Record<string, any>>({
                 const groupKeys = new Set(group.items.map(col => col.key));
                 return (
                   <div key={group.category} className="dt-props-category-group">
-                    <div className="dt-props-section-title">
+                    <div
+                      className="dt-props-section-title dt-props-section-title--clickable"
+                      onClick={() => setCollapsedCats(prev => {
+                        const next = new Set(prev);
+                        if (next.has(group.category)) next.delete(group.category); else next.add(group.category);
+                        return next;
+                      })}
+                    >
+                      <span className="dt-props-cat-arrow">{collapsedCats.has(group.category) ? '▶' : '▼'}</span>
                       <span>{group.category}</span>
                       <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
                     </div>
-                    <div className="dt-props-section-actions">
-                      <button
-                        className="dt-props-section-action"
-                        title="Показать все в категории"
-                        onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: true } : c))}
-                      >
-                        👁
-                      </button>
-                      <button
-                        className="dt-props-section-action"
-                        title="Скрыть все в категории"
-                        onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: false } : c))}
-                      >
-                        🚫
-                      </button>
-                    </div>
-                    {group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
+                    {!collapsedCats.has(group.category) && group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
                   </div>
                 );
               })}
