@@ -99,13 +99,17 @@ export default function EmployeesPage() {
       setMessage('Такой логин уже есть');
       return;
     }
-    const next = await saveEmployee(draft);
-    setEmployees(next);
-    const saved = next.find(item => item.login === draft.login.trim());
-    setSelectedId(saved?.id ?? null);
-    if (saved) setDraft(toDraft(saved));
-    setMessage('Сохранено');
-    setTimeout(() => setMessage(''), 1800);
+    try {
+      const next = await saveEmployee(draft);
+      setEmployees(next);
+      const saved = next.find(item => item.login === draft.login.trim());
+      setSelectedId(saved?.id ?? null);
+      if (saved) setDraft(toDraft(saved));
+      setMessage('Сохранено');
+      setTimeout(() => setMessage(''), 1800);
+    } catch (err: any) {
+      setMessage('Ошибка: ' + (err?.message ?? 'неизвестная'));
+    }
   }
 
   async function remove() {

@@ -22,7 +22,14 @@ create table if not exists public.v2_employees (
   updated_at timestamptz not null default now()
 );
 
+-- Функция updated_at (на случай если crm_v2_schema.sql ещё не запускался)
+create or replace function public.v2_touch_updated_at()
+returns trigger language plpgsql as $$
+begin new.updated_at = now(); return new; end;
+$$;
+
 -- Триггер updated_at
+drop trigger if exists v2_employees_updated_at on public.v2_employees;
 create trigger v2_employees_updated_at
   before update on public.v2_employees
   for each row execute function public.v2_touch_updated_at();
