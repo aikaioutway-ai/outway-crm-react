@@ -96,7 +96,14 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
       const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
         .order('created_at', { ascending: false }).limit(50);
       if (data) {
-        setAudit(data.map((r: any) => ({
+        const isAdmin = userRole === 'admin' || userRole === 'director';
+        const ADMIN_NAMES = ['admin', 'администратор', 'director', 'директор'];
+        const filtered = isAdmin ? data : data.filter((r: any) => {
+          if (r.actor_role === 'admin' || r.actor_role === 'director') return false;
+          const name = String(r.actor_name ?? '').toLowerCase();
+          return !ADMIN_NAMES.some(n => name.includes(n));
+        });
+        setAudit(filtered.map((r: any) => ({
           id: String(r.id), familyId: String(r.entity_id),
           userName: r.actor_name ?? 'Система', action: r.action ?? '',
           field: r.entity_type ?? '', oldValue: JSON.stringify(r.old_value ?? ''), newValue: JSON.stringify(r.new_value ?? ''),
