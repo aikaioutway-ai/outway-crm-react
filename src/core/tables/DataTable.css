@@ -2,18 +2,18 @@
 /* Использует CSS переменные из корневого стиля CRM                           */
 
 :root {
-  --dt-bg:         #F0F4FF;
+  --dt-bg:         #F7F9FB;
   --dt-white:      #FFFFFF;
-  --dt-accent:     #312E81;
-  --dt-accent-h:   #27246B;
-  --dt-accent-l:   #C7D2FE;
-  --dt-text:       #1A1A2E;
-  --dt-text-2:     #6B6B8A;
-  --dt-border:     #DDE3F5;
-  --dt-hover:      #EEF2FF;
-  --dt-selected:   #E0E7FF;
-  --dt-radius:     8px;
-  --dt-font:       Arial, sans-serif;
+  --dt-accent:     #2563EB;
+  --dt-accent-h:   #1D4ED8;
+  --dt-accent-l:   #FFEDD5;
+  --dt-text:       #080B0B;
+  --dt-text-2:     #6E7685;
+  --dt-border:     #E5ECEF;
+  --dt-hover:      #F0F5F7;
+  --dt-selected:   #E9F1F4;
+  --dt-radius:     14px;
+  --dt-font:       var(--font);
 }
 
 /* ── ROOT ── */
@@ -23,23 +23,28 @@
   flex-direction: column;
   background: var(--dt-white);
   border: 1px solid var(--dt-border);
-  border-radius: 0;
-  overflow: hidden;
+  border-radius: var(--dt-radius);
+  overflow: visible;
   font-family: var(--dt-font);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--dt-text);
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
 }
 
 /* ── TOOLBAR ── */
 .dt-toolbar {
+  position: sticky;
+  top: 98px;
+  z-index: 30;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
+  padding: 10px 12px;
   border-bottom: 1px solid var(--dt-border);
-  background: var(--dt-white);
+  background: #FFFFFF;
+  border-radius: var(--dt-radius) var(--dt-radius) 0 0;
+  box-shadow: 0 8px 18px rgba(8,11,11,0.04);
   gap: 8px;
   flex-wrap: wrap;
 }
@@ -52,7 +57,7 @@
   gap: 5px;
   padding: 5px 10px;
   border: 1px solid var(--dt-border);
-  border-radius: 6px;
+  border-radius: 10px;
   background: var(--dt-white);
   color: var(--dt-text-2);
   font-size: 12px;
@@ -61,10 +66,17 @@
   transition: background 0.15s, color 0.15s, border-color 0.15s;
   white-space: nowrap;
 }
-.dt-btn:hover         { background: var(--dt-hover); color: var(--dt-accent); border-color: var(--dt-accent-l); }
-.dt-btn--active       { background: var(--dt-hover); color: var(--dt-accent); border-color: var(--dt-accent-l); }
+.dt-btn:hover         { background: var(--dt-hover); color: var(--dt-accent); border-color: #B8C8CF; }
+.dt-btn--active       { background: var(--dt-accent); color: #fff; border-color: var(--dt-accent); }
 .dt-btn--danger       { color: #DC2626; border-color: #FECACA; }
 .dt-btn--danger:hover { background: #FEF2F2; }
+.dt-btn--icon {
+  width: 30px;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  border-radius: 10px;
+}
 
 .dt-badge {
   display: inline-flex;
@@ -82,6 +94,41 @@
 
 .dt-count        { font-size: 12px; color: var(--dt-text-2); font-weight: 600; }
 .dt-selected-info{ font-size: 12px; color: var(--dt-accent);  font-weight: 700; }
+
+.dt-pagination {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px;
+}
+
+.dt-page-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--dt-border);
+  border-radius: 10px;
+  background: #fff;
+  color: var(--dt-text);
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dt-page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.dt-page-text {
+  min-width: 48px;
+  text-align: center;
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--dt-text);
+}
 
 /* ── FILTER / SORT PANEL ── */
 .dt-filter-panel {
@@ -137,7 +184,7 @@
   background: var(--dt-white);
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
-  box-shadow: 0 8px 24px rgba(49,46,129,0.12);
+  box-shadow: 0 14px 34px rgba(8,11,11,0.10);
   min-width: 240px;
   max-height: 400px;
   overflow-y: auto;
@@ -190,10 +237,12 @@
 /* ── TABLE WRAP ── */
 .dt-wrap {
   overflow-x: auto;
-  overflow-y: auto;
-  flex: 1;
-  min-height: 0;
+  overflow-y: visible;
+  flex: 0 0 auto;
+  min-height: auto;
   position: relative;
+  background: #fff;
+  border-radius: 0 0 var(--dt-radius) var(--dt-radius);
 }
 
 /* ── TABLE ── */
@@ -207,8 +256,8 @@
 .dt-th {
   position: relative;
   padding: 0;
-  background: #F8F9FF;
-  border-bottom: 2px solid var(--dt-border);
+  background: #F7F9FB;
+  border-bottom: 1px solid var(--dt-border);
   border-right: 1px solid var(--dt-border);
   font-weight: 700;
   font-size: 12px;
@@ -230,7 +279,7 @@
 .dt-sort-indicator  { color: var(--dt-accent); font-size: 11px; font-weight: 900; }
 
 /* Sticky cols */
-.dt-sticky-col       { position: sticky; left: 0; z-index: 3; background: #F8F9FF; }
+.dt-sticky-col       { position: sticky; left: 0; z-index: 3; background: #F7F9FB; }
 .dt-sticky-col--2    { left: 36px; }
 
 /* Resize handle */
@@ -241,12 +290,12 @@
   cursor: col-resize;
   z-index: 4;
 }
-.dt-resize-handle:hover { background: var(--dt-accent-l); }
+.dt-resize-handle:hover { background: #B8C8CF; }
 
 /* ── ROWS ── */
 .dt-tr {
   cursor: pointer;
-  transition: background 0.1s;
+  transition: none;
   border-bottom: 1px solid var(--dt-border);
 }
 .dt-tr:hover         { background: var(--dt-hover); }
@@ -255,8 +304,8 @@
 
 /* ── CELLS ── */
 .dt-td {
-  padding: 5px 10px;
-  border-right: 1px solid var(--dt-border);
+  padding: 3px 10px;
+  border-right: 1px solid #EEF3F5;
   vertical-align: middle;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -272,32 +321,12 @@
 .dt-tr:hover .dt-td.dt-sticky-col     { background: var(--dt-hover); }
 
 .dt-cell-text { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dt-td--editable {
-  cursor: text;
-}
-.dt-td--editable:hover {
-  box-shadow: inset 0 0 0 1px var(--dt-accent-l);
-  background: #FFFFFF !important;
-}
-.dt-cell-input {
-  width: 100%;
-  height: 24px;
-  padding: 2px 6px;
-  border: 1px solid var(--dt-accent);
-  border-radius: 4px;
-  background: #fff;
-  color: var(--dt-text);
-  font: inherit;
-  font-size: 12px;
-  outline: none;
-  box-sizing: border-box;
-}
 
 /* ── FOOTER CALC BAR (вынесен из таблицы для надёжного sticky) ── */
 .dt-calc-bar {
   flex-shrink: 0;
   border-top: 2px solid var(--dt-border);
-  background: #F8F9FF;
+  background: #F7F9FB;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -314,10 +343,10 @@
 .dt-tf {
   padding: 0;
   border-right: 1px solid var(--dt-border);
-  background: #F8F9FF;
+  background: #F7F9FB;
   cursor: pointer;
 }
-.dt-tf.dt-sticky-col { background: #F8F9FF; }
+.dt-tf.dt-sticky-col { background: #F7F9FB; }
 
 .dt-calc-cell {
   display: flex;
@@ -351,7 +380,7 @@
 .dt-skeleton-cell {
   height: 28px;
   border-radius: 6px;
-  background: linear-gradient(90deg, #EEF2FF 25%, #E0E7FF 50%, #EEF2FF 75%);
+  background: linear-gradient(90deg, #F0F5F7 25%, #DDE7EB 50%, #F0F5F7 75%);
   background-size: 200% 100%;
   animation: dt-shimmer 1.4s infinite;
   flex-shrink: 0;
@@ -368,7 +397,7 @@
   background: var(--dt-white);
   border: 1px solid var(--dt-border);
   border-radius: var(--dt-radius);
-  box-shadow: 0 8px 24px rgba(49,46,129,0.14);
+  box-shadow: 0 14px 34px rgba(8,11,11,0.12);
   min-width: 190px;
   padding: 4px 0;
   font-size: 13px;
@@ -408,15 +437,34 @@
   background: #FFFFFF;
 }
 .dt-tr[data-group-even="false"] td {
-  background: #F6F8FF;
+  background: #FBFCFD;
 }
 .dt-tr[data-group-even="true"]:hover td,
 .dt-tr[data-group-even="false"]:hover td {
-  background: #EEF2FF !important;
+  background: #F0F5F7 !important;
 }
 .dt-tr--selected[data-group-even="true"] td,
 .dt-tr--selected[data-group-even="false"] td {
-  background: #E0E7FF !important;
+  background: #E9F1F4 !important;
+}
+
+/* ── INLINE FAMILY CARD ── */
+.dt-expanded-row {
+  cursor: default;
+  border-bottom: 1px solid var(--dt-border);
+}
+
+.dt-expanded-cell {
+  padding: 0 !important;
+  border: none !important;
+  background: linear-gradient(180deg, #EEF3F5 0%, #F7F9FB 100%) !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  max-width: none !important;
+}
+
+.dt-expanded-cell > * {
+  width: auto;
 }
 
 /* ── PROPERTIES PANEL v2 (Notion-style) ── */
@@ -426,22 +474,19 @@
   left: 0;
   z-index: 200;
   width: 300px;
+  max-height: 520px;
   background: #fff;
   border: 1px solid var(--dt-border);
   border-radius: 10px;
-  box-shadow: 0 8px 32px rgba(49,46,129,0.13);
+  box-shadow: 0 16px 38px rgba(8,11,11,0.12);
   overflow: hidden;
-}
-.dt-props-title {
-  padding: 10px 14px 8px;
-  border-bottom: 1px solid var(--dt-border);
-  font-size: 12px;
-  font-weight: 800;
-  color: var(--dt-accent);
+  display: flex;
+  flex-direction: column;
 }
 .dt-props-search {
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--dt-border);
+  flex-shrink: 0;
 }
 .dt-props-search input {
   width: 100%;
@@ -455,21 +500,10 @@
   box-sizing: border-box;
 }
 .dt-props-body {
-  max-height: 380px;
+  flex: 1;
   overflow-y: auto;
-  padding: 6px 0 0;
-}
-.dt-props-empty {
-  padding: 14px;
-  font-size: 12px;
-  color: var(--dt-text-2);
-}
-.dt-props-category-group {
-  border-bottom: 1px solid var(--dt-border);
-  padding-bottom: 6px;
-}
-.dt-props-category-group:last-child {
-  border-bottom: none;
+  padding: 6px 0;
+  min-height: 0;
 }
 .dt-props-category {
   padding: 0;
@@ -662,18 +696,20 @@
 
 /* ── 003: COMPACT ROWS — больше строк на экране ── */
 .dt-td {
-  padding: 5px 10px !important;
+  padding: 3px 10px !important;
+  height: 30px;
+  line-height: 1.22;
 }
 .dt-th {
-  padding: 6px 10px !important;
+  padding: 5px 10px !important;
 }
 .dt-td--check,
 .dt-th--check {
-  padding: 5px 8px !important;
+  padding: 3px 8px !important;
 }
 .dt-td--num,
 .dt-th--num {
-  padding: 5px 8px !important;
+  padding: 3px 8px !important;
 }
 
 /* ── 006: SHOWN / HIDDEN панель свойств ── */
@@ -681,27 +717,10 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 14px 3px;
+  padding: 8px 14px 4px;
   font-size: 11px;
   font-weight: 700;
   color: var(--dt-text-2);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-.dt-props-section-count {
-  color: var(--dt-accent);
-  background: var(--dt-hover);
-  border-radius: 999px;
-  padding: 1px 6px;
-  font-size: 10px;
-  letter-spacing: 0;
-}
-.dt-props-section-actions,
-.dt-props-footer-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 0 14px 5px;
 }
 .dt-props-section-action {
   background: none;
@@ -713,14 +732,6 @@
   padding: 0;
 }
 .dt-props-section-action:hover { text-decoration: underline; }
-.dt-props-footer-actions {
-  justify-content: space-between;
-  border-top: 1px solid var(--dt-border);
-  background: #FAFBFF;
-  padding: 8px 14px;
-  position: sticky;
-  bottom: 0;
-}
 
 .dt-props-item-v2 {
   padding: 5px 14px 5px 12px !important;
@@ -760,4 +771,412 @@
 }
 .dt-props-panel-v2 {
   z-index: 100 !important;
+}
+
+/* ── Активные колонки (шторка сверху) ── */
+.dt-props-active-cols {
+  padding: 10px 12px 6px;
+  border-bottom: 1px solid var(--dt-border);
+}
+.dt-props-active-title {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--dt-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+.dt-props-active-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.dt-props-active-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: var(--dt-accent-l, #DDE7EB);
+  color: var(--dt-accent, #080B0B);
+  border-radius: 6px;
+  padding: 3px 6px 3px 4px;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: grab;
+  user-select: none;
+}
+.dt-props-active-chip:active { cursor: grabbing; }
+.dt-props-chip-drag {
+  font-size: 12px;
+  opacity: 0.5;
+  cursor: grab;
+}
+.dt-props-chip-label {
+  max-width: 90px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-props-chip-hide {
+  background: none;
+  border: none;
+  color: var(--dt-accent, #080B0B);
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  line-height: 1;
+  opacity: 0.6;
+}
+.dt-props-chip-hide:hover { opacity: 1; }
+
+/* ── Иконки шторки категорий ── */
+.dt-props-section-action {
+  background: none;
+  border: none;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 4px;
+  opacity: 0.6;
+}
+.dt-props-section-action:hover { opacity: 1; background: var(--dt-hover, #F0F5F7); }
+
+/* ── Сворачиваемые категории ── */
+.dt-props-section-title--clickable {
+  cursor: pointer;
+  user-select: none;
+}
+.dt-props-section-title--clickable:hover {
+  background: var(--dt-hover, #F0F5F7);
+  border-radius: 6px;
+}
+.dt-props-cat-arrow {
+  font-size: 9px;
+  color: var(--dt-text-2);
+  margin-right: 4px;
+}
+
+/* ── Чип ×  ── */
+.dt-props-chip-x {
+  font-size: 13px;
+  font-weight: 700;
+  opacity: 0.5;
+  line-height: 1;
+}
+.dt-props-active-chip:hover .dt-props-chip-x { opacity: 1; }
+
+/* ── Активные колонки — строки ── */
+.dt-props-active-cols {
+  border-bottom: 1px solid var(--dt-border);
+  padding-bottom: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.dt-props-active-title {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--dt-text-2);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 8px 12px 4px;
+}
+.dt-props-active-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  cursor: grab;
+  user-select: none;
+  border-radius: 6px;
+  margin: 0 4px;
+}
+.dt-props-active-row:hover { background: var(--dt-hover, #F0F5F7); }
+.dt-props-active-row:active { cursor: grabbing; }
+.dt-props-active-row-label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--dt-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.dt-props-active-row-hide {
+  opacity: 0.4;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.dt-props-active-row:hover .dt-props-active-row-hide { opacity: 1; }
+
+
+@keyframes dtExpandIn {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* ── Larger readable table density ── */
+.dt-root {
+  font-size: 13px;
+}
+
+.dt-th {
+  padding: 7px 10px !important;
+  font-size: 13px;
+}
+
+.dt-td {
+  height: 34px;
+  padding: 5px 10px !important;
+  font-size: 13px;
+  line-height: 1.28;
+}
+
+.dt-td span,
+.dt-cell-text {
+  font-size: 13px !important;
+}
+
+.dt-td--num {
+  font-size: 12px;
+}
+
+.dt-td button {
+  font-size: 11px !important;
+}
+
+/* ── Airy table treatment ── */
+.dt-root {
+  background: #fff;
+  border: 1px solid #E8ECEF;
+  border-radius: 0 0 10px 10px;
+  box-shadow: none;
+}
+
+.dt-toolbar {
+  top: 86px;
+  padding: 8px 10px;
+  background: #fff;
+  border-bottom: 1px solid #EDF0F2;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.dt-btn {
+  border-color: #E8ECEF;
+  border-radius: 7px;
+  background: #fff;
+  color: #5F6873;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.dt-btn:hover {
+  background: #F8FAFC;
+  border-color: #D8DEE4;
+  color: #111827;
+}
+
+.dt-wrap {
+  border-radius: 0 0 10px 10px;
+  background: #fff;
+}
+
+.dt-th {
+  background: #fff !important;
+  border-bottom: none;
+  border-right: none;
+  color: #6B7280;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.dt-th-inner {
+  min-height: 31px;
+  padding: 7px 10px;
+}
+
+.dt-td {
+  height: 35px;
+  border-right: none;
+  border-bottom: none;
+  color: #111827;
+  background: #fff;
+}
+
+.dt-tr {
+  border-bottom: none;
+}
+
+.dt-tr:hover td {
+  background: #FAFBFC !important;
+}
+
+.dt-tr[data-group-even="true"] td {
+  background: #fff;
+}
+
+.dt-tr[data-group-even="false"] td {
+  background: #FFF7ED;
+}
+
+.dt-tr[data-group-even="true"]:hover td,
+.dt-tr[data-group-even="false"]:hover td {
+  background: #FFF7ED !important;
+}
+
+.dt-tr--selected[data-group-even="true"] td,
+.dt-tr--selected[data-group-even="false"] td {
+  background: #F5F8FA !important;
+}
+
+.dt-th.dt-sticky-col {
+  background: #fff;
+}
+
+.dt-cell-text {
+  font-weight: 500;
+}
+
+/* ── Warm alternating rows ── */
+.dt-tr[data-group-even="true"] td {
+  background: #FFF7ED !important;
+}
+
+.dt-tr[data-group-even="false"] td {
+  background: #fff !important;
+}
+
+.dt-tr[data-group-even="true"]:hover td,
+.dt-tr[data-group-even="false"]:hover td {
+  background: #FFF7ED !important;
+}
+
+.dt-tr--selected[data-group-even="true"] td,
+.dt-tr--selected[data-group-even="false"] td {
+  background: #FFF7ED !important;
+}
+
+.dt-tr:active td {
+  background: inherit !important;
+}
+
+.dt-tr[data-group-even="true"] .dt-td.dt-sticky-col {
+  background: #FFF7ED !important;
+}
+
+.dt-tr[data-group-even="false"] .dt-td.dt-sticky-col {
+  background: #fff !important;
+}
+
+/* ── Notion-like inline editing and row opener ── */
+.dt-tr {
+  cursor: default;
+}
+
+.dt-td--editable {
+  cursor: text;
+}
+
+.dt-td--editing {
+  position: relative;
+  overflow: visible !important;
+  z-index: 20;
+}
+
+.dt-cell-input {
+  position: absolute;
+  left: -2px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: calc(100% + 4px);
+  min-width: 180px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid #E5ECEF;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  outline: none;
+  box-shadow: 0 16px 34px rgba(8,11,11,0.12);
+  box-sizing: border-box;
+  z-index: 30;
+}
+
+select.dt-cell-input {
+  cursor: pointer;
+}
+
+.dt-cell-input:disabled {
+  opacity: 0.75;
+}
+
+.dt-td--num {
+  position: relative;
+  overflow: visible !important;
+}
+
+.dt-row-number {
+  display: inline-block;
+  min-width: 16px;
+}
+
+.dt-row-open-btn {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 22px;
+  height: 22px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid #E5ECEF;
+  border-radius: 6px;
+  background: #fff;
+  color: #6B7280;
+  box-shadow: 0 4px 10px rgba(8,11,11,0.06);
+  cursor: pointer;
+  z-index: 8;
+}
+
+.dt-row-open-icon {
+  width: 13px;
+  height: 13px;
+  border: 1.5px solid currentColor;
+  border-radius: 2px;
+  display: inline-block;
+  position: relative;
+}
+
+.dt-row-open-icon::after {
+  content: '';
+  position: absolute;
+  left: 4px;
+  top: 2px;
+  width: 4px;
+  height: 7px;
+  border-left: 1.5px solid currentColor;
+  border-right: 1.5px solid currentColor;
+  opacity: 0.75;
+}
+
+.dt-tr:hover .dt-row-number {
+  opacity: 0;
+}
+
+.dt-tr:hover .dt-row-open-btn {
+  display: inline-flex;
+}
+
+.dt-row-open-btn:hover {
+  border-color: #D8DEE4;
+  color: #111827;
+  background: #F8FAFC;
 }

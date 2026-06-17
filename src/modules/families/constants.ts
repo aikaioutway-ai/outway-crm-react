@@ -1,22 +1,22 @@
 // Один источник правды для отображения школ, зон, транспорта
 
 export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branches: string[] }[] = [
-  { key: 'ALL',   label: 'Все',     codes: [], branches: [] },
-  { key: 'KNG',   label: 'KNG',    codes: ['KINGS'],   branches: [] },
-  { key: 'LA',    label: 'LA',     codes: ['LIGHT'],   branches: [] },
-  { key: 'BKG',   label: 'BKG',   codes: ['BILIM'],   branches: [] },
+  { key: 'TIS',   label: 'TIS',   codes: ['TENSAY'],  branches: [] },
+  { key: 'ERU',   label: 'ERU',   codes: ['ERUDIT'],  branches: [] },
+  { key: 'EDi',   label: 'EDI',   codes: ['EDISON'],  branches: [] },
+  { key: 'EPS',   label: 'EPS',   codes: ['EPSILON'], branches: [] },
   { key: 'AES',   label: 'AES',   codes: ['AES'],     branches: [] },
   { key: 'KAS',   label: 'KAS',   codes: ['KAS'],     branches: [] },
-  { key: 'EPS',   label: 'EPS',   codes: ['EPSILON'], branches: [] },
   { key: 'GEN2',  label: 'GEN #2',codes: ['GENIUS'],  branches: ['Гениум — Чуйкова','Гениум Чуйкова'] },
   { key: 'GEN4',  label: 'GEN #4',codes: ['GENIUS4'], branches: ['Гениум — Авангард','Гениум Авангард'] },
   { key: 'NOVA',  label: 'NOVA',  codes: ['NOVA'],    branches: [] },
-  { key: 'ING',   label: 'ING',   codes: ['INDIGO'],  branches: ['Индиго Kids','Asylkech Girls School'] },
-  { key: 'ING_P', label: 'ING_P', codes: ['INDIGO'],  branches: ['Indigo Prime Academy'] },
-  { key: 'ING_W', label: 'ING_W', codes: ['INDIGO'],  branches: ['Indigo West'] },
-  { key: 'TIS',   label: 'TIS',   codes: ['TENSAY'],  branches: [] },
-  { key: 'ERU',   label: 'ERU',   codes: ['ERUDIT'],  branches: [] },
-  { key: 'EDi',   label: 'EDi',   codes: ['EDISON'],  branches: [] },
+  { key: 'ING',   label: 'ING',   codes: ['INDIGO'], branches: ['Индиго Kids','Asylkech Girls School'] },
+  { key: 'ING_P', label: 'ING_P', codes: ['INDIGO'], branches: ['Indigo Prime Academy'] },
+  { key: 'ING_W', label: 'ING_W', codes: ['INDIGO'], branches: ['Indigo West'] },
+  { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: [] },
+  { key: 'BKG',   label: 'BKG',   codes: ['BILIM'],   branches: [] },
+  { key: 'KNG',   label: 'KINGS', codes: ['KINGS'],   branches: [] },
+  { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
 // Маппинг branch_name из БД → короткое название в CRM

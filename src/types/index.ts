@@ -140,6 +140,7 @@ export interface Charge {
   childName?: string;
   periodMonth: number;
   year: number;
+  chargeType?: string;
   amount: number;
   paidAmount: number;
   debtAmount: number;
@@ -209,6 +210,26 @@ export interface AuditLog {
 // ─── РОЛИ ────────────────────────────────────────────────────────────────────
 
 export type UserRole = 'admin' | 'manager' | 'cashier' | 'logist' | 'director';
+export type EmployeeRole = UserRole | 'driver';
+export type EmployeeStatus = 'active' | 'paused' | 'disabled';
+
+export interface Employee {
+  id: string;
+  fullName: string;
+  login: string;
+  passwordHash?: string;
+  role: EmployeeRole;
+  position: string;
+  phone1: string;
+  phone2?: string;
+  address?: string;
+  schoolKeys: string[];
+  status: EmployeeStatus;
+  startDate?: string;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface User {
   id: string;

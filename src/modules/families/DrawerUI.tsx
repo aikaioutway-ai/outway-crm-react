@@ -9,7 +9,7 @@ export function Section({ title, children, action }: {
     <div style={{ marginBottom: 14 }}>
       <div style={{
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border)',
+        minHeight: 33, marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border)',
       }}>
         <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.65 }}>
           {title}

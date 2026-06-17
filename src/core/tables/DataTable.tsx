@@ -47,6 +47,7 @@ export interface DataTableProps<T = any> {
   data: T[];
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
+  onRowOpen?: (row: T) => void;
   onRowDelete?: (row: T) => void;
   onRowEdit?: (row: T) => void;
   onRowPayment?: (row: T) => void;
@@ -57,7 +58,12 @@ export interface DataTableProps<T = any> {
   groupColorKey?: string;
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
   toolbarExtra?: React.ReactNode;
+  toolbarRightExtra?: React.ReactNode;
   canManageProperties?: boolean;
+  expandedRowKey?: React.Key | null;
+  getExpandedRowKey?: (row: T) => React.Key;
+  onExpandedRowKeyChange?: (key: React.Key | null, row?: T) => void;
+  renderExpandedRow?: (row: T) => React.ReactNode;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -126,6 +132,8 @@ const CALC_OPTIONS: { value: CalcMode; label: string }[] = [
   { value: 'not_empty', label: 'Заполненных' },
 ];
 
+const PAGE_SIZE = 18;
+
 function useDragList<T>(list: T[], onChange: (next: T[]) => void) {
   const dragIdx = useRef<number | null>(null);
   const onDragStart = (i: number) => { dragIdx.current = i; };
@@ -149,8 +157,16 @@ function buildColumns<T>(initialColumns: ColumnDef<T>[], storageKey: string): Co
       const parsed: { key: string; visible: boolean; width?: number }[] = JSON.parse(saved);
       const map = Object.fromEntries(parsed.map((p, i) => [p.key, { ...p, order: i }]));
       return initialColumns
-        .map(c => ({ ...c, visible: map[c.key]?.visible ?? c.visible ?? true, width: map[c.key]?.width ?? c.width }))
-        .sort((a, b) => (map[a.key]?.order ?? 999) - (map[b.key]?.order ?? 999));
+        .map(c => ({
+          ...c,
+          visible: c.key === 'openCard' ? true : map[c.key]?.visible ?? c.visible ?? true,
+          width: map[c.key]?.width ?? c.width,
+        }))
+        .sort((a, b) => {
+          if (a.key === 'openCard') return -1;
+          if (b.key === 'openCard') return 1;
+          return (map[a.key]?.order ?? 999) - (map[b.key]?.order ?? 999);
+        });
     }
   } catch {}
   return initialColumns.map(c => ({ ...c, visible: c.visible ?? true }));
@@ -163,6 +179,7 @@ export function DataTable<T extends Record<string, any>>({
   data,
   rowKey,
   onRowClick,
+  onRowOpen,
   onRowDelete,
   onRowEdit,
   onRowPayment,
@@ -172,7 +189,12 @@ export function DataTable<T extends Record<string, any>>({
   emptyText = 'Нет данных',
   groupColorKey,
   toolbarExtra,
+  toolbarRightExtra,
   canManageProperties = true,
+  expandedRowKey,
+  getExpandedRowKey,
+  onExpandedRowKeyChange,
+  renderExpandedRow,
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
@@ -192,6 +214,7 @@ export function DataTable<T extends Record<string, any>>({
   const [sorts, setSorts] = useState<SortConfig[]>([]);
   const [filters, setFilters] = useState<FilterRule[]>([]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
+  const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [showSortPanel, setShowSortPanel] = useState(false);
   const [showProps, setShowProps] = useState(false);
   const [propsSearch, setPropsSearch] = useState('');
@@ -204,6 +227,7 @@ export function DataTable<T extends Record<string, any>>({
   const [editingCell, setEditingCell] = useState<{ rowId: any; key: string } | null>(null);
   const [draftValue, setDraftValue] = useState('');
   const [savingCell, setSavingCell] = useState(false);
+  const [page, setPage] = useState(1);
 
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
@@ -246,6 +270,19 @@ export function DataTable<T extends Record<string, any>>({
     return rows;
   }, [data, filters, sorts, cols]);
 
+  const totalPages = Math.max(1, Math.ceil(processedData.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, totalPages);
+  const pageStart = (pageSafe - 1) * PAGE_SIZE;
+  const pageRows = processedData.slice(pageStart, pageStart + PAGE_SIZE);
+
+  useEffect(() => {
+    setPage(1);
+  }, [filters, sorts, data, storageKey]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   useEffect(() => {
     const handler = () => { setColMenu(null); setRowMenu(null); setCalcPopup(null); };
     document.addEventListener('click', handler);
@@ -266,19 +303,6 @@ export function DataTable<T extends Record<string, any>>({
   }, [cols, saveCols]);
 
   const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, saveCols);
-
-  const toggleSelect = (id: any) => {
-    setSelected(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  };
-
-  const selectAll = () => {
-    if (selected.size === processedData.length) setSelected(new Set());
-    else setSelected(new Set(processedData.map(r => r[rowKey])));
-  };
 
   const startCellEdit = (row: T, col: ColumnDef<T>) => {
     if (!col.editable || !onCellSave) return;
@@ -311,6 +335,16 @@ export function DataTable<T extends Record<string, any>>({
     const blob = new Blob([header + '\n' + body], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a'); a.href = url; a.download = 'export.csv'; a.click();
+  };
+
+  const setColumnSort = (key: string, dir: SortConfig['dir']) => {
+    setSorts(prev => [{ key, dir }, ...prev.filter(sort => sort.key !== key)]);
+    setColMenu(null);
+  };
+
+  const clearColumnSort = (key: string) => {
+    setSorts(prev => prev.filter(sort => sort.key !== key));
+    setColMenu(null);
   };
 
   // ─── COMPACT CALC BAR (для вставки наверху снаружи) ───────────────────────
@@ -365,13 +399,17 @@ export function DataTable<T extends Record<string, any>>({
               Удалить выбранные
             </button>
           )}
-          <button className="dt-btn" onClick={exportCSV}>
+          <div className="dt-pagination">
+            <button className="dt-page-btn" disabled={pageSafe <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
+            <span className="dt-page-text">{pageSafe} / {totalPages}</span>
+            <button className="dt-page-btn" disabled={pageSafe >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
+          </div>
+          <button className="dt-btn dt-btn--icon" onClick={exportCSV} title="Выгрузить таблицу">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
               <path d="M8 2v8M5 7l3 3 3-3M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            CSV
           </button>
-          <span className="dt-count">{processedData.length} строк</span>
+          {toolbarRightExtra}
         </div>
       </div>
 
@@ -537,8 +575,45 @@ export function DataTable<T extends Record<string, any>>({
 
         return (
           <div className="dt-props-panel-v2" style={{ zIndex: 100 }} onClick={e => e.stopPropagation()}>
-            <div className="dt-props-title">Колонки по категориям</div>
             {/* chips removed — 001 */}
+
+            {/* Активные колонки — список */}
+            {(() => {
+              const activeCols = cols.filter(c => c.visible !== false && c.showInProperties !== false);
+              if (activeCols.length === 0) return null;
+              return (
+                <div className="dt-props-active-cols">
+                  <div className="dt-props-active-title">Отображается</div>
+                  {activeCols.map(col => {
+                    const globalIdx = cols.findIndex(c => c.key === col.key);
+                    return (
+                      <div
+                        key={col.key}
+                        className="dt-props-active-row"
+                        draggable
+                        title="Перетащи чтобы переместить"
+                        onDragStart={() => onDragStart(globalIdx)}
+                        onDragOver={e => onDragOver(e, globalIdx)}
+                        onDragEnd={onDragEnd}
+                      >
+                        <span className="dt-props-item-drag">⠿</span>
+                        <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
+                          {TYPE_ICON[col.type] ?? '○'}
+                        </span>
+                        <span className="dt-props-active-row-label">{col.label}</span>
+                        <span
+                          className="dt-props-active-row-hide"
+                          title="Скрыть"
+                          onClick={e => { e.stopPropagation(); saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c)); }}
+                        >
+                          <EyeOpen />
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
 
             {/* Search */}
             <div className="dt-props-search">
@@ -552,28 +627,23 @@ export function DataTable<T extends Record<string, any>>({
               )}
               {propGroups.map(group => {
                 const visibleCount = group.items.filter(col => col.visible !== false).length;
-                const groupKeys = new Set(group.items.map(col => col.key));
                 return (
                   <div key={group.category} className="dt-props-category-group">
-                    <div className="dt-props-section-title">
+                    <div
+                      className="dt-props-section-title dt-props-section-title--clickable"
+                      onClick={() => setCollapsedCats(prev => {
+                        const next = new Set(prev);
+                        if (next.has(group.category)) next.delete(group.category); else next.add(group.category);
+                        return next;
+                      })}
+                    >
                       <span>{group.category}</span>
-                      <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
+                        <span className="dt-props-cat-arrow">{collapsedCats.has(group.category) ? '▶' : '▼'}</span>
+                      </div>
                     </div>
-                    <div className="dt-props-section-actions">
-                      <button
-                        className="dt-props-section-action"
-                        onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: true } : c))}
-                      >
-                        Показать
-                      </button>
-                      <button
-                        className="dt-props-section-action"
-                        onClick={() => saveCols(cols.map(c => groupKeys.has(c.key) ? { ...c, visible: false } : c))}
-                      >
-                        Скрыть
-                      </button>
-                    </div>
-                    {group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
+                    {!collapsedCats.has(group.category) && group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
                   </div>
                 );
               })}
@@ -604,7 +674,7 @@ export function DataTable<T extends Record<string, any>>({
           <div className="dt-skeleton">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="dt-skeleton-row">
-                {Array.from({ length: Math.min(visibleCols.length + 2, 6) }).map((_, j) => (
+                {Array.from({ length: Math.min(visibleCols.length + 1, 6) }).map((_, j) => (
                   <div key={j} className="dt-skeleton-cell" style={{ width: j === 0 ? 40 : j === 1 ? 120 : 160 }} />
                 ))}
               </div>
@@ -614,12 +684,7 @@ export function DataTable<T extends Record<string, any>>({
           <table className="dt-table">
             <thead>
               <tr>
-                <th className="dt-th dt-th--check dt-sticky-col">
-                  <input type="checkbox"
-                    checked={selected.size === processedData.length && processedData.length > 0}
-                    onChange={selectAll} />
-                </th>
-                <th className="dt-th dt-th--num dt-sticky-col dt-sticky-col--2">#</th>
+                <th className="dt-th dt-th--num dt-sticky-col">#</th>
 
                 {visibleCols.map(col => {
                   const sortEntry = sorts.find(s => s.key === col.key);
@@ -673,7 +738,7 @@ export function DataTable<T extends Record<string, any>>({
             <tbody>
               {processedData.length === 0 ? (
                 <tr>
-                  <td colSpan={visibleCols.length + 2} className="dt-empty">
+                  <td colSpan={visibleCols.length + 1} className="dt-empty">
                     <div className="dt-empty-inner">
                       <svg width="40" height="40" viewBox="0 0 40 40" fill="none">
                         <circle cx="20" cy="20" r="18" stroke="#C7D2FE" strokeWidth="2"/>
@@ -684,32 +749,47 @@ export function DataTable<T extends Record<string, any>>({
                     </div>
                   </td>
                 </tr>
-              ) : processedData.map((row, idx) => {
+              ) : pageRows.map((row, idx) => {
                 const id = row[rowKey];
+                const expandKey = getExpandedRowKey ? getExpandedRowKey(row) : id;
+                const isExpanded = expandedRowKey != null && String(expandedRowKey) === String(expandKey);
                 const isSelected = selected.has(id);
                 return (
+                  <React.Fragment key={String(id)}>
                   <tr
-                    key={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
-                    data-group-even={groupColorKey ? (((row as any)[groupColorKey] ?? 0) % 2 === 0 ? 'true' : 'false') : undefined}
-                    onClick={() => undefined}
+                    data-group-even={(pageStart + idx) % 2 === 0 ? 'true' : 'false'}
+                    onClick={() => onRowClick?.(row)}
                     onContextMenu={e => {
                       e.preventDefault();
                       e.stopPropagation();
                       setRowMenu({ row, x: e.clientX, y: e.clientY });
                     }}
                   >
-                    <td className="dt-td dt-td--check dt-sticky-col" onClick={e => { e.stopPropagation(); toggleSelect(id); }}>
-                      <input type="checkbox" checked={isSelected} onChange={() => {}} />
+                    <td className="dt-td dt-td--num dt-sticky-col">
+                      <span className="dt-row-number">{pageStart + idx + 1}</span>
+                      {(onRowOpen || onRowClick) && (
+                        <button
+                          className="dt-row-open-btn"
+                          title="Открыть карточку"
+                          onClick={event => {
+                            event.stopPropagation();
+                            (onRowOpen ?? onRowClick)?.(row);
+                          }}
+                        >
+                          <span className="dt-row-open-icon" />
+                        </button>
+                      )}
                     </td>
-                    <td className="dt-td dt-td--num dt-sticky-col dt-sticky-col--2">{idx + 1}</td>
                     {visibleCols.map(col => (
                       <td
                         key={col.key}
-                        className={`dt-td ${col.editable ? 'dt-td--editable' : ''}`}
+                        className={`dt-td ${col.editable ? 'dt-td--editable' : ''} ${editingCell?.rowId === id && editingCell.key === col.key ? 'dt-td--editing' : ''}`}
                         onClick={e => {
-                          e.stopPropagation();
-                          startCellEdit(row, col);
+                          if (col.editable) {
+                            e.stopPropagation();
+                            startCellEdit(row, col);
+                          }
                         }}
                       >
                         {editingCell?.rowId === id && editingCell.key === col.key ? (
@@ -753,8 +833,17 @@ export function DataTable<T extends Record<string, any>>({
                       </td>
                     ))}
                   </tr>
+                  {isExpanded && renderExpandedRow && (
+                    <tr className="dt-expanded-row">
+                      <td colSpan={visibleCols.length + 1} className="dt-expanded-cell">
+                        {renderExpandedRow(row)}
+                      </td>
+                    </tr>
+                  )}
+                  </React.Fragment>
                 );
               })}
+
             </tbody>
           </table>
         )}
@@ -764,7 +853,23 @@ export function DataTable<T extends Record<string, any>>({
       {/* ── COLUMN CONTEXT MENU ── */}
       {colMenu && (
         <div className="dt-ctx-menu" style={{ left: colMenu.x, top: colMenu.y }} onClick={e => e.stopPropagation()}>
-          <div className="dt-ctx-section">Колонка</div>
+          <div className="dt-ctx-section">{cols.find(c => c.key === colMenu.key)?.label ?? 'Колонка'}</div>
+          {cols.find(c => c.key === colMenu.key)?.sortable !== false && (
+            <>
+              <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'asc')}>
+                <span>↑</span> Сортировать по возрастанию
+              </button>
+              <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'desc')}>
+                <span>↓</span> Сортировать по убыванию
+              </button>
+              {sorts.some(sort => sort.key === colMenu.key) && (
+                <button className="dt-ctx-item" onClick={() => clearColumnSort(colMenu.key)}>
+                  <span>×</span> Убрать сортировку
+                </button>
+              )}
+              <hr className="dt-ctx-divider" />
+            </>
+          )}
           <button className="dt-ctx-item" onClick={() => {
             saveCols(cols.map(c => c.key === colMenu.key ? { ...c, visible: false } : c));
             setColMenu(null);
@@ -777,22 +882,17 @@ export function DataTable<T extends Record<string, any>>({
       {/* ── ROW CONTEXT MENU ── */}
       {rowMenu && (
         <div className="dt-ctx-menu" style={{ left: rowMenu.x, top: rowMenu.y }} onClick={e => e.stopPropagation()}>
-          {onRowClick && (
-            <button className="dt-ctx-item" onClick={() => { onRowClick(rowMenu.row); setRowMenu(null); }}>
+          {renderExpandedRow && onExpandedRowKeyChange && (
+            <button className="dt-ctx-item" onClick={() => {
+              const row = rowMenu.row;
+              const expandKey = getExpandedRowKey ? getExpandedRowKey(row) : row[rowKey];
+              const isExp = expandedRowKey != null && String(expandedRowKey) === String(expandKey);
+              onExpandedRowKeyChange(isExp ? null : expandKey, isExp ? undefined : row);
+              setRowMenu(null);
+            }}>
               <span>↗</span> Открыть карточку
             </button>
           )}
-          {onRowEdit && (
-            <button className="dt-ctx-item" onClick={() => { onRowEdit(rowMenu.row); setRowMenu(null); }}>
-              <span>✏</span> Редактировать
-            </button>
-          )}
-          <button className="dt-ctx-item" onClick={() => {
-            navigator.clipboard.writeText(String(rowMenu.row[rowKey]));
-            setRowMenu(null);
-          }}>
-            <span>📋</span> Копировать ID
-          </button>
           {onRowDelete && (
             <button className="dt-ctx-item dt-ctx-item--danger" onClick={() => { onRowDelete(rowMenu.row); setRowMenu(null); }}>
               <span>🗑</span> Удалить
@@ -817,4 +917,7 @@ export function DataTable<T extends Record<string, any>>({
   );
 }
 
+// @keyframes dtExpandIn добавлены в DataTable.css
 export default DataTable;
+
+

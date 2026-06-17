@@ -42,6 +42,7 @@ function mapCharge(row: any, childName?: string): Charge {
     childName,
     periodMonth: Number(row.period_month),
     year: Number(row.period_year),
+    chargeType: row.charge_type ?? undefined,
     amount,
     paidAmount,
     debtAmount,
@@ -141,9 +142,11 @@ export async function createChargesForPeriod(
   periodMonth: number,
   year: number,
 ): Promise<void> {
-  if (!children.length) return;
+  // Только посаженные на трансфер дети получают начисление
+  const activeChildren = children.filter(c => c.status === 'boarded');
+  if (!activeChildren.length) return;
 
-  const rows = children.map(child => {
+  const rows = activeChildren.map(child => {
     const amount = Number(child.finalPrice ?? 0);
     return {
       child_id: child.id,
@@ -300,4 +303,23 @@ export async function confirmFamilyPayment(params: {
 
 export function chargePeriodLabel(charge: Pick<Charge, 'periodMonth' | 'year'>): string {
   return `${charge.periodMonth}/${charge.year}`;
+}
+
+export async function recalcSiblingDiscounts(familyId: string, children: Child[]): Promise<void> {
+  // Пересчитываем скидку братьев/сестёр после добавления или удаления ребёнка
+  // Первый ребёнок — без скидки, второй и далее — 5%
+  const updates = children.map((child, index) => ({
+    id: child.id,
+    sibling_discount_percent: index === 0 ? 0 : 5,
+    final_price: index === 0
+      ? Number(child.basePrice ?? child.finalPrice ?? 0)
+      : Math.round(Number(child.basePrice ?? child.finalPrice ?? 0) * 0.95),
+  }));
+
+  for (const u of updates) {
+    await supabase
+      .from('v2_children')
+      .update({ sibling_discount_percent: u.sibling_discount_percent, final_price: u.final_price })
+      .eq('id', u.id);
+  }
 }
