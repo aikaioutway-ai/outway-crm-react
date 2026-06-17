@@ -695,16 +695,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
   // Если у сотрудника ограниченный доступ — фильтруем по его школам
   const hasSchoolRestriction = allowedSchools && allowedSchools.length > 0 && !allowedSchools.includes('ALL');
 
-  const rowAllowedByAccess = (row: ChildRow) => {
+  // Проверяем доступна ли вкладка сотруднику (сравнение без учёта регистра)
+  const isTabAllowed = (tabKey: string) => {
     if (!hasSchoolRestriction) return true;
-    return allowedSchools!.some(key =>
-      row.schoolCode === key || row.branchFilter === key || row.branchName?.includes(key)
-    );
+    if (tabKey === 'ALL') return true;
+    return allowedSchools!.some(k => k.toLowerCase() === tabKey.toLowerCase());
   };
 
   const rowMatchesSchoolTab = (row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
-    if (!rowAllowedByAccess(row)) return false;
-    if (tabItem.key === 'ALL') return true;
+    if (tabItem.key === 'ALL') return !hasSchoolRestriction || allowedSchools!.some(k => isTabAllowed(k));
+    if (!isTabAllowed(tabItem.key)) return false;
     if (row.branchFilter === tabItem.key) return true;
     if (tabItem.branches.length > 0) return tabItem.branches.includes(row.branchName);
     if (tabItem.codes.length > 0) return tabItem.codes.includes(row.schoolCode);
@@ -985,12 +985,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
           }}>
             {schoolButtonItems.map((t, index) => {
               const isActive = activeTab === t.key;
+              const allowed = isTabAllowed(t.key);
               const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
               const hasBadge = Boolean(metric.alert);
               return (
                 <React.Fragment key={t.key}>
                   <button
-                    onClick={() => setModeFilter({ activeTab: t.key })}
+                    onClick={() => allowed && setModeFilter({ activeTab: t.key })}
                     style={{
                       height: 31,
                       position: 'relative',
@@ -1001,14 +1002,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
                       border: 'none',
                       borderBottom: `3px solid ${isActive ? '#3F46D3' : 'transparent'}`,
                       background: 'transparent',
-                      color: isActive ? '#3F46D3' : '#5A5C61',
+                      color: isActive ? '#3F46D3' : allowed ? '#5A5C61' : '#C0C0C8',
                       fontSize: 11,
                       fontWeight: isActive ? 800 : 700,
-                      cursor: 'pointer',
+                      cursor: allowed ? 'pointer' : 'default',
                       whiteSpace: 'nowrap',
                       flex: '0 1 auto',
                       minWidth: 0,
                       overflow: 'visible',
+                      opacity: allowed ? 1 : 0.4,
                     }}
                   >
                     <span style={{
