@@ -302,7 +302,7 @@ function toDraft(employee: Employee): EmployeeDraft {
     id: employee.id,
     fullName: employee.fullName,
     login: employee.login,
-    password: '',
+    password: employee.passwordPlain ?? '',
     role: employee.role,
     position: employee.position,
     phone1: employee.phone1,

@@ -218,6 +218,7 @@ export interface Employee {
   fullName: string;
   login: string;
   passwordHash?: string;
+  passwordPlain?: string;
   role: EmployeeRole;
   position: string;
   phone1: string;

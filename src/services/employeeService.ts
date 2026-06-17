@@ -32,6 +32,7 @@ function mapRow(row: any): Employee {
     fullName: String(row.full_name),
     login: String(row.login),
     passwordHash: row.password_hash ?? undefined,
+    passwordPlain: row.password_plain ?? undefined,
     role: row.role as EmployeeRole,
     position: String(row.position ?? ''),
     phone1: String(row.phone1 ?? ''),
@@ -46,7 +47,7 @@ function mapRow(row: any): Employee {
   };
 }
 
-// ─── SHA-256 (браузер) ───────────────────────────────────────────────────────
+// ─── SHA-256 ────────────────────────────────────────────────────────────────
 
 async function hashPassword(password: string): Promise<string> {
   const value = password.trim();
@@ -61,7 +62,7 @@ async function hashPassword(password: string): Promise<string> {
   return btoa(unescape(encodeURIComponent(value)));
 }
 
-// ─── ЧТЕНИЕ ──────────────────────────────────────────────────────────────────
+// ─── ЧТЕНИЕ ─────────────────────────────────────────────────────────────────
 
 export async function fetchEmployees(): Promise<Employee[]> {
   const { data, error } = await supabase
@@ -72,7 +73,7 @@ export async function fetchEmployees(): Promise<Employee[]> {
   return (data ?? []).map(mapRow);
 }
 
-// ─── АВТОРИЗАЦИЯ ─────────────────────────────────────────────────────────────
+// ─── АВТОРИЗАЦИЯ ────────────────────────────────────────────────────────────
 
 export async function authenticateEmployee(
   login: string,
@@ -92,12 +93,12 @@ export async function authenticateEmployee(
   if (error || !data) return null;
   if (data.role === 'driver') return null;
 
-  const passwordHash = await hashPassword(normalizedPassword);
-  // Дефолтный admin без хеша — пароль 'admin'
-  const isDefaultAdmin =
-    data.id === 'emp-admin' && !data.password_hash && normalizedPassword === 'admin';
+  // Проверяем plain пароль (приоритет) или hash
+  const plainMatch = data.password_plain && data.password_plain === normalizedPassword;
+  const hashMatch = data.password_hash && data.password_hash === await hashPassword(normalizedPassword);
+  const isDefaultAdmin = data.id === 'emp-admin' && !data.password_plain && !data.password_hash && normalizedPassword === 'admin';
 
-  if (!isDefaultAdmin && data.password_hash !== passwordHash) return null;
+  if (!plainMatch && !hashMatch && !isDefaultAdmin) return null;
 
   return {
     id: data.id,
@@ -107,11 +108,10 @@ export async function authenticateEmployee(
   };
 }
 
-// ─── СОЗДАНИЕ / ОБНОВЛЕНИЕ ───────────────────────────────────────────────────
+// ─── СОЗДАНИЕ / ОБНОВЛЕНИЕ ──────────────────────────────────────────────────
 
 export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
   const now = new Date().toISOString();
-  const passwordHash = draft.password ? await hashPassword(draft.password) : undefined;
 
   const row: Record<string, unknown> = {
     full_name: draft.fullName.trim(),
@@ -128,17 +128,15 @@ export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
     updated_at: now,
   };
 
-  if (passwordHash) row.password_hash = passwordHash;
+  if (draft.password?.trim()) {
+    row.password_plain = draft.password.trim();
+    row.password_hash = await hashPassword(draft.password.trim());
+  }
 
   if (draft.id) {
-    // обновление
-    const { error } = await supabase
-      .from('v2_employees')
-      .update(row)
-      .eq('id', draft.id);
+    const { error } = await supabase.from('v2_employees').update(row).eq('id', draft.id);
     if (error) throw new Error(error.message);
   } else {
-    // создание
     row.id = `emp-${Date.now()}`;
     row.created_at = now;
     const { error } = await supabase.from('v2_employees').insert(row);
@@ -148,7 +146,7 @@ export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
   return fetchEmployees();
 }
 
-// ─── УДАЛЕНИЕ ────────────────────────────────────────────────────────────────
+// ─── УДАЛЕНИЕ ───────────────────────────────────────────────────────────────
 
 export async function deleteEmployee(id: string): Promise<Employee[]> {
   const { error } = await supabase.from('v2_employees').delete().eq('id', id);
