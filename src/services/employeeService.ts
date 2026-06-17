@@ -1,25 +1,5 @@
+import { supabase } from './supabase';
 import { Employee, EmployeeRole, EmployeeStatus, UserRole } from '../types';
-
-const STORAGE_KEY = 'outway_employees_v1';
-
-const DEFAULT_EMPLOYEES: Employee[] = [
-  {
-    id: 'emp-admin',
-    fullName: 'Администратор',
-    login: 'admin',
-    role: 'admin',
-    position: 'Управляющий',
-    phone1: '',
-    phone2: '',
-    address: '',
-    schoolKeys: ['ALL'],
-    status: 'active',
-    startDate: new Date().toISOString().slice(0, 10),
-    comment: 'Первичный доступ',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  },
-];
 
 export interface EmployeeDraft {
   id?: string;
@@ -44,73 +24,29 @@ export interface AuthenticatedUser {
   role: UserRole;
 }
 
-export function fetchEmployees(): Employee[] {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(DEFAULT_EMPLOYEES));
-      return DEFAULT_EMPLOYEES;
-    }
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : DEFAULT_EMPLOYEES;
-  } catch {
-    return DEFAULT_EMPLOYEES;
-  }
-}
+// ─── МАППИНГ ────────────────────────────────────────────────────────────────
 
-export async function authenticateEmployee(login: string, password: string): Promise<AuthenticatedUser | null> {
-  const normalizedLogin = login.trim();
-  const normalizedPassword = password.trim();
-  if (!normalizedLogin || !normalizedPassword) return null;
-
-  const employee = fetchEmployees().find(item => item.login === normalizedLogin);
-  if (!employee || employee.status !== 'active' || employee.role === 'driver') return null;
-
-  const passwordHash = await hashPassword(normalizedPassword);
-  const isDefaultAdmin = employee.id === 'emp-admin' && !employee.passwordHash && normalizedPassword === 'admin';
-  if (!isDefaultAdmin && employee.passwordHash !== passwordHash) return null;
-
+function mapRow(row: any): Employee {
   return {
-    id: employee.id,
-    name: employee.fullName,
-    login: employee.login,
-    role: employee.role,
+    id: String(row.id),
+    fullName: String(row.full_name),
+    login: String(row.login),
+    passwordHash: row.password_hash ?? undefined,
+    role: row.role as EmployeeRole,
+    position: String(row.position ?? ''),
+    phone1: String(row.phone1 ?? ''),
+    phone2: row.phone2 ?? undefined,
+    address: row.address ?? undefined,
+    schoolKeys: Array.isArray(row.school_keys) ? row.school_keys : ['ALL'],
+    status: row.status as EmployeeStatus,
+    startDate: row.start_date ?? undefined,
+    comment: row.comment ?? undefined,
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at),
   };
 }
 
-export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
-  const employees = fetchEmployees();
-  const now = new Date().toISOString();
-  const passwordHash = draft.password ? await hashPassword(draft.password) : undefined;
-  const normalized: Employee = {
-    id: draft.id ?? `emp-${Date.now()}`,
-    fullName: draft.fullName.trim(),
-    login: draft.login.trim(),
-    passwordHash: passwordHash ?? employees.find(item => item.id === draft.id)?.passwordHash,
-    role: draft.role,
-    position: draft.position.trim(),
-    phone1: draft.phone1.trim(),
-    phone2: draft.phone2?.trim(),
-    address: draft.address?.trim(),
-    schoolKeys: draft.schoolKeys.length ? draft.schoolKeys : ['ALL'],
-    status: draft.status,
-    startDate: draft.startDate,
-    comment: draft.comment?.trim(),
-    createdAt: employees.find(item => item.id === draft.id)?.createdAt ?? now,
-    updatedAt: now,
-  };
-  const next = employees.some(item => item.id === normalized.id)
-    ? employees.map(item => item.id === normalized.id ? normalized : item)
-    : [normalized, ...employees];
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  return next;
-}
-
-export function deleteEmployee(id: string): Employee[] {
-  const next = fetchEmployees().filter(item => item.id !== id);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  return next;
-}
+// ─── SHA-256 (браузер) ───────────────────────────────────────────────────────
 
 async function hashPassword(password: string): Promise<string> {
   const value = password.trim();
@@ -118,7 +54,104 @@ async function hashPassword(password: string): Promise<string> {
   if (window.crypto?.subtle) {
     const bytes = new TextEncoder().encode(value);
     const hash = await window.crypto.subtle.digest('SHA-256', bytes);
-    return Array.from(new Uint8Array(hash)).map(byte => byte.toString(16).padStart(2, '0')).join('');
+    return Array.from(new Uint8Array(hash))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
   }
   return btoa(unescape(encodeURIComponent(value)));
+}
+
+// ─── ЧТЕНИЕ ──────────────────────────────────────────────────────────────────
+
+export async function fetchEmployees(): Promise<Employee[]> {
+  const { data, error } = await supabase
+    .from('v2_employees')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapRow);
+}
+
+// ─── АВТОРИЗАЦИЯ ─────────────────────────────────────────────────────────────
+
+export async function authenticateEmployee(
+  login: string,
+  password: string,
+): Promise<AuthenticatedUser | null> {
+  const normalizedLogin = login.trim();
+  const normalizedPassword = password.trim();
+  if (!normalizedLogin || !normalizedPassword) return null;
+
+  const { data, error } = await supabase
+    .from('v2_employees')
+    .select('*')
+    .eq('login', normalizedLogin)
+    .eq('status', 'active')
+    .single();
+
+  if (error || !data) return null;
+  if (data.role === 'driver') return null;
+
+  const passwordHash = await hashPassword(normalizedPassword);
+  // Дефолтный admin без хеша — пароль 'admin'
+  const isDefaultAdmin =
+    data.id === 'emp-admin' && !data.password_hash && normalizedPassword === 'admin';
+
+  if (!isDefaultAdmin && data.password_hash !== passwordHash) return null;
+
+  return {
+    id: data.id,
+    name: data.full_name,
+    login: data.login,
+    role: data.role as UserRole,
+  };
+}
+
+// ─── СОЗДАНИЕ / ОБНОВЛЕНИЕ ───────────────────────────────────────────────────
+
+export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
+  const now = new Date().toISOString();
+  const passwordHash = draft.password ? await hashPassword(draft.password) : undefined;
+
+  const row: Record<string, unknown> = {
+    full_name: draft.fullName.trim(),
+    login: draft.login.trim(),
+    role: draft.role,
+    position: draft.position.trim(),
+    phone1: draft.phone1.trim(),
+    phone2: draft.phone2?.trim() || null,
+    address: draft.address?.trim() || null,
+    school_keys: draft.schoolKeys.length ? draft.schoolKeys : ['ALL'],
+    status: draft.status,
+    start_date: draft.startDate || null,
+    comment: draft.comment?.trim() || null,
+    updated_at: now,
+  };
+
+  if (passwordHash) row.password_hash = passwordHash;
+
+  if (draft.id) {
+    // обновление
+    const { error } = await supabase
+      .from('v2_employees')
+      .update(row)
+      .eq('id', draft.id);
+    if (error) throw new Error(error.message);
+  } else {
+    // создание
+    row.id = `emp-${Date.now()}`;
+    row.created_at = now;
+    const { error } = await supabase.from('v2_employees').insert(row);
+    if (error) throw new Error(error.message);
+  }
+
+  return fetchEmployees();
+}
+
+// ─── УДАЛЕНИЕ ────────────────────────────────────────────────────────────────
+
+export async function deleteEmployee(id: string): Promise<Employee[]> {
+  const { error } = await supabase.from('v2_employees').delete().eq('id', id);
+  if (error) throw new Error(error.message);
+  return fetchEmployees();
 }

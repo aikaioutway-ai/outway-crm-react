@@ -211,7 +211,7 @@ export interface AuditLog {
 
 export type UserRole = 'admin' | 'manager' | 'cashier' | 'logist' | 'director';
 export type EmployeeRole = UserRole | 'driver';
-export type EmployeeStatus = 'active' | 'paused' | 'disabled';
+export type EmployeeStatus = 'active' | 'inactive' | 'dismissed';
 
 export interface Employee {
   id: string;

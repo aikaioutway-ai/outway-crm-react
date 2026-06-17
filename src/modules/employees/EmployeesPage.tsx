@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Edit3, Eye, EyeOff, Plus, Save, Trash2, UserCog } from 'lucide-react';
 import { Employee, EmployeeRole, EmployeeStatus } from '../../types';
 import { deleteEmployee, EmployeeDraft, fetchEmployees, saveEmployee } from '../../services/employeeService';
@@ -15,8 +15,8 @@ const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
 
 const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
   { value: 'active', label: 'Активен' },
-  { value: 'paused', label: 'Пауза' },
-  { value: 'disabled', label: 'Отключен' },
+  { value: 'inactive', label: 'Неактивен' },
+  { value: 'dismissed', label: 'Уволен' },
 ];
 
 const EMPTY_DRAFT: EmployeeDraft = {
@@ -37,9 +37,21 @@ const EMPTY_DRAFT: EmployeeDraft = {
 const SCHOOL_OPTIONS = SCHOOL_TABS.filter(item => item.key !== 'ALL').map(item => ({ key: item.key, label: item.label }));
 
 export default function EmployeesPage() {
-  const [employees, setEmployees] = useState<Employee[]>(() => fetchEmployees());
-  const [selectedId, setSelectedId] = useState<string | null>(employees[0]?.id ?? null);
-  const [draft, setDraft] = useState<EmployeeDraft>(() => employees[0] ? toDraft(employees[0]) : EMPTY_DRAFT);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<EmployeeDraft>(EMPTY_DRAFT);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchEmployees()
+      .then(data => {
+        setEmployees(data);
+        setSelectedId(data[0]?.id ?? null);
+        if (data[0]) setDraft(toDraft(data[0]));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
   const [query, setQuery] = useState('');
   const [message, setMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -96,9 +108,9 @@ export default function EmployeesPage() {
     setTimeout(() => setMessage(''), 1800);
   }
 
-  function remove() {
+  async function remove() {
     if (!selectedId || !window.confirm('Удалить сотрудника?')) return;
-    const next = deleteEmployee(selectedId);
+    const next = await deleteEmployee(selectedId);
     setEmployees(next);
     setSelectedId(next[0]?.id ?? null);
     setDraft(next[0] ? toDraft(next[0]) : EMPTY_DRAFT);
@@ -118,6 +130,8 @@ export default function EmployeesPage() {
       return { ...current, schoolKeys: next };
     });
   }
+
+  if (loading) return <div style={{ padding: 32, color: 'var(--text-2)' }}>Загрузка сотрудников...</div>;
 
   return (
     <div style={pageStyle}>
