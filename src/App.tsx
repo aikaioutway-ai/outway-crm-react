@@ -94,6 +94,7 @@ export default function App() {
           <FamiliesPage
             mode={section === 'cashier' ? 'cashier' : section === 'logistics' ? 'logistics' : 'requests'}
             userRole={currentUserRole}
+            allowedSchools={currentUser?.schoolKeys}
           />
         ) : section === 'employees' ? (
           <EmployeesPage />

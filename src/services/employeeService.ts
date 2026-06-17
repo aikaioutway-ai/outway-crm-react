@@ -22,6 +22,7 @@ export interface AuthenticatedUser {
   name: string;
   login: string;
   role: UserRole;
+  schoolKeys: string[];
 }
 
 // ─── МАППИНГ ────────────────────────────────────────────────────────────────
@@ -105,6 +106,7 @@ export async function authenticateEmployee(
     name: data.full_name,
     login: data.login,
     role: data.role as UserRole,
+    schoolKeys: Array.isArray(data.school_keys) ? data.school_keys : ['ALL'],
   };
 }
 

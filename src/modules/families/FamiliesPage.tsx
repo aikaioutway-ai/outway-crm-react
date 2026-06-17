@@ -61,6 +61,7 @@ type FamiliesMode = 'requests' | 'payments' | 'cashier' | 'logistics';
 interface FamiliesPageProps {
   mode?: FamiliesMode;
   userRole?: 'admin' | 'manager' | 'cashier' | 'logist' | 'director';
+  allowedSchools?: string[];
 }
 
 interface ModeFilters {
@@ -466,7 +467,7 @@ const DEFAULT_MODE_FILTERS: ModeFilters = {
   quickPaymentStatus: '',
 };
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', allowedSchools }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
@@ -691,7 +692,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin' }: 
       ? logisticsWorkRows(rows)
       : rows;
 
+  // Если у сотрудника ограниченный доступ — фильтруем по его школам
+  const hasSchoolRestriction = allowedSchools && allowedSchools.length > 0 && !allowedSchools.includes('ALL');
+
+  const rowAllowedByAccess = (row: ChildRow) => {
+    if (!hasSchoolRestriction) return true;
+    return allowedSchools!.some(key =>
+      row.schoolCode === key || row.branchFilter === key || row.branchName?.includes(key)
+    );
+  };
+
   const rowMatchesSchoolTab = (row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
+    if (!rowAllowedByAccess(row)) return false;
     if (tabItem.key === 'ALL') return true;
     if (row.branchFilter === tabItem.key) return true;
     if (tabItem.branches.length > 0) return tabItem.branches.includes(row.branchName);
