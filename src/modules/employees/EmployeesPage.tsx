@@ -650,7 +650,7 @@ function schoolChipStyle(active: boolean): React.CSSProperties {
 function statusBadgeStyle(status: EmployeeStatus): React.CSSProperties {
   const tone = status === 'active'
     ? { bg: '#ECFDF5', text: '#065F46' }
-    : status === 'paused'
+    : status === 'inactive'
       ? { bg: '#FEF3C7', text: '#F59E0B' }
       : { bg: '#FEE2E2', text: '#991B1B' };
   return {
