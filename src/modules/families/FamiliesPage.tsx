@@ -919,7 +919,7 @@ const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
   logistics: true,
 };
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, dashboardMode = 'logistics' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, dashboardMode = 'logistics' as 'logistics' | 'drivers' }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [dashboardTransfers, setDashboardTransfers] = useState<V2TransferDashboardRow[]>([]);
   const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
@@ -1790,7 +1790,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return { activeTab: schoolKey, quickChildStatus: '', quickTransfer: '' };
   }, [mode, rows, rowMatchesSchoolTab, userRole]);
 
-  const tableColumns: ColumnDef<ChildRow>[] = [
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const tableColumns: ColumnDef<ChildRow>[] = useMemo(() => [
     {
       key: 'openCard',
       label: 'Оплата',
@@ -1928,7 +1929,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     },
     ...COLUMNS,
-  ];
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  ], [userRole, onCellSave]);
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: 'var(--active-bg)', borderRadius: 22, display: 'flex' }}>
@@ -1943,7 +1945,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 8px 8px', minHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}
       >
 
-        <LogisticsMicrobusDashboard
+        {dashboardMode !== 'drivers' && <LogisticsMicrobusDashboard
           items={logisticsAvgItems}
           collapsed={logisticsDashboardCollapsed}
           onToggle={() => setLogisticsDashboardCollapsed(value => !value)}
@@ -1962,8 +1964,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           summaryItems={dashboardSummaryItems}
           primaryValue={dashboardPrimaryValue}
           detailItems={dashboardTransferItems}
-          detailValueMode={dashboardMode === 'drivers' ? 'vehicleType' : 'count'}
-          showMetricFilter={dashboardMode !== 'drivers'}
+          detailValueMode={'count'}
+          showMetricFilter={true}
           activeDetailKey={activeDashboardDetailKey}
           onDetailSelect={(item) => {
             if (item.key === 'all') {
@@ -1976,10 +1978,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             }
             if (item.key.startsWith('transfer-')) {
               const transferNumber = item.key.replace('transfer-', '');
-              if (dashboardMode === 'drivers') {
-                setTransferCardNumber(transferNumber);
-                return;
-              }
               setModeFilter({ quickTransfer: transferNumber, quickChildStatus: '' });
             }
           }}
@@ -1993,7 +1991,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               transferNumber,
             });
           }}
-        />
+        />}
 
         {/* ── ТАБЛИЦА ── */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'visible', minWidth: 0 }}>

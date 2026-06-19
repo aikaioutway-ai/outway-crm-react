@@ -173,7 +173,7 @@ async function loadColumnSettings(storageKey: string): Promise<{ key: string; vi
       .from('column_settings')
       .select('settings')
       .eq('storage_key', storageKey)
-      .single();
+      .maybeSingle();
     return data?.settings ?? null;
   } catch {
     return null;
@@ -181,9 +181,10 @@ async function loadColumnSettings(storageKey: string): Promise<{ key: string; vi
 }
 
 async function saveColumnSettings(storageKey: string, settings: { key: string; visible: boolean; width?: number }[]): Promise<void> {
-  await supabase
+  const { error } = await supabase
     .from('column_settings')
     .upsert({ storage_key: storageKey, settings, updated_at: new Date().toISOString() }, { onConflict: 'storage_key' });
+  if (error) console.error('[DataTable] saveColumnSettings failed:', error);
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
