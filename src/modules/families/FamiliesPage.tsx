@@ -264,7 +264,7 @@ type LogisticsVehicleFilter = 'all' | VehicleType;
 const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
   { key: 'average', label: 'Средний' },
   { key: 'count', label: 'К-во' },
-  { key: 'pendingSum', label: 'На проверке', money: true },
+  { key: 'pendingSum', label: 'На проверке' },
   { key: 'debtSum', label: 'Долг', money: true },
   { key: 'debtorsCount', label: 'Должники' },
   { key: 'chargedSum', label: 'Начислено', money: true },
@@ -1144,7 +1144,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       balanceSum: workRows.reduce((sum, row) => sum + Number(row.balance || 0), 0),
       debtorsCount: debtRows.length,
       debtSum: debtRows.reduce((sum, row) => sum + Number(row.debtAmount || 0), 0),
-      pendingSum: pendingFamilyRows.reduce((sum, row) => sum + Number(row.pendingPayment || 0), 0),
+      pendingSum: pendingFamilyRows.length,
     };
   }, [dashboardVehicleFilter]);
   const dashboardMetricValue = useCallback((stats: ReturnType<typeof dashboardStatsForRows>) => {
@@ -1377,7 +1377,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     { label: 'К-во трансфер', value: String(dashboardSummaryStats.transferCount) },
     { label: 'К-во учеников', value: String(dashboardSummaryStats.studentCount) },
     ...(allowedMetrics.includes('average') ? [{ label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) }] : []),
-    ...(allowedMetrics.includes('pendingSum') ? [{ label: 'На проверке', value: compactMoney(dashboardSummaryStats.pendingSum) }] : []),
+    ...(allowedMetrics.includes('pendingSum') ? [{ label: 'На проверке', value: String(dashboardSummaryStats.pendingSum) }] : []),
     ...(allowedMetrics.includes('chargedSum') ? [{ label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) }] : []),
     ...(allowedMetrics.includes('debtorsCount') ? [{ label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) }] : []),
     ...(allowedMetrics.includes('debtSum') ? [{ label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) }] : []),
