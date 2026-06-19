@@ -425,23 +425,41 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave,
         </div>
       </div>
 
-      {/* Кассир: подтверждение */}
+      {/* Кассир: подтверждение / отклонение */}
       {canConfirm && (
-        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <input
             type="date"
             value={actualPaymentDate}
             onChange={e => setActualPaymentDate(e.target.value)}
-            title="Факт дата оплаты"
-            style={{ ...inputStyle, flex: 1 }}
+            placeholder="Дата поступления"
+            style={{ ...inputStyle, width: '100%' }}
           />
-          <button
-            onClick={() => onConfirm(actualPaymentDate)}
-            disabled={confirming || !actualPaymentDate}
-            style={{ ...smallAccentBtn, background: '#10B981', color: '#fff' }}
-          >
-            {confirming ? '...' : 'Подтвердить'}
-          </button>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <button
+              onClick={() => onConfirm(actualPaymentDate)}
+              disabled={confirming || !actualPaymentDate}
+              style={{
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                cursor: confirming || !actualPaymentDate ? 'default' : 'pointer',
+                background: confirming || !actualPaymentDate ? '#D1FAE5' : '#10B981',
+                color: '#fff',
+              }}
+            >
+              {confirming ? '...' : '✓ Подтвердить'}
+            </button>
+            <button
+              onClick={() => onSave({ status: 'Отклонено' })}
+              disabled={confirming}
+              style={{
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                cursor: confirming ? 'default' : 'pointer',
+                background: '#FEE2E2', color: '#991B1B',
+              }}
+            >
+              ✕ Отклонить
+            </button>
+          </div>
         </div>
       )}
 
