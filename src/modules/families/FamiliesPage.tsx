@@ -62,6 +62,7 @@ type FamiliesMode = 'requests' | 'payments' | 'cashier' | 'logistics';
 interface FamiliesPageProps {
   mode?: FamiliesMode;
   userRole?: 'admin' | 'manager' | 'cashier' | 'logist' | 'director';
+  userName?: string;
   allowedSchools?: string[];
 }
 
@@ -758,7 +759,7 @@ const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
   logistics: true,
 };
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', allowedSchools }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
@@ -1018,7 +1019,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
       await confirmFamilyPayment({
         payment,
         charges: [],
-        confirmedBy: 'Кайрат',
+        confirmedBy: userName,
         actualPaymentDate: row.pendingActualPaymentDate,
       });
       await load(false);
@@ -2101,7 +2102,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
               <InlineFamilyCard
                 family={expandedFamily}
                 userRole={userRole}
-                userName="Кайрат"
+                userName={userName}
                 initialTab={expandedInitialTab}
                 onUpdated={() => load(false)}
                 onClose={() => { setExpandedFamilyId(null); setExpandedFamily(null); setExpandedInitialTab('overview'); }}
