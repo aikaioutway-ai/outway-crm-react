@@ -785,7 +785,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
-  const roleDefaultChildStatus = (userRole === 'manager' || userRole === 'logist') ? 'new' : '';
+  const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
     requests: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
     payments: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },

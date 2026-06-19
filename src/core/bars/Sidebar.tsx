@@ -25,12 +25,12 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
 ];
 
 export function getAllowedSections(role: UserRole): NavSection[] {
-  if (role === 'admin') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'settings'];
-  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'settings'];
-  if (role === 'director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'settings'];
-  if (role === 'manager') return ['families'];
-  if (role === 'logist') return ['logistics', 'drivers'];
-  if (role === 'cashier') return ['cashier'];
+  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'settings'];
+  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses'];
+  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers'];
+  if (role === 'manager')      return ['families'];
+  if (role === 'logist')       return ['logistics', 'drivers'];
+  if (role === 'cashier')      return ['cashier', 'payroll', 'expenses'];
   return ['families'];
 }
 

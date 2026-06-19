@@ -96,12 +96,17 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       const { supabase } = await import('../../services/supabase');
       const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
         .order('created_at', { ascending: false }).limit(50);
-      if (data) setAudit(data.map((r: any) => ({
-        id: String(r.id), familyId: String(r.entity_id),
-        userName: r.actor_name ?? 'Система', action: r.action ?? '',
-        field: r.entity_type ?? '', oldValue: JSON.stringify(r.old_value ?? ''),
-        newValue: JSON.stringify(r.new_value ?? ''), createdAt: r.created_at ?? '',
-      })));
+      if (data) {
+        const filtered = userRole === 'gen_director'
+          ? data.filter((r: any) => (r.actor_role ?? '') !== 'admin')
+          : data;
+        setAudit(filtered.map((r: any) => ({
+          id: String(r.id), familyId: String(r.entity_id),
+          userName: r.actor_name ?? 'Система', action: r.action ?? '',
+          field: r.entity_type ?? '', oldValue: JSON.stringify(r.old_value ?? ''),
+          newValue: JSON.stringify(r.new_value ?? ''), createdAt: r.created_at ?? '',
+        })));
+      }
     } catch {}
   }
   async function addAudit(action: string, field: string, o: string, n: string) {
@@ -291,7 +296,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       `}</style>
       <aside style={sidebarRailStyle}>
           <nav style={railNavStyle}>
-            {TABS.map(item => {
+            {TABS.filter(item => {
+              if (item.key === 'history') return userRole === 'admin' || userRole === 'gen_director';
+              return true;
+            }).map(item => {
               const active = tab === item.key;
               return (
                 <button
