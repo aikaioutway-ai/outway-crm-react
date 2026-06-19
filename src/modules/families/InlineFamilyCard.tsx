@@ -248,6 +248,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
+  const totalCharged = charges.reduce((s, c) => s + c.amount, 0);
   const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
   const primaryChild = children[0];
   const familyMonthlyPrice = children.length > 0
@@ -311,11 +312,14 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
             </div>
             <div style={headerMetricsStyle}>
-              <SideMetric label="Долг" value={money(totalDebt)} alert={totalDebt > 0} />
-              <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
-              {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
               <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
+              <SideMetric label="Платежи" value={money(totalPaid)} />
+              {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
+              <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
+              <div style={{ width: 10, flexShrink: 0 }} />
+              <SideMetric label="Начислено" value={money(totalCharged)} />
               <SideMetric label="Оплачено" value={money(totalPaid)} />
+              {totalDebt > 0 && <SideMetric label="Долг" value={money(totalDebt)} alert />}
             </div>
             {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
           </div>
@@ -769,8 +773,8 @@ const headerInfoStyle: React.CSSProperties = {
 };
 
 const headerMetricsStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(4, minmax(92px, auto))',
+  display: 'flex',
+  flexWrap: 'wrap',
   gap: 6,
   alignItems: 'center',
 };
