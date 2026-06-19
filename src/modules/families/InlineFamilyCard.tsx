@@ -248,6 +248,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
+  const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
   const primaryChild = children[0];
   const familyMonthlyPrice = children.length > 0
     ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
@@ -312,6 +313,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <div style={headerMetricsStyle}>
               <SideMetric label="Долг" value={money(totalDebt)} alert={totalDebt > 0} />
               <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
+              {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
               <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
               <SideMetric label="Оплачено" value={money(totalPaid)} />
             </div>
@@ -365,20 +367,20 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   );
 }
 
-function SideMetric({ label, value, alert }: { label: string; value: string; alert?: boolean }) {
+function SideMetric({ label, value, alert, pending }: { label: string; value: string; alert?: boolean; pending?: boolean }) {
   return (
     <div style={{
-      background: '#FFFFFF',
+      background: pending ? '#FFFBEB' : '#FFFFFF',
       borderRadius: 8,
       padding: '6px 9px',
-      border: alert ? '1px solid #FECACA' : '1px solid #E8EEF1',
+      border: alert ? '1px solid #FECACA' : pending ? '1px solid #FDE68A' : '1px solid #E8EEF1',
       display: 'grid',
       gridTemplateColumns: '1fr auto',
       alignItems: 'center',
       gap: 7,
     }}>
-      <div style={{ fontSize: 9, color: '#8A94A3', textTransform: 'uppercase', fontWeight: 800 }}>{label}</div>
-      <div style={{ fontSize: 11, fontWeight: 850, color: alert ? '#B91C1C' : '#111827' }}>{value}</div>
+      <div style={{ fontSize: 9, color: pending ? '#92400E' : '#8A94A3', textTransform: 'uppercase', fontWeight: 800 }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 850, color: alert ? '#B91C1C' : pending ? '#92400E' : '#111827' }}>{value}</div>
     </div>
   );
 }
