@@ -127,90 +127,96 @@ export default function TabFinance({
         </div>
       )}
 
-      {canCreatePayment && <Section title="Новый платёж">
-        <div style={paymentPanelStyle}>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 132px 132px auto', gap: 7, alignItems: 'center' }}>
-            <input
-              type="number"
-              value={paymentAmount}
-              onChange={e => setPaymentAmount(e.target.value)}
-              placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'}
-              style={inputStyle}
-            />
-            <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
-              <option value="cash">Наличные</option>
-              <option value="transfer">Безналичный QR</option>
-            </select>
-            <input
-              type="date"
-              value={paymentDate}
-              onChange={e => setPaymentDate(e.target.value)}
-              style={inputStyle}
-            />
-            <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={{
-              minWidth: 124, height: 31, padding: '0 12px', border: 'none', borderRadius: 8,
-              background: '#D7EEEE', color: '#237F81', fontSize: 11, fontWeight: 800,
-              cursor: savingPayment || !paymentAmount ? 'default' : 'pointer', opacity: savingPayment || !paymentAmount ? 0.6 : 1,
-              whiteSpace: 'nowrap',
-            }}>
-              {savingPayment ? 'Сохраняем...' : 'На проверку'}
-            </button>
-          </div>
-          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1fr) 180px', gap: 7, marginTop: 7 }}>
-            <input
-              value={comment}
-              onChange={e => setComment(e.target.value)}
-              placeholder="Комментарий"
-              style={inputStyle}
-            />
-            <label style={fileInputStyle}>
-              <Paperclip size={14} />
-              <span>{receiptFile ? receiptFile.name : 'Прикрепить чек'}</span>
-              <input
-                type="file"
-                accept="image/*,.pdf"
-                onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
-                style={{ display: 'none' }}
-              />
-            </label>
-          </div>
-        </div>
-      </Section>}
-
-      <Section title="Прогноз начислений">
-        <div style={forecastPanelStyle}>
-          <div style={forecastSummaryStyle}>
-            <span>К созданию</span>
-            <b>{money(forecastTotal)}</b>
-          </div>
-          <div style={forecastSummaryStyle}>
-            <span>Баланс</span>
-            <b>{money(mainBalance)}</b>
-          </div>
-          <div style={forecastSummaryStyle}>
-            <span>Депозит</span>
-            <b>{money(depositBalance)}</b>
-          </div>
-        </div>
-        <div style={{ display: 'grid', gap: 6, marginTop: 8 }}>
-          {forecastRows.map(row => (
-            <div key={row.key} style={forecastRowStyle}>
-              <div>
-                <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{row.label}</div>
-                <div style={{ fontSize: 10, color: '#7B8491', marginTop: 1 }}>{row.note}</div>
-              </div>
-              <div style={{ textAlign: 'right' }}>
-                <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{money(row.amount)}</div>
-                <div style={{ fontSize: 10, color: row.state === 'planned' ? '#687C54' : '#7B8491', marginTop: 1 }}>
-                  {row.state === 'paid' ? 'закрыто' : row.state === 'created' ? 'уже создано' : 'план'}
+      <div style={threeColumnsStyle}>
+        {/* Левая колонка: платёж + прогноз */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {canCreatePayment && (
+            <Section title="Новый платёж">
+              <div style={paymentPanelStyle}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+                  <input
+                    type="number"
+                    value={paymentAmount}
+                    onChange={e => setPaymentAmount(e.target.value)}
+                    placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'}
+                    style={{ ...inputStyle, width: '100%' }}
+                  />
+                  <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={{ ...inputStyle, width: '100%' }}>
+                    <option value="cash">Наличные</option>
+                    <option value="transfer">Безналичный QR</option>
+                  </select>
+                  <input
+                    type="date"
+                    value={paymentDate}
+                    onChange={e => setPaymentDate(e.target.value)}
+                    style={{ ...inputStyle, width: '100%' }}
+                  />
+                  <input
+                    value={comment}
+                    onChange={e => setComment(e.target.value)}
+                    placeholder="Комментарий"
+                    style={{ ...inputStyle, width: '100%' }}
+                  />
+                  <label style={{ ...fileInputStyle, width: '100%', boxSizing: 'border-box' }}>
+                    <Paperclip size={14} />
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {receiptFile ? receiptFile.name : 'Прикрепить чек'}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*,.pdf"
+                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                      style={{ display: 'none' }}
+                    />
+                  </label>
+                  <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={{
+                    width: '100%', height: 34, border: 'none', borderRadius: 8,
+                    background: '#D7EEEE', color: '#237F81', fontSize: 12, fontWeight: 800,
+                    cursor: savingPayment || !paymentAmount ? 'default' : 'pointer',
+                    opacity: savingPayment || !paymentAmount ? 0.6 : 1,
+                  }}>
+                    {savingPayment ? 'Сохраняем...' : 'На проверку →'}
+                  </button>
                 </div>
               </div>
-            </div>
-          ))}
-        </div>
-      </Section>
+            </Section>
+          )}
 
-      <div style={financeColumnsStyle}>
+          <Section title="Прогноз">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={forecastSummaryStyle}>
+                <span>К созданию</span>
+                <b>{money(forecastTotal)}</b>
+              </div>
+              <div style={forecastSummaryStyle}>
+                <span>Баланс</span>
+                <b>{money(mainBalance)}</b>
+              </div>
+              <div style={forecastSummaryStyle}>
+                <span>Депозит</span>
+                <b>{money(depositBalance)}</b>
+              </div>
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              {forecastRows.map(row => (
+                <div key={row.key} style={forecastRowStyle}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{row.label}</div>
+                    <div style={{ fontSize: 10, color: '#7B8491', marginTop: 1 }}>{row.note}</div>
+                  </div>
+                  <div style={{ textAlign: 'right' }}>
+                    <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{money(row.amount)}</div>
+                    <div style={{ fontSize: 10, color: row.state === 'planned' ? '#687C54' : '#7B8491', marginTop: 1 }}>
+                      {row.state === 'paid' ? 'закрыто' : row.state === 'created' ? 'создано' : 'план'}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        </div>
+
+        {/* Средняя колонка: начисления */}
         <Section
           title={`Начисления (${charges.length})`}
           action={isAdmin && (
@@ -230,7 +236,6 @@ export default function TabFinance({
               </div>
             </div>
           )}
-
           {sortedCharges.length === 0
             ? <Empty text="Начислений нет" />
             : sortedCharges.map(charge => (
@@ -245,6 +250,7 @@ export default function TabFinance({
           }
         </Section>
 
+        {/* Правая колонка: платежи */}
         <Section title={`Платежи (${payments.length})`}>
           {payments.length === 0 ? <Empty text="Платежей нет" /> : payments.map(payment => (
             <PaymentRow
@@ -554,9 +560,9 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const financeColumnsStyle: React.CSSProperties = {
+const threeColumnsStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gridTemplateColumns: '220px minmax(0, 1fr) minmax(0, 1fr)',
   gap: 12,
   alignItems: 'start',
 };
