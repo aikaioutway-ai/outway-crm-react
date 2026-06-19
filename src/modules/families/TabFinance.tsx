@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
-import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentStatus, PaymentType } from '../../types';
+import { AlertTriangle, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentStatus, PaymentType, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL, PERIOD_ORDER } from './constants';
 import { Section, Spinner, Empty } from './DrawerUI';
@@ -31,6 +31,7 @@ interface Props {
   depositBalance: number;
   isAdmin: boolean;
   isCashier: boolean;
+  userRole?: UserRole;
   onSaveCharge: (charge: Charge, updates: Partial<Charge>) => Promise<boolean>;
   onDeleteCharge: (charge: Charge) => void;
   onAddCharges: (month: number, year: number) => void | Promise<void>;
@@ -50,6 +51,7 @@ export default function TabFinance({
   depositBalance,
   isAdmin,
   isCashier,
+  userRole,
   onSaveCharge,
   onDeleteCharge,
   onAddCharges,
@@ -243,6 +245,7 @@ export default function TabFinance({
                 key={charge.id}
                 charge={charge}
                 isAdmin={isAdmin}
+                userRole={userRole}
                 onSave={updates => onSaveCharge(charge, updates)}
                 onDelete={() => onDeleteCharge(charge)}
               />
@@ -271,12 +274,16 @@ export default function TabFinance({
   );
 }
 
-function ChargeRow({ charge, isAdmin, onSave, onDelete }: {
+const CAN_REMOVE_PENALTY: UserRole[] = ['admin', 'gen_director', 'director'];
+
+function ChargeRow({ charge, isAdmin, userRole, onSave, onDelete }: {
   charge: Charge;
   isAdmin: boolean;
+  userRole?: UserRole;
   onSave: (updates: Partial<Charge>) => Promise<boolean>;
   onDelete: () => void;
 }) {
+  const canRemovePenalty = !!userRole && CAN_REMOVE_PENALTY.includes(userRole);
   const [amount, setAmount] = useState(String(charge.amount));
   const [status, setStatus] = useState<PaymentStatus>(charge.status);
   const [reason, setReason] = useState('');
@@ -332,7 +339,23 @@ function ChargeRow({ charge, isAdmin, onSave, onDelete }: {
           )}
         </div>
       </div>
-
+      {charge.penaltyAmount > 0 && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, padding: '5px 8px', background: '#FEF2F2', borderRadius: 6, border: '1px solid #FECACA' }}>
+          <AlertTriangle size={12} color="#DC2626" />
+          <span style={{ fontSize: 11, color: '#DC2626', fontWeight: 700, flex: 1 }}>
+            Пеня: {money(charge.penaltyAmount)} (макс. {money(Math.round(charge.amount * 0.15))})
+          </span>
+          {canRemovePenalty && (
+            <button
+              onClick={() => onSave({ penaltyAmount: 0 })}
+              title="Убрать пеню"
+              style={{ fontSize: 10, fontWeight: 700, background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}
+            >
+              Убрать пеню
+            </button>
+          )}
+        </div>
+      )}
       {isAdmin && editing && (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 155px auto auto auto', gap: 7, marginTop: 8 }}>
           <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={inputStyle} />

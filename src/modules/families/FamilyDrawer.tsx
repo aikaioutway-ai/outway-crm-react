@@ -351,6 +351,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
             depositBalance={depositBalance}
             isAdmin={isAdmin}
             isCashier={isCashier}
+            userRole={userRole as any}
             onSaveCharge={handleSaveCharge}
             onDeleteCharge={handleDeleteCharge}
             onAddCharges={handleAddCharges}

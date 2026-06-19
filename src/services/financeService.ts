@@ -198,6 +198,7 @@ export async function updateCharge(chargeId: string, updates: Partial<Charge>): 
   const row: Record<string, unknown> = {};
   if (updates.status !== undefined) row.status = fromPaymentStatus(updates.status);
   if (updates.isFrozen !== undefined && updates.isFrozen) row.status = 'cancelled';
+  if (updates.penaltyAmount !== undefined) row.penalty_amount = updates.penaltyAmount;
 
   if (Object.keys(row).length === 0) return;
   const { error } = await supabase.from('v2_charges').update(row).eq('id', chargeId);

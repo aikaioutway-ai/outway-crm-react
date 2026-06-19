@@ -357,7 +357,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               charges={charges} payments={payments} paymentItems={paymentItems}
               loading={loadingFinance} family={savedFamily} children={children}
               mainBalance={mainBalance} depositBalance={depositBalance}
-              isAdmin={isAdmin} isCashier={isCashier}
+              isAdmin={isAdmin} isCashier={isCashier} userRole={userRole as any}
               onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
               onAddCharges={handleAddCharges} onCreatePayment={handleCreatePayment}
               onConfirmPayment={handleConfirmPayment} onSavePayment={handleSavePayment}
