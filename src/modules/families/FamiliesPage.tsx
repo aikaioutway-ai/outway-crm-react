@@ -220,10 +220,11 @@ function normalizeRows(rows: ChildRow[]): ChildRow[] {
 }
 
 function compactMoney(value: number): string {
-  const amount = Math.round(Number(value || 0));
+  const amount = Number(value || 0);
   if (Math.abs(amount) >= 1000000) return `${(amount / 1000000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}м`;
-  if (Math.abs(amount) >= 1000) return `${Math.round(amount / 1000)}к`;
-  return amount.toLocaleString('ru-RU');
+  if (Math.abs(amount) >= 10000) return `${Math.round(amount / 1000)}к`;
+  if (Math.abs(amount) >= 1000) return `${(amount / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}к`;
+  return Math.round(amount).toLocaleString('ru-RU');
 }
 
 function uniqueFamilyRows(rows: ChildRow[]): ChildRow[] {
