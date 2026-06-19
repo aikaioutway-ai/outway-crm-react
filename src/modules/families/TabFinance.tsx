@@ -567,11 +567,7 @@ const threeColumnsStyle: React.CSSProperties = {
   alignItems: 'start',
 };
 
-const forecastPanelStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
-  gap: 8,
-};
+
 
 const forecastSummaryStyle: React.CSSProperties = {
   display: 'flex',
