@@ -23,10 +23,10 @@ Deno.serve(async (req) => {
   const now = new Date();
   const day = now.getDate();
 
-  // Пеня начисляется только с 7-го числа
-  if (day < 7) {
+  // Пеня начисляется только с 6-го числа
+  if (day < 6) {
     return Response.json(
-      { ok: true, message: `День ${day} — пеня ещё не начисляется (с 7-го)`, updated: 0 },
+      { ok: true, message: `День ${day} — пеня ещё не начисляется (с 6-го)`, updated: 0 },
       { headers: corsHeaders }
     );
   }
