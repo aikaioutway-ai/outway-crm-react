@@ -1897,8 +1897,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
                 onClick={() => {
                   if (!allowed) return;
                   setModeFilter({ activeTab: t.key });
+                  setDashboardSchoolKey(t.key);
                   if (mode === 'logistics') {
-                    setDashboardSchoolKey(t.key);
                     setLogisticsDashboardCollapsed(false);
                   }
                 }}
