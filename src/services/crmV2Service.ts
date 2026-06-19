@@ -48,6 +48,23 @@ export interface V2DriverTableRow {
   branchNames: string[];
 }
 
+export interface NewV2DriverInput {
+  fullName: string;
+  phone: string;
+  secondPhone?: string;
+  address?: string;
+  districts?: string[];
+  branchId?: string;
+  schoolId?: string;
+  transferNumber?: number;
+  vehicleType?: VehicleType;
+  plateNumber?: string;
+  brand?: string;
+  model?: string;
+  seats?: number | null;
+  comment?: string;
+}
+
 export interface FamilyListRow {
   rowId: string;
   familyId: string;
@@ -546,6 +563,67 @@ export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
       branchNames,
     };
   });
+}
+
+export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
+  const districtsText = input.districts?.length ? `Районы: ${input.districts.join(', ')}` : '';
+  const comment = [districtsText, input.comment ?? ''].filter(Boolean).join('\n');
+
+  const { data: driver, error: driverError } = await supabase
+    .from('v2_drivers')
+    .insert({
+      full_name: input.fullName.trim(),
+      phone: input.phone.trim(),
+      second_phone: input.secondPhone?.trim() || null,
+      address: input.address?.trim() || null,
+      status: input.transferNumber ? 'active' : 'vacation',
+      comment: comment || null,
+    })
+    .select('id')
+    .single();
+  if (driverError) throw new Error(driverError.message);
+
+  const driverId = String(driver.id);
+  let vehicleId: string | null = null;
+
+  if (input.vehicleType || input.plateNumber || input.brand || input.model || input.seats) {
+    const { data: vehicle, error: vehicleError } = await supabase
+      .from('v2_vehicles')
+      .insert({
+        driver_id: driverId,
+        vehicle_type: input.vehicleType ?? 'microbus',
+        plate_number: input.plateNumber?.trim() || null,
+        brand: input.brand?.trim() || null,
+        model: input.model?.trim() || null,
+        seats: input.seats ?? null,
+        status: 'active',
+      })
+      .select('id')
+      .single();
+    if (vehicleError) throw new Error(vehicleError.message);
+    vehicleId = String(vehicle.id);
+  }
+
+  if (input.branchId && input.transferNumber && input.vehicleType) {
+    const transferId = await ensureV2Transfer({
+      schoolId: input.schoolId,
+      branchId: input.branchId,
+      transferNumber: input.transferNumber,
+      vehicleType: input.vehicleType,
+    });
+    const { error: transferError } = await supabase
+      .from('v2_transfers')
+      .update({
+        driver_id: driverId,
+        vehicle_id: vehicleId,
+        vehicle_type: input.vehicleType,
+        status: 'active',
+      })
+      .eq('id', transferId);
+    if (transferError) throw new Error(transferError.message);
+  }
+
+  return driverId;
 }
 
 export async function updateV2TransferVehicleType(params: {
