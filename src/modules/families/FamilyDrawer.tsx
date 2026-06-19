@@ -244,6 +244,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     : savedFamily.monthlyPrice;
   const totalCharged = charges.reduce((s, c) => s + c.amount + c.penaltyAmount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
+  const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
 
   return (
     <>
@@ -282,7 +283,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
           </div>
 
           {/* Chips row — stretched */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 0 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 0 }}>
             <HeaderChip
               label="НАЧИСЛЕНО"
               value={money(totalCharged)}
@@ -292,6 +293,12 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
               value={money(totalPaid)}
               chipBg="#D1FAE5"
               chipColor="#065F46"
+            />
+            <HeaderChip
+              label="НА ПРОВЕРКЕ"
+              value={money(pendingAmount)}
+              chipBg={pendingAmount > 0 ? '#FEF9C3' : 'rgba(255,255,255,0.13)'}
+              chipColor={pendingAmount > 0 ? '#92400E' : undefined}
             />
             <HeaderChip
               label="ДОЛГ"
