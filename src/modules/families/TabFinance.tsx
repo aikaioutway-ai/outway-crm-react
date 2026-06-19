@@ -91,7 +91,6 @@ export default function TabFinance({
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));
   const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(`${p.month}:${p.year}`));
   const forecastRows = buildForecastRows(children, charges);
-  const forecastTotal = forecastRows.filter(row => row.state === 'planned').reduce((sum, row) => sum + row.amount, 0);
 
   if (loading) return <Spinner />;
 
@@ -656,30 +655,6 @@ const threeColumnsStyle: React.CSSProperties = {
 
 
 
-const forecastSummaryStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 8,
-  border: '1px solid #E8EEF1',
-  borderRadius: 8,
-  background: '#fff',
-  padding: '8px 10px',
-  color: '#6B7280',
-  fontSize: 11,
-  fontWeight: 800,
-};
-
-const forecastRowStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr auto',
-  gap: 10,
-  alignItems: 'center',
-  border: '1px solid #E8EEF1',
-  borderRadius: 8,
-  background: '#fff',
-  padding: '8px 10px',
-};
 
 const smallAccentBtn: React.CSSProperties = {
   display: 'inline-flex',

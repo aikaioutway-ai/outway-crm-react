@@ -240,7 +240,7 @@ export function parseBankXlsx(buffer: ArrayBuffer): BankStatementRow[] {
     if (!desc || isNaN(amount) || amount <= 0) continue;
 
     // Извлекаем код MBIZ_S_xxxx из поля назначения
-    const match = desc.match(/MBIZ_S_([A-Za-z0-9_\-]+)/);
+    const match = desc.match(/MBIZ_S_([A-Za-z0-9_-]+)/);
     if (!match) continue;
     const receipt_code = `MBIZ_S_${match[1]}`;
 
