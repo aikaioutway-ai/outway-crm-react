@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Users, Wallet, Map, Car, DollarSign, Settings, Receipt, UserCog, ChevronLeft, ChevronRight, LogOut } from 'lucide-react';
 import { UserRole } from '../../types';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'payroll' | 'expenses' | 'settings';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'payroll' | 'expenses' | 'settings' | 'bank_statement';
 
 interface SidebarProps {
   active: NavSection;
@@ -21,16 +21,17 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'payroll',   label: 'Зарплата',   icon: <DollarSign size={18} /> },
   { key: 'expenses',  label: 'Расходы',    icon: <Receipt size={18} /> },
   { key: 'employees', label: 'Сотрудники', icon: <UserCog size={18} /> },
+  { key: 'bank_statement', label: 'Выписка', icon: <Receipt size={18} /> },
   { key: 'settings',  label: 'Настройки',  icon: <Settings size={18} /> },
 ];
 
 export function getAllowedSections(role: UserRole): NavSection[] {
-  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'settings'];
-  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses'];
-  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers'];
+  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'bank_statement', 'settings'];
+  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'bank_statement'];
+  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'bank_statement'];
   if (role === 'manager')      return ['families'];
   if (role === 'logist')       return ['logistics', 'drivers'];
-  if (role === 'cashier')      return ['cashier', 'payroll', 'expenses'];
+  if (role === 'cashier')      return ['cashier', 'payroll', 'expenses', 'bank_statement'];
   return ['families'];
 }
 

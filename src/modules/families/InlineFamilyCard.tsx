@@ -170,9 +170,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     await loadFinance();
     await loadAudit();
   }
-  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null): Promise<boolean> {
+  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string): Promise<boolean> {
     try {
-      await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentDate, receiptFile, comment, createdBy: userName });
+      await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentDate, receiptFile, receiptCode, comment, createdBy: userName });
       await addAudit('Платёж', 'family_payment', '-', `${money(amount)} на проверке`);
       await loadFinance();
       await loadAudit();

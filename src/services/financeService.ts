@@ -255,6 +255,7 @@ export async function createFamilyPayment(params: {
   paymentType: PaymentType;
   paymentDate: string;
   receiptFile?: File | null;
+  receiptCode?: string;
   comment?: string;
   createdBy?: string;
 }): Promise<FamilyPayment> {
@@ -272,6 +273,7 @@ export async function createFamilyPayment(params: {
       payment_method: params.paymentType,
       payment_date: params.paymentDate,
       receipt_url: receiptUrl,
+      receipt_code: params.receiptCode || null,
       status: 'pending',
       submitted_by: params.createdBy,
       comment: params.comment || null,

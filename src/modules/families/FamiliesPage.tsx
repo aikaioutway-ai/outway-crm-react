@@ -4,14 +4,14 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { fetchV2FamiliesTable, fetchV2Family, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType } from '../../services/crmV2Service';
+import { clearV2TransferVehicleType, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus, X } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 
 interface ChildRow {
@@ -41,8 +41,12 @@ interface ChildRow {
   status: string;
   paymentStatus: string;
   transferNumber: string | null;
+  driverId: string | null;
   stopNumber: string | null;
   timeMorning: string | null;
+  selfExitAllowed: boolean;
+  latitude: number | null;
+  longitude: number | null;
   discountAmount: number;
   totalCharged: number;
   totalPaid: number;
@@ -64,6 +68,7 @@ interface FamiliesPageProps {
   userRole?: UserRole;
   userName?: string;
   allowedSchools?: string[];
+  dashboardMode?: 'logistics' | 'drivers';
 }
 
 interface ModeFilters {
@@ -207,6 +212,57 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   { key: 'familyId',       label: 'ID семьи',     type: 'text',   category: 'Система', width: 120, visible: false, filterable: true,  sortable: false, showInProperties: true },
 ];
 
+const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
+  {
+    key: 'fullName',
+    label: 'Водитель',
+    type: 'text',
+    category: 'Водитель',
+    width: 190,
+    render: value => <span style={{ fontWeight: 850, color: '#17222F' }}>{value || '—'}</span>,
+  },
+  { key: 'phone', label: 'Телефон', type: 'text', category: 'Водитель', width: 125 },
+  { key: 'secondPhone', label: 'Доп. телефон', type: 'text', category: 'Водитель', width: 125, visible: false },
+  {
+    key: 'status',
+    label: 'Статус',
+    type: 'select',
+    category: 'Водитель',
+    width: 105,
+    render: value => (
+      <span style={{
+        display: 'inline-flex',
+        padding: '3px 8px',
+        borderRadius: 7,
+        background: value === 'active' ? '#E8F5E9' : '#ECEFF3',
+        color: value === 'active' ? '#1B5E20' : '#52606F',
+        fontSize: 11,
+        fontWeight: 850,
+      }}>
+        {value === 'active' ? 'Активен' : value || '—'}
+      </span>
+    ),
+  },
+  { key: 'branchShorts', label: 'Школа', type: 'text', category: 'Маршрут', width: 110, getValue: row => row.branchShorts.join(', ') },
+  { key: 'transferNumbers', label: 'Трансфер', type: 'text', category: 'Маршрут', width: 140 },
+  {
+    key: 'vehicleLabel',
+    label: 'Тип ТС',
+    type: 'select',
+    category: 'Авто',
+    width: 125,
+    render: value => <span style={{ fontWeight: 800, color: '#17222F' }}>{value || '—'}</span>,
+  },
+  { key: 'plateNumber', label: 'Гос. номер', type: 'text', category: 'Авто', width: 105 },
+  { key: 'brand', label: 'Марка', type: 'text', category: 'Авто', width: 105, visible: false },
+  { key: 'model', label: 'Модель', type: 'text', category: 'Авто', width: 105, visible: false },
+  { key: 'seats', label: 'Мест', type: 'number', category: 'Авто', width: 70, visible: false },
+  { key: 'childrenCount', label: 'Дети', type: 'number', category: 'Работа', width: 75 },
+  { key: 'transferCount', label: 'К-во трансферов', type: 'number', category: 'Работа', width: 115, visible: false },
+  { key: 'address', label: 'Адрес', type: 'text', category: 'Водитель', width: 220, visible: false },
+  { key: 'comment', label: 'Комментарий', type: 'text', category: 'Водитель', width: 220, visible: false },
+];
+
 let familiesRowsCache: ChildRow[] | null = null;
 
 function normalizeRows(rows: ChildRow[]): ChildRow[] {
@@ -261,6 +317,18 @@ type LogisticsDashboardItem = { key: string; label: string; value: number; color
 type LogisticsTransferDashboardItem = LogisticsDashboardItem & { group: string; count: number; vehicleType?: string };
 type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidSum' | 'balanceSum' | 'pendingSum';
 type LogisticsVehicleFilter = 'all' | VehicleType;
+type TransferCardData = {
+  transfer: V2TransferDashboardRow;
+  driver?: V2DriverTableRow;
+  childrenCount: number;
+  history: {
+    driverName: string;
+    phone: string;
+    startDate: string;
+    endDate: string;
+    status: string;
+  }[];
+};
 
 const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
   { key: 'average', label: 'Средний' },
@@ -307,6 +375,13 @@ function vehicleTypeShortLabel(vehicleType?: string): string {
   if (vehicleType === 'minivan') return 'MINI';
   if (vehicleType === 'sedan') return 'CAR';
   return '';
+}
+
+function formatDateShort(value?: string): string {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString('ru-RU');
 }
 
 const logisticsDashboardStyle: React.CSSProperties = {
@@ -408,11 +483,11 @@ const logisticsBarItemStyle: React.CSSProperties = {
 const logisticsBarValueStyle: React.CSSProperties = {
   position: 'absolute',
   left: '50%',
-  top: -20,
+  top: -22,
   transform: 'translateX(-50%)',
-  fontSize: 11,
-  fontWeight: 750,
-  color: '#626C8B',
+  fontSize: 13,
+  fontWeight: 850,
+  color: '#41547A',
   whiteSpace: 'nowrap',
 };
 
@@ -433,8 +508,8 @@ const logisticsBarLabelStyle: React.CSSProperties = {
   width: '100%',
   maxWidth: 72,
   paddingTop: 6,
-  fontSize: 10,
-  fontWeight: 700,
+  fontSize: 12,
+  fontWeight: 750,
   color: '#626C8B',
   textAlign: 'center',
   whiteSpace: 'nowrap',
@@ -459,6 +534,8 @@ function LogisticsMicrobusDashboard({
   activeDetailKey,
   onDetailSelect,
   onDetailContextMenu,
+  detailValueMode = 'count',
+  showMetricFilter = true,
 }: {
   items: LogisticsDashboardItem[];
   collapsed: boolean;
@@ -476,9 +553,12 @@ function LogisticsMicrobusDashboard({
   activeDetailKey?: string;
   onDetailSelect?: (item: LogisticsTransferDashboardItem) => void;
   onDetailContextMenu?: (event: React.MouseEvent, item: LogisticsTransferDashboardItem) => void;
+  detailValueMode?: 'count' | 'vehicleType';
+  showMetricFilter?: boolean;
 }) {
   const maxValue = Math.max(20, ...items.map(item => Math.max(0, item.value)));
   const maxDetailValue = Math.max(1, ...detailItems.map(item => item.count));
+  const compactDetailBars = detailValueMode === 'vehicleType';
   const selectedMetric = metricOptions.find(item => item.key === metric) ?? metricOptions[0] ?? LOGISTICS_DASHBOARD_METRICS[0];
   const averageGaugeValue = items.length
     ? items.reduce((sum, item) => sum + item.value, 0) / items.length
@@ -528,14 +608,16 @@ function LogisticsMicrobusDashboard({
   return (
     <div style={logisticsDashboardStyle}>
       <div style={logisticsDashboardSideStyle}>
-        <div style={{ ...logisticsGaugeTitleStyle, width: 182, display: 'grid', gridTemplateColumns: 'minmax(82px, 1fr) minmax(92px, 1fr)', gap: 8 }}>
-          <NotionSelect
-            value={metric}
-            options={metricOptions.map(option => ({ value: option.key, label: option.label }))}
-            onChange={value => onMetricChange(value as LogisticsDashboardMetric)}
-            variant="inline"
-            panelWidth={220}
-          />
+        <div style={{ ...logisticsGaugeTitleStyle, width: showMetricFilter ? 182 : 92, display: 'grid', gridTemplateColumns: showMetricFilter ? 'minmax(82px, 1fr) minmax(92px, 1fr)' : 'minmax(92px, 1fr)', gap: 8 }}>
+          {showMetricFilter && (
+            <NotionSelect
+              value={metric}
+              options={metricOptions.map(option => ({ value: option.key, label: option.label }))}
+              onChange={value => onMetricChange(value as LogisticsDashboardMetric)}
+              variant="inline"
+              panelWidth={220}
+            />
+          )}
           <NotionSelect
             value={vehicleFilter}
             options={LOGISTICS_VEHICLE_FILTERS.map(option => ({ value: option.key, label: option.label }))}
@@ -586,7 +668,7 @@ function LogisticsMicrobusDashboard({
                 justifyContent: 'space-between',
                 gap: 8,
                 minWidth: 0,
-                fontSize: 10,
+                fontSize: 12,
                 lineHeight: 1.25,
                 color: '#626C8B',
               }}>
@@ -623,6 +705,8 @@ function LogisticsMicrobusDashboard({
         <div style={{
           ...logisticsBarsStyle,
           gridTemplateColumns: `repeat(${items.length || 1}, minmax(44px, 1fr))`,
+          borderBottom: 0,
+          overflow: 'visible',
         }}>
           {items.map(item => {
             const height = Math.max(8, Math.round((Math.max(0, item.value) / maxValue) * 94));
@@ -635,8 +719,15 @@ function LogisticsMicrobusDashboard({
                 style={{
                   ...logisticsBarItemStyle,
                   cursor: 'pointer',
-                  borderRadius: 8,
-                  boxShadow: active ? 'inset 0 -2px 0 #31A4A5' : 'none',
+                  position: 'relative',
+                  zIndex: active ? 1 : 0,
+                  marginTop: active ? -56 : 0,
+                  marginBottom: active ? -3 : 0,
+                  padding: active ? '56px 4px 3px' : 0,
+                  border: '1px solid transparent',
+                  borderRadius: active ? '0 0 8px 8px' : 0,
+                  background: active ? 'var(--active-bg)' : 'transparent',
+                  boxShadow: active ? 'inset 0 -4px 0 #31A4A5' : 'none',
                 }}
               >
                 <div style={logisticsBarTrackStyle}>
@@ -657,11 +748,14 @@ function LogisticsMicrobusDashboard({
         <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
           <div style={{
             ...logisticsBarsStyle,
-            gridTemplateColumns: `repeat(${detailItems.length || 1}, minmax(30px, 1fr))`,
-            gap: 12,
-            justifyContent: 'stretch',
+            gridTemplateColumns: compactDetailBars
+              ? `repeat(${detailItems.length || 1}, minmax(26px, 34px))`
+              : `repeat(${detailItems.length || 1}, minmax(30px, 1fr))`,
+            gap: compactDetailBars ? 8 : 12,
+            justifyContent: compactDetailBars ? 'space-between' : 'stretch',
             paddingTop: 26,
             borderBottom: 0,
+            overflow: 'visible',
           }}>
             {detailItems.length ? detailItems.map(item => {
               const height = Math.max(8, Math.round((item.count / maxDetailValue) * 78));
@@ -683,10 +777,17 @@ function LogisticsMicrobusDashboard({
                   style={{
                     ...logisticsBarItemStyle,
                     gridTemplateRows: '82px 22px',
-                    opacity: isEmpty ? 0.66 : 1,
+                    opacity: isActive ? 1 : isEmpty ? 0.66 : 1,
                     cursor: 'pointer',
-                    borderRadius: 8,
-                    boxShadow: isActive ? 'inset 0 -2px 0 #31A4A5' : 'none',
+                    position: 'relative',
+                    zIndex: isActive ? 1 : 0,
+                    marginTop: isActive ? -20 : 0,
+                    marginBottom: isActive ? -20 : 0,
+                    padding: isActive ? (compactDetailBars ? '20px 2px 20px' : '20px 4px 20px') : 0,
+                    border: '1px solid transparent',
+                    borderRadius: isActive ? '8px 8px 0 0' : 0,
+                    background: isActive ? 'var(--active-bg)' : 'transparent',
+                    boxShadow: isActive ? 'inset 0 4px 0 #31A4A5' : 'none',
                   }}
                 >
                   <div style={{ ...logisticsBarTrackStyle, height: 82 }}>
@@ -700,13 +801,18 @@ function LogisticsMicrobusDashboard({
                         width: 16,
                       }}
                     >
-                      <span style={{ ...logisticsBarValueStyle, color: isEmpty ? '#9AA7AE' : '#626C8B' }}>{item.count}</span>
+                      <span style={{
+                        ...logisticsBarValueStyle,
+                        color: isEmpty ? '#9AA7AE' : '#626C8B',
+                      }}>
+                        {detailValueMode === 'vehicleType' ? vehicleLabel || '—' : item.count}
+                      </span>
                     </div>
                   </div>
                   <div style={{
                     ...logisticsBarLabelStyle,
                     maxWidth: isStatus ? 48 : 34,
-                    fontSize: isStatus ? 8 : 10,
+                    fontSize: isStatus ? 10 : 12,
                     color: isActive ? '#17222F' : isEmpty ? '#9AA7AE' : '#626C8B',
                     fontWeight: isActive ? 900 : 700,
                   }}>
@@ -719,10 +825,10 @@ function LogisticsMicrobusDashboard({
                       lineHeight: 1,
                     }}>
                       <span>{item.label}</span>
-                      {vehicleLabel && (
+                      {detailValueMode !== 'vehicleType' && vehicleLabel && (
                         <span style={{
                           color: vehicleLineColor ?? '#31A4A5',
-                          fontSize: 7,
+                          fontSize: 9,
                           fontWeight: 900,
                           lineHeight: 1,
                         }}>
@@ -760,6 +866,10 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'minivan', label: 'Минивэн' },
   { value: 'sedan', label: 'Седан' },
 ];
+const TRANSFER_TYPE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }[] = [
+  { value: 'unassigned', label: 'Не назначен' },
+  ...VEHICLE_TYPE_OPTIONS,
+];
 const DEFAULT_ACTIVE_TAB = SCHOOL_TABS.find(t => t.key !== 'ALL')?.key ?? 'TIS';
 
 const DEFAULT_MODE_FILTERS: ModeFilters = {
@@ -781,15 +891,17 @@ const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
   logistics: true,
 };
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, dashboardMode = 'logistics' }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
+  const [dashboardTransfers, setDashboardTransfers] = useState<V2TransferDashboardRow[]>([]);
+  const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
   const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
     requests: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
     payments: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
-    cashier:  { ...DEFAULT_MODE_FILTERS },
+    cashier:  { ...DEFAULT_MODE_FILTERS, activeTab: 'ALL' },
     logistics: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
   });
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
@@ -803,6 +915,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [dashboardSchoolByMode, setDashboardSchoolByMode] = useState<Partial<Record<FamiliesMode, string>>>({});
   const [dashboardMetricByMode, setDashboardMetricByMode] = useState<Partial<Record<FamiliesMode, LogisticsDashboardMetric>>>({});
   const [dashboardVehicleFilterByMode, setDashboardVehicleFilterByMode] = useState<Partial<Record<FamiliesMode, LogisticsVehicleFilter>>>({});
+  const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [transferTypeMenu, setTransferTypeMenu] = useState<{
     x: number;
     y: number;
@@ -814,6 +928,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const logisticsDashboardCollapsed = logisticsDashboardCollapsedByMode[mode] ?? false;
   const tableBarsCollapsed = tableBarsCollapsedByMode[mode] ?? false;
   const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? true;
+  const schoolsSidebarCollapsed = dashboardMode === 'drivers' || schoolsBarCollapsed;
   const dashboardSchoolKey = dashboardSchoolByMode[mode] ?? '';
   const DEFAULT_METRIC_BY_MODE: Record<FamiliesMode, LogisticsDashboardMetric> = {
     requests: 'count',
@@ -876,9 +991,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     try {
-      const result = normalizeRows(await fetchV2FamiliesTable());
+      const [families, transfers, drivers] = await Promise.all([
+        fetchV2FamiliesTable(),
+        fetchV2TransfersDashboard().catch(() => []),
+        fetchV2DriversTable().catch(() => []),
+      ]);
+      const result = normalizeRows(families);
       familiesRowsCache = result;
       setRows(result);
+      setDashboardTransfers(transfers);
+      setDriverRows(drivers);
     } catch (error) {
       console.error('Families load failed', error);
     } finally {
@@ -1060,29 +1182,72 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
   }
 
-  async function changeDashboardTransferVehicleType(vehicleType: VehicleType) {
+  async function rejectPendingPayment(row: ChildRow) {
+    if (!row.pendingPaymentId) return;
+    if (!window.confirm('Отклонить платёж?')) return;
+    setConfirmingPaymentId(row.pendingPaymentId);
+    try {
+      await updateFamilyPayment(row.pendingPaymentId, { status: 'Отклонено' });
+      await load(false);
+    } catch (error) {
+      console.error('Payment reject failed', error);
+      alert('Не удалось отклонить платёж');
+    } finally {
+      setConfirmingPaymentId(null);
+    }
+  }
+
+  async function changeDashboardTransferVehicleType(vehicleType: VehicleType | 'unassigned') {
     if (!transferTypeMenu) return;
     if (!selectedDashboardSchool || selectedDashboardSchool.key === 'ALL') {
       alert('Сначала выберите конкретную школу');
       setTransferTypeMenu(null);
       return;
     }
+    const savedTransfer = dashboardTransfers.find(item =>
+      item.transferNumber === transferTypeMenu.transferNumber
+      && (
+        item.branchCode === selectedDashboardSchool.key
+        || item.branchShort === selectedDashboardSchool.label
+        || item.branchId === dashboardSchoolRows.find(row => row.branchId)?.branchId
+      )
+    );
     const sampleRow = dashboardSchoolRows.find(row => row.branchId);
-    if (!sampleRow?.branchId) {
+    const branchId = sampleRow?.branchId ?? savedTransfer?.branchId;
+    const schoolId = sampleRow?.schoolId ?? savedTransfer?.schoolId;
+    if (!branchId) {
       alert('Не удалось определить филиал школы для трансфера');
       setTransferTypeMenu(null);
       return;
     }
     try {
+      if (vehicleType === 'unassigned') {
+        await clearV2TransferVehicleType({
+          branchId,
+          transferNumber: Number(transferTypeMenu.transferNumber),
+        });
+        setDashboardTransfers(prev => prev.filter(item => !(
+          item.branchId === branchId && item.transferNumber === transferTypeMenu.transferNumber
+        )));
+        setTransferTypeMenu(null);
+        void load(false);
+        return;
+      }
+
       await updateV2TransferVehicleType({
-        schoolId: sampleRow.schoolId,
-        branchId: sampleRow.branchId,
+        schoolId,
+        branchId,
         transferNumber: Number(transferTypeMenu.transferNumber),
         vehicleType,
       });
+      setDashboardTransfers(prev => prev.map(item => (
+        item.branchId === branchId && item.transferNumber === transferTypeMenu.transferNumber
+          ? { ...item, vehicleType }
+          : item
+      )));
       setRows(prev => {
         const next = prev.map(row => (
-          row.branchId === sampleRow.branchId
+          row.branchId === branchId
           && row.transferNumber === transferTypeMenu.transferNumber
           && row.status !== 'rejected'
             ? { ...row, vehicleType, vehicleLabel: VT_LABEL[vehicleType] ?? vehicleType }
@@ -1303,20 +1468,26 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           ? `Трансфер ${quickTransfer}`
           : 'Все трансферы';
   const logisticsAvgItems = useMemo(() => schoolButtonItems
-    .map((item, index) => ({
-      key: item.key,
-      label: item.key === 'ALL' ? '≡' : item.label,
-      value: dashboardMetricValue(dashboardStatsForRows(
-        item.key === 'ALL' ? rows : rows.filter(row => rowMatchesSchoolTab(row, item))
-      )),
-      color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
-    })), [dashboardMetricValue, dashboardStatsForRows, rowMatchesSchoolTab, rows, schoolButtonItems]);
+    .map((item, index) => {
+      const itemRows = item.key === 'ALL' ? rows : rows.filter(row => rowMatchesSchoolTab(row, item));
+      const value = dashboardMode === 'drivers'
+        ? new Set(logisticsWorkRows(itemRows).map(row => row.driverId).filter(Boolean)).size
+        : dashboardMetricValue(dashboardStatsForRows(itemRows));
+      return {
+        key: item.key,
+        label: item.key === 'ALL' ? '≡' : item.label,
+        value,
+        color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
+      };
+    }), [dashboardMetricValue, dashboardMode, dashboardStatsForRows, rowMatchesSchoolTab, rows, schoolButtonItems]);
   const selectedDashboardSchool = schoolButtonItems.find(item => item.key === dashboardSchoolKey)
     ?? schoolButtonItems.find(item => item.key === activeTab)
     ?? schoolButtonItems[0];
-  const dashboardSchoolRows = selectedDashboardSchool
-    ? rows.filter(row => rowMatchesSchoolTab(row, selectedDashboardSchool))
-    : [];
+  const dashboardSchoolRows = useMemo(() => (
+    selectedDashboardSchool
+      ? rows.filter(row => rowMatchesSchoolTab(row, selectedDashboardSchool))
+      : []
+  ), [rowMatchesSchoolTab, rows, selectedDashboardSchool]);
   const dashboardWorkRows = logisticsWorkRows(dashboardSchoolRows);
   const dashboardVehicleRows = dashboardVehicleFilter === 'all'
     ? dashboardWorkRows
@@ -1327,22 +1498,34 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           const transferRows = dashboardVehicleRows.filter(row => row.transferNumber === transfer);
           const originalTransferRows = dashboardWorkRows.filter(row => row.transferNumber === transfer);
           const count = transferRows.length;
-          const vehicleType = originalTransferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
+          const savedTransfer = dashboardTransfers.find(item =>
+            item.transferNumber === transfer
+            && selectedDashboardSchool
+            && (
+              selectedDashboardSchool.key === 'ALL'
+              || item.branchId === originalTransferRows.find(row => row.branchId)?.branchId
+              || item.branchCode === selectedDashboardSchool.key
+              || item.branchShort === selectedDashboardSchool.label
+            )
+          );
+          const vehicleType = savedTransfer?.vehicleType
+            ?? originalTransferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
             ?? originalTransferRows.find(row => row.vehicleType === 'sedan')?.vehicleType
             ?? originalTransferRows.find(row => row.vehicleType === 'microbus')?.vehicleType;
+          const driverMode = dashboardMode === 'drivers';
           return {
             key: `transfer-${transfer}`,
             label: `#${transfer}`,
             group: 'Трансферы',
-            value: count,
-            count,
-            color: logisticsTransferCountColor(count),
+            value: driverMode && vehicleType ? 1 : count,
+            count: driverMode && vehicleType ? 1 : count,
+            color: driverMode && vehicleType ? (logisticsVehicleTypeLineColor(vehicleType) ?? '#31A4A5') : logisticsTransferCountColor(count),
             vehicleType,
           };
         }),
-        {
+        ...(dashboardMode === 'drivers' ? [] : [{
           key: 'new',
-          label: 'Новые',
+          label: '?',
           group: 'Статус',
           value: dashboardVehicleRows.filter(row => row.status === 'new').length,
           count: dashboardVehicleRows.filter(row => row.status === 'new').length,
@@ -1350,12 +1533,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         },
         {
           key: 'rejected',
-          label: 'Отказ',
+          label: 'X',
           group: 'Статус',
           value: dashboardSchoolRows.filter(row => row.status === 'rejected').length,
           count: dashboardSchoolRows.filter(row => row.status === 'rejected').length,
           color: '#EF7168',
-        },
+        }]),
       ]
     : [];
   const activeDashboardDetailKey = quickChildStatus === 'new' || quickChildStatus === 'rejected'
@@ -1373,21 +1556,139 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const dashboardSummaryStats = dashboardStatsForRows(dashboardSummaryRows);
   const allowedMetrics = METRICS_BY_ROLE[userRole] ?? METRICS_BY_ROLE.admin;
   const visibleDashboardMetrics = LOGISTICS_DASHBOARD_METRICS.filter(m => allowedMetrics.includes(m.key));
+  const dashboardMetricOptions = dashboardMode === 'drivers'
+    ? [{ key: 'count' as LogisticsDashboardMetric, label: 'Водители' }]
+    : visibleDashboardMetrics;
+  const dashboardDisplayMetric = dashboardMode === 'drivers'
+    ? 'count' as LogisticsDashboardMetric
+    : (allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]);
+  const dashboardPrimaryValue = dashboardMode === 'drivers'
+    ? new Set(logisticsWorkRows(dashboardSummaryRows).map(row => row.driverId).filter(Boolean)).size
+    : dashboardMetricValue(dashboardSummaryStats);
   const dashboardSummaryItems = [
-    { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-    { label: 'К-во трансфер', value: String(dashboardSummaryStats.transferCount) },
-    { label: 'К-во учеников', value: String(dashboardSummaryStats.studentCount) },
-    ...(allowedMetrics.includes('average') ? [{ label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) }] : []),
-    ...(allowedMetrics.includes('pendingSum') ? [{ label: 'На проверке', value: String(dashboardSummaryStats.pendingSum) }] : []),
-    ...(allowedMetrics.includes('chargedSum') ? [{ label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) }] : []),
-    ...(allowedMetrics.includes('debtorsCount') ? [{ label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) }] : []),
-    ...(allowedMetrics.includes('debtSum') ? [{ label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) }] : []),
+    ...(dashboardMode === 'drivers' ? (() => {
+      const selectedTransfers = dashboardTransfers.filter(item =>
+        selectedDashboardSchool?.key === 'ALL'
+        || item.branchCode === selectedDashboardSchool?.key
+        || item.branchShort === selectedDashboardSchool?.label
+        || dashboardSchoolRows.some(row => row.branchId === item.branchId)
+      );
+      return [
+        { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
+        { label: 'Микроавтобус', value: String(selectedTransfers.filter(item => item.vehicleType === 'microbus').length) },
+        { label: 'Минивэн', value: String(selectedTransfers.filter(item => item.vehicleType === 'minivan').length) },
+        { label: 'Седан', value: String(selectedTransfers.filter(item => item.vehicleType === 'sedan').length) },
+      ];
+    })() : [
+      { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
+      { label: 'К-во трансфер', value: String(dashboardSummaryStats.transferCount) },
+      { label: 'К-во учеников', value: String(dashboardSummaryStats.studentCount) },
+      ...(allowedMetrics.includes('average') ? [{ label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) }] : []),
+      ...(allowedMetrics.includes('pendingSum') ? [{ label: 'На проверке', value: String(dashboardSummaryStats.pendingSum) }] : []),
+      ...(allowedMetrics.includes('chargedSum') ? [{ label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) }] : []),
+      ...(allowedMetrics.includes('debtorsCount') ? [{ label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) }] : []),
+      ...(allowedMetrics.includes('debtSum') ? [{ label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) }] : []),
+    ]),
   ];
+  const filteredDriverRows = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return driverRows.filter(row => {
+      const schoolMatch = !selectedDashboardSchool
+        || selectedDashboardSchool.key === 'ALL'
+        || row.branchCodes.includes(selectedDashboardSchool.key)
+        || row.branchShorts.includes(selectedDashboardSchool.label)
+        || row.branchNames.includes(selectedDashboardSchool.label)
+        || dashboardSchoolRows.some(schoolRow => row.branchIds.includes(String(schoolRow.branchId ?? '')));
+      if (!schoolMatch) return false;
+      if (dashboardVehicleFilter !== 'all' && row.vehicleType !== dashboardVehicleFilter) return false;
+      if (!q) return true;
+      return [
+        row.fullName,
+        row.phone,
+        row.secondPhone,
+        row.status,
+        row.vehicleLabel,
+        row.plateNumber,
+        row.brand,
+        row.model,
+        row.transferNumbers,
+        row.branchShorts.join(' '),
+        row.address,
+        row.comment,
+      ].some(value => String(value ?? '').toLowerCase().includes(q));
+    });
+  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRows, search, selectedDashboardSchool]);
+  const selectedDriver = selectedDriverId
+    ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
+    : null;
+  const selectedDriverChildren = useMemo(() => (
+    selectedDriverId
+      ? rows
+          .filter(row => row.driverId === selectedDriverId && row.status !== 'rejected' && row.childName)
+          .sort((a, b) => Number(a.stopNumber ?? 999) - Number(b.stopNumber ?? 999))
+      : []
+  ), [rows, selectedDriverId]);
   const selectedTransferVehicleType = transferTypeMenu
-    ? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'minivan')?.vehicleType
+    ? dashboardTransfers.find(item =>
+        item.transferNumber === transferTypeMenu.transferNumber
+        && selectedDashboardSchool
+        && (
+          item.branchCode === selectedDashboardSchool.key
+          || item.branchShort === selectedDashboardSchool.label
+          || item.branchId === dashboardSchoolRows.find(row => row.branchId)?.branchId
+        )
+      )?.vehicleType
+      ?? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'minivan')?.vehicleType
       ?? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'sedan')?.vehicleType
       ?? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'microbus')?.vehicleType
     : undefined;
+  const selectedTransferCard = useMemo<TransferCardData | null>(() => {
+    if (!transferCardNumber || !selectedDashboardSchool) return null;
+    const relatedRows = dashboardSchoolRows.filter(row => row.transferNumber === transferCardNumber && row.status !== 'rejected');
+    const schoolTransfer = dashboardTransfers.find(item =>
+      item.transferNumber === transferCardNumber
+      && (
+        selectedDashboardSchool.key === 'ALL'
+        || item.branchCode === selectedDashboardSchool.key
+        || item.branchShort === selectedDashboardSchool.label
+        || relatedRows.some(row => row.branchId === item.branchId)
+      )
+    );
+    const fallbackTransfer = dashboardTransfers.find(item => item.transferNumber === transferCardNumber);
+    const sampleRow = relatedRows[0];
+    const transfer: V2TransferDashboardRow = schoolTransfer ?? fallbackTransfer ?? {
+      id: `transfer-${selectedDashboardSchool.key}-${transferCardNumber}`,
+      schoolId: sampleRow?.schoolId ?? null,
+      branchId: sampleRow?.branchId ?? null,
+      branchCode: sampleRow?.schoolCode ?? selectedDashboardSchool.key,
+      branchShort: sampleRow?.branchShort ?? selectedDashboardSchool.label,
+      branchName: sampleRow?.branchName ?? selectedDashboardSchool.label,
+      transferNumber: transferCardNumber,
+      vehicleType: (sampleRow?.vehicleType || 'microbus') as VehicleType,
+      driverId: sampleRow?.driverId ?? null,
+      createdAt: '',
+      updatedAt: '',
+    };
+    const driver = transfer.driverId
+      ? driverRows.find(item => item.driverId === transfer.driverId)
+      : undefined;
+    const history = driver
+      ? [{
+          driverName: driver.fullName || 'Без имени',
+          phone: driver.phone || '-',
+          startDate: formatDateShort(transfer.createdAt),
+          endDate: '-',
+          status: 'Действует',
+        }]
+      : [];
+
+    return {
+      transfer,
+      driver,
+      childrenCount: relatedRows.length,
+      history,
+    };
+  }, [dashboardSchoolRows, dashboardTransfers, driverRows, selectedDashboardSchool, transferCardNumber]);
   const tableQuickSelectStyle: React.CSSProperties = {
     height: 26,
     minWidth: 124,
@@ -1500,33 +1801,56 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       label: 'Подтверждение',
       type: 'text',
       category: 'Кассир',
-      width: 120,
+      width: 220,
       visible: mode === 'cashier',
       render: (_value, row) => {
         const disabled = !row.isFirstChild || !row.pendingPaymentId || confirmingPaymentId === row.pendingPaymentId;
         if (!row.isFirstChild || !row.pendingPaymentId) return <span style={{ color: 'var(--text-2)' }}>—</span>;
         return (
-          <button
-            disabled={disabled}
-            onClick={(event) => {
-              event.stopPropagation();
-              confirmPendingPayment(row);
-            }}
-            style={{
-              height: 26,
-              padding: '0 10px',
-              border: 'none',
-              borderRadius: 6,
-              background: disabled ? '#CBD5E1' : '#10B981',
-              color: '#fff',
-              fontSize: 11,
-              fontWeight: 800,
-              cursor: disabled ? 'default' : 'pointer',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {confirmingPaymentId === row.pendingPaymentId ? '...' : 'Подтвердить'}
-          </button>
+          <div style={{ display: 'flex', gap: 4 }}>
+            <button
+              disabled={disabled}
+              onClick={(event) => {
+                event.stopPropagation();
+                confirmPendingPayment(row);
+              }}
+              style={{
+                height: 26,
+                padding: '0 10px',
+                border: 'none',
+                borderRadius: 6,
+                background: disabled ? '#CBD5E1' : '#10B981',
+                color: '#fff',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: disabled ? 'default' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {confirmingPaymentId === row.pendingPaymentId ? '...' : 'Подтвердить'}
+            </button>
+            <button
+              disabled={disabled}
+              onClick={(event) => {
+                event.stopPropagation();
+                rejectPendingPayment(row);
+              }}
+              style={{
+                height: 26,
+                padding: '0 10px',
+                border: 'none',
+                borderRadius: 6,
+                background: disabled ? '#CBD5E1' : '#FEE2E2',
+                color: disabled ? '#fff' : '#991B1B',
+                fontSize: 11,
+                fontWeight: 800,
+                cursor: disabled ? 'default' : 'pointer',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              Отклонить
+            </button>
+          </div>
         );
       },
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
@@ -1558,14 +1882,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             setModeFilter(getSchoolSwitchFilters(key));
             setLogisticsDashboardCollapsed(false);
           }}
-          metric={allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]}
+          metric={dashboardDisplayMetric}
           onMetricChange={setDashboardMetric}
-          metricOptions={visibleDashboardMetrics}
+          metricOptions={dashboardMetricOptions}
           vehicleFilter={dashboardVehicleFilter}
           onVehicleFilterChange={setDashboardVehicleFilter}
           summaryItems={dashboardSummaryItems}
-          primaryValue={dashboardMetricValue(dashboardSummaryStats)}
+          primaryValue={dashboardPrimaryValue}
           detailItems={dashboardTransferItems}
+          detailValueMode={dashboardMode === 'drivers' ? 'vehicleType' : 'count'}
+          showMetricFilter={dashboardMode !== 'drivers'}
           activeDetailKey={activeDashboardDetailKey}
           onDetailSelect={(item) => {
             if (item.key === 'all') {
@@ -1577,7 +1903,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               return;
             }
             if (item.key.startsWith('transfer-')) {
-              setModeFilter({ quickTransfer: item.key.replace('transfer-', ''), quickChildStatus: '' });
+              const transferNumber = item.key.replace('transfer-', '');
+              if (dashboardMode === 'drivers') {
+                setTransferCardNumber(transferNumber);
+                return;
+              }
+              setModeFilter({ quickTransfer: transferNumber, quickChildStatus: '' });
             }
           }}
           onDetailContextMenu={(event, item) => {
@@ -1594,7 +1925,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
         {/* ── ТАБЛИЦА ── */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'visible', minWidth: 0 }}>
-          {!tableBarsCollapsed ? (
+          {dashboardMode !== 'drivers' && !tableBarsCollapsed ? (
           <div className="no-scrollbar" style={{
             position: 'relative',
             top: 'auto',
@@ -1622,7 +1953,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               borderRadius: '8px 8px 0 0',
               background: '#fff',
               color: '#17222F',
-              fontSize: 12,
+              fontSize: 13,
               fontWeight: 850,
               whiteSpace: 'nowrap',
               flexShrink: 0,
@@ -1764,7 +2095,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               <ChevronUp size={15} />
             </button>
           </div>
-          ) : (
+          ) : dashboardMode !== 'drivers' ? (
             <div style={{
               height: 22,
               display: 'flex',
@@ -1787,7 +2118,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 borderRadius: 8,
                 background: '#fff',
                 color: '#17222F',
-                fontSize: 11,
+                fontSize: 12,
                 fontWeight: 850,
                 whiteSpace: 'nowrap',
               }}>
@@ -1816,83 +2147,129 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 <ChevronDown size={15} />
               </button>
             </div>
-          )}
-          <DataTable<ChildRow>
-            key={`families_table_${mode}`}
-            columns={tableColumns}
-            data={filtered}
-            rowKey="rowId"
-            storageKey={`families_table_${mode}`}
-            loading={loading}
-            emptyText="Заявок не найдено"
-            canManageProperties={canManageProperties}
-            onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
-            onRowDelete={(row) => console.log('delete', row.rowId)}
-            onRowEdit={(row) => console.log('edit', row.rowId)}
-            onCellSave={handleCellSave}
-            hideToolbar={tableBarsCollapsed}
-            toolbarExtra={(
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
-                  <Search size={14} style={{
-                    position: 'absolute',
-                    left: 10,
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: 'var(--text-2)',
-                    pointerEvents: 'none',
-                  }} />
-                  <input
-                    value={search}
-                    onChange={e => setSearch(e.target.value)}
-                    placeholder="Имя, телефон, ребёнок, адрес..."
-                    style={{
-                      width: '100%',
-                      height: 26,
-                      padding: '0 10px 0 30px',
-                      border: '1px solid var(--border)',
-                      borderRadius: 10,
-                      fontSize: 12,
-                      fontWeight: 600,
-                      background: '#fff',
-                      outline: 'none',
-                      color: 'var(--text)',
-                    }}
-                  />
+          ) : null}
+          {dashboardMode === 'drivers' ? (
+            <DataTable<V2DriverTableRow>
+              key="drivers_table"
+              columns={DRIVER_COLUMNS}
+              data={filteredDriverRows}
+              rowKey="rowId"
+              storageKey="drivers_table_by_school"
+              loading={loading}
+              emptyText="Водители не найдены"
+              canManageProperties={canManageProperties}
+              onRowOpen={(row) => setSelectedDriverId(row.driverId)}
+              hideToolbar={false}
+              toolbarExtra={(
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
+                    <Search size={14} style={{
+                      position: 'absolute',
+                      left: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'var(--text-2)',
+                      pointerEvents: 'none',
+                    }} />
+                    <input
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="ФИО, телефон, трансфер, авто..."
+                      style={{
+                        width: '100%',
+                        height: 26,
+                        padding: '0 10px 0 30px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: '#fff',
+                        outline: 'none',
+                        color: 'var(--text)',
+                      }}
+                    />
+                  </div>
                 </div>
-                <select value={quickPaymentStatus} onChange={e => setModeFilter({ quickPaymentStatus: e.target.value })} style={tableQuickSelectStyle}>
-                  {PAYMENT_STATUS_OPTIONS.map(option => (
-                    <option key={option.value} value={option.value}>{option.label}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-            toolbarRightExtra={(
-              <button
-                onClick={() => setShowNewFamily(true)}
-                title="Новая заявка"
-                style={{
-                  width: 30,
-                  height: 30,
-                  border: 'none',
-                  borderRadius: 10,
-                  background: '#31A4A5',
-                  color: '#fff',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  flexShrink: 0,
-                }}
-              >
-                <Plus size={16} />
-              </button>
-            )}
-          />
+              )}
+            />
+          ) : (
+            <DataTable<ChildRow>
+              key={`families_table_${mode}`}
+              columns={tableColumns}
+              data={filtered}
+              rowKey="rowId"
+              storageKey={`families_table_${mode}`}
+              loading={loading}
+              emptyText="Заявок не найдено"
+              canManageProperties={canManageProperties}
+              onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
+              onRowDelete={(row) => console.log('delete', row.rowId)}
+              onRowEdit={(row) => console.log('edit', row.rowId)}
+              onCellSave={handleCellSave}
+              hideToolbar={tableBarsCollapsed}
+              toolbarExtra={(
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
+                    <Search size={14} style={{
+                      position: 'absolute',
+                      left: 10,
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: 'var(--text-2)',
+                      pointerEvents: 'none',
+                    }} />
+                    <input
+                      value={search}
+                      onChange={e => setSearch(e.target.value)}
+                      placeholder="Имя, телефон, ребёнок, адрес..."
+                      style={{
+                        width: '100%',
+                        height: 26,
+                        padding: '0 10px 0 30px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        fontSize: 12,
+                        fontWeight: 600,
+                        background: '#fff',
+                        outline: 'none',
+                        color: 'var(--text)',
+                      }}
+                    />
+                  </div>
+                  <select value={quickPaymentStatus} onChange={e => setModeFilter({ quickPaymentStatus: e.target.value })} style={tableQuickSelectStyle}>
+                    {PAYMENT_STATUS_OPTIONS.map(option => (
+                      <option key={option.value} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              toolbarRightExtra={(
+                <button
+                  onClick={() => setShowNewFamily(true)}
+                  title="Новая заявка"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    border: 'none',
+                    borderRadius: 10,
+                    background: '#31A4A5',
+                    color: '#fff',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                  }}
+                >
+                  <Plus size={16} />
+                </button>
+              )}
+            />
+          )}
         </div>
       </div>
 
       <aside style={{
-        width: schoolsBarCollapsed ? 58 : 260,
+        width: schoolsSidebarCollapsed ? 58 : 260,
         height: '100%',
         background: '#fff',
         borderRadius: '22px 0 0 22px',
@@ -1908,19 +2285,21 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           minHeight: 48,
           display: 'flex',
           alignItems: 'center',
-          justifyContent: schoolsBarCollapsed ? 'center' : 'space-between',
+          justifyContent: schoolsSidebarCollapsed ? 'center' : 'space-between',
           gap: 6,
-          padding: schoolsBarCollapsed ? '0 8px' : '0 10px 0 12px',
+          padding: schoolsSidebarCollapsed ? '0 8px' : '0 10px 0 12px',
           borderBottom: '1px solid var(--border)',
           color: '#626C8B',
-          fontSize: 11,
+          fontSize: 12,
           fontWeight: 850,
           textTransform: 'uppercase',
         }}>
-          {!schoolsBarCollapsed && <span>Школы</span>}
+          {!schoolsSidebarCollapsed && <span>Школы</span>}
           <button
-            onClick={() => setSchoolsBarCollapsed(value => !value)}
-            title={schoolsBarCollapsed ? 'Показать школы' : 'Скрыть школы'}
+            onClick={() => {
+              if (dashboardMode !== 'drivers') setSchoolsBarCollapsed(value => !value);
+            }}
+            title={dashboardMode === 'drivers' ? 'Школы' : schoolsSidebarCollapsed ? 'Показать школы' : 'Скрыть школы'}
             style={{
               width: 28,
               height: 28,
@@ -1931,15 +2310,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: 'pointer',
+              cursor: dashboardMode === 'drivers' ? 'default' : 'pointer',
               flexShrink: 0,
             }}
           >
-            {schoolsBarCollapsed ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+            {schoolsSidebarCollapsed ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
           </button>
         </div>
-        <nav style={{ flex: 1, padding: schoolsBarCollapsed ? '7px 0 7px 0' : '7px 8px 7px 0', overflow: 'visible' }}>
-          {schoolButtonItems.filter(t => t.key !== 'ALL' || !schoolsBarCollapsed).map(t => {
+        <nav style={{ flex: 1, padding: schoolsSidebarCollapsed ? '7px 0 7px 0' : '7px 8px 7px 0', overflow: 'visible' }}>
+          {schoolButtonItems.filter(t => t.key !== 'ALL' || !schoolsSidebarCollapsed).map(t => {
             const isActive = activeTab === t.key;
             const allowed = isTabAllowed(t.key);
             const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
@@ -1958,20 +2337,20 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }}
                 title={t.label}
                 style={{
-                  width: isActive ? (schoolsBarCollapsed ? 'calc(100% + 8px)' : 'calc(100% + 10px)') : '100%',
+                  width: isActive ? (schoolsSidebarCollapsed ? 'calc(100% + 8px)' : 'calc(100% + 10px)') : '100%',
                   minHeight: 34,
                   display: 'flex',
-                  alignItems: schoolsBarCollapsed ? 'center' : 'stretch',
-                  justifyContent: schoolsBarCollapsed ? 'center' : 'flex-start',
+                  alignItems: schoolsSidebarCollapsed ? 'center' : 'stretch',
+                  justifyContent: schoolsSidebarCollapsed ? 'center' : 'flex-start',
                   gap: 5,
-                  padding: schoolsBarCollapsed ? '8px 0' : '8px 8px 8px 10px',
-                  marginLeft: isActive ? (schoolsBarCollapsed ? -8 : -10) : 0,
+                  padding: schoolsSidebarCollapsed ? '8px 0' : '8px 8px 8px 10px',
+                  marginLeft: isActive ? (schoolsSidebarCollapsed ? -8 : -10) : 0,
                   marginBottom: 1,
                   border: '1px solid transparent',
                   borderRadius: isActive ? '0 16px 16px 0' : 14,
                   background: isActive ? 'var(--active-bg)' : 'transparent',
                   color: isActive ? '#17222F' : allowed ? '#626C8B' : '#C0C0C8',
-                  fontSize: schoolsBarCollapsed ? 9 : 10,
+                  fontSize: schoolsSidebarCollapsed ? 9 : 10,
                   fontWeight: isActive ? 800 : 650,
                   cursor: allowed ? 'pointer' : 'default',
                   opacity: allowed ? 1 : 0.45,
@@ -1980,7 +2359,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   overflow: 'hidden',
                 }}
               >
-                {schoolsBarCollapsed ? (
+                {schoolsSidebarCollapsed ? (
                   <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
                 ) : (
                   <span style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', minWidth: 0 }}>
@@ -1992,16 +2371,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                         background: hasBadge ? '#EF4444' : '#159A6A',
                         flexShrink: 0,
                       }} />
-                      <span style={{ width: 42, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 11 }}>{t.label}</span>
+                      <span style={{ width: 42, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12 }}>{t.label}</span>
                     </span>
                     <span style={{
                       minWidth: 0,
                       overflow: 'hidden',
                       textOverflow: 'ellipsis',
                       color: stats.debtSum > 0 ? '#EF4444' : '#626C8B',
-                      fontSize: 9,
-                      fontWeight: 500,
-                      lineHeight: 1,
+                      fontSize: 10,
+                      fontWeight: 650,
+                      lineHeight: 1.12,
                     }}>
                       Все: {stats.totalCount} · Новые: {stats.newCount} · Долг: {stats.debtorsCount}/{compactMoney(stats.debtSum)}
                     </span>
@@ -2012,6 +2391,378 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           })}
         </nav>
       </aside>
+
+      {selectedDriver && (
+        <div
+          onClick={() => setSelectedDriverId(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1250,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            background: 'rgba(23, 34, 47, 0.20)',
+            backdropFilter: 'blur(2px)',
+          }}
+        >
+          <section
+            onClick={event => event.stopPropagation()}
+            style={{
+              width: 'min(1040px, calc(100vw - 32px))',
+              maxHeight: 'calc(100vh - 48px)',
+              overflow: 'hidden',
+              borderRadius: 18,
+              background: '#fff',
+              boxShadow: '0 24px 60px rgba(30, 56, 75, 0.22)',
+              border: '1px solid #D4E3E7',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <header style={{
+              display: 'flex',
+              alignItems: 'flex-start',
+              justifyContent: 'space-between',
+              gap: 16,
+              padding: '18px 20px 14px',
+              borderBottom: '1px solid #E5EEF1',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 22, fontWeight: 900, color: '#17222F', lineHeight: 1.15 }}>
+                  {selectedDriver.fullName || 'Водитель'}
+                </div>
+                <div style={{ marginTop: 5, display: 'flex', gap: 12, flexWrap: 'wrap', color: '#626C8B', fontSize: 13, fontWeight: 750 }}>
+                  <span>{selectedDriver.phone || 'номер не указан'}</span>
+                  <span>ID: {selectedDriver.driverId.slice(0, 8)}</span>
+                  <span>{selectedDriver.status === 'active' ? 'Активен' : selectedDriver.status || 'Статус не указан'}</span>
+                </div>
+                <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: '#17222F', fontSize: 13, fontWeight: 800 }}>
+                  <span>Наш долг: 0 сом</span>
+                  <span>Не хватает документов: данные не заведены</span>
+                  <span>Просрочены: нет данных</span>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDriverId(null)}
+                title="Закрыть"
+                style={{
+                  width: 36,
+                  height: 36,
+                  border: '1px solid #D4E3E7',
+                  borderRadius: 12,
+                  background: '#fff',
+                  color: '#626C8B',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)',
+                gap: 12,
+                marginBottom: 12,
+              }}>
+                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Школа / трансфер</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13 }}>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Школа</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.branchShorts.join(', ') || '-'}</span>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Трансфер</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.transferNumbers || '-'}</span>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Тип ТС</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.vehicleLabel || '-'}</span>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Авто</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>
+                      {[selectedDriver.brand, selectedDriver.model, selectedDriver.plateNumber].filter(Boolean).join(' · ') || '-'}
+                    </span>
+                  </div>
+                </section>
+
+                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Контакты / адрес</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13 }}>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Телефон</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.phone || '-'}</span>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Доп. контакт</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.secondPhone || '-'}</span>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Адрес</span>
+                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.address || '-'}</span>
+                  </div>
+                </section>
+              </div>
+
+              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+                <div style={{
+                  height: 42,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 14px',
+                  borderBottom: '1px solid #E5EEF1',
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: '#17222F',
+                }}>
+                  Дети ({selectedDriverChildren.length})
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        {['Ост.', 'ФИО', 'Адрес', 'Телефон', 'Утро', 'Самовыход', 'Координаты'].map(label => (
+                          <th key={label} style={{
+                            height: 36,
+                            padding: '0 10px',
+                            borderBottom: '1px solid #E5EEF1',
+                            textAlign: 'left',
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: '#7A859D',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedDriverChildren.length ? selectedDriverChildren.map((child, index) => {
+                        const coords = child.latitude != null && child.longitude != null
+                          ? `${child.latitude.toFixed(6)}, ${child.longitude.toFixed(6)}`
+                          : '-';
+                        return (
+                          <tr key={child.rowId}>
+                            {[
+                              child.stopNumber || '-',
+                              child.childName || '-',
+                              child.streetAddress || '-',
+                              child.phone || child.contactPhone || '-',
+                              child.timeMorning || '-',
+                              child.selfExitAllowed ? 'Да' : 'Нет',
+                              coords,
+                            ].map((value, cellIndex) => (
+                              <td key={cellIndex} style={{
+                                height: 42,
+                                padding: '0 10px',
+                                borderBottom: index === selectedDriverChildren.length - 1 ? 'none' : '1px solid #EEF4F6',
+                                fontSize: 13,
+                                fontWeight: cellIndex === 1 ? 850 : 650,
+                                color: '#17222F',
+                                whiteSpace: 'nowrap',
+                                maxWidth: cellIndex === 2 ? 260 : undefined,
+                                overflow: cellIndex === 2 ? 'hidden' : undefined,
+                                textOverflow: cellIndex === 2 ? 'ellipsis' : undefined,
+                              }}>
+                                {value}
+                              </td>
+                            ))}
+                          </tr>
+                        );
+                      }) : (
+                        <tr>
+                          <td colSpan={7} style={{
+                            height: 58,
+                            padding: '0 14px',
+                            color: '#7A859D',
+                            fontSize: 13,
+                            fontWeight: 700,
+                          }}>
+                            Детей по этому водителю нет
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {selectedTransferCard && (
+        <div
+          onClick={() => setTransferCardNumber(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 1200,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: 24,
+            background: 'rgba(23, 34, 47, 0.18)',
+            backdropFilter: 'blur(2px)',
+          }}
+        >
+          <section
+            onClick={event => event.stopPropagation()}
+            style={{
+              width: 'min(720px, calc(100vw - 32px))',
+              maxHeight: 'calc(100vh - 48px)',
+              overflow: 'hidden',
+              borderRadius: 18,
+              background: '#fff',
+              boxShadow: '0 24px 60px rgba(30, 56, 75, 0.22)',
+              border: '1px solid #D4E3E7',
+              display: 'flex',
+              flexDirection: 'column',
+            }}
+          >
+            <header style={{
+              minHeight: 72,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 12,
+              padding: '16px 18px',
+              borderBottom: '1px solid #E5EEF1',
+            }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 20, fontWeight: 900, color: '#17222F' }}>
+                  Трансфер №{selectedTransferCard.transfer.transferNumber}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12, fontWeight: 750, color: '#626C8B' }}>
+                  {selectedTransferCard.transfer.branchShort || selectedTransferCard.transfer.branchName || selectedDashboardSchool?.label || 'Школа'} · {VT_LABEL[selectedTransferCard.transfer.vehicleType] ?? selectedTransferCard.transfer.vehicleType}
+                </div>
+              </div>
+              <button
+                onClick={() => setTransferCardNumber(null)}
+                title="Закрыть"
+                style={{
+                  width: 36,
+                  height: 36,
+                  border: '1px solid #D4E3E7',
+                  borderRadius: 12,
+                  background: '#fff',
+                  color: '#626C8B',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                }}
+              >
+                <X size={18} />
+              </button>
+            </header>
+
+            <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+                gap: 10,
+                marginBottom: 14,
+              }}>
+                {[
+                  { label: 'Водитель', value: selectedTransferCard.driver?.fullName || 'Не назначен' },
+                  { label: 'Телефон', value: selectedTransferCard.driver?.phone || '-' },
+                  { label: 'Дети', value: String(selectedTransferCard.childrenCount) },
+                  { label: 'Статус', value: selectedTransferCard.driver ? 'Активный' : 'Ожидание' },
+                ].map(item => (
+                  <div key={item.label} style={{
+                    minHeight: 66,
+                    border: '1px solid #DDE9EC',
+                    borderRadius: 10,
+                    background: '#fff',
+                    padding: '10px 12px',
+                    minWidth: 0,
+                  }}>
+                    <div style={{ fontSize: 11, fontWeight: 850, color: '#7A859D', textTransform: 'uppercase' }}>{item.label}</div>
+                    <div style={{ marginTop: 7, fontSize: 14, fontWeight: 900, color: '#17222F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div style={{
+                border: '1px solid #DDE9EC',
+                borderRadius: 12,
+                overflow: 'hidden',
+                background: '#fff',
+              }}>
+                <div style={{
+                  height: 42,
+                  display: 'flex',
+                  alignItems: 'center',
+                  padding: '0 14px',
+                  borderBottom: '1px solid #E5EEF1',
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: '#17222F',
+                }}>
+                  История водителей
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+                    <thead>
+                      <tr>
+                        {['Водитель', 'Телефон', 'Начало', 'Конец', 'Статус'].map(label => (
+                          <th key={label} style={{
+                            height: 36,
+                            padding: '0 12px',
+                            borderBottom: '1px solid #E5EEF1',
+                            textAlign: 'left',
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: '#7A859D',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedTransferCard.history.length ? selectedTransferCard.history.map((entry, index) => (
+                        <tr key={`${entry.driverName}-${index}`}>
+                          {[entry.driverName, entry.phone, entry.startDate, entry.endDate, entry.status].map((value, cellIndex) => (
+                            <td key={cellIndex} style={{
+                              height: 42,
+                              padding: '0 12px',
+                              borderBottom: index === selectedTransferCard.history.length - 1 ? 'none' : '1px solid #EEF4F6',
+                              fontSize: 13,
+                              fontWeight: cellIndex === 0 ? 850 : 650,
+                              color: cellIndex === 4 ? '#237F81' : '#17222F',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {value || '-'}
+                            </td>
+                          ))}
+                        </tr>
+                      )) : (
+                        <tr>
+                          <td colSpan={5} style={{
+                            height: 58,
+                            padding: '0 14px',
+                            color: '#7A859D',
+                            fontSize: 13,
+                            fontWeight: 700,
+                          }}>
+                            Водитель не назначен
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {showNewFamily && (
         <NewFamilyModal
@@ -2080,9 +2831,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             Тип транспорта
           </div>
           <div style={{ display: 'grid', gap: 3 }}>
-            {VEHICLE_TYPE_OPTIONS.map(option => {
-              const active = selectedTransferVehicleType === option.value;
-              const tone = TRANSFER_TONE[option.value] ?? TRANSFER_TONE.empty;
+            {TRANSFER_TYPE_MENU_OPTIONS.map(option => {
+              const active = option.value === 'unassigned'
+                ? !selectedTransferVehicleType
+                : selectedTransferVehicleType === option.value;
+              const tone = option.value === 'unassigned'
+                ? TRANSFER_TONE.empty
+                : TRANSFER_TONE[option.value] ?? TRANSFER_TONE.empty;
               return (
                 <button
                   key={option.value}

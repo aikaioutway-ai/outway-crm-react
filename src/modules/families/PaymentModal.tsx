@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { X, CreditCard, Paperclip } from 'lucide-react';
+import { X, CreditCard, Paperclip, Loader } from 'lucide-react';
 import { Charge, Child, Family, PaymentType } from '../../types';
 import { money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { createFamilyPayment, fetchFinanceSnapshot } from '../../services/financeService';
 import { addV2Audit, fetchV2Children } from '../../services/crmV2Service';
+import { extractReceiptData } from '../../services/receiptOcr';
 
 interface Props {
   family: Family;
@@ -21,6 +22,9 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptCode, setReceiptCode] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrMsg, setOcrMsg] = useState('');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -61,6 +65,7 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
         paymentType,
         paymentDate,
         receiptFile,
+        receiptCode: receiptCode || undefined,
         comment,
         createdBy: userName,
       });
@@ -80,6 +85,8 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
       setMsg('Платёж отправлен кассиру на проверку');
       setAmount('');
       setReceiptFile(null);
+      setReceiptCode('');
+      setOcrMsg('');
       setComment('');
       await load();
     } catch (e: any) {
@@ -168,15 +175,42 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
                     style={inputStyle}
                   />
                   <label style={fileInputStyle}>
-                    <Paperclip size={14} />
+                    {ocrLoading ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Paperclip size={14} />}
                     <span>{receiptFile ? receiptFile.name : 'Прикрепить чек'}</span>
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                      onChange={async e => {
+                        const file = e.target.files?.[0] ?? null;
+                        setReceiptFile(file);
+                        if (!file) return;
+                        setOcrLoading(true);
+                        setOcrMsg('');
+                        try {
+                          const result = await extractReceiptData(file);
+                          if (result.receipt_code) setReceiptCode(result.receipt_code);
+                          if (result.amount) setAmount(String(result.amount));
+                          if (result.date) setPaymentDate(result.date);
+                          setOcrMsg(result.receipt_code ? '✓ Данные извлечены из чека' : 'Код чека не найден — введите вручную');
+                        } catch {
+                          setOcrMsg('OCR недоступен — введите данные вручную');
+                        }
+                        setOcrLoading(false);
+                      }}
                       style={{ display: 'none' }}
                     />
                   </label>
+                  {ocrMsg && (
+                    <div style={{ fontSize: 11, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '4px 2px' }}>
+                      {ocrMsg}
+                    </div>
+                  )}
+                  <input
+                    value={receiptCode}
+                    onChange={e => setReceiptCode(e.target.value)}
+                    placeholder="Код чека (авто или вручную)"
+                    style={inputStyle}
+                  />
                 </div>
                 <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{ ...inputStyle, width: '100%', marginBottom: 10 }} />
                 <button

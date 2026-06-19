@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { AlertTriangle, Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { extractReceiptData } from '../../services/receiptOcr';
 import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentStatus, PaymentType, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL, PERIOD_ORDER } from './constants';
@@ -35,7 +36,7 @@ interface Props {
   onSaveCharge: (charge: Charge, updates: Partial<Charge>) => Promise<boolean>;
   onDeleteCharge: (charge: Charge) => void;
   onAddCharges: (month: number, year: number) => void | Promise<void>;
-  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null) => Promise<boolean>;
+  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string) => Promise<boolean>;
   onConfirmPayment: (payment: FamilyPayment, actualPaymentDate: string) => Promise<boolean>;
   onUnconfirmPayment?: (payment: FamilyPayment) => Promise<boolean>;
   onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
@@ -68,6 +69,9 @@ export default function TabFinance({
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [receiptCode, setReceiptCode] = useState('');
+  const [ocrLoading, setOcrLoading] = useState(false);
+  const [ocrMsg, setOcrMsg] = useState('');
   const [comment, setComment] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
@@ -95,12 +99,14 @@ export default function TabFinance({
     const amount = Number(paymentAmount);
     if (!amount || amount <= 0) return;
     setSavingPayment(true);
-    const ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile);
+    const ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile, receiptCode || undefined);
     setSavingPayment(false);
     if (ok) {
       setMsg('Платёж отправлен кассиру на проверку');
       setPaymentAmount('');
       setReceiptFile(null);
+      setReceiptCode('');
+      setOcrMsg('');
       setComment('');
       setTimeout(() => setMsg(''), 2500);
     } else {
@@ -162,17 +168,45 @@ export default function TabFinance({
                     style={{ ...inputStyle, width: '100%' }}
                   />
                   <label style={{ ...fileInputStyle, width: '100%', boxSizing: 'border-box' }}>
-                    <Paperclip size={14} />
+                    {ocrLoading ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Paperclip size={14} />}
                     <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {receiptFile ? receiptFile.name : 'Прикрепить чек'}
                     </span>
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={e => setReceiptFile(e.target.files?.[0] ?? null)}
+                      onChange={async e => {
+                        const file = e.target.files?.[0] ?? null;
+                        setReceiptFile(file);
+                        if (!file) return;
+                        setOcrLoading(true);
+                        setOcrMsg('');
+                        try {
+                          const result = await extractReceiptData(file);
+                          if (result.receipt_code) setReceiptCode(result.receipt_code);
+                          if (result.amount) setPaymentAmount(String(result.amount));
+                          if (result.date) setPaymentDate(result.date);
+                          setOcrMsg(result.receipt_code ? '✓ Данные извлечены' : 'Код не найден');
+                        } catch (err: any) {
+                          console.error('OCR error:', err);
+                          setOcrMsg('OCR ошибка: ' + (err?.message ?? String(err)));
+                        }
+                        setOcrLoading(false);
+                      }}
                       style={{ display: 'none' }}
                     />
                   </label>
+                  {ocrMsg && (
+                    <div style={{ fontSize: 10, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '2px 2px' }}>
+                      {ocrMsg}
+                    </div>
+                  )}
+                  <input
+                    value={receiptCode}
+                    onChange={e => setReceiptCode(e.target.value)}
+                    placeholder="Код чека"
+                    style={{ ...inputStyle, width: '100%' }}
+                  />
                   <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={{
                     width: '100%', height: 34, border: 'none', borderRadius: 8,
                     background: '#D7EEEE', color: '#237F81', fontSize: 12, fontWeight: 800,

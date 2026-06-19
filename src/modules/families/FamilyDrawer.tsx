@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { X, User, Users, CreditCard, History } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem } from '../../types';
 import { getFamilyPrice, money } from '../../utils/pricing';
@@ -42,17 +43,29 @@ const TABS: { key: Tab; label: string; icon: React.ReactNode }[] = [
 ];
 
 export default function FamilyDrawer({ family, onClose, userRole = 'manager', userName = 'Менеджер' }: Props) {
+  const queryClient = useQueryClient();
   const [tab, setTab]               = useState<Tab>('info');
-  const [children, setChildren]     = useState<Child[]>([]);
-  const [charges, setCharges]       = useState<Charge[]>([]);
-  const [payments, setPayments]     = useState<FamilyPayment[]>([]);
-  const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
-  const [mainBalance, setMainBalance] = useState(0);
-  const [depositBalance, setDepositBalance] = useState(0);
   const [audit, setAudit]           = useState<AuditEntry[]>([]);
-  const [loadingKids, setLoadingKids]         = useState(true);
-  const [loadingFinance, setLoadingFinance] = useState(true);
   const [saving, setSaving]         = useState(false);
+
+  // Дети — кэшируются по familyId
+  const { data: children = [], isLoading: loadingKids, refetch: refetchChildren } = useQuery({
+    queryKey: ['children', family.id],
+    queryFn: () => fetchV2Children(family),
+  });
+
+  // Финансы — кэшируются, зависят от children
+  const { data: financeSnapshot, isLoading: loadingFinance, refetch: refetchFinance } = useQuery({
+    queryKey: ['finance', family.id],
+    queryFn: () => fetchFinanceSnapshot(family.id, children),
+    enabled: !loadingKids, // ждём пока загрузятся дети
+  });
+
+  const charges      = financeSnapshot?.charges      ?? [];
+  const payments     = financeSnapshot?.payments     ?? [];
+  const paymentItems = financeSnapshot?.paymentItems ?? [];
+  const mainBalance  = financeSnapshot?.mainBalance  ?? 0;
+  const depositBalance = financeSnapshot?.depositBalance ?? 0;
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [saveMsg, setSaveMsg]       = useState('');
 
@@ -61,33 +74,16 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
 
   useEffect(() => {
     setSavedFamily(family);
-    loadAll();
     loadAudit();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
-  async function loadAll() {
-    const loadedChildren = await loadChildren();
-    await loadFinance(loadedChildren);
+  async function loadFinance() {
+    await queryClient.invalidateQueries({ queryKey: ['finance', family.id] });
   }
 
-  async function loadChildren(): Promise<Child[]> {
-    setLoadingKids(true);
-    const next = await fetchV2Children(family);
-    setChildren(next);
-    setLoadingKids(false);
-    return next;
-  }
-
-  async function loadFinance(loadedChildren = children) {
-    setLoadingFinance(true);
-    const snapshot = await fetchFinanceSnapshot(family.id, loadedChildren);
-    setCharges(snapshot.charges);
-    setPayments(snapshot.payments);
-    setPaymentItems(snapshot.paymentItems);
-    setMainBalance(snapshot.mainBalance ?? 0);
-    setDepositBalance(snapshot.depositBalance ?? 0);
-    setLoadingFinance(false);
+  async function loadChildren() {
+    await queryClient.invalidateQueries({ queryKey: ['children', family.id] });
   }
 
   async function loadAudit() {
@@ -201,7 +197,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     await loadAudit();
   }
 
-  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null): Promise<boolean> {
+  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string): Promise<boolean> {
     try {
       await createFamilyPayment({
         familyId: family.id,
@@ -209,6 +205,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         paymentType,
         paymentDate,
         receiptFile,
+        receiptCode,
         comment,
         createdBy: userName,
       });
@@ -244,17 +241,16 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   }
 
   // Долг по платежам (исключая депозит)
-  const totalDebt = payments
-    ? charges.reduce((s, c) => s + c.debtAmount, 0)
+  const totalDebt = payments.length > 0
+    ? charges.reduce((s: number, c: any) => s + c.debtAmount, 0)
     : 0;
 
-  // Правильная цена семьи = getFamilyPrice от детей
   const familyMonthlyPrice = children.length > 0
-    ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
+    ? getFamilyPrice(children.map((c: any) => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
     : savedFamily.monthlyPrice;
-  const totalCharged = charges.reduce((s, c) => s + c.amount + c.penaltyAmount, 0);
-  const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
-  const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
+  const totalCharged = charges.reduce((s: number, c: any) => s + c.amount + c.penaltyAmount, 0);
+  const totalPaid = charges.reduce((s: number, c: any) => s + c.paidAmount, 0);
+  const pendingAmount = payments.filter((p: any) => p.status === 'На проверке').reduce((s: number, p: any) => s + p.amount, 0);
 
   return (
     <>
@@ -349,7 +345,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         {/* ─── CONTENT ─── */}
         <div style={{ flex: 1, overflowY: 'auto', padding: '14px 20px', background: '#FAFBFF' }}>
           {tab === 'info'      && <TabInfo      family={savedFamily} saving={saving} onSave={handleSaveFamily} />}
-          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} onReload={loadAll} />}
+          {tab === 'children'  && <TabChildren  children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} onReload={loadChildren} />}
           {tab === 'finance'   && <TabFinance
             charges={charges}
             payments={payments}
