@@ -161,7 +161,7 @@ function buildColumns<T>(initialColumns: ColumnDef<T>[], storageKey: string): Co
       return initialColumns
         .map(c => ({
           ...c,
-          visible: c.key === 'openCard' ? true : map[c.key]?.visible ?? c.visible ?? true,
+          visible: map[c.key]?.visible ?? c.visible ?? true,
           width: map[c.key]?.width ?? c.width,
         }))
         .sort((a, b) => {
