@@ -6,7 +6,7 @@ import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
 import { addV2Audit, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
-  confirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
+  confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
   updateFamilyPayment, updateCharge,
 } from '../../services/financeService';
@@ -179,6 +179,17 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     try {
       await confirmFamilyPayment({ payment, charges, confirmedBy: userName, actualPaymentDate });
       await addAudit('Подтверждение', 'family_payment', payment.status, `${money(payment.amount)} подтверждено`);
+      await loadFinance();
+      await loadAudit();
+      onUpdated?.();
+      return true;
+    } catch { return false; }
+  }
+
+  async function handleUnconfirmPayment(payment: FamilyPayment): Promise<boolean> {
+    try {
+      await unconfirmFamilyPayment(payment);
+      await addAudit('Отмена подтверждения', 'family_payment', payment.status, `${money(payment.amount)} откатано`);
       await loadFinance();
       await loadAudit();
       onUpdated?.();
@@ -373,7 +384,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               isAdmin={isAdmin} isCashier={isCashier} userRole={userRole as any}
               onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
               onAddCharges={handleAddCharges} onCreatePayment={handleCreatePayment}
-              onConfirmPayment={handleConfirmPayment} onSavePayment={handleSavePayment}
+              onConfirmPayment={handleConfirmPayment} onUnconfirmPayment={handleUnconfirmPayment} onSavePayment={handleSavePayment}
               onDeletePayment={handleDeletePayment}
             />
           )}

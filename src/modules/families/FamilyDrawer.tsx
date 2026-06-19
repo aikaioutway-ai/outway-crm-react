@@ -6,7 +6,7 @@ import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
 import { addV2Audit, fetchV2Children, updateV2Family } from '../../services/crmV2Service';
 import {
-  confirmFamilyPayment,
+  confirmFamilyPayment, unconfirmFamilyPayment,
   createChargesForPeriod,
   createFamilyPayment,
   deleteFamilyPayment,
@@ -233,6 +233,16 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
     }
   }
 
+  async function handleUnconfirmPayment(payment: FamilyPayment): Promise<boolean> {
+    try {
+      await unconfirmFamilyPayment(payment);
+      await addAudit('Отмена подтверждения', 'family_payment', payment.status, `${money(payment.amount)} откатано`);
+      await loadFinance();
+      await loadAudit();
+      return true;
+    } catch { return false; }
+  }
+
   // Долг по платежам (исключая депозит)
   const totalDebt = payments
     ? charges.reduce((s, c) => s + c.debtAmount, 0)
@@ -357,6 +367,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
             onAddCharges={handleAddCharges}
             onCreatePayment={handleCreatePayment}
             onConfirmPayment={handleConfirmPayment}
+            onUnconfirmPayment={handleUnconfirmPayment}
             onSavePayment={handleSavePayment}
             onDeletePayment={handleDeletePayment}
           />}

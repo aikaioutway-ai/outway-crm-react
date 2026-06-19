@@ -313,6 +313,49 @@ export async function confirmFamilyPayment(params: {
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Отменяет подтверждение платежа:
+ * - статус → pending
+ * - откатывает баланс кошелька
+ * - снимает применение к начислениям
+ */
+export async function unconfirmFamilyPayment(payment: FamilyPayment): Promise<void> {
+  const confirmedAmount = payment.amount;
+
+  // 1. Откатываем статус платежа
+  const { error: e1 } = await supabase
+    .from('v2_payments')
+    .update({
+      status: 'pending',
+      confirmed_main_amount: 0,
+      confirmed_deposit_amount: 0,
+      reviewed_by: null,
+      reviewed_at: null,
+    })
+    .eq('id', payment.id);
+  if (e1) throw new Error(e1.message);
+
+  // 2. Вычитаем из кошелька
+  const { error: e2 } = await supabase.rpc('v2_add_wallet_transaction', {
+    p_family_id: payment.familyId,
+    p_wallet_type: 'main',
+    p_transaction_type: 'payment_reversed',
+    p_amount: -confirmedAmount,
+    p_source_type: 'payment',
+    p_source_id: payment.id,
+    p_comment: 'Отмена подтверждения',
+    p_created_by: 'CRM',
+  });
+  if (e2) throw new Error(e2.message);
+
+  // 3. Пересчитываем применение к начислениям
+  await supabase.rpc('v2_apply_wallet_to_charges', {
+    p_family_id: payment.familyId,
+    p_wallet_type: 'main',
+    p_created_by: 'CRM',
+  });
+}
+
 // Учебный год: сентябрь(9)–май(5)
 const ACADEMIC_MONTHS = [9, 10, 11, 12, 1, 2, 3, 4, 5];
 

@@ -37,6 +37,7 @@ interface Props {
   onAddCharges: (month: number, year: number) => void | Promise<void>;
   onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null) => Promise<boolean>;
   onConfirmPayment: (payment: FamilyPayment, actualPaymentDate: string) => Promise<boolean>;
+  onUnconfirmPayment?: (payment: FamilyPayment) => Promise<boolean>;
   onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDeletePayment: (payment: FamilyPayment) => Promise<boolean>;
 }
@@ -57,6 +58,7 @@ export default function TabFinance({
   onAddCharges,
   onCreatePayment,
   onConfirmPayment,
+  onUnconfirmPayment,
   onSavePayment,
   onDeletePayment,
 }: Props) {
@@ -263,6 +265,7 @@ export default function TabFinance({
               onConfirm={(actualPaymentDate) => confirmPayment(payment, actualPaymentDate)}
               onSave={updates => onSavePayment(payment, updates)}
               onDelete={() => onDeletePayment(payment)}
+              onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
               isAdmin={isAdmin}
             />
           ))}
@@ -381,12 +384,13 @@ function ChargeRow({ charge, isAdmin, userRole, onSave, onDelete }: {
   );
 }
 
-function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave, onDelete, isAdmin }: {
+function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUnconfirm, onSave, onDelete, isAdmin }: {
   payment: FamilyPayment;
   items: PaymentItem[];
   canConfirm: boolean;
   confirming: boolean;
   onConfirm: (actualPaymentDate: string) => void;
+  onUnconfirm?: () => void;
   onSave: (updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDelete: () => Promise<boolean>;
   isAdmin: boolean;
@@ -438,6 +442,15 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave,
           <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
             {payment.status}
           </div>
+          {onUnconfirm && !editing && (
+            <button
+              onClick={() => { if (window.confirm('Отменить подтверждение? Баланс будет откатан.')) onUnconfirm(); }}
+              title="Отменить подтверждение"
+              style={{ ...iconBtnStyle, color: '#DC2626' }}
+            >
+              <X size={13} />
+            </button>
+          )}
           {isAdmin && !editing && (
             <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
               <Pencil size={13} />
