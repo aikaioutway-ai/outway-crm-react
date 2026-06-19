@@ -73,6 +73,13 @@ interface ModeFilters {
   quickPaymentStatus: string;
 }
 
+const MODE_LABEL: Record<FamiliesMode, string> = {
+  requests: 'Заявки',
+  payments: 'Оплаты',
+  cashier: 'Кассир',
+  logistics: 'Логистика',
+};
+
 const PAYMENT_STATUS_OPTIONS = [
   { value: '', label: 'Все оплаты' },
   { value: 'no_charges', label: 'Нет начислений' },
@@ -251,18 +258,27 @@ const LOGISTICS_CHART_COLORS = [
 
 type LogisticsDashboardItem = { key: string; label: string; value: number; color: string };
 type LogisticsTransferDashboardItem = LogisticsDashboardItem & { group: string; count: number; vehicleType?: string };
-type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidSum' | 'balanceSum';
+type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidSum' | 'balanceSum' | 'pendingSum';
 type LogisticsVehicleFilter = 'all' | VehicleType;
 
 const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
   { key: 'average', label: 'Средний' },
   { key: 'count', label: 'К-во' },
+  { key: 'pendingSum', label: 'На проверке', money: true },
   { key: 'debtSum', label: 'Долг', money: true },
   { key: 'debtorsCount', label: 'Должники' },
   { key: 'chargedSum', label: 'Начислено', money: true },
   { key: 'paidSum', label: 'Оплачено', money: true },
   { key: 'balanceSum', label: 'Баланс', money: true },
 ];
+
+const METRICS_BY_ROLE: Record<string, LogisticsDashboardMetric[]> = {
+  admin:    ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
+  director: ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
+  manager:  ['count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
+  cashier:  ['pendingSum', 'debtSum', 'debtorsCount'],
+  logist:   ['average', 'count'],
+};
 const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[] = [
   { key: 'all', label: 'Все ТС' },
   { key: 'microbus', label: 'Микроавтобус' },
@@ -432,6 +448,7 @@ function LogisticsMicrobusDashboard({
   onSelect,
   metric,
   onMetricChange,
+  metricOptions,
   vehicleFilter,
   onVehicleFilterChange,
   summaryItems,
@@ -448,6 +465,7 @@ function LogisticsMicrobusDashboard({
   onSelect?: (key: string) => void;
   metric: LogisticsDashboardMetric;
   onMetricChange: (metric: LogisticsDashboardMetric) => void;
+  metricOptions: { key: LogisticsDashboardMetric; label: string; money?: boolean }[];
   vehicleFilter: LogisticsVehicleFilter;
   onVehicleFilterChange: (filter: LogisticsVehicleFilter) => void;
   summaryItems?: { label: string; value: string }[];
@@ -459,7 +477,7 @@ function LogisticsMicrobusDashboard({
 }) {
   const maxValue = Math.max(20, ...items.map(item => Math.max(0, item.value)));
   const maxDetailValue = Math.max(1, ...detailItems.map(item => item.count));
-  const selectedMetric = LOGISTICS_DASHBOARD_METRICS.find(item => item.key === metric) ?? LOGISTICS_DASHBOARD_METRICS[0];
+  const selectedMetric = metricOptions.find(item => item.key === metric) ?? metricOptions[0] ?? LOGISTICS_DASHBOARD_METRICS[0];
   const averageGaugeValue = items.length
     ? items.reduce((sum, item) => sum + item.value, 0) / items.length
     : 0;
@@ -511,7 +529,7 @@ function LogisticsMicrobusDashboard({
         <div style={{ ...logisticsGaugeTitleStyle, width: 182, display: 'grid', gridTemplateColumns: 'minmax(82px, 1fr) minmax(92px, 1fr)', gap: 8 }}>
           <NotionSelect
             value={metric}
-            options={LOGISTICS_DASHBOARD_METRICS.map(option => ({ value: option.key, label: option.label }))}
+            options={metricOptions.map(option => ({ value: option.key, label: option.label }))}
             onChange={value => onMetricChange(value as LogisticsDashboardMetric)}
             variant="inline"
             panelWidth={220}
@@ -740,8 +758,10 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'minivan', label: 'Минивэн' },
   { value: 'sedan', label: 'Седан' },
 ];
+const DEFAULT_ACTIVE_TAB = SCHOOL_TABS.find(t => t.key !== 'ALL')?.key ?? 'TIS';
+
 const DEFAULT_MODE_FILTERS: ModeFilters = {
-  activeTab: 'ALL',
+  activeTab: DEFAULT_ACTIVE_TAB,
   quickTransfer: '',
   quickChildStatus: '',
   quickPaymentStatus: '',
@@ -792,7 +812,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const tableBarsCollapsed = tableBarsCollapsedByMode[mode] ?? false;
   const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? true;
   const dashboardSchoolKey = dashboardSchoolByMode[mode] ?? '';
-  const dashboardMetric = dashboardMetricByMode[mode] ?? 'average';
+  const DEFAULT_METRIC_BY_MODE: Record<FamiliesMode, LogisticsDashboardMetric> = {
+    requests: 'count',
+    payments: 'debtorsCount',
+    cashier: 'pendingSum',
+    logistics: 'average',
+  };
+  const dashboardMetric = dashboardMetricByMode[mode] ?? DEFAULT_METRIC_BY_MODE[mode];
   const dashboardVehicleFilter = dashboardVehicleFilterByMode[mode] ?? 'all';
   const setModeFilter = (patch: Partial<ModeFilters>) => {
     setFiltersByMode(prev => ({
@@ -1106,6 +1132,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     const averageTransfers = allTransfers;
     const familyRows = uniqueFamilyRows(workRows);
     const debtRows = familyRows.filter(row => row.debtAmount > 0);
+    const pendingFamilyRows = uniqueFamilyRows(workRows.filter(row => row.pendingPayment > 0));
     return {
       transferCount: allTransfers.size,
       studentCount: workRows.length,
@@ -1115,6 +1142,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       balanceSum: workRows.reduce((sum, row) => sum + Number(row.balance || 0), 0),
       debtorsCount: debtRows.length,
       debtSum: debtRows.reduce((sum, row) => sum + Number(row.debtAmount || 0), 0),
+      pendingSum: pendingFamilyRows.reduce((sum, row) => sum + Number(row.pendingPayment || 0), 0),
     };
   }, [dashboardVehicleFilter]);
   const dashboardMetricValue = useCallback((stats: ReturnType<typeof dashboardStatsForRows>) => {
@@ -1124,6 +1152,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (dashboardMetric === 'chargedSum') return stats.chargedSum;
     if (dashboardMetric === 'paidSum') return stats.paidSum;
     if (dashboardMetric === 'balanceSum') return stats.balanceSum;
+    if (dashboardMetric === 'pendingSum') return stats.pendingSum;
     return stats.average;
   }, [dashboardMetric]);
 
@@ -1323,14 +1352,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           count: dashboardSchoolRows.filter(row => row.status === 'rejected').length,
           color: '#EF7168',
         },
-        {
-          key: 'all',
-          label: '≡',
-          group: 'Все',
-          value: dashboardVehicleRows.length,
-          count: dashboardVehicleRows.length,
-          color: '#31A4A5',
-        },
       ]
     : [];
   const activeDashboardDetailKey = quickChildStatus === 'new' || quickChildStatus === 'rejected'
@@ -1346,14 +1367,17 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return dashboardSchoolRows;
   })();
   const dashboardSummaryStats = dashboardStatsForRows(dashboardSummaryRows);
+  const allowedMetrics = METRICS_BY_ROLE[userRole] ?? METRICS_BY_ROLE.admin;
+  const visibleDashboardMetrics = LOGISTICS_DASHBOARD_METRICS.filter(m => allowedMetrics.includes(m.key));
   const dashboardSummaryItems = [
     { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
     { label: 'К-во трансфер', value: String(dashboardSummaryStats.transferCount) },
     { label: 'К-во учеников', value: String(dashboardSummaryStats.studentCount) },
-    { label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) },
-    { label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) },
-    { label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) },
-    { label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) },
+    ...(allowedMetrics.includes('average') ? [{ label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) }] : []),
+    ...(allowedMetrics.includes('pendingSum') ? [{ label: 'На проверке', value: compactMoney(dashboardSummaryStats.pendingSum) }] : []),
+    ...(allowedMetrics.includes('chargedSum') ? [{ label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) }] : []),
+    ...(allowedMetrics.includes('debtorsCount') ? [{ label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) }] : []),
+    ...(allowedMetrics.includes('debtSum') ? [{ label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) }] : []),
   ];
   const selectedTransferVehicleType = transferTypeMenu
     ? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'minivan')?.vehicleType
@@ -1508,12 +1532,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           onToggle={() => setLogisticsDashboardCollapsed(value => !value)}
           selectedKey={selectedDashboardSchool?.key}
           onSelect={(key) => {
+            if (key === 'ALL') return;
             setDashboardSchoolKey(key);
-            setModeFilter({ activeTab: key });
+            setModeFilter({ activeTab: key, quickChildStatus: '', quickTransfer: '' });
             setLogisticsDashboardCollapsed(false);
           }}
-          metric={dashboardMetric}
+          metric={allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]}
           onMetricChange={setDashboardMetric}
+          metricOptions={visibleDashboardMetrics}
           vehicleFilter={dashboardVehicleFilter}
           onVehicleFilterChange={setDashboardVehicleFilter}
           summaryItems={dashboardSummaryItems}
@@ -1568,10 +1594,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           }}>
             <span style={{
               height: 31,
-              width: 150,
               display: 'inline-flex',
               alignItems: 'center',
-              gap: 6,
+              gap: 5,
               padding: '0 10px',
               borderRadius: '8px 8px 0 0',
               background: '#fff',
@@ -1579,11 +1604,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               fontSize: 12,
               fontWeight: 850,
               whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
               flexShrink: 0,
             }}>
-              {selectedSchoolLabel} · {selectedTransferLabel}
+              <span style={{ color: '#31A4A5', fontWeight: 900 }}>{MODE_LABEL[mode]}</span>
+              <span style={{ color: '#C8D8DC' }}>·</span>
+              {selectedSchoolLabel}
+              <span style={{ color: '#C8D8DC' }}>·</span>
+              {selectedTransferLabel}
             </span>
             <div style={{ width: 54, flexShrink: 0 }} />
             {TRANSFER_TABS.map(tabItem => {
@@ -1734,6 +1761,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 height: 18,
                 display: 'inline-flex',
                 alignItems: 'center',
+                gap: 5,
                 padding: '0 8px',
                 borderRadius: 8,
                 background: '#fff',
@@ -1742,7 +1770,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 fontWeight: 850,
                 whiteSpace: 'nowrap',
               }}>
-                {selectedSchoolLabel} · {selectedTransferLabel}
+                <span style={{ color: '#31A4A5' }}>{MODE_LABEL[mode]}</span>
+                <span style={{ color: '#D4E3E7' }}>·</span>
+                {selectedSchoolLabel}
+                <span style={{ color: '#D4E3E7' }}>·</span>
+                {selectedTransferLabel}
               </span>
               <button
                 onClick={() => setTableBarsCollapsed(false)}
@@ -1886,7 +1918,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           </button>
         </div>
         <nav style={{ flex: 1, padding: schoolsBarCollapsed ? '7px 0 7px 0' : '7px 8px 7px 0', overflow: 'visible' }}>
-          {schoolButtonItems.map(t => {
+          {schoolButtonItems.filter(t => t.key !== 'ALL' || !schoolsBarCollapsed).map(t => {
             const isActive = activeTab === t.key;
             const allowed = isTabAllowed(t.key);
             const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
@@ -1897,7 +1929,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 key={t.key}
                 onClick={() => {
                   if (!allowed) return;
-                  setModeFilter({ activeTab: t.key });
+                  setModeFilter({ activeTab: t.key, quickChildStatus: '', quickTransfer: '' });
                   setDashboardSchoolKey(t.key);
                   if (mode === 'logistics') {
                     setLogisticsDashboardCollapsed(false);
