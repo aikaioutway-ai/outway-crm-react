@@ -56,7 +56,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [saveMsg, setSaveMsg]       = useState('');
 
-  const isAdmin   = userRole === 'admin' || userRole === 'director';
+  const isAdmin   = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
 
   useEffect(() => {
@@ -96,10 +96,10 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
       const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
         .order('created_at', { ascending: false }).limit(50);
       if (data) {
-        const isAdmin = userRole === 'admin' || userRole === 'director';
-        const ADMIN_NAMES = ['admin', 'администратор', 'director', 'директор'];
+        const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
+        const ADMIN_NAMES = ['admin', 'администратор', 'director', 'директор', 'gen_director', 'ген директор'];
         const filtered = isAdmin ? data : data.filter((r: any) => {
-          if (r.actor_role === 'admin' || r.actor_role === 'director') return false;
+          if (r.actor_role === 'admin' || r.actor_role === 'director' || r.actor_role === 'gen_director') return false;
           const name = String(r.actor_name ?? '').toLowerCase();
           return !ADMIN_NAMES.some(n => name.includes(n));
         });

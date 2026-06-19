@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Family, FamilyPayment, VehicleType, Zone } from '../../types';
+import { Family, FamilyPayment, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
@@ -61,7 +61,7 @@ type FamiliesMode = 'requests' | 'payments' | 'cashier' | 'logistics';
 
 interface FamiliesPageProps {
   mode?: FamiliesMode;
-  userRole?: 'admin' | 'manager' | 'cashier' | 'logist' | 'director';
+  userRole?: UserRole;
   userName?: string;
   allowedSchools?: string[];
 }
@@ -273,8 +273,9 @@ const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: strin
 ];
 
 const METRICS_BY_ROLE: Record<string, LogisticsDashboardMetric[]> = {
-  admin:    ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
-  director: ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
+  admin:        ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
+  gen_director: ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
+  director:     ['average', 'count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
   manager:  ['count', 'pendingSum', 'debtSum', 'debtorsCount', 'chargedSum', 'paidSum', 'balanceSum'],
   cashier:  ['pendingSum', 'debtSum', 'debtorsCount'],
   logist:   ['average', 'count'],
@@ -783,11 +784,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
+  const roleDefaultChildStatus = (userRole === 'manager' || userRole === 'logist') ? 'new' : '';
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
-    requests: { ...DEFAULT_MODE_FILTERS },
-    payments: { ...DEFAULT_MODE_FILTERS },
-    cashier: { ...DEFAULT_MODE_FILTERS },
-    logistics: { ...DEFAULT_MODE_FILTERS },
+    requests: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
+    payments: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
+    cashier:  { ...DEFAULT_MODE_FILTERS },
+    logistics: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
   });
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
   const [expandedFamily, setExpandedFamily]     = useState<Family | null>(null);
@@ -1097,7 +1099,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
   }
 
-  const canManageProperties = userRole === 'admin' || userRole === 'director';
+  const canManageProperties = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const modeRows = useMemo(() => (
     mode === 'logistics' ? logisticsWorkRows(rows) : rows
   ), [mode, rows]);
@@ -1250,13 +1252,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const filtered = useMemo(() => modeRows.filter(r => {
     if (!matchesSchool(r)) return false;
     if (!matchesSearch(r)) return false;
+    if (mode === 'cashier' && r.pendingPayment <= 0) return false;
     if (quickTransfer === 'empty' && r.transferNumber) return false;
     if (quickTransfer && quickTransfer !== 'empty' && r.transferNumber !== quickTransfer) return false;
     if (quickChildStatus === 'transfered' && !r.transferNumber) return false;
     if (quickChildStatus && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     if (quickPaymentStatus && r.paymentStatus !== quickPaymentStatus) return false;
     return true;
-  }), [matchesSchool, matchesSearch, modeRows, quickChildStatus, quickPaymentStatus, quickTransfer]);
+  }), [matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickPaymentStatus, quickTransfer]);
 
   const transferVehicleType = useCallback((transfer: string) => {
     if (!transfer || transfer === 'empty') return 'empty';
@@ -1396,6 +1399,23 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     fontWeight: 600,
     outline: 'none',
   };
+  const getSchoolSwitchFilters = useCallback((schoolKey: string): Partial<ModeFilters> => {
+    if (userRole === 'manager' || userRole === 'logist') {
+      return { activeTab: schoolKey, quickChildStatus: 'new', quickTransfer: '' };
+    }
+    if (mode === 'cashier') {
+      const tab = SCHOOL_TABS.find(t => t.key === schoolKey);
+      const schoolRows = tab ? rows.filter(r => rowMatchesSchoolTab(r, tab)) : rows;
+      const counts: Record<string, number> = {};
+      uniqueFamilyRows(schoolRows.filter(r => r.pendingPayment > 0)).forEach(r => {
+        if (r.transferNumber) counts[r.transferNumber] = (counts[r.transferNumber] || 0) + 1;
+      });
+      const best = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      return { activeTab: schoolKey, quickTransfer: best?.[0] ?? '', quickChildStatus: '' };
+    }
+    return { activeTab: schoolKey, quickChildStatus: '', quickTransfer: '' };
+  }, [mode, rows, rowMatchesSchoolTab, userRole]);
+
   const tableColumns: ColumnDef<ChildRow>[] = [
     {
       key: 'openCard',
@@ -1534,7 +1554,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           onSelect={(key) => {
             if (key === 'ALL') return;
             setDashboardSchoolKey(key);
-            setModeFilter({ activeTab: key, quickChildStatus: '', quickTransfer: '' });
+            setModeFilter(getSchoolSwitchFilters(key));
             setLogisticsDashboardCollapsed(false);
           }}
           metric={allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]}
@@ -1929,7 +1949,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 key={t.key}
                 onClick={() => {
                   if (!allowed) return;
-                  setModeFilter({ activeTab: t.key, quickChildStatus: '', quickTransfer: '' });
+                  setModeFilter(getSchoolSwitchFilters(t.key));
                   setDashboardSchoolKey(t.key);
                   if (mode === 'logistics') {
                     setLogisticsDashboardCollapsed(false);

@@ -15,7 +15,7 @@ const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
   settings:  '⚙️ Настройки — в разработке',
 };
 
-const ROLES: UserRole[] = ['admin', 'director', 'manager', 'logist', 'cashier'];
+const ROLES: UserRole[] = ['admin', 'gen_director', 'director', 'manager', 'logist', 'cashier'];
 const SESSION_KEY = 'outway_auth_user';
 
 function getSavedRole(): UserRole {

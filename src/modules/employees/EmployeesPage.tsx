@@ -6,6 +6,7 @@ import { SCHOOL_TABS } from '../families/constants';
 
 const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
   { value: 'admin', label: 'Админ' },
+  { value: 'gen_director', label: 'Ген. Директор' },
   { value: 'director', label: 'Директор' },
   { value: 'manager', label: 'Менеджер' },
   { value: 'cashier', label: 'Кассир' },

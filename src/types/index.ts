@@ -209,7 +209,7 @@ export interface AuditLog {
 
 // ─── РОЛИ ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'manager' | 'cashier' | 'logist' | 'director';
+export type UserRole = 'admin' | 'manager' | 'cashier' | 'logist' | 'director' | 'gen_director';
 export type EmployeeRole = UserRole | 'driver';
 export type EmployeeStatus = 'active' | 'inactive' | 'dismissed';
 

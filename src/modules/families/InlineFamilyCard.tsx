@@ -58,7 +58,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [saveMsg, setSaveMsg] = useState('');
 
-  const isAdmin = userRole === 'admin' || userRole === 'director';
+  const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
 
   useEffect(() => {
