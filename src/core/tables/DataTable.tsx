@@ -2,6 +2,7 @@ import React, {
   useState, useRef, useEffect, useCallback, useMemo
 } from 'react';
 import NotionSelect from '../selects/NotionSelect';
+import { supabase } from '../../services/supabase';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -152,22 +153,37 @@ function useDragList<T>(list: T[], onChange: (next: T[]) => void) {
   return { onDragStart, onDragOver, onDragEnd };
 }
 
-function buildColumns<T>(initialColumns: ColumnDef<T>[], storageKey: string): ColumnDef<T>[] {
-  try {
-    const saved = localStorage.getItem(storageKey + '_cols');
-    if (saved) {
-      const parsed: { key: string; visible: boolean; width?: number }[] = JSON.parse(saved);
-      const map = Object.fromEntries(parsed.map((p, i) => [p.key, { ...p, order: i }]));
-      return initialColumns
-        .map(c => ({
-          ...c,
-          visible: map[c.key]?.visible ?? c.visible ?? true,
-          width: map[c.key]?.width ?? c.width,
-        }))
-        .sort((a, b) => (map[a.key]?.order ?? 999) - (map[b.key]?.order ?? 999));
-    }
-  } catch {}
+function buildColumns<T>(initialColumns: ColumnDef<T>[], saved: { key: string; visible: boolean; width?: number }[] | null): ColumnDef<T>[] {
+  if (saved) {
+    const map = Object.fromEntries(saved.map((p, i) => [p.key, { ...p, order: i }]));
+    return initialColumns
+      .map(c => ({
+        ...c,
+        visible: map[c.key]?.visible ?? c.visible ?? true,
+        width: map[c.key]?.width ?? c.width,
+      }))
+      .sort((a, b) => (map[a.key]?.order ?? 999) - (map[b.key]?.order ?? 999));
+  }
   return initialColumns.map(c => ({ ...c, visible: c.visible ?? true }));
+}
+
+async function loadColumnSettings(storageKey: string): Promise<{ key: string; visible: boolean; width?: number }[] | null> {
+  try {
+    const { data } = await supabase
+      .from('column_settings')
+      .select('settings')
+      .eq('storage_key', storageKey)
+      .single();
+    return data?.settings ?? null;
+  } catch {
+    return null;
+  }
+}
+
+async function saveColumnSettings(storageKey: string, settings: { key: string; visible: boolean; width?: number }[]): Promise<void> {
+  await supabase
+    .from('column_settings')
+    .upsert({ storage_key: storageKey, settings, updated_at: new Date().toISOString() }, { onConflict: 'storage_key' });
 }
 
 // ─── MAIN COMPONENT ───────────────────────────────────────────────────────────
@@ -197,23 +213,31 @@ export function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
-  const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, storageKey));
+  const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, null));
 
-  // Пересчитываем колонки только когда реально изменился НАБОР ключей (добавили/убрали колонку в коде).
-  // Игнорируем перерендеры родителя, которые создают новую ссылку на массив с теми же ключами.
+  // Загружаем настройки колонок из Supabase при монтировании
   const prevColKeysRef = useRef<string>('');
+  useEffect(() => {
+    loadColumnSettings(storageKey).then(saved => {
+      setCols(buildColumns(initialColumns, saved));
+      prevColKeysRef.current = initialColumns.map(c => c.key).join(',');
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey]);
+
+  // Пересчитываем если изменился набор ключей колонок в коде
   useEffect(() => {
     const currentKeys = initialColumns.map(c => c.key).join(',');
     if (currentKeys === prevColKeysRef.current) return;
     prevColKeysRef.current = currentKeys;
-    setCols(buildColumns(initialColumns, storageKey));
+    loadColumnSettings(storageKey).then(saved => {
+      setCols(buildColumns(initialColumns, saved));
+    });
   }, [initialColumns, storageKey]);
 
   const saveCols = useCallback((next: ColumnDef<T>[]) => {
     setCols(next);
-    localStorage.setItem(storageKey + '_cols', JSON.stringify(
-      next.map(c => ({ key: c.key, visible: c.visible, width: c.width }))
-    ));
+    saveColumnSettings(storageKey, next.map(c => ({ key: c.key, visible: c.visible ?? true, width: c.width })));
   }, [storageKey]);
 
   const [sorts, setSorts] = useState<SortConfig[]>([]);

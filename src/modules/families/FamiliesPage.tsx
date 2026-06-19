@@ -4,9 +4,10 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { clearV2TransferVehicleType, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { clearV2TransferVehicleType, fetchV2Branches, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
+import NewDriverModal from '../drivers/NewDriverModal';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
@@ -329,6 +330,33 @@ type TransferCardData = {
     status: string;
   }[];
 };
+type DriverCardTab = 'main' | 'finance';
+type DriverFinanceRow = {
+  month: string;
+  days: number;
+  rate: number;
+  fines: number;
+  penalties: number;
+  accrued: number;
+  advances: number;
+  paid: number;
+  balance: number;
+};
+
+const DRIVER_FINANCE_MONTHS = [
+  'Январь',
+  'Февраль',
+  'Март',
+  'Апрель',
+  'Май',
+  'Июнь',
+  'Июль',
+  'Август',
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
+];
 
 const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
   { key: 'average', label: 'Средний' },
@@ -908,6 +936,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [expandedFamily, setExpandedFamily]     = useState<Family | null>(null);
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
+  const [showNewDriver, setShowNewDriver]       = useState(false);
+  const [driverBranches, setDriverBranches]     = useState<V2BranchOption[]>([]);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [logisticsDashboardCollapsedByMode, setLogisticsDashboardCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
   const [tableBarsCollapsedByMode, setTableBarsCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
@@ -917,6 +947,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [dashboardVehicleFilterByMode, setDashboardVehicleFilterByMode] = useState<Partial<Record<FamiliesMode, LogisticsVehicleFilter>>>({});
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [selectedDriverTab, setSelectedDriverTab] = useState<DriverCardTab>('main');
   const [transferTypeMenu, setTransferTypeMenu] = useState<{
     x: number;
     y: number;
@@ -987,6 +1018,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   useEffect(() => {
     load(!familiesRowsCache);
   }, []);
+
+  useEffect(() => {
+    if (dashboardMode !== 'drivers') return;
+    void fetchV2Branches()
+      .then(setDriverBranches)
+      .catch(error => console.error('Branches load failed', error));
+  }, [dashboardMode]);
 
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
@@ -1265,7 +1303,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
   }
 
-  const canManageProperties = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
+  const canManageProperties = userRole === 'admin';
   const modeRows = useMemo(() => (
     mode === 'logistics' ? logisticsWorkRows(rows) : rows
   ), [mode, rows]);
@@ -1628,6 +1666,40 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           .sort((a, b) => Number(a.stopNumber ?? 999) - Number(b.stopNumber ?? 999))
       : []
   ), [rows, selectedDriverId]);
+  const selectedDriverFinanceRows = useMemo<DriverFinanceRow[]>(() => (
+    DRIVER_FINANCE_MONTHS.map(month => ({
+      month,
+      days: 0,
+      rate: 0,
+      fines: 0,
+      penalties: 0,
+      accrued: 0,
+      advances: 0,
+      paid: 0,
+      balance: 0,
+    }))
+  ), []);
+  const selectedDriverFinanceTotals = useMemo(() => (
+    selectedDriverFinanceRows.reduce((totals, row) => ({
+      days: totals.days + row.days,
+      rate: totals.rate + row.rate,
+      fines: totals.fines + row.fines,
+      penalties: totals.penalties + row.penalties,
+      accrued: totals.accrued + row.accrued,
+      advances: totals.advances + row.advances,
+      paid: totals.paid + row.paid,
+      balance: totals.balance + row.balance,
+    }), {
+      days: 0,
+      rate: 0,
+      fines: 0,
+      penalties: 0,
+      accrued: 0,
+      advances: 0,
+      paid: 0,
+      balance: 0,
+    })
+  ), [selectedDriverFinanceRows]);
   const selectedTransferVehicleType = transferTypeMenu
     ? dashboardTransfers.find(item =>
         item.transferNumber === transferTypeMenu.transferNumber
@@ -2158,7 +2230,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               loading={loading}
               emptyText="Водители не найдены"
               canManageProperties={canManageProperties}
-              onRowOpen={(row) => setSelectedDriverId(row.driverId)}
+              onRowOpen={(row) => {
+                setSelectedDriverTab('main');
+                setSelectedDriverId(row.driverId);
+              }}
               hideToolbar={false}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -2190,6 +2265,27 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                     />
                   </div>
                 </div>
+              )}
+              toolbarRightExtra={(
+                <button
+                  onClick={() => setShowNewDriver(true)}
+                  title="Новый водитель"
+                  style={{
+                    width: 30,
+                    height: 30,
+                    border: 'none',
+                    borderRadius: 10,
+                    background: '#31A4A5',
+                    color: '#fff',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    flexShrink: 0,
+                    cursor: 'pointer',
+                  }}
+                >
+                  <Plus size={16} />
+                </button>
               )}
             />
           ) : (
@@ -2439,7 +2535,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   <span>{selectedDriver.status === 'active' ? 'Активен' : selectedDriver.status || 'Статус не указан'}</span>
                 </div>
                 <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: '#17222F', fontSize: 13, fontWeight: 800 }}>
-                  <span>Наш долг: 0 сом</span>
+                  <span>Наш долг: {money(selectedDriverFinanceTotals.balance)}</span>
                   <span>Не хватает документов: данные не заведены</span>
                   <span>Просрочены: нет данных</span>
                 </div>
@@ -2465,7 +2561,45 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               </button>
             </header>
 
+            <div style={{
+              height: 48,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '0 18px',
+              borderBottom: '1px solid #E5EEF1',
+              background: '#fff',
+            }}>
+              {[
+                { key: 'main' as DriverCardTab, label: 'Основная' },
+                { key: 'finance' as DriverCardTab, label: 'Финансы' },
+              ].map(tabItem => {
+                const active = selectedDriverTab === tabItem.key;
+                return (
+                  <button
+                    key={tabItem.key}
+                    onClick={() => setSelectedDriverTab(tabItem.key)}
+                    style={{
+                      height: 30,
+                      padding: '0 12px',
+                      border: `1px solid ${active ? '#31A4A5' : '#DDE9EC'}`,
+                      borderRadius: 10,
+                      background: active ? '#DFF4F4' : '#fff',
+                      color: active ? '#237F81' : '#52606F',
+                      fontSize: 12,
+                      fontWeight: 900,
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {tabItem.label}
+                  </button>
+                );
+              })}
+            </div>
+
             <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
+              {selectedDriverTab === 'main' ? (
+              <>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'minmax(0, 1.1fr) minmax(0, 1fr)',
@@ -2585,6 +2719,105 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   </table>
                 </div>
               </section>
+              </>
+              ) : (
+                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+                  <div style={{
+                    height: 42,
+                    display: 'flex',
+                    alignItems: 'center',
+                    padding: '0 14px',
+                    borderBottom: '1px solid #E5EEF1',
+                    fontSize: 13,
+                    fontWeight: 900,
+                    color: '#17222F',
+                  }}>
+                    Финансы
+                  </div>
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
+                      <thead>
+                        <tr>
+                          {['Месяц', 'К-во дней', 'Ставка', 'Штрафы', 'Пеня', 'Начислено', 'Авансы', 'Оплачено', 'Остаток'].map(label => (
+                            <th key={label} style={{
+                              height: 36,
+                              padding: '0 10px',
+                              borderBottom: '1px solid #E5EEF1',
+                              textAlign: label === 'Месяц' ? 'left' : 'right',
+                              fontSize: 11,
+                              fontWeight: 900,
+                              color: '#7A859D',
+                              textTransform: 'uppercase',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {label}
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {selectedDriverFinanceRows.map((row, index) => (
+                          <tr key={row.month}>
+                            {[
+                              row.month,
+                              row.days,
+                              money(row.rate),
+                              money(row.fines),
+                              money(row.penalties),
+                              money(row.accrued),
+                              money(row.advances),
+                              money(row.paid),
+                              money(row.balance),
+                            ].map((value, cellIndex) => (
+                              <td key={cellIndex} style={{
+                                height: 40,
+                                padding: '0 10px',
+                                borderBottom: index === selectedDriverFinanceRows.length - 1 ? 'none' : '1px solid #EEF4F6',
+                                textAlign: cellIndex === 0 ? 'left' : 'right',
+                                fontSize: 13,
+                                fontWeight: cellIndex === 0 ? 850 : 650,
+                                color: '#17222F',
+                                whiteSpace: 'nowrap',
+                              }}>
+                                {value}
+                              </td>
+                            ))}
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr>
+                          {[
+                            'Итого',
+                            selectedDriverFinanceTotals.days,
+                            money(selectedDriverFinanceTotals.rate),
+                            money(selectedDriverFinanceTotals.fines),
+                            money(selectedDriverFinanceTotals.penalties),
+                            money(selectedDriverFinanceTotals.accrued),
+                            money(selectedDriverFinanceTotals.advances),
+                            money(selectedDriverFinanceTotals.paid),
+                            money(selectedDriverFinanceTotals.balance),
+                          ].map((value, cellIndex) => (
+                            <td key={cellIndex} style={{
+                              height: 44,
+                              padding: '0 10px',
+                              borderTop: '1px solid #DDE9EC',
+                              background: '#F8FCFC',
+                              textAlign: cellIndex === 0 ? 'left' : 'right',
+                              fontSize: 13,
+                              fontWeight: 900,
+                              color: cellIndex === 8 && selectedDriverFinanceTotals.balance > 0 ? '#B42318' : '#17222F',
+                              whiteSpace: 'nowrap',
+                            }}>
+                              {value}
+                            </td>
+                          ))}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </section>
+              )}
             </div>
           </section>
         </div>
@@ -2768,6 +3001,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         <NewFamilyModal
           onClose={() => setShowNewFamily(false)}
           
+        />
+      )}
+
+      {showNewDriver && (
+        <NewDriverModal
+          branches={driverBranches}
+          initialBranchKey={selectedDashboardSchool?.key}
+          onClose={() => setShowNewDriver(false)}
+          onCreated={(driverId) => {
+            setShowNewDriver(false);
+            void load(false).then(() => setSelectedDriverId(driverId));
+          }}
         />
       )}
 
