@@ -204,7 +204,13 @@ export function DataTable<T extends Record<string, any>>({
   const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, storageKey));
 
   useEffect(() => {
-    setCols(buildColumns(initialColumns, storageKey));
+    setCols(prev => {
+      const next = buildColumns(initialColumns, storageKey);
+      // Если набор ключей не изменился — сохраняем текущую видимость пользователя
+      const sameKeys = prev.length === next.length && prev.every((c, i) => c.key === next[i]?.key);
+      if (sameKeys) return prev;
+      return next;
+    });
   }, [initialColumns, storageKey]);
 
   const saveCols = useCallback((next: ColumnDef<T>[]) => {
