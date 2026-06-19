@@ -92,7 +92,7 @@ function mapPaymentItem(row: any): PaymentItem {
 export async function fetchFinanceSnapshot(familyId: string, children: Child[]): Promise<FinanceSnapshot> {
   const childNameById = new Map(children.map(c => [String(c.id), c.childName]));
 
-  const [chargeRes, paymentRes, allocationRes, walletRes] = await Promise.all([
+  const [chargeRes, paymentRes, walletRes] = await Promise.all([
     supabase
       .from('v2_charges')
       .select('*')
@@ -103,10 +103,6 @@ export async function fetchFinanceSnapshot(familyId: string, children: Child[]):
       .from('v2_payments')
       .select('*')
       .eq('family_id', familyId)
-      .order('created_at', { ascending: false }),
-    supabase
-      .from('v2_charge_allocations')
-      .select('*, v2_wallet_transactions(*), v2_charges(*)')
       .order('created_at', { ascending: false }),
     supabase
       .from('v2_family_wallets')
@@ -120,12 +116,27 @@ export async function fetchFinanceSnapshot(familyId: string, children: Child[]):
     : (chargeRes.data ?? []).map((row: any) => mapCharge(row, childNameById.get(String(row.child_id))));
 
   const payments = paymentRes.error ? [] : (paymentRes.data ?? []).map(mapPayment);
-  const paymentIds = new Set(payments.map(p => p.id));
-  const paymentItems = allocationRes.error
-    ? []
-    : (allocationRes.data ?? [])
-      .filter((row: any) => paymentIds.has(String(row.v2_wallet_transactions?.source_id ?? '')))
-      .map(mapPaymentItem);
+
+  // Получаем аллокации только для платежей этой семьи, чтобы не тянуть всю таблицу
+  const paymentIds = payments.map(p => p.id);
+  let paymentItems: PaymentItem[] = [];
+  if (paymentIds.length > 0) {
+    const txRes = await supabase
+      .from('v2_wallet_transactions')
+      .select('id')
+      .in('source_id', paymentIds);
+    const txIds = (txRes.data ?? []).map((t: any) => String(t.id));
+    if (txIds.length > 0) {
+      const allocationRes = await supabase
+        .from('v2_charge_allocations')
+        .select('*, v2_wallet_transactions(*), v2_charges(*)')
+        .in('wallet_transaction_id', txIds)
+        .order('created_at', { ascending: false });
+      if (!allocationRes.error) {
+        paymentItems = (allocationRes.data ?? []).map(mapPaymentItem);
+      }
+    }
+  }
 
   return {
     charges,
