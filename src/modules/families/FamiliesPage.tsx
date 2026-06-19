@@ -1380,7 +1380,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
       width: 80,
       sortable: false,
       filterable: false,
-      showInProperties: false,
+      showInProperties: true,
       render: (_value, row) => (
         row.isFirstChild ? (
           <button
