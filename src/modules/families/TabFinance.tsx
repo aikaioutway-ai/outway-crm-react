@@ -383,21 +383,14 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave,
   const [comment, setComment] = useState(payment.comment ?? '');
   const [saving, setSaving] = useState(false);
   const statusStyle = payment.status === 'Подтверждено'
-    ? { background: '#F3F4F6', color: '#374151' }
+    ? { background: '#ECFDF5', color: '#065F46' }
     : payment.status === 'Отклонено'
       ? { background: '#FEE2E2', color: '#991B1B' }
-      : { background: '#F2F5E9', color: '#687C54' };
+      : { background: '#FEF9C3', color: '#92400E' };
 
   async function save() {
     setSaving(true);
-    const ok = await onSave({
-      amount: Number(amount),
-      paymentType,
-      paymentDate,
-      actualPaymentDate,
-      status,
-      comment,
-    });
+    const ok = await onSave({ amount: Number(amount), paymentType, paymentDate, actualPaymentDate, status, comment });
     setSaving(false);
     if (ok) setEditing(false);
   }
@@ -407,37 +400,23 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave,
     setSaving(true);
     const ok = await onDelete();
     setSaving(false);
-    if (!ok) window.alert('Подтверждённый платёж нельзя удалить простым удалением: сначала нужен откат.');
+    if (!ok) window.alert('Подтверждённый платёж нельзя удалить: сначала нужен откат.');
   }
 
   return (
     <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginBottom: 7 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-        <div>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(payment.amount)}</div>
           <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
             {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ru-RU') : 'без даты'} · {PAYMENT_TYPE_LABEL[payment.paymentType] ?? payment.paymentType}
             {payment.actualPaymentDate && <> · факт {new Date(payment.actualPaymentDate).toLocaleDateString('ru-RU')}</>}
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+          <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
             {payment.status}
           </div>
-          {canConfirm && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <input
-                type="date"
-                value={actualPaymentDate}
-                onChange={e => setActualPaymentDate(e.target.value)}
-                title="Факт дата оплаты"
-                style={{ ...inputStyle, width: 130, height: 28, padding: '4px 7px' }}
-              />
-              <button onClick={() => onConfirm(actualPaymentDate)} disabled={confirming || !actualPaymentDate} style={smallAccentBtn}>
-                {confirming ? '...' : 'Подтвердить'}
-              </button>
-            </div>
-          )}
           {isAdmin && !editing && (
             <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
               <Pencil size={13} />
@@ -445,28 +424,50 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave,
           )}
         </div>
       </div>
+
+      {/* Кассир: подтверждение */}
+      {canConfirm && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 8, alignItems: 'center' }}>
+          <input
+            type="date"
+            value={actualPaymentDate}
+            onChange={e => setActualPaymentDate(e.target.value)}
+            title="Факт дата оплаты"
+            style={{ ...inputStyle, flex: 1 }}
+          />
+          <button
+            onClick={() => onConfirm(actualPaymentDate)}
+            disabled={confirming || !actualPaymentDate}
+            style={{ ...smallAccentBtn, background: '#10B981', color: '#fff' }}
+          >
+            {confirming ? '...' : 'Подтвердить'}
+          </button>
+        </div>
+      )}
+
+      {/* Админ: редактирование */}
       {isAdmin && editing && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 135px 145px', gap: 7, marginTop: 8 }}>
-          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={inputStyle} />
-          <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
-            <option value="cash">Наличные</option>
-            <option value="transfer">Безналичный QR</option>
-          </select>
-          <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
-          <input type="date" value={actualPaymentDate} onChange={e => setActualPaymentDate(e.target.value)} style={inputStyle} />
-          <select value={status} onChange={e => setStatus(e.target.value as any)} style={inputStyle}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма" style={inputStyle} />
+            <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
+              <option value="cash">Наличные</option>
+              <option value="transfer">Безналичный QR</option>
+            </select>
+            <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
+            <input type="date" value={actualPaymentDate} onChange={e => setActualPaymentDate(e.target.value)} style={inputStyle} />
+          </div>
+          <select value={status} onChange={e => setStatus(e.target.value as any)} style={{ ...inputStyle, width: '100%' }}>
             <option value="На проверке">На проверке</option>
             <option value="Отклонено">Отклонено</option>
             <option value="Черновик">Черновик</option>
             {payment.status === 'Подтверждено' && <option value="Подтверждено">Подтверждено</option>}
           </select>
-          <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{ ...inputStyle, gridColumn: '2 / -1' }} />
-          <div style={{ display: 'flex', gap: 7, gridColumn: '1 / -1' }}>
-            <button onClick={save} disabled={saving} style={smallAccentBtn}>{saving ? '...' : 'Сохранить'}</button>
-            <button onClick={() => setEditing(false)} style={{ ...smallAccentBtn, background: '#F3F4F6', color: 'var(--text)' }}>Закрыть</button>
-            <button onClick={remove} disabled={saving} style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}>
-              <Trash2 size={12} /> Удалить
-            </button>
+          <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{ ...inputStyle, width: '100%' }} />
+          <div style={{ display: 'flex', gap: 6 }}>
+            <button onClick={save} disabled={saving} style={smallAccentBtn}>{saving ? '...' : <><Save size={12} /> Сохранить</>}</button>
+            <button onClick={() => setEditing(false)} style={{ ...smallAccentBtn, background: '#F3F4F6', color: 'var(--text)' }}><X size={12} /></button>
+            <button onClick={remove} disabled={saving} style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}><Trash2 size={12} /></button>
           </div>
         </div>
       )}

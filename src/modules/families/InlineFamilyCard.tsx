@@ -171,6 +171,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       await addAudit('Платёж', 'family_payment', '-', `${money(amount)} на проверке`);
       await loadFinance();
       await loadAudit();
+      onUpdated?.();
       return true;
     } catch { return false; }
   }
@@ -180,6 +181,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       await addAudit('Подтверждение', 'family_payment', payment.status, `${money(payment.amount)} подтверждено`);
       await loadFinance();
       await loadAudit();
+      onUpdated?.();
       return true;
     } catch { return false; }
   }
