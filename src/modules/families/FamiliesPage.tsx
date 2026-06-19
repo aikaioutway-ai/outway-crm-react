@@ -1930,7 +1930,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     },
     ...COLUMNS,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [userRole, onCellSave]);
+  ], [userRole]);
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: 'var(--active-bg)', borderRadius: 22, display: 'flex' }}>
