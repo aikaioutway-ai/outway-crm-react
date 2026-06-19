@@ -203,14 +203,14 @@ export function DataTable<T extends Record<string, any>>({
   // ── Persistent column order & visibility ──
   const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, storageKey));
 
+  // Пересчитываем колонки только когда реально изменился НАБОР ключей (добавили/убрали колонку в коде).
+  // Игнорируем перерендеры родителя, которые создают новую ссылку на массив с теми же ключами.
+  const prevColKeysRef = useRef<string>('');
   useEffect(() => {
-    setCols(prev => {
-      const next = buildColumns(initialColumns, storageKey);
-      // Если набор ключей не изменился — сохраняем текущую видимость пользователя
-      const sameKeys = prev.length === next.length && prev.every((c, i) => c.key === next[i]?.key);
-      if (sameKeys) return prev;
-      return next;
-    });
+    const currentKeys = initialColumns.map(c => c.key).join(',');
+    if (currentKeys === prevColKeysRef.current) return;
+    prevColKeysRef.current = currentKeys;
+    setCols(buildColumns(initialColumns, storageKey));
   }, [initialColumns, storageKey]);
 
   const saveCols = useCallback((next: ColumnDef<T>[]) => {

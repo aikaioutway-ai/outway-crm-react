@@ -305,6 +305,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                 <Phone size={11} color="#7B8491" />
                 <span>{savedFamily.phone ? formatPhone(savedFamily.phone) : 'телефон не указан'}</span>
               </div>
+              <div style={{ marginTop: 2, fontSize: 10, color: '#9CA3AF', fontWeight: 600, userSelect: 'all', cursor: 'text' }}>
+                ID: {family.id}
+              </div>
             </div>
             <div style={headerMetricsStyle}>
               <SideMetric label="Долг" value={money(totalDebt)} alert={totalDebt > 0} />
