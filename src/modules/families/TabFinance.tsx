@@ -185,35 +185,25 @@ export default function TabFinance({
           )}
 
           <Section title="Прогноз">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              <div style={forecastSummaryStyle}>
-                <span>К созданию</span>
-                <b>{money(forecastTotal)}</b>
-              </div>
-              <div style={forecastSummaryStyle}>
-                <span>Баланс</span>
-                <b>{money(mainBalance)}</b>
-              </div>
-              <div style={forecastSummaryStyle}>
-                <span>Депозит</span>
-                <b>{money(depositBalance)}</b>
-              </div>
-            </div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-              {forecastRows.map(row => (
-                <div key={row.key} style={forecastRowStyle}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {forecastRows.filter(row => row.state !== 'paid').map((row, i, arr) => (
+                <div key={row.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{row.label}</div>
-                    <div style={{ fontSize: 10, color: '#7B8491', marginTop: 1 }}>{row.note}</div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{row.label}</div>
+                    {row.note && <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{row.note}</div>}
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{money(row.amount)}</div>
-                    <div style={{ fontSize: 10, color: row.state === 'planned' ? '#687C54' : '#7B8491', marginTop: 1 }}>
-                      {row.state === 'paid' ? 'закрыто' : row.state === 'created' ? 'создано' : 'план'}
-                    </div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: row.state === 'created' ? '#374151' : '#111827' }}>{money(row.amount)}</div>
+                    <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{row.state === 'created' ? 'создано' : 'план'}</div>
                   </div>
                 </div>
               ))}
+              {forecastRows.filter(r => r.state !== 'paid').length > 0 && (
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E8EEF1', paddingTop: 8, marginTop: 2 }}>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#374151' }}>Итого</span>
+                  <span style={{ fontSize: 12, fontWeight: 800, color: '#111827' }}>{money(forecastRows.filter(r => r.state !== 'paid').reduce((s, r) => s + r.amount, 0))}</span>
+                </div>
+              )}
             </div>
           </Section>
         </div>
@@ -251,6 +241,14 @@ export default function TabFinance({
               />
             ))
           }
+          {charges.length > 0 && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 105px 105px auto', gap: 8, padding: '8px 12px', borderTop: '2px solid #E8EEF1', marginTop: 4 }}>
+              <div style={{ fontSize: 11, fontWeight: 800, color: '#374151' }}>Итого</div>
+              <div style={{ textAlign: 'right', fontSize: 11, fontWeight: 800, color: '#111827' }}>{money(charges.reduce((s, c) => s + c.amount, 0))}</div>
+              <div style={{ textAlign: 'right', fontSize: 11, fontWeight: 800, color: charges.reduce((s, c) => s + c.debtAmount, 0) > 0 ? '#991B1B' : '#111827' }}>{money(charges.reduce((s, c) => s + c.debtAmount, 0))}</div>
+              <div />
+            </div>
+          )}
         </Section>
 
         {/* Правая колонка: платежи */}

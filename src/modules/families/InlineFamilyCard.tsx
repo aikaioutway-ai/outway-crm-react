@@ -250,6 +250,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
   const totalCharged = charges.reduce((s, c) => s + c.amount, 0);
   const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
+  const depositCharge = charges.find(c => c.chargeType === 'deposit');
+  const depositPaid = depositCharge ? depositCharge.debtAmount <= 0 : false;
   const primaryChild = children[0];
   const familyMonthlyPrice = children.length > 0
     ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
@@ -313,6 +315,13 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             </div>
             <div style={headerMetricsStyle}>
               <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
+              {depositCharge && (
+                <SideMetric
+                  label="Депозит"
+                  value={depositPaid ? money(depositCharge.amount) : `${money(depositCharge.paidAmount)} / ${money(depositCharge.amount)}`}
+                  alert={!depositPaid}
+                />
+              )}
               <SideMetric label="Платежи" value={money(totalPaid)} />
               {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
               <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
@@ -331,12 +340,16 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         <div style={contentBodyStyle}>
           {tab === 'overview' && (
             <div style={{ display: 'grid', gap: 10 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <DetailPanel title="Контакт">
                   <DetailInput label="Родитель" tone="soft" value={savedFamily.parentName} onCommit={value => handleSaveFamily({ ...savedFamily, parentName: formatName(value) })} />
                   <DetailInput label="Телефон 1" tone="soft" value={savedFamily.phone} onCommit={value => handleSaveFamily({ ...savedFamily, phone: formatPhone(value) })} />
                   <DetailInput label="Телефон 2" tone="soft" value={savedFamily.secondPhone ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, secondPhone: formatPhone(value) })} />
                   <DetailInput label="Telegram" tone="soft" value={savedFamily.phoneTelegram ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, phoneTelegram: value })} />
+                </DetailPanel>
+                <DetailPanel title="Доп. контакт">
+                  <DetailInput label="Имя" tone="soft" value={savedFamily.contactName ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, contactName: formatName(value) })} />
+                  <DetailInput label="Телефон" tone="soft" value={savedFamily.contactPhone ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, contactPhone: formatPhone(value) })} />
                 </DetailPanel>
                 <DetailPanel title="Адрес">
                   <DetailInput label="Адрес" tone="clear" value={savedFamily.fullAddress} onCommit={value => handleSaveFamily({ ...savedFamily, fullAddress: value })} />
