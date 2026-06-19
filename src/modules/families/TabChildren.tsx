@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import { fetchV2Branches, updateV2Child, updateV2ChildRoute, V2BranchOption } from '../../services/crmV2Service';
+import { autoChargeOnBoarding } from '../../services/financeService';
 import { Section, Spinner } from './DrawerUI';
 import { formatClassName } from '../../utils/format';
 
@@ -55,7 +56,7 @@ const CHILD_STATUS_LABEL: Record<ChildStatus, string> = {
   paused: 'Пауза',
 };
 
-export default function TabChildren({ children, loading, isAdmin, compactColumns = false, onReload }: Props) {
+export default function TabChildren({ children, loading, family, isAdmin, compactColumns = false, onReload }: Props) {
   const [kids, setKids] = useState<KidState[]>([]);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
@@ -106,13 +107,35 @@ export default function TabChildren({ children, loading, isAdmin, compactColumns
   }
 
   async function commitKid(kid: KidState, patch: Partial<KidState> = {}) {
+    const prev = kid;
     const next = buildKid(kid, patch);
     setKids(current => current.map(item => item.id === kid.id ? next : item));
     setSavingId(kid.id);
     try {
       await saveKid(next);
-      setMsg('Сохранено');
-      setTimeout(() => setMsg(''), 1600);
+      // Автоначисление при первой посадке в трансфер
+      if (prev.status !== 'boarded' && next.status === 'boarded') {
+        const allBoarded = [...kids.map(k => k.id === next.id ? next : k)]
+          .filter(k => k.status === 'boarded')
+          .map(k => ({
+            id: k.id, familyId: family.id, childName: k.childName, class: '',
+            selfExitAllowed: k.selfExitAllowed, schoolCode: '', schoolId: k.schoolId,
+            branchId: k.branchId, zone: k.zone, vehicleType: k.vehicleType,
+            finalPrice: k.finalPrice, basePrice: k.basePrice, status: 'boarded' as const,
+            transferNumber: k.transferNumber ? Number(k.transferNumber) : undefined,
+            stopNumber: k.stopNumber ? Number(k.stopNumber) : undefined,
+            timeMorning: k.timeMorning || undefined,
+            siblingDiscountPercent: k.siblingDiscountPercent,
+            manualDiscountPercent: k.manualDiscountPercent,
+            manualDiscountAmount: k.manualDiscountAmount,
+            latitude: undefined, longitude: undefined,
+          }));
+        await autoChargeOnBoarding(family.id, allBoarded as any);
+        setMsg('Сохранено · начисление создано');
+      } else {
+        setMsg('Сохранено');
+      }
+      setTimeout(() => setMsg(''), 2400);
     } catch (error: any) {
       setMsg(`Ошибка: ${error.message}`);
       setTimeout(() => setMsg(''), 6000);

@@ -312,6 +312,133 @@ export async function confirmFamilyPayment(params: {
   if (error) throw new Error(error.message);
 }
 
+// Учебный год: сентябрь(9)–май(5)
+const ACADEMIC_MONTHS = [9, 10, 11, 12, 1, 2, 3, 4, 5];
+
+function currentAcademicPeriod(): { month: number; year: number } | null {
+  const now = new Date();
+  const month = now.getMonth() + 1; // 1-based
+  const year = now.getFullYear();
+  if (!ACADEMIC_MONTHS.includes(month)) return null; // июнь, июль, август — не сезон
+  return { month, year };
+}
+
+async function familyHasDeposit(familyId: string): Promise<boolean> {
+  const { data } = await supabase
+    .from('v2_charges')
+    .select('id')
+    .eq('family_id', familyId)
+    .eq('charge_type', 'deposit')
+    .limit(1);
+  return (data?.length ?? 0) > 0;
+}
+
+async function createDepositCharge(familyId: string, children: Child[]): Promise<void> {
+  const activeChildren = children.filter(c => c.status === 'boarded');
+  if (!activeChildren.length) return;
+  const rows = activeChildren.map(child => ({
+    child_id: child.id,
+    family_id: familyId,
+    period_month: 5, // депозит хранится как май
+    period_year: new Date().getFullYear(),
+    charge_type: 'deposit',
+    original_amount: Number(child.finalPrice ?? 0),
+    amount: Number(child.finalPrice ?? 0),
+    paid_amount: 0,
+    status: 'unpaid',
+  }));
+  const { error } = await supabase
+    .from('v2_charges')
+    .upsert(rows, { onConflict: 'child_id,period_month,period_year,charge_type', ignoreDuplicates: true });
+  if (error) throw new Error(error.message);
+  await supabase.rpc('v2_apply_wallet_to_charges', {
+    p_family_id: familyId,
+    p_wallet_type: 'deposit',
+    p_created_by: 'auto',
+  });
+}
+
+/**
+ * Вызывается при смене статуса ребёнка → boarded.
+ * Логика:
+ * - Август (8): ничего, начисление пойдёт 1 сентября
+ * - Июнь/Июль: ничего, не сезон
+ * - Сентябрь–Май: начисление за текущий месяц + депозит (если первый раз)
+ */
+export async function autoChargeOnBoarding(familyId: string, children: Child[]): Promise<void> {
+  const period = currentAcademicPeriod();
+  if (!period) return; // не сезон или август
+
+  const hasDeposit = await familyHasDeposit(familyId);
+
+  // Начисление за текущий месяц
+  await createChargesForPeriod(familyId, children, period.month, period.year);
+
+  // Депозит — только если ещё не было
+  if (!hasDeposit) {
+    await createDepositCharge(familyId, children);
+  }
+}
+
+/**
+ * Ежемесячное начисление для всех семей с boarded детьми.
+ * Вызывается 1-го числа каждого месяца (сентябрь–апрель).
+ * Май — особый: списывается с депозитного кошелька.
+ */
+export async function monthlyAutoCharge(): Promise<{ charged: number; skipped: number }> {
+  const period = currentAcademicPeriod();
+  if (!period) return { charged: 0, skipped: 0 };
+
+  // Получаем все семьи с boarded детьми
+  const { data: children, error } = await supabase
+    .from('v2_children')
+    .select('id, family_id, final_price, status, school_id, branch_id, zone, vehicle_type')
+    .eq('status', 'boarded');
+  if (error || !children?.length) return { charged: 0, skipped: 0 };
+
+  const familyMap = new Map<string, Child[]>();
+  children.forEach((c: any) => {
+    const fid = c.family_id;
+    if (!familyMap.has(fid)) familyMap.set(fid, []);
+    familyMap.get(fid)!.push({
+      id: c.id,
+      familyId: fid,
+      childName: '',
+      class: '',
+      selfExitAllowed: false,
+      schoolCode: 'KINGS' as any,
+      schoolId: c.school_id,
+      branchId: c.branch_id,
+      zone: c.zone,
+      vehicleType: c.vehicle_type,
+      finalPrice: Number(c.final_price ?? 0),
+      basePrice: Number(c.final_price ?? 0),
+      status: 'boarded',
+      transferNumber: undefined,
+      stopNumber: undefined,
+      timeMorning: undefined,
+      siblingDiscountPercent: 0,
+      manualDiscountPercent: 0,
+      manualDiscountAmount: 0,
+      latitude: undefined,
+      longitude: undefined,
+    });
+  });
+
+  let charged = 0;
+  let skipped = 0;
+  const entries = Array.from(familyMap.entries());
+  for (const [familyId, kids] of entries) {
+    try {
+      await createChargesForPeriod(familyId, kids, period.month, period.year);
+      charged++;
+    } catch {
+      skipped++;
+    }
+  }
+  return { charged, skipped };
+}
+
 export function chargePeriodLabel(charge: Pick<Charge, 'periodMonth' | 'year'>): string {
   return `${charge.periodMonth}/${charge.year}`;
 }
