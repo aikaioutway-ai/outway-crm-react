@@ -2,7 +2,6 @@ import React, { useEffect, useState } from 'react';
 import Sidebar, { canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import FamiliesPage from './modules/families/FamiliesPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
-import DriversPage from './modules/drivers/DriversPage';
 import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { fetchV2FamiliesTable } from './services/crmV2Service';
@@ -111,12 +110,6 @@ export default function App() {
           />
         ) : section === 'employees' ? (
           <EmployeesPage />
-        ) : section === 'drivers' ? (
-          <DriversPage
-            userRole={currentUserRole}
-            userName={currentUser?.name}
-            allowedSchools={currentUser?.schoolKeys}
-          />
         ) : section === 'bank_statement' ? (
           <BankStatementPage userName={currentUser?.name} />
         ) : (
