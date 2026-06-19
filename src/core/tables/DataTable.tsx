@@ -1,6 +1,7 @@
 import React, {
   useState, useRef, useEffect, useCallback, useMemo
 } from 'react';
+import NotionSelect from '../selects/NotionSelect';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -59,6 +60,7 @@ export interface DataTableProps<T = any> {
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
   toolbarExtra?: React.ReactNode;
   toolbarRightExtra?: React.ReactNode;
+  hideToolbar?: boolean;
   canManageProperties?: boolean;
   expandedRowKey?: React.Key | null;
   getExpandedRowKey?: (row: T) => React.Key;
@@ -132,7 +134,7 @@ const CALC_OPTIONS: { value: CalcMode; label: string }[] = [
   { value: 'not_empty', label: 'Заполненных' },
 ];
 
-const PAGE_SIZE = 18;
+const PAGE_SIZE = 20;
 
 function useDragList<T>(list: T[], onChange: (next: T[]) => void) {
   const dragIdx = useRef<number | null>(null);
@@ -190,6 +192,7 @@ export function DataTable<T extends Record<string, any>>({
   groupColorKey,
   toolbarExtra,
   toolbarRightExtra,
+  hideToolbar = false,
   canManageProperties = true,
   expandedRowKey,
   getExpandedRowKey,
@@ -367,7 +370,7 @@ export function DataTable<T extends Record<string, any>>({
       )}
 
       {/* ── TOOLBAR ── */}
-      <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
+      {!hideToolbar && <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
         <div className="dt-toolbar-left">
           {toolbarExtra}
 
@@ -411,7 +414,7 @@ export function DataTable<T extends Record<string, any>>({
           </button>
           {toolbarRightExtra}
         </div>
-      </div>
+      </div>}
 
       {/* ── COMPACT FILTER PANEL ── */}
       {showFilterPanel && (
@@ -794,31 +797,25 @@ export function DataTable<T extends Record<string, any>>({
                       >
                         {editingCell?.rowId === id && editingCell.key === col.key ? (
                           col.editOptions ? (
-                            <select
+                            <NotionSelect
                               autoFocus
-                              className="dt-cell-input"
                               value={draftValue}
+                              options={col.editOptions}
                               disabled={savingCell}
-                              onChange={e => {
-                                const nextValue = e.target.value;
+                              variant="cell"
+                              onChange={nextValue => {
                                 setDraftValue(nextValue);
                                 commitCellEdit(row, col, nextValue);
                               }}
-                              onKeyDown={e => {
-                                if (e.key === 'Enter') commitCellEdit(row, col);
-                                if (e.key === 'Escape') cancelCellEdit();
-                              }}
-                            >
-                              {col.editOptions.map(option => (
-                                <option key={option.value} value={option.value}>{option.label}</option>
-                              ))}
-                            </select>
+                              onEscape={cancelCellEdit}
+                            />
                           ) : (
                             <input
                               autoFocus
                               className="dt-cell-input"
                               value={draftValue}
                               disabled={savingCell}
+                              onClick={e => e.stopPropagation()}
                               onChange={e => setDraftValue(e.target.value)}
                               onBlur={() => commitCellEdit(row, col)}
                               onKeyDown={e => {

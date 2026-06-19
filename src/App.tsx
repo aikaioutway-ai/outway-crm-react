@@ -39,6 +39,7 @@ export default function App() {
   const currentUserRole = currentUser?.role ?? getSavedRole();
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole)[0]);
   const [badges, setBadges] = useState<Partial<Record<NavSection, number>>>({});
+  const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
 
   const handleLogin = async (login: string, password: string) => {
     const user = await authenticateEmployee(login, password);
@@ -86,10 +87,20 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%' }}>
-      <Sidebar active={section} onChange={setSection} badges={badges} userRole={currentUserRole} onLogout={handleLogout} />
+    <div style={{ display: 'flex', height: '100%', background: 'var(--active-bg)' }}>
+      <Sidebar
+        active={section}
+        onChange={setSection}
+        badges={badges}
+        userRole={currentUserRole}
+        onLogout={handleLogout}
+        collapseSignal={sidebarCollapseSignal}
+      />
 
-      <main style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+      <main
+        onClick={() => setSidebarCollapseSignal(value => value + 1)}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', padding: 10, background: 'var(--active-bg)' }}
+      >
         {section === 'families' || section === 'cashier' || section === 'logistics' ? (
           <FamiliesPage
             mode={section === 'cashier' ? 'cashier' : section === 'logistics' ? 'logistics' : 'requests'}

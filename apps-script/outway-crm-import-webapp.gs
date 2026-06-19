@@ -35,6 +35,7 @@ const SCHOOL_CODE_TO_BRANCH = {
   KINGS: 'KNG',
   LIGHT: 'LA',
   BILIM: 'BKG',
+  BJ: 'BJ',
   AES: 'AES',
   KAS: 'KAS',
   AES_KAS: 'AES',
@@ -65,6 +66,8 @@ const BRANCH_NAME_TO_CODE = {
   'Билим Бишкек Kg': 'BKG',
   'Билим Бишкек KG': 'BKG',
   'Билим Бишкек kg': 'BKG',
+  'Билим Жолу': 'BJ',
+  'Bilim Jolu': 'BJ',
   'American-European School': 'AES',
   'Kyrgyz-American School': 'KAS',
   'Эпсилон': 'EPS',
@@ -86,6 +89,26 @@ const BRANCH_NAME_TO_CODE = {
   'Гениум Авангард': 'GEN4',
   'Гениум Авангард Сити': 'GEN4',
   'Гениум — Авангард': 'GEN4'
+};
+
+const BRANCH_CODE_TO_SCHOOL_CODE = {
+  KNG: 'KNG',
+  LA: 'LA',
+  BKG: 'BKG',
+  BJ: 'BKG',
+  AES: 'AES',
+  KAS: 'KAS',
+  EPS: 'EPS',
+  EDI: 'EDI',
+  ERU: 'ERU',
+  TIS: 'TIS',
+  NOVA: 'NOVA',
+  ING: 'ING',
+  ING_A: 'ING',
+  ING_P: 'ING',
+  ING_W: 'ING',
+  GEN2: 'GENIUS',
+  GEN4: 'GENIUS'
 };
 
 function doGet(e) {
@@ -172,8 +195,7 @@ function appendToSheet_(sheet, familyId, payload, children) {
 
 function syncToSupabaseV2_(familyId, payload, children, sourceSheet) {
   const branchCode = resolveBranchCode_(payload.schoolCode, payload.branchName);
-  const branch = getBranchByCode_(branchCode);
-  if (!branch) throw new Error('Branch not found in v2_school_branches: ' + branchCode);
+  const branch = ensureBranchForPayload_(branchCode, payload);
 
   const createdAt = payload.createdAt || new Date().toISOString();
   const familyData = {
@@ -511,6 +533,77 @@ function getBranchByCode_(code) {
     + '&select=id,school_id,code,name,short_name'
   );
   return rows[0] || null;
+}
+
+function ensureBranchForPayload_(branchCode, payload) {
+  const existing = getBranchByCode_(branchCode);
+  if (existing) return existing;
+
+  const schoolRow = findSchoolRowForPayload_(payload);
+  const schoolCode = resolveSchoolCodeForBranch_(branchCode, payload.schoolCode);
+  const schoolName = resolveSchoolNameForBranch_(schoolCode, payload);
+  const school = upsertSchool_(schoolCode, schoolName);
+
+  const branchData = {
+    school_id: school.id,
+    code: branchCode,
+    short_name: branchCode,
+    name: text_(payload.branchName) || text_(schoolRow && schoolRow.name) || text_(payload.schoolName) || branchCode,
+    address: text_(schoolRow && schoolRow.address) || text_(payload.schoolAddress),
+    latitude: toFloatOrNull_(schoolRow && schoolRow.lat),
+    longitude: toFloatOrNull_(schoolRow && schoolRow.lng),
+    manager_phone: text_(schoolRow && schoolRow.manager) || text_(payload.managerPhone),
+    active: true
+  };
+
+  supabaseUpsert_('v2_school_branches', branchData, 'code');
+  const created = getBranchByCode_(branchCode);
+  if (!created) throw new Error('Branch not found in v2_school_branches after create: ' + branchCode);
+  return created;
+}
+
+function findSchoolRowForPayload_(payload) {
+  const schools = getSchools_();
+  const branchName = text_(payload.branchName);
+  const schoolCode = text_(payload.schoolCode).toUpperCase();
+
+  return schools.find(s => text_(s.name) === branchName && text_(s.code).toUpperCase() === schoolCode)
+    || schools.find(s => text_(s.name) === branchName)
+    || schools.find(s => text_(s.code).toUpperCase() === schoolCode)
+    || null;
+}
+
+function upsertSchool_(code, name) {
+  const rows = supabaseUpsert_('v2_schools', {
+    code: code,
+    name: name || code,
+    active: true
+  }, 'code');
+  if (rows && rows[0]) return rows[0];
+
+  const existing = supabaseGet_(
+    'v2_schools?code=eq.' + encodeURIComponent(code)
+    + '&select=id,code,name'
+  );
+  if (!existing.length) throw new Error('School not found in v2_schools after create: ' + code);
+  return existing[0];
+}
+
+function resolveSchoolCodeForBranch_(branchCode, rawSchoolCode) {
+  const code = text_(branchCode).toUpperCase();
+  if (BRANCH_CODE_TO_SCHOOL_CODE[code]) return BRANCH_CODE_TO_SCHOOL_CODE[code];
+
+  const raw = text_(rawSchoolCode).toUpperCase();
+  if (SCHOOL_CODE_TO_BRANCH[raw]) return SCHOOL_CODE_TO_BRANCH[raw];
+  return code;
+}
+
+function resolveSchoolNameForBranch_(schoolCode, payload) {
+  const code = text_(schoolCode).toUpperCase();
+  if (code === 'BKG') return 'Билим';
+  if (code === 'ING') return 'Indigo Schools';
+  if (code === 'GENIUS') return 'Genius';
+  return text_(payload.schoolName) || text_(payload.branchName) || code;
 }
 
 function resolveBranchCode_(schoolCode, branchName) {

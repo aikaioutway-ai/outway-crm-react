@@ -7,7 +7,7 @@ import { Section, Spinner, Empty } from './DrawerUI';
 
 const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
   'Оплачено':          { bg: '#F3F4F6', color: '#374151' },
-  'Частично оплачено': { bg: '#FEF3C7', color: '#F59E0B' },
+  'Частично оплачено': { bg: '#F2F5E9', color: '#687C54' },
   'Просрочено':        { bg: '#FEE2E2', color: '#991B1B' },
   'Заморожено':        { bg: '#EEF2F5', color: '#475569' },
   'Не оплачено':       { bg: '#F3F4F6', color: '#374151' },
@@ -149,7 +149,7 @@ export default function TabFinance({
             />
             <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={{
               minWidth: 124, height: 31, padding: '0 12px', border: 'none', borderRadius: 8,
-              background: '#FFEDD5', color: '#F59E0B', fontSize: 11, fontWeight: 800,
+              background: '#D7EEEE', color: '#237F81', fontSize: 11, fontWeight: 800,
               cursor: savingPayment || !paymentAmount ? 'default' : 'pointer', opacity: savingPayment || !paymentAmount ? 0.6 : 1,
               whiteSpace: 'nowrap',
             }}>
@@ -201,7 +201,7 @@ export default function TabFinance({
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>{money(row.amount)}</div>
-                <div style={{ fontSize: 10, color: row.state === 'planned' ? '#F59E0B' : '#7B8491', marginTop: 1 }}>
+                <div style={{ fontSize: 10, color: row.state === 'planned' ? '#687C54' : '#7B8491', marginTop: 1 }}>
                   {row.state === 'paid' ? 'закрыто' : row.state === 'created' ? 'уже создано' : 'план'}
                 </div>
               </div>
@@ -380,7 +380,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onSave,
     ? { background: '#F3F4F6', color: '#374151' }
     : payment.status === 'Отклонено'
       ? { background: '#FEE2E2', color: '#991B1B' }
-      : { background: '#FEF3C7', color: '#F59E0B' };
+      : { background: '#F2F5E9', color: '#687C54' };
 
   async function save() {
     setSaving(true);
@@ -598,8 +598,8 @@ const smallAccentBtn: React.CSSProperties = {
   justifyContent: 'center',
   gap: 4,
   padding: '6px 10px',
-  background: '#FFEDD5',
-  color: '#F59E0B',
+  background: '#D7EEEE',
+  color: '#237F81',
   border: 'none',
   borderRadius: 7,
   fontSize: 11,
@@ -648,8 +648,8 @@ const iconBtnStyle: React.CSSProperties = {
   height: 28,
   border: 'none',
   borderRadius: 7,
-  background: '#FFEDD5',
-  color: '#F59E0B',
+  background: '#D7EEEE',
+  color: '#237F81',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',

@@ -3,28 +3,32 @@
 html, body, #root { height: 100%; }
 
 :root {
-  --bg:        #F7F9FB;
+  --bg:        #E9F1F5;
   --white:     #FFFFFF;
-  --accent:    #2563EB;
-  --accent-h:  #1D4ED8;
-  --accent-l:  #FFEDD5;
+  --accent:    #31A4A5;
+  --accent-h:  #237F81;
+  --accent-l:  #D7EEEE;
+  --active-bg:  #D7EEEE;
   --surface:   #FFFFFF;
-  --surface-2: #F7F9FB;
-  --surface-3: #EEF4F6;
-  --text:      #080B0B;
-  --text-2:    #6E7685;
-  --border:    #E5ECEF;
+  --surface-2: #F5FAFB;
+  --surface-3: #DDECEF;
+  --text:      #17222F;
+  --text-2:    #626C8B;
+  --border:    #D4E3E7;
   --danger:    #D94D4D;
   --success:   #159A6A;
   --warning:   #C9861A;
-  --info:      #4478A8;
-  --shadow:    0 14px 34px rgba(8,11,11,.08);
-  --radius:    14px;
+  --info:      #31A4A5;
+  --shadow:    0 18px 46px rgba(43, 72, 89, .12);
+  --radius:    18px;
   --font:      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {
-  background: var(--bg);
+  background:
+    linear-gradient(135deg, rgba(170, 212, 212, .42), transparent 34%),
+    linear-gradient(315deg, rgba(49, 164, 165, .13), transparent 32%),
+    var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;
@@ -43,18 +47,19 @@ a { color: var(--accent); text-decoration: none; }
   justify-content: center;
   padding: 24px;
   background:
-    linear-gradient(135deg, rgba(255, 90, 46, .10), transparent 36%),
-    linear-gradient(315deg, rgba(37, 99, 235, .08), transparent 34%),
+    linear-gradient(135deg, rgba(170, 212, 212, .58), transparent 36%),
+    linear-gradient(315deg, rgba(49, 164, 165, .18), transparent 34%),
     var(--bg);
 }
 
 .login-panel {
   width: min(100%, 390px);
-  background: #FFFFFF;
+  background: rgba(255, 255, 255, .92);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 22px;
   box-shadow: var(--shadow);
-  padding: 28px;
+  padding: 30px;
+  backdrop-filter: blur(18px);
 }
 
 .login-brand {
@@ -86,15 +91,15 @@ a { color: var(--accent); text-decoration: none; }
   padding: 0 12px;
   background: var(--surface-2);
   border: 1px solid var(--border);
-  border-radius: 8px;
+  border-radius: 14px;
   color: var(--text-2);
   transition: background .12s ease, border-color .12s ease, box-shadow .12s ease;
 }
 
 .login-input:focus-within {
   background: #FFFFFF;
-  border-color: #C9D6DD;
-  box-shadow: 0 0 0 3px rgba(255, 237, 213, .85);
+  border-color: #AAD4D4;
+  box-shadow: 0 0 0 4px rgba(170, 212, 212, .38);
 }
 
 .login-input input {
@@ -116,14 +121,14 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   justify-content: center;
   border: 0;
-  border-radius: 8px;
+  border-radius: 12px;
   background: transparent;
   color: var(--text-2);
   cursor: pointer;
 }
 
 .login-password-toggle:hover {
-  background: #EEF4F6;
+  background: #D7EEEE;
   color: var(--text);
 }
 
@@ -132,7 +137,7 @@ a { color: var(--accent); text-decoration: none; }
   display: flex;
   align-items: center;
   padding: 8px 10px;
-  border-radius: 8px;
+  border-radius: 14px;
   background: #FFF1F1;
   color: var(--danger);
   font-size: 12px;
@@ -145,9 +150,9 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   justify-content: center;
   gap: 9px;
-  border: 1px solid #080B0B;
-  border-radius: 8px;
-  background: #080B0B;
+  border: 1px solid #237F81;
+  border-radius: 14px;
+  background: #31A4A5;
   color: #FFFFFF;
   font-size: 14px;
   font-weight: 850;
@@ -155,7 +160,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .login-submit:hover {
-  background: #171B1C;
+  background: #237F81;
 }
 
 .login-submit:active {
@@ -177,11 +182,20 @@ a { color: var(--accent); text-decoration: none; }
 
 .family-card-control:focus {
   background: #FFFFFF !important;
-  border-color: #D8E0E6 !important;
-  box-shadow: 0 0 0 3px rgba(255, 237, 213, .85) !important;
+  border-color: #AAD4D4 !important;
+  box-shadow: 0 0 0 3px rgba(170, 212, 212, .42) !important;
 }
 
 /* ── SCROLLBAR ────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #B8C8CF; border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: #9BC6C8; border-radius: 3px; }
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}

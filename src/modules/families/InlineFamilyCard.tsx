@@ -1,38 +1,48 @@
 import React, { useEffect, useState } from 'react';
-import { Contact, CreditCard, LayoutDashboard, PanelLeftClose, PanelLeftOpen, Phone, Users, Clock, X } from 'lucide-react';
-import { Family, Child, Charge, FamilyPayment, PaymentItem } from '../../types';
-import { getFamilyPrice, money } from '../../utils/pricing';
-import { PERIOD_LABEL, SCHOOL_NAME, VT_LABEL } from './constants';
+import { CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X } from 'lucide-react';
+import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
+import { getFamilyPrice, getPriceByZone, money } from '../../utils/pricing';
+import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
-import { addV2Audit, fetchV2Children, updateV2Family } from '../../services/crmV2Service';
+import { addV2Audit, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
   updateFamilyPayment, updateCharge,
 } from '../../services/financeService';
-import TabInfo from './TabInfo';
-import TabChildren from './TabChildren';
 import TabFinance from './TabFinance';
 import TabHistory from './TabHistory';
+import NotionSelect from '../../core/selects/NotionSelect';
 
 interface AuditEntry {
   id: string; familyId: string; userName: string;
   action: string; field: string; oldValue: string; newValue: string; createdAt: string;
 }
 interface Props {
-  family: Family; onClose: () => void; userRole?: string; userName?: string; initialTab?: Tab;
+  family: Family; onClose: () => void; userRole?: string; userName?: string; initialTab?: Tab; onUpdated?: () => void;
 }
-type Tab = 'overview' | 'finance' | 'children' | 'contacts' | 'history';
+type Tab = 'overview' | 'finance' | 'history';
 
 const TABS: { key: Tab; label: string; desc: string; icon: React.ReactNode }[] = [
-  { key: 'overview', label: 'Обзор', desc: 'главное по семье', icon: <LayoutDashboard size={15} /> },
+  { key: 'overview', label: 'Основная', desc: 'контакт, адрес, дети', icon: <LayoutDashboard size={15} /> },
   { key: 'finance', label: 'Финансы', desc: 'платежи и начисления', icon: <CreditCard size={15} /> },
-  { key: 'children', label: 'Дети', desc: 'школа, класс, цена', icon: <Users size={15} /> },
-  { key: 'contacts', label: 'Контакты', desc: 'родитель и телефоны', icon: <Contact size={15} /> },
   { key: 'history', label: 'История', desc: 'изменения и события', icon: <Clock size={15} /> },
 ];
 
-export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview' }: Props) {
+const ZONE_OPTIONS = ['A', 'B', 'C'].map(value => ({ value, label: value }));
+const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
+  { value: 'microbus', label: 'Микроавтобус' },
+  { value: 'minivan', label: 'Минивэн' },
+  { value: 'sedan', label: 'Седан' },
+];
+const TRANSFER_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }))];
+const STOP_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))];
+const DISCOUNT_PERCENT_OPTIONS = Array.from({ length: 21 }, (_, i) => {
+  const value = String(i * 5);
+  return { value, label: i === 0 ? '-' : `${value}%` };
+});
+
+export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', onUpdated }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
@@ -41,12 +51,12 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [mainBalance, setMainBalance] = useState(0);
   const [depositBalance, setDepositBalance] = useState(0);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
-  const [loadingKids, setLoadingKids] = useState(true);
+  const [branches, setBranches] = useState<V2BranchOption[]>([]);
+  const [, setLoadingKids] = useState(true);
   const [loadingFinance, setLoadingFinance] = useState(true);
-  const [saving, setSaving] = useState(false);
+  const [, setSaving] = useState(false);
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [saveMsg, setSaveMsg] = useState('');
-  const [sidebarHidden, setSidebarHidden] = useState(false);
 
   const isAdmin = userRole === 'admin' || userRole === 'director';
   const isCashier = userRole === 'cashier';
@@ -56,6 +66,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setTab(initialTab);
     loadAll();
     loadAudit();
+    fetchV2Branches().then(setBranches).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
 
@@ -105,6 +116,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       setTimeout(() => setSaveMsg(''), 2000);
       await addAudit('Редактирование', 'family', JSON.stringify(family), JSON.stringify(updated));
       await loadAudit();
+      onUpdated?.();
     } catch {
       setSaveMsg('Ошибка');
     }
@@ -171,6 +183,66 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       return true;
     } catch { return false; }
   }
+  async function handleSaveChild(child: Child, patch: Partial<Child>): Promise<boolean> {
+    try {
+      const nextChild = { ...child, ...patch };
+      const dbPatch: Record<string, unknown> = {};
+      const shouldReprice = 'zone' in patch || 'vehicleType' in patch || 'basePrice' in patch || 'manualDiscountPercent' in patch || 'manualDiscountAmount' in patch;
+
+      if ('childName' in patch) dbPatch.child_name = nextChild.childName;
+      if ('class' in patch) dbPatch.class_name = nextChild.class;
+      if ('branchId' in patch) dbPatch.branch_id = nextChild.branchId ?? null;
+      if ('schoolId' in patch) dbPatch.school_id = nextChild.schoolId ?? null;
+      if ('zone' in patch) dbPatch.zone = nextChild.zone;
+      if ('selfExitAllowed' in patch) dbPatch.self_exit_allowed = Boolean(nextChild.selfExitAllowed);
+
+      if (shouldReprice) {
+        const basePrice = ('zone' in patch || 'vehicleType' in patch)
+          ? getPriceByZone(nextChild.schoolCode, nextChild.zone as Zone, nextChild.vehicleType as VehicleType)
+          : Math.max(0, Number(nextChild.basePrice || 0));
+        const discountPercent = clampToStep(Number(nextChild.manualDiscountPercent || 0), 0, 100, 5);
+        const percentAmount = Math.round(basePrice * discountPercent / 100);
+        const maxManualAmount = Math.max(0, basePrice - percentAmount);
+        const manualAmount = clampToStep(Number(nextChild.manualDiscountAmount || 0), 0, maxManualAmount, 100);
+        const finalPrice = Math.max(0, basePrice - percentAmount - manualAmount);
+
+        nextChild.basePrice = basePrice;
+        nextChild.manualDiscountPercent = discountPercent;
+        nextChild.manualDiscountAmount = manualAmount;
+        nextChild.finalPrice = finalPrice;
+        dbPatch.base_price = basePrice;
+        dbPatch.manual_discount_percent = discountPercent;
+        dbPatch.manual_discount_amount = manualAmount;
+        dbPatch.final_price = finalPrice;
+      } else if ('finalPrice' in patch) {
+        nextChild.finalPrice = Math.max(0, Number(nextChild.finalPrice || 0));
+        dbPatch.final_price = nextChild.finalPrice;
+      }
+
+      if ('vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch) {
+        await updateV2ChildRoute({
+          child: nextChild,
+          vehicleType: nextChild.vehicleType as VehicleType,
+          transferNumber: nextChild.transferNumber,
+          stopNumber: nextChild.stopNumber,
+          timeMorning: nextChild.timeMorning,
+        });
+        delete dbPatch.vehicle_type;
+      }
+
+      if (Object.keys(dbPatch).length > 0) {
+        await updateV2Child(child.id, dbPatch);
+      }
+
+      setChildren(prev => prev.map(item => item.id === child.id ? nextChild : item));
+      await addAudit('Редактирование ребёнка', 'child', JSON.stringify(child), JSON.stringify(nextChild));
+      await loadFinance(children.map(item => item.id === child.id ? nextChild : item));
+      onUpdated?.();
+      return true;
+    } catch {
+      return false;
+    }
+  }
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
@@ -179,12 +251,28 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
     : savedFamily.monthlyPrice;
   const initials = (savedFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
-  const currentTab = TABS.find(item => item.key === tab) ?? TABS[0];
+  const coordinatesText = savedFamily.latitude && savedFamily.longitude
+    ? `${savedFamily.latitude.toFixed(6)}, ${savedFamily.longitude.toFixed(6)}`
+    : primaryChild?.latitude && primaryChild?.longitude
+      ? `${primaryChild.latitude.toFixed(6)}, ${primaryChild.longitude.toFixed(6)}`
+      : '-';
+  const mapUrl = savedFamily.latitude && savedFamily.longitude
+    ? `https://yandex.com/maps/?ll=${savedFamily.longitude},${savedFamily.latitude}&z=16&pt=${savedFamily.longitude},${savedFamily.latitude},pm2rdm`
+    : primaryChild?.latitude && primaryChild?.longitude
+      ? `https://yandex.com/maps/?ll=${primaryChild.longitude},${primaryChild.latitude}&z=16&pt=${primaryChild.longitude},${primaryChild.latitude},pm2rdm`
+      : '';
 
   return (
-    <div style={modalStyle(sidebarHidden)}>
-      <aside style={sidebarHidden ? sidebarRailStyle : sidebarStyle}>
-        {sidebarHidden ? (
+    <div style={modalStyle()}>
+      <style>{`
+        .family-detail-rows > .family-detail-row:nth-child(odd) { background: #F7FBFB; }
+        .family-detail-rows > .family-detail-row:nth-child(even) { background: #FFFFFF; }
+        .family-detail-rows > .family-detail-row:hover { background: #EAF6F6; }
+        .family-child-table tbody tr:nth-child(odd) td { background: #F7FBFB; }
+        .family-child-table tbody tr:nth-child(even) td { background: #FFFFFF; }
+        .family-child-table tbody tr:hover td { background: #EAF6F6; }
+      `}</style>
+      <aside style={sidebarRailStyle}>
           <nav style={railNavStyle}>
             {TABS.map(item => {
               const active = tab === item.key;
@@ -201,85 +289,28 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               );
             })}
           </nav>
-        ) : (
-        <>
-        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 11 }}>
-          <div style={avatarStyle}>{initials}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <div style={{ fontSize: 14, fontWeight: 850, color: '#111827', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {formatName(savedFamily.parentName)}
-            </div>
-            <div style={{ marginTop: 4, display: 'flex', alignItems: 'center', gap: 5, minHeight: 14 }}>
-              <Phone size={11} color="#7B8491" />
-              <span style={{ fontSize: 12, color: '#374151', fontWeight: 700, whiteSpace: 'nowrap' }}>
-                {savedFamily.phone ? formatPhone(savedFamily.phone) : 'телефон не указан'}
-              </span>
-            </div>
-            {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800, marginTop: 3 }}>{saveMsg}</div>}
-          </div>
-        </div>
-
-        <div style={profileStatusStyle}>
-          <div style={{
-            ...profileStatusRingStyle,
-            background: totalDebt > 0 ? '#FEE2E2' : '#FFEDD5',
-            color: totalDebt > 0 ? '#991B1B' : '#F59E0B',
-          }}>
-            {totalDebt > 0 ? '!' : '✓'}
-          </div>
-          <div>
-            <div style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>
-              {totalDebt > 0 ? 'Есть долг' : 'Финансы в порядке'}
-            </div>
-            <div style={{ marginTop: 2, fontSize: 11, color: '#6B7280', fontWeight: 650 }}>
-              {children.length} детей · {money(familyMonthlyPrice)} / мес
-            </div>
-          </div>
-        </div>
-
-        <nav style={{ display: 'grid', gap: 4 }}>
-          {TABS.map(item => {
-            const active = tab === item.key;
-            return (
-              <button key={item.key} onClick={() => setTab(item.key)} style={navButtonStyle(active)}>
-                {active && <span style={activeLineStyle} />}
-                <span style={{ color: active ? '#F59E0B' : '#98A2B3', display: 'grid', placeItems: 'center' }}>{item.icon}</span>
-                <span style={{ minWidth: 0 }}>
-                  <span style={{ display: 'block', fontSize: 13, fontWeight: active ? 850 : 750 }}>{item.label}</span>
-                  <span style={{ display: 'block', marginTop: 1, fontSize: 10, fontWeight: 600, color: '#98A2B3', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{item.desc}</span>
-                </span>
-                {item.key === 'history' && audit.length > 0 && (
-                  <span style={navBadgeStyle}>{audit.length > 99 ? '99+' : audit.length}</span>
-                )}
-              </button>
-            );
-          })}
-        </nav>
-
-        <div style={sideMetricsWrapStyle}>
-          <SideMetric label="Долг" value={money(totalDebt)} alert={totalDebt > 0} />
-          <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
-          <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
-          <SideMetric label="Оплачено" value={money(totalPaid)} />
-        </div>
-        </>
-        )}
       </aside>
 
       <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <header style={contentHeaderStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
-            <button
-              onClick={() => setSidebarHidden(value => !value)}
-              style={sidebarToggleStyle}
-              title={sidebarHidden ? 'Показать меню' : 'Скрыть меню'}
-            >
-              {sidebarHidden ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
-            </button>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 18, fontWeight: 900, color: '#111827' }}>{currentTab.label}</div>
-              <div style={{ marginTop: 3, fontSize: 12, fontWeight: 650, color: '#7B8491' }}>{currentTab.desc}</div>
+          <div style={headerInfoStyle}>
+            <div style={avatarStyle}>{initials}</div>
+            <div style={{ minWidth: 160 }}>
+              <div style={{ fontSize: 14, fontWeight: 900, color: '#111827', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {formatName(savedFamily.parentName)}
+              </div>
+              <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, color: '#374151', fontSize: 11, fontWeight: 750 }}>
+                <Phone size={11} color="#7B8491" />
+                <span>{savedFamily.phone ? formatPhone(savedFamily.phone) : 'телефон не указан'}</span>
+              </div>
             </div>
+            <div style={headerMetricsStyle}>
+              <SideMetric label="Долг" value={money(totalDebt)} alert={totalDebt > 0} />
+              <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
+              <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
+              <SideMetric label="Оплачено" value={money(totalPaid)} />
+            </div>
+            {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
           </div>
           <button onClick={onClose} style={closeButtonStyle}>
             <X size={16} />
@@ -288,69 +319,28 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
         <div style={contentBodyStyle}>
           {tab === 'overview' && (
-            <div style={{ display: 'grid', gap: 14 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <DetailPanel title="Семья">
+            <div style={{ display: 'grid', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+                <DetailPanel title="Контакт">
                   <DetailInput label="Родитель" tone="soft" value={savedFamily.parentName} onCommit={value => handleSaveFamily({ ...savedFamily, parentName: formatName(value) })} />
-                  <DetailInput label="Телефон" tone="soft" value={savedFamily.phone} onCommit={value => handleSaveFamily({ ...savedFamily, phone: formatPhone(value) })} />
-                  <DetailInput label="Адрес" tone="clear" value={savedFamily.fullAddress} onCommit={value => handleSaveFamily({ ...savedFamily, fullAddress: value })} />
-                  <DetailInput label="Комментарий" tone="clear" value={savedFamily.comment ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, comment: value })} />
+                  <DetailInput label="Телефон 1" tone="soft" value={savedFamily.phone} onCommit={value => handleSaveFamily({ ...savedFamily, phone: formatPhone(value) })} />
+                  <DetailInput label="Телефон 2" tone="soft" value={savedFamily.secondPhone ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, secondPhone: formatPhone(value) })} />
+                  <DetailInput label="Telegram" tone="soft" value={savedFamily.phoneTelegram ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, phoneTelegram: value })} />
                 </DetailPanel>
-                <DetailPanel title="Маршрут">
-                  <DetailSelect
-                    label="Школа"
-                    tone="soft"
-                    value={savedFamily.schoolCode}
-                    options={Object.entries(SCHOOL_NAME).map(([value, label]) => ({ value, label }))}
-                    onCommit={value => handleSaveFamily({ ...savedFamily, schoolCode: value as Family['schoolCode'] })}
-                  />
-                  <DetailSelect
-                    label="Транспорт"
-                    tone="soft"
-                    value={savedFamily.vehicleType}
-                    options={Object.entries(VT_LABEL).map(([value, label]) => ({ value, label }))}
-                    onCommit={value => handleSaveFamily({ ...savedFamily, vehicleType: value as Family['vehicleType'] })}
-                  />
-                  <DetailInput
-                    label="Трансфер"
-                    tone="clear"
-                    value={String(savedFamily.transferNumber ?? primaryChild?.transferNumber ?? '')}
-                    type="number"
-                    placeholder="-"
-                    onCommit={value => handleSaveFamily({ ...savedFamily, transferNumber: value ? Number(value) : undefined })}
-                  />
-                  <DetailInput
-                    label="Время"
-                    tone="clear"
-                    value={savedFamily.timeMorning ?? primaryChild?.timeMorning ?? ''}
-                    type="time"
-                    placeholder="-"
-                    onCommit={value => handleSaveFamily({ ...savedFamily, timeMorning: value || undefined })}
-                  />
+                <DetailPanel title="Адрес">
+                  <DetailInput label="Адрес" tone="clear" value={savedFamily.fullAddress} onCommit={value => handleSaveFamily({ ...savedFamily, fullAddress: value })} />
+                  <DetailValue label="Координаты" value={coordinatesText} />
+                  <DetailMapLink label="Яндекс" url={mapUrl} />
+                  <DetailInput label="Комментарий" tone="clear" value={savedFamily.comment ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, comment: value })} />
                 </DetailPanel>
               </div>
 
               <DetailPanel title={`Дети (${children.length})`}>
-                <div style={{ display: 'grid', gap: 8 }}>
-                  {children.length === 0 && <div style={{ fontSize: 12, color: '#7B8491' }}>Детей нет</div>}
-                  {children.map(child => (
-                    <div key={child.id} style={childOverviewRowStyle}>
-                      <div>
-                        <div style={{ fontSize: 13, fontWeight: 850, color: '#111827' }}>{child.childName || 'Без имени'}</div>
-                        <div style={{ marginTop: 2, fontSize: 11, fontWeight: 650, color: '#7B8491' }}>
-                          {child.class ? `${child.class} кл.` : 'класс не указан'} · {child.branchShort || child.schoolCode} · {child.transferNumber ? `№${child.transferNumber}` : 'без трансфера'}
-                        </div>
-                      </div>
-                      <div style={{ fontSize: 13, fontWeight: 850, color: '#111827' }}>{money(Number(child.finalPrice ?? 0))}</div>
-                    </div>
-                  ))}
-                </div>
+                <ChildrenOverviewTable children={children} branches={branches} onSaveChild={handleSaveChild} />
               </DetailPanel>
             </div>
           )}
 
-          {tab === 'contacts' && <TabInfo family={savedFamily} saving={saving} onSave={handleSaveFamily} />}
-          {tab === 'children' && <TabChildren children={children} loading={loadingKids} family={savedFamily} isAdmin={isAdmin} compactColumns={sidebarHidden} onReload={loadAll} />}
           {tab === 'finance' && (
             <TabFinance
               charges={charges} payments={payments} paymentItems={paymentItems}
@@ -375,24 +365,26 @@ function SideMetric({ label, value, alert }: { label: string; value: string; ale
     <div style={{
       background: '#FFFFFF',
       borderRadius: 8,
-      padding: '8px 10px',
+      padding: '6px 9px',
       border: alert ? '1px solid #FECACA' : '1px solid #E8EEF1',
       display: 'grid',
       gridTemplateColumns: '1fr auto',
       alignItems: 'center',
-      gap: 8,
+      gap: 7,
     }}>
-      <div style={{ fontSize: 10, color: '#8A94A3', textTransform: 'uppercase', fontWeight: 800 }}>{label}</div>
-      <div style={{ fontSize: 12, fontWeight: 850, color: alert ? '#B91C1C' : '#111827' }}>{value}</div>
+      <div style={{ fontSize: 9, color: '#8A94A3', textTransform: 'uppercase', fontWeight: 800 }}>{label}</div>
+      <div style={{ fontSize: 11, fontWeight: 850, color: alert ? '#B91C1C' : '#111827' }}>{value}</div>
     </div>
   );
 }
 
 function DetailPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section style={{ background: '#fff', border: '1px solid #E8EEF1', borderRadius: 12, padding: 14 }}>
-      <div style={{ fontSize: 14, fontWeight: 900, color: '#111827', marginBottom: 10 }}>{title}</div>
-      {children}
+    <section style={{ background: '#fff', border: '1px solid #E8EEF1', borderRadius: 12, padding: 12 }}>
+      <div style={{ fontSize: 13, fontWeight: 900, color: '#111827', marginBottom: 8 }}>{title}</div>
+      <div className="family-detail-rows">
+        {children}
+      </div>
     </section>
   );
 }
@@ -408,7 +400,7 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
   return (
-    <label style={detailFieldStyle(tone)}>
+    <label className="family-detail-row" style={detailFieldStyle(tone)}>
       <span style={detailLabelStyle}>{label}</span>
       <input
         className="family-card-control"
@@ -423,34 +415,224 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   );
 }
 
-function DetailSelect({ label, value, options, onCommit, tone = 'soft' }: {
-  label: string;
-  value: string;
-  options: { value: string; label: string }[];
-  onCommit: (value: string) => void;
-  tone?: 'soft' | 'clear';
-}) {
+function DetailValue({ label, value }: { label: string; value: string }) {
   return (
-    <label style={detailFieldStyle(tone)}>
+    <div className="family-detail-row" style={detailFieldStyle('soft')}>
       <span style={detailLabelStyle}>{label}</span>
-      <select
-        className="family-card-control"
-        value={value}
-        onChange={event => onCommit(event.currentTarget.value)}
-        style={detailControlStyle}
-      >
-        {options.map(option => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-    </label>
+      <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+        {value || '-'}
+      </span>
+    </div>
   );
 }
 
-function modalStyle(sidebarHidden: boolean): React.CSSProperties {
+function DetailMapLink({ label, url }: { label: string; url: string }) {
+  return (
+    <div className="family-detail-row" style={detailFieldStyle('soft')}>
+      <span style={detailLabelStyle}>{label}</span>
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+          style={{
+            ...detailControlStyle,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 6,
+            color: '#237F81',
+            textDecoration: 'none',
+          }}
+        >
+          <MapPin size={13} />
+          <span>Открыть карту</span>
+          <ExternalLink size={12} />
+        </a>
+      ) : (
+        <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', color: '#98A2B3' }}>-</span>
+      )}
+    </div>
+  );
+}
+
+function ChildrenOverviewTable({
+  children,
+  branches,
+  onSaveChild,
+}: {
+  children: Child[];
+  branches: V2BranchOption[];
+  onSaveChild: (child: Child, patch: Partial<Child>) => Promise<boolean>;
+}) {
+  if (children.length === 0) {
+    return <div style={{ fontSize: 12, color: '#7B8491' }}>Детей нет</div>;
+  }
+
+  return (
+    <div className="no-scrollbar" style={{ overflowX: 'auto', border: '1px solid #E8EEF1', borderRadius: 10 }}>
+      <table className="family-child-table" style={{ width: '100%', minWidth: 1040, borderCollapse: 'collapse', background: '#fff' }}>
+        <thead>
+          <tr>
+            {['ФИО', 'Школа', 'Класс', 'Зона', 'Тип ТС', 'Самовыход', 'Трансфер', 'Остановка', 'Утро', 'Скидка %', 'Скидка', 'Цена', 'Итого'].map(label => (
+              <th key={label} style={childTableHeadStyle}>{label}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {children.map(child => (
+            <tr key={child.id}>
+              <td style={{ ...childTableCellStyle, minWidth: 170 }}><EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /></td>
+              <td style={childTableCellStyle}>
+                <EditableSelect
+                  value={child.branchId ?? ''}
+                  options={branches.map(branch => ({ value: branch.id, label: branch.shortName || branch.code }))}
+                  onCommit={value => {
+                    const branch = branches.find(item => item.id === value);
+                    if (!branch) return Promise.resolve(false);
+                    return onSaveChild(child, {
+                      branchId: branch.id,
+                      schoolId: branch.schoolId,
+                      branchCode: branch.code,
+                      branchShort: branch.shortName,
+                      branchName: branch.name,
+                      schoolCode: branch.code as Child['schoolCode'],
+                    });
+                  }}
+                />
+              </td>
+              <td style={childTableCellStyle}><EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /></td>
+              <td style={childTableCellStyle}><EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={52} panelWidth={120} /></td>
+              <td style={childTableCellStyle}><EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={116} panelWidth={190} /></td>
+              <td style={childTableCellStyle}><input type="checkbox" checked={child.selfExitAllowed} onChange={event => void onSaveChild(child, { selfExitAllowed: event.currentTarget.checked })} /></td>
+              <td style={childTableCellStyle}><EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={64} panelWidth={130} /></td>
+              <td style={childTableCellStyle}><EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={60} panelWidth={120} /></td>
+              <td style={childTableCellStyle}><EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /></td>
+              <td style={childTableCellStyle}><EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /></td>
+              <td style={childTableCellStyle}><EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, Number(child.basePrice || child.finalPrice || 0))} /></td>
+              <td style={childTableCellStyle}><EditableNumber value={child.basePrice || undefined} onCommit={value => onSaveChild(child, { basePrice: value ?? 0 })} /></td>
+              <td style={childTableCellStyle}><EditableNumber value={child.finalPrice || undefined} onCommit={value => onSaveChild(child, { finalPrice: value ?? 0 })} strong /></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function EditableText({
+  value,
+  onCommit,
+  type = 'text',
+  strong,
+}: {
+  value: string;
+  onCommit: (value: string) => Promise<boolean>;
+  type?: string;
+  strong?: boolean;
+}) {
+  const [local, setLocal] = useState(value ?? '');
+  useEffect(() => setLocal(value ?? ''), [value]);
+  return (
+    <input
+      type={type}
+      value={local}
+      onChange={event => setLocal(event.currentTarget.value)}
+      onBlur={() => {
+        if (local !== (value ?? '')) void onCommit(local);
+      }}
+      style={childTableControlStyle(strong)}
+    />
+  );
+}
+
+function EditableNumber({
+  value,
+  onCommit,
+  prefix,
+  suffix,
+  strong,
+  step,
+  min,
+  max,
+}: {
+  value?: number;
+  onCommit: (value: number | undefined) => Promise<boolean>;
+  prefix?: string;
+  suffix?: string;
+  strong?: boolean;
+  step?: number;
+  min?: number;
+  max?: number;
+}) {
+  const stringValue = value == null || Number.isNaN(value) ? '' : String(value);
+  const [local, setLocal] = useState(stringValue);
+  useEffect(() => setLocal(stringValue), [stringValue]);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+      {prefix && <span style={{ color: '#98A2B3', fontSize: 10, fontWeight: 850 }}>{prefix}</span>}
+      <input
+        type="number"
+        value={local}
+        step={step}
+        min={min}
+        max={max}
+        onChange={event => setLocal(event.currentTarget.value)}
+        onBlur={() => {
+          const parsed = local === '' ? undefined : clampNumber(Number(local), min, max, step);
+          const nextLocal = parsed == null ? '' : String(parsed);
+          if (nextLocal !== local) setLocal(nextLocal);
+          if (nextLocal !== stringValue) void onCommit(parsed);
+        }}
+        style={{ ...childTableControlStyle(strong), width: 58 }}
+      />
+      {suffix && <span style={{ color: '#98A2B3', fontSize: 10, fontWeight: 850 }}>{suffix}</span>}
+    </div>
+  );
+}
+
+function EditableSelect({
+  value,
+  options,
+  onCommit,
+  width,
+  panelWidth,
+}: {
+  value: string;
+  options: { value: string; label: string }[];
+  onCommit: (value: string) => Promise<boolean>;
+  width?: number;
+  panelWidth?: number;
+}) {
+  return (
+    <NotionSelect
+      value={value}
+      options={options}
+      onChange={nextValue => {
+        if (nextValue !== value) void onCommit(nextValue);
+      }}
+      variant="inline"
+      width={width ?? '100%'}
+      panelWidth={panelWidth}
+    />
+  );
+}
+
+function clampNumber(value: number, min?: number, max?: number, step?: number): number {
+  if (!Number.isFinite(value)) return min ?? 0;
+  const lower = min ?? Number.NEGATIVE_INFINITY;
+  const upper = max ?? Number.POSITIVE_INFINITY;
+  const stepped = step && Number.isFinite(step) && step > 0 ? Math.round(value / step) * step : value;
+  return Math.min(upper, Math.max(lower, stepped));
+}
+
+function clampToStep(value: number, min: number, max: number, step: number): number {
+  return clampNumber(value, min, max, step);
+}
+
+function modalStyle(): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: sidebarHidden ? '56px minmax(0, 1fr)' : '286px minmax(0, 1fr)',
+    gridTemplateColumns: '76px minmax(0, 1fr)',
     background: '#fff',
     border: '1px solid #DDE7EB',
     borderRadius: 18,
@@ -464,22 +646,12 @@ function modalStyle(sidebarHidden: boolean): React.CSSProperties {
   };
 }
 
-const sidebarStyle: React.CSSProperties = {
-  borderRight: 'none',
-  padding: '18px 0 18px 18px',
-  display: 'flex',
-  flexDirection: 'column',
-  gap: 14,
-  background: '#fff',
-  overflowY: 'auto',
-};
-
 const sidebarRailStyle: React.CSSProperties = {
   borderRight: 'none',
-  padding: '82px 8px 12px',
+  padding: '96px 0 12px 10px',
   display: 'flex',
   flexDirection: 'column',
-  alignItems: 'center',
+  alignItems: 'stretch',
   background: '#fff',
   overflowY: 'auto',
 };
@@ -493,15 +665,17 @@ const railNavStyle: React.CSSProperties = {
 function railButtonStyle(active: boolean): React.CSSProperties {
   return {
     position: 'relative',
-    width: 38,
-    height: 38,
-    border: active ? '1px solid #E5ECEF' : '1px solid transparent',
-    borderRadius: 10,
-    background: active ? '#F7F9FB' : 'transparent',
-    color: active ? '#F59E0B' : '#98A2B3',
+    width: '100%',
+    height: 42,
+    border: '1px solid transparent',
+    borderRight: active ? 'none' : '1px solid transparent',
+    borderRadius: active ? '12px 0 0 12px' : 12,
+    background: active ? 'var(--active-bg)' : 'transparent',
+    color: active ? '#31A4A5' : '#98A2B3',
     display: 'grid',
     placeItems: 'center',
     cursor: 'pointer',
+    boxShadow: active ? 'inset 3px 0 0 #31A4A5' : 'none',
   };
 }
 
@@ -521,107 +695,36 @@ const railBadgeStyle: React.CSSProperties = {
 };
 
 const avatarStyle: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: 13,
-  background: '#FFEDD5',
+  width: 36,
+  height: 36,
+  borderRadius: 12,
+  background: '#D7EEEE',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 850,
-  color: '#F59E0B',
+  color: '#237F81',
   flexShrink: 0,
 };
 
-const profileStatusStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '44px 1fr',
-  gap: 10,
-  alignItems: 'center',
-  background: '#fff',
-  border: '1px solid #E8EEF1',
-  borderRadius: 14,
-  padding: 12,
-  marginRight: 18,
-};
-
-const profileStatusRingStyle: React.CSSProperties = {
-  width: 42,
-  height: 42,
-  borderRadius: '50%',
-  display: 'grid',
-  placeItems: 'center',
-  fontSize: 16,
-  fontWeight: 900,
-};
-
-const activeLineStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: -1,
-  top: 0,
-  bottom: 0,
-  width: 1,
-  background: '#F7F9FB',
-};
-
-function navButtonStyle(active: boolean): React.CSSProperties {
-  return {
-    position: 'relative',
-    width: '100%',
-    display: 'grid',
-    gridTemplateColumns: '22px 1fr auto',
-    alignItems: 'center',
-    gap: 9,
-    border: active ? '1px solid #E5ECEF' : '1px solid transparent',
-    borderRightColor: active ? '#F7F9FB' : 'transparent',
-    borderRadius: active ? '10px 0 0 10px' : 10,
-    background: active ? '#F7F9FB' : 'transparent',
-    color: active ? '#111827' : '#667085',
-    padding: '10px 12px',
-    textAlign: 'left',
-    cursor: 'pointer',
-    boxShadow: 'none',
-  };
-}
-
-const sideMetricsWrapStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr',
-  gap: 7,
-  marginTop: 4,
-  marginRight: 18,
-};
-
-const navBadgeStyle: React.CSSProperties = {
-  minWidth: 18,
-  height: 18,
-  borderRadius: 999,
-  background: '#EEF2F5',
-  color: '#475569',
-  display: 'inline-grid',
-  placeItems: 'center',
-  fontSize: 10,
-  fontWeight: 850,
-};
-
-function detailFieldStyle(tone: 'soft' | 'clear'): React.CSSProperties {
+function detailFieldStyle(_tone: 'soft' | 'clear'): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '120px minmax(0, 1fr)',
-    gap: 12,
+    gridTemplateColumns: '104px minmax(0, 1fr)',
+    gap: 10,
     minWidth: 0,
-    padding: '4px 8px',
-    minHeight: 34,
+    padding: '3px 8px',
+    minHeight: 29,
     borderBottom: '1px solid #F0F3F5',
     borderRadius: 7,
-    background: tone === 'soft' ? '#F8FAFC' : '#FFF8F1',
+    background: 'transparent',
     alignItems: 'center',
   };
 }
 
 const detailLabelStyle: React.CSSProperties = {
-  fontSize: 11,
+  fontSize: 10,
   fontWeight: 800,
   color: '#7B8491',
 };
@@ -629,13 +732,13 @@ const detailLabelStyle: React.CSSProperties = {
 const detailControlStyle: React.CSSProperties = {
   width: '100%',
   minWidth: 0,
-  height: 28,
+  height: 24,
   border: '1px solid transparent',
   borderRadius: 7,
   background: 'transparent',
   color: '#111827',
   padding: '0 8px',
-  fontSize: 13,
+  fontSize: 12,
   fontWeight: 750,
   outline: 'none',
 };
@@ -647,7 +750,22 @@ const contentHeaderStyle: React.CSSProperties = {
   borderBottom: '1px solid #E5ECEF',
   background: '#fff',
   flexShrink: 0,
-  padding: '18px 22px',
+  padding: '10px 22px',
+};
+
+const headerInfoStyle: React.CSSProperties = {
+  minWidth: 0,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 18,
+  flexWrap: 'wrap',
+};
+
+const headerMetricsStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(4, minmax(92px, auto))',
+  gap: 6,
+  alignItems: 'center',
 };
 
 const closeButtonStyle: React.CSSProperties = {
@@ -664,32 +782,47 @@ const closeButtonStyle: React.CSSProperties = {
   placeItems: 'center',
 };
 
-const sidebarToggleStyle: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  background: '#fff',
-  border: '1px solid #E5ECEF',
-  borderRadius: 10,
-  cursor: 'pointer',
-  color: '#6B7280',
-  padding: 0,
-  flexShrink: 0,
-  display: 'grid',
-  placeItems: 'center',
-};
-
 const contentBodyStyle: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
-  padding: '18px 22px',
-  background: '#F7F9FB',
+  padding: '14px 22px',
+  background: 'var(--active-bg)',
 };
 
-const childOverviewRowStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr auto',
-  gap: 10,
-  alignItems: 'center',
-  padding: '9px 0',
-  borderBottom: '1px solid #EDF0F2',
+const childTableHeadStyle: React.CSSProperties = {
+  height: 30,
+  padding: '0 8px',
+  borderBottom: '1px solid #E8EEF1',
+  background: '#F7FBFB',
+  color: '#667085',
+  fontSize: 10,
+  fontWeight: 850,
+  textAlign: 'left',
+  whiteSpace: 'nowrap',
 };
+
+const childTableCellStyle: React.CSSProperties = {
+  height: 34,
+  padding: '0 8px',
+  borderBottom: '1px solid #F0F3F5',
+  color: '#4B5563',
+  fontSize: 11,
+  fontWeight: 700,
+  whiteSpace: 'nowrap',
+};
+
+function childTableControlStyle(strong?: boolean): React.CSSProperties {
+  return {
+    width: '100%',
+    minWidth: 0,
+    height: 24,
+    border: '1px solid transparent',
+    borderRadius: 6,
+    background: 'transparent',
+    color: '#111827',
+    padding: '0 4px',
+    fontSize: 11,
+    fontWeight: strong ? 850 : 750,
+    outline: 'none',
+  };
+}

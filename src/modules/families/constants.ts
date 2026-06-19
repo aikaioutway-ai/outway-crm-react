@@ -137,17 +137,26 @@ export const PERIOD_LABEL: Record<string, string> = {
 
 export const PERIOD_ORDER = ['deposit','9','10','11','12','1','2','3','4','5'];
 
+function getSeasonStartYear(): number {
+  const currentDate = new Date();
+  const month = currentDate.getMonth() + 1;
+  return month >= 6 ? currentDate.getFullYear() : currentDate.getFullYear() - 1;
+}
+
+const SEASON_YEAR = getSeasonStartYear();
+const NEXT_SEASON_YEAR = SEASON_YEAR + 1;
+
 export const ALL_PERIODS = [
-  { key: 'deposit', month: 0,  year: 2026, label: 'Депозит' },
-  { key: '9',       month: 9,  year: 2026, label: 'Сентябрь 2026' },
-  { key: '10',      month: 10, year: 2026, label: 'Октябрь 2026' },
-  { key: '11',      month: 11, year: 2026, label: 'Ноябрь 2026' },
-  { key: '12',      month: 12, year: 2026, label: 'Декабрь 2026' },
-  { key: '1',       month: 1,  year: 2027, label: 'Январь 2027' },
-  { key: '2',       month: 2,  year: 2027, label: 'Февраль 2027' },
-  { key: '3',       month: 3,  year: 2027, label: 'Март 2027' },
-  { key: '4',       month: 4,  year: 2027, label: 'Апрель 2027' },
-  { key: '5',       month: 5,  year: 2027, label: 'Май 2027' },
+  { key: 'deposit', month: 0,  year: SEASON_YEAR,      label: 'Депозит' },
+  { key: '9',       month: 9,  year: SEASON_YEAR,      label: `Сентябрь ${SEASON_YEAR}` },
+  { key: '10',      month: 10, year: SEASON_YEAR,      label: `Октябрь ${SEASON_YEAR}` },
+  { key: '11',      month: 11, year: SEASON_YEAR,      label: `Ноябрь ${SEASON_YEAR}` },
+  { key: '12',      month: 12, year: SEASON_YEAR,      label: `Декабрь ${SEASON_YEAR}` },
+  { key: '1',       month: 1,  year: NEXT_SEASON_YEAR, label: `Январь ${NEXT_SEASON_YEAR}` },
+  { key: '2',       month: 2,  year: NEXT_SEASON_YEAR, label: `Февраль ${NEXT_SEASON_YEAR}` },
+  { key: '3',       month: 3,  year: NEXT_SEASON_YEAR, label: `Март ${NEXT_SEASON_YEAR}` },
+  { key: '4',       month: 4,  year: NEXT_SEASON_YEAR, label: `Апрель ${NEXT_SEASON_YEAR}` },
+  { key: '5',       month: 5,  year: NEXT_SEASON_YEAR, label: `Май ${NEXT_SEASON_YEAR}` },
 ];
 
 export function normalizeZone(z: unknown, fallback = 'A'): string {

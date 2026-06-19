@@ -2,16 +2,16 @@
 /* Использует CSS переменные из корневого стиля CRM                           */
 
 :root {
-  --dt-bg:         #F7F9FB;
+  --dt-bg:         #E9F1F5;
   --dt-white:      #FFFFFF;
-  --dt-accent:     #2563EB;
-  --dt-accent-h:   #1D4ED8;
-  --dt-accent-l:   #FFEDD5;
-  --dt-text:       #080B0B;
-  --dt-text-2:     #6E7685;
-  --dt-border:     #E5ECEF;
-  --dt-hover:      #F0F5F7;
-  --dt-selected:   #E9F1F4;
+  --dt-accent:     #31A4A5;
+  --dt-accent-h:   #237F81;
+  --dt-accent-l:   #D7EEEE;
+  --dt-text:       #17222F;
+  --dt-text-2:     #626C8B;
+  --dt-border:     #D4E3E7;
+  --dt-hover:      #F5FAFB;
+  --dt-selected:   #D7EEEE;
   --dt-radius:     14px;
   --dt-font:       var(--font);
 }
@@ -34,8 +34,8 @@
 
 /* ── TOOLBAR ── */
 .dt-toolbar {
-  position: sticky;
-  top: 98px;
+  position: relative;
+  top: auto;
   z-index: 30;
   display: flex;
   align-items: center;
@@ -950,13 +950,13 @@
 /* ── Airy table treatment ── */
 .dt-root {
   background: #fff;
-  border: 1px solid #E8ECEF;
-  border-radius: 0 0 10px 10px;
-  box-shadow: none;
+  border: 1px solid #D4E3E7;
+  border-radius: 0 0 18px 18px;
+  box-shadow: 0 16px 34px rgba(43, 72, 89, .08);
 }
 
 .dt-toolbar {
-  top: 86px;
+  top: auto;
   padding: 8px 10px;
   background: #fff;
   border-bottom: 1px solid #EDF0F2;
@@ -965,18 +965,18 @@
 }
 
 .dt-btn {
-  border-color: #E8ECEF;
-  border-radius: 7px;
+  border-color: #D4E3E7;
+  border-radius: 12px;
   background: #fff;
-  color: #5F6873;
+  color: #626C8B;
   font-size: 11px;
   font-weight: 700;
 }
 
 .dt-btn:hover {
-  background: #F8FAFC;
-  border-color: #D8DEE4;
-  color: #111827;
+  background: #D7EEEE;
+  border-color: #AAD4D4;
+  color: #17222F;
 }
 
 .dt-wrap {
@@ -985,10 +985,10 @@
 }
 
 .dt-th {
-  background: #fff !important;
+  background: #F8FCFC !important;
   border-bottom: none;
   border-right: none;
-  color: #6B7280;
+  color: #626C8B;
   font-size: 12px;
   font-weight: 750;
 }
@@ -1002,7 +1002,7 @@
   height: 35px;
   border-right: none;
   border-bottom: none;
-  color: #111827;
+  color: #17222F;
   background: #fff;
 }
 
@@ -1019,12 +1019,12 @@
 }
 
 .dt-tr[data-group-even="false"] td {
-  background: #FFF7ED;
+  background: #F8FCFC;
 }
 
 .dt-tr[data-group-even="true"]:hover td,
 .dt-tr[data-group-even="false"]:hover td {
-  background: #FFF7ED !important;
+  background: #EAF6F6 !important;
 }
 
 .dt-tr--selected[data-group-even="true"] td,
@@ -1040,9 +1040,9 @@
   font-weight: 500;
 }
 
-/* ── Warm alternating rows ── */
+/* ── Soft alternating rows ── */
 .dt-tr[data-group-even="true"] td {
-  background: #FFF7ED !important;
+  background: #F7FBFB !important;
 }
 
 .dt-tr[data-group-even="false"] td {
@@ -1051,12 +1051,12 @@
 
 .dt-tr[data-group-even="true"]:hover td,
 .dt-tr[data-group-even="false"]:hover td {
-  background: #FFF7ED !important;
+  background: #EAF6F6 !important;
 }
 
 .dt-tr--selected[data-group-even="true"] td,
 .dt-tr--selected[data-group-even="false"] td {
-  background: #FFF7ED !important;
+  background: #D7EEEE !important;
 }
 
 .dt-tr:active td {
@@ -1064,7 +1064,7 @@
 }
 
 .dt-tr[data-group-even="true"] .dt-td.dt-sticky-col {
-  background: #FFF7ED !important;
+  background: #F7FBFB !important;
 }
 
 .dt-tr[data-group-even="false"] .dt-td.dt-sticky-col {
@@ -1096,14 +1096,14 @@
   height: 38px;
   padding: 0 12px;
   border: 1px solid #E5ECEF;
-  border-radius: 8px;
+  border-radius: 12px;
   background: #fff;
-  color: #111827;
+  color: #17222F;
   font: inherit;
   font-size: 13px;
   font-weight: 650;
   outline: none;
-  box-shadow: 0 16px 34px rgba(8,11,11,0.12);
+  box-shadow: 0 16px 34px rgba(43, 72, 89, .16);
   box-sizing: border-box;
   z-index: 30;
 }
@@ -1138,10 +1138,10 @@ select.dt-cell-input {
   justify-content: center;
   padding: 0;
   border: 1px solid #E5ECEF;
-  border-radius: 6px;
+  border-radius: 10px;
   background: #fff;
-  color: #6B7280;
-  box-shadow: 0 4px 10px rgba(8,11,11,0.06);
+  color: #626C8B;
+  box-shadow: 0 4px 10px rgba(43, 72, 89, .08);
   cursor: pointer;
   z-index: 8;
 }
@@ -1176,7 +1176,7 @@ select.dt-cell-input {
 }
 
 .dt-row-open-btn:hover {
-  border-color: #D8DEE4;
-  color: #111827;
-  background: #F8FAFC;
+  border-color: #AAD4D4;
+  color: #17222F;
+  background: #D7EEEE;
 }

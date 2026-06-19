@@ -1,16 +1,17 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Family, FamilyPayment, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { fetchV2FamiliesTable, fetchV2Family, updateV2Child, updateV2ChildRoute, updateV2Family } from '../../services/crmV2Service';
+import { fetchV2FamiliesTable, fetchV2Family, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
+import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Search, Plus } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 
 interface ChildRow {
@@ -247,18 +248,84 @@ const LOGISTICS_CHART_COLORS = [
   '#E49A55', '#5A9FE8', '#B77BDA', '#E1709B', '#88A8D8',
 ];
 
+type LogisticsDashboardItem = { key: string; label: string; value: number; color: string };
+type LogisticsTransferDashboardItem = LogisticsDashboardItem & { group: string; count: number; vehicleType?: string };
+type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidSum' | 'balanceSum';
+type LogisticsVehicleFilter = 'all' | VehicleType;
+
+const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
+  { key: 'average', label: 'Средний' },
+  { key: 'count', label: 'К-во' },
+  { key: 'debtSum', label: 'Долг', money: true },
+  { key: 'debtorsCount', label: 'Должники' },
+  { key: 'chargedSum', label: 'Начислено', money: true },
+  { key: 'paidSum', label: 'Оплачено', money: true },
+  { key: 'balanceSum', label: 'Баланс', money: true },
+];
+const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[] = [
+  { key: 'all', label: 'Все ТС' },
+  { key: 'microbus', label: 'Микроавтобус' },
+  { key: 'minivan', label: 'Минивэн' },
+  { key: 'sedan', label: 'Седан' },
+];
+
+function logisticsTransferCountColor(count: number): string {
+  if (count <= 0) return '#C9D4D6';
+  if (count < 16) return '#EF7168';
+  if (count === 16) return '#E49A55';
+  if (count === 17) return '#74BE92';
+  return '#31A4A5';
+}
+
+function logisticsVehicleTypeLineColor(vehicleType?: string): string | null {
+  if (vehicleType === 'minivan') return '#74BE92';
+  if (vehicleType === 'sedan') return '#E49A55';
+  return null;
+}
+
+function vehicleTypeShortLabel(vehicleType?: string): string {
+  if (vehicleType === 'microbus') return 'BUS';
+  if (vehicleType === 'minivan') return 'MINI';
+  if (vehicleType === 'sedan') return 'CAR';
+  return '';
+}
+
 const logisticsDashboardStyle: React.CSSProperties = {
   position: 'relative',
   display: 'grid',
-  gridTemplateColumns: '150px minmax(0, 1fr)',
-  gap: 16,
-  alignItems: 'center',
-  minHeight: 168,
-  padding: '12px 42px 10px 14px',
+  gridTemplateColumns: '224px minmax(0, 1fr)',
+  gap: 10,
+  alignItems: 'start',
+  minHeight: 340,
+  padding: 0,
+  background: 'transparent',
+  border: 'none',
+  borderRadius: 0,
+  overflow: 'visible',
+};
+
+const logisticsDashboardSideStyle: React.CSSProperties = {
+  position: 'relative',
+  display: 'grid',
+  justifyItems: 'center',
+  gap: 4,
+  padding: '12px 12px 14px',
+  minHeight: '100%',
   background: '#fff',
-  border: '1px solid #E8ECEF',
+  border: '1px solid #D4E3E7',
   borderRadius: 10,
-  overflow: 'hidden',
+};
+
+const logisticsDashboardMainStyle: React.CSSProperties = {
+  position: 'relative',
+  display: 'grid',
+  gap: 14,
+  minWidth: 0,
+  minHeight: '100%',
+  padding: '30px 42px 14px 14px',
+  background: '#fff',
+  border: '1px solid #D4E3E7',
+  borderRadius: 10,
 };
 
 const logisticsCollapsedStyle: React.CSSProperties = {
@@ -269,7 +336,7 @@ const logisticsCollapsedStyle: React.CSSProperties = {
   minHeight: 34,
   padding: '5px 8px 5px 12px',
   background: '#fff',
-  border: '1px solid #E8ECEF',
+  border: '1px solid #D4E3E7',
   borderRadius: 10,
 };
 
@@ -277,43 +344,23 @@ const logisticsCollapsedDotStyle: React.CSSProperties = {
   width: 8,
   height: 8,
   borderRadius: 999,
-  background: '#F59E0B',
+  background: '#31A4A5',
   flexShrink: 0,
-};
-
-const logisticsToggleStyle: React.CSSProperties = {
-  height: 26,
-  padding: '0 9px',
-  border: '1px solid #E8ECEF',
-  borderRadius: 7,
-  background: '#fff',
-  color: '#6B7280',
-  fontSize: 11,
-  fontWeight: 800,
-  cursor: 'pointer',
-  whiteSpace: 'nowrap',
-  justifySelf: 'end',
-};
-
-const logisticsGaugeStyle: React.CSSProperties = {
-  display: 'grid',
-  justifyItems: 'center',
-  gap: 4,
 };
 
 const logisticsGaugeTitleStyle: React.CSSProperties = {
   justifySelf: 'start',
-  marginLeft: 14,
+  marginLeft: 6,
   fontSize: 12,
   fontWeight: 850,
-  color: '#111827',
+  color: '#17222F',
 };
 
 const logisticsGaugeValueStyle: React.CSSProperties = {
   position: 'absolute',
   fontSize: 24,
   fontWeight: 900,
-  color: '#111827',
+  color: '#17222F',
 };
 
 const logisticsBarsStyle: React.CSSProperties = {
@@ -323,23 +370,31 @@ const logisticsBarsStyle: React.CSSProperties = {
   gap: 8,
   minWidth: 0,
   overflow: 'hidden',
-  padding: '16px 0 2px',
+  padding: '22px 0 2px',
   borderBottom: '1px solid #E5ECEF',
   scrollbarWidth: 'none',
 };
 
 const logisticsBarItemStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateRows: '18px 98px 24px',
+  gridTemplateRows: '98px 24px',
   justifyItems: 'center',
   alignItems: 'end',
   minWidth: 0,
+  border: 0,
+  background: 'transparent',
+  padding: 0,
 };
 
 const logisticsBarValueStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: '50%',
+  top: -20,
+  transform: 'translateX(-50%)',
   fontSize: 11,
   fontWeight: 750,
-  color: '#6B7280',
+  color: '#626C8B',
+  whiteSpace: 'nowrap',
 };
 
 const logisticsBarTrackStyle: React.CSSProperties = {
@@ -352,6 +407,7 @@ const logisticsBarTrackStyle: React.CSSProperties = {
 const logisticsBarStyle: React.CSSProperties = {
   width: 18,
   borderRadius: '5px 5px 0 0',
+  position: 'relative',
 };
 
 const logisticsBarLabelStyle: React.CSSProperties = {
@@ -360,7 +416,7 @@ const logisticsBarLabelStyle: React.CSSProperties = {
   paddingTop: 6,
   fontSize: 10,
   fontWeight: 700,
-  color: '#6B7280',
+  color: '#626C8B',
   textAlign: 'center',
   whiteSpace: 'nowrap',
   overflow: 'hidden',
@@ -371,20 +427,48 @@ function LogisticsMicrobusDashboard({
   items,
   collapsed,
   onToggle,
+  selectedKey,
+  onSelect,
+  metric,
+  onMetricChange,
+  vehicleFilter,
+  onVehicleFilterChange,
+  summaryItems,
+  primaryValue,
+  detailItems = [],
+  activeDetailKey,
+  onDetailSelect,
+  onDetailContextMenu,
 }: {
-  items: { key: string; label: string; value: number; color: string }[];
+  items: LogisticsDashboardItem[];
   collapsed: boolean;
   onToggle: () => void;
+  selectedKey?: string;
+  onSelect?: (key: string) => void;
+  metric: LogisticsDashboardMetric;
+  onMetricChange: (metric: LogisticsDashboardMetric) => void;
+  vehicleFilter: LogisticsVehicleFilter;
+  onVehicleFilterChange: (filter: LogisticsVehicleFilter) => void;
+  summaryItems?: { label: string; value: string }[];
+  primaryValue?: number;
+  detailItems?: LogisticsTransferDashboardItem[];
+  activeDetailKey?: string;
+  onDetailSelect?: (item: LogisticsTransferDashboardItem) => void;
+  onDetailContextMenu?: (event: React.MouseEvent, item: LogisticsTransferDashboardItem) => void;
 }) {
-  const maxValue = Math.max(20, ...items.map(item => item.value));
-  const average = items.length
+  const maxValue = Math.max(20, ...items.map(item => Math.max(0, item.value)));
+  const maxDetailValue = Math.max(1, ...detailItems.map(item => item.count));
+  const selectedMetric = LOGISTICS_DASHBOARD_METRICS.find(item => item.key === metric) ?? LOGISTICS_DASHBOARD_METRICS[0];
+  const averageGaugeValue = items.length
     ? items.reduce((sum, item) => sum + item.value, 0) / items.length
     : 0;
+  const selectedGaugeItem = selectedKey ? items.find(item => item.key === selectedKey) : undefined;
+  const gaugeValue = primaryValue ?? selectedGaugeItem?.value ?? averageGaugeValue;
   const radius = 38;
   const stroke = 11;
   const circumference = 2 * Math.PI * radius;
   const gap = 4;
-  const totalValue = items.reduce((sum, item) => sum + item.value, 0) || 1;
+  const totalValue = items.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
   let offset = 0;
 
   if (collapsed) {
@@ -392,24 +476,58 @@ function LogisticsMicrobusDashboard({
       <div style={logisticsCollapsedStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
           <span style={logisticsCollapsedDotStyle} />
-          <span style={{ fontSize: 12, fontWeight: 850, color: '#111827' }}>Средний по микроавтобусам</span>
-          <span style={{ fontSize: 12, fontWeight: 900, color: '#F59E0B' }}>{average.toFixed(2)}</span>
+          <span style={{ fontSize: 12, fontWeight: 850, color: '#17222F' }}>{selectedMetric.label}</span>
+          <span style={{ fontSize: 12, fontWeight: 900, color: '#31A4A5' }}>
+            {selectedMetric.money ? compactMoney(gaugeValue) : gaugeValue.toFixed(metric === 'average' ? 2 : 0)}
+          </span>
         </div>
-        <button onClick={onToggle} style={logisticsToggleStyle}>Показать</button>
+        <button
+          onClick={onToggle}
+          title="Показать дашборд"
+          style={{
+            width: 28,
+            height: 24,
+            border: 'none',
+            borderRadius: 8,
+            background: 'transparent',
+            color: '#626C8B',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            flexShrink: 0,
+          }}
+        >
+          <ChevronDown size={15} />
+        </button>
       </div>
     );
   }
 
   return (
     <div style={logisticsDashboardStyle}>
-      <button onClick={onToggle} style={{ ...logisticsToggleStyle, position: 'absolute', top: 8, right: 8 }}>Скрыть</button>
-      <div style={logisticsGaugeStyle}>
-        <div style={logisticsGaugeTitleStyle}>Средний</div>
+      <div style={logisticsDashboardSideStyle}>
+        <div style={{ ...logisticsGaugeTitleStyle, width: 182, display: 'grid', gridTemplateColumns: 'minmax(82px, 1fr) minmax(92px, 1fr)', gap: 8 }}>
+          <NotionSelect
+            value={metric}
+            options={LOGISTICS_DASHBOARD_METRICS.map(option => ({ value: option.key, label: option.label }))}
+            onChange={value => onMetricChange(value as LogisticsDashboardMetric)}
+            variant="inline"
+            panelWidth={220}
+          />
+          <NotionSelect
+            value={vehicleFilter}
+            options={LOGISTICS_VEHICLE_FILTERS.map(option => ({ value: option.key, label: option.label }))}
+            onChange={value => onVehicleFilterChange(value as LogisticsVehicleFilter)}
+            variant="inline"
+            panelWidth={210}
+          />
+        </div>
         <div style={{ position: 'relative', width: 112, height: 112, display: 'grid', placeItems: 'center' }}>
           <svg width="112" height="112" viewBox="0 0 112 112" style={{ transform: 'rotate(-90deg)' }}>
             <circle cx="56" cy="56" r={radius} fill="none" stroke="#EEF2F5" strokeWidth={stroke} />
             {items.map(item => {
-              const dash = Math.max(1, (item.value / totalValue) * circumference - gap);
+              const dash = Math.max(1, (Math.max(0, item.value) / totalValue) * circumference - gap);
               const node = (
                 <circle
                   key={item.key}
@@ -428,43 +546,216 @@ function LogisticsMicrobusDashboard({
               return node;
             })}
           </svg>
-          <div style={logisticsGaugeValueStyle}>{average.toFixed(2)}</div>
+          <div style={{ ...logisticsGaugeValueStyle, fontSize: selectedMetric.money ? 20 : 24 }}>
+            {selectedMetric.money ? compactMoney(gaugeValue) : gaugeValue.toFixed(metric === 'average' ? 2 : 0)}
+          </div>
         </div>
+        {summaryItems?.length ? (
+          <div style={{
+            width: 136,
+            display: 'grid',
+            gap: 7,
+            justifySelf: 'center',
+            marginTop: 6,
+          }}>
+            {summaryItems.map(item => (
+              <div key={item.label} style={{
+                display: 'flex',
+                alignItems: 'baseline',
+                justifyContent: 'space-between',
+                gap: 8,
+                minWidth: 0,
+                fontSize: 10,
+                lineHeight: 1.25,
+                color: '#626C8B',
+              }}>
+                <span style={{ fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{item.label}</span>
+                <span style={{ fontWeight: 850, color: '#17222F', whiteSpace: 'nowrap' }}>{item.value}</span>
+              </div>
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <div style={logisticsBarsStyle}>
-        {items.map(item => {
-          const height = Math.max(10, Math.round((item.value / maxValue) * 94));
-          return (
-            <div key={item.key} style={logisticsBarItemStyle}>
-              <div style={logisticsBarValueStyle}>{item.value.toFixed(1)}</div>
-              <div style={logisticsBarTrackStyle}>
-                <div style={{ ...logisticsBarStyle, height, background: item.color }} />
+      <div style={logisticsDashboardMainStyle}>
+        <button
+          onClick={onToggle}
+          title="Скрыть дашборд"
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 31,
+            height: 28,
+            border: 'none',
+            borderRadius: 8,
+            background: 'transparent',
+            color: '#626C8B',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <ChevronUp size={15} />
+        </button>
+        <div style={{
+          ...logisticsBarsStyle,
+          gridTemplateColumns: `repeat(${items.length || 1}, minmax(44px, 1fr))`,
+        }}>
+          {items.map(item => {
+            const height = Math.max(8, Math.round((Math.max(0, item.value) / maxValue) * 94));
+            const active = selectedKey === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onSelect?.(item.key)}
+                style={{
+                  ...logisticsBarItemStyle,
+                  cursor: 'pointer',
+                  borderRadius: 8,
+                  boxShadow: active ? 'inset 0 -2px 0 #31A4A5' : 'none',
+                }}
+              >
+                <div style={logisticsBarTrackStyle}>
+                  <div style={{ ...logisticsBarStyle, height, background: item.color }}>
+                    <span style={logisticsBarValueStyle}>
+                      {selectedMetric.money ? compactMoney(item.value) : item.value.toFixed(metric === 'average' ? 1 : 0)}
+                    </span>
+                  </div>
+                </div>
+                <div style={{ ...logisticsBarLabelStyle, color: active ? '#17222F' : '#626C8B', fontWeight: active ? 900 : 700 }}>
+                  {item.label}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'grid', gap: 8, minWidth: 0 }}>
+          <div style={{
+            ...logisticsBarsStyle,
+            gridTemplateColumns: `repeat(${detailItems.length || 1}, minmax(30px, 1fr))`,
+            gap: 12,
+            justifyContent: 'stretch',
+            paddingTop: 26,
+            borderBottom: 0,
+          }}>
+            {detailItems.length ? detailItems.map(item => {
+              const height = Math.max(8, Math.round((item.count / maxDetailValue) * 78));
+                const isEmpty = item.count <= 0;
+                const isStatus = item.key === 'all' || item.key === 'new' || item.key === 'rejected';
+                const isActive = activeDetailKey === item.key;
+                const vehicleLineColor = logisticsVehicleTypeLineColor(item.vehicleType);
+                const vehicleLabel = vehicleTypeShortLabel(item.vehicleType);
+                return (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => onDetailSelect?.(item)}
+                    onContextMenu={(event) => {
+                      if (!item.key.startsWith('transfer-')) return;
+                      onDetailContextMenu?.(event, item);
+                    }}
+                    title={item.label}
+                  style={{
+                    ...logisticsBarItemStyle,
+                    gridTemplateRows: '82px 22px',
+                    opacity: isEmpty ? 0.66 : 1,
+                    cursor: 'pointer',
+                    borderRadius: 8,
+                    boxShadow: isActive ? 'inset 0 -2px 0 #31A4A5' : 'none',
+                  }}
+                >
+                  <div style={{ ...logisticsBarTrackStyle, height: 82 }}>
+                    <div
+                      style={{
+                        ...logisticsBarStyle,
+                        height,
+                        background: isEmpty
+                          ? 'repeating-linear-gradient(-45deg, #EDF3F5 0, #EDF3F5 5px, #D9E5E8 5px, #D9E5E8 7px)'
+                          : item.color,
+                        width: 16,
+                      }}
+                    >
+                      <span style={{ ...logisticsBarValueStyle, color: isEmpty ? '#9AA7AE' : '#626C8B' }}>{item.count}</span>
+                    </div>
+                  </div>
+                  <div style={{
+                    ...logisticsBarLabelStyle,
+                    maxWidth: isStatus ? 48 : 34,
+                    fontSize: isStatus ? 8 : 10,
+                    color: isActive ? '#17222F' : isEmpty ? '#9AA7AE' : '#626C8B',
+                    fontWeight: isActive ? 900 : 700,
+                  }}>
+                    <span style={{
+                      display: 'inline-flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 1,
+                      minWidth: 12,
+                      lineHeight: 1,
+                    }}>
+                      <span>{item.label}</span>
+                      {vehicleLabel && (
+                        <span style={{
+                          color: vehicleLineColor ?? '#31A4A5',
+                          fontSize: 7,
+                          fontWeight: 900,
+                          lineHeight: 1,
+                        }}>
+                          {vehicleLabel}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                </button>
+              );
+            }) : (
+              <div style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 700, color: '#626C8B', paddingBottom: 16 }}>
+                По этой школе пока нет трансферов
               </div>
-              <div style={logisticsBarLabelStyle}>{item.label}</div>
-            </div>
-          );
-        })}
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
 }
 
 const TRANSFER_TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  microbus: { bg: '#FFF7ED', border: '#FED7AA', text: '#F59E0B', dot: '#F59E0B' },
+  microbus: { bg: '#D7EEEE', border: '#AAD4D4', text: '#237F81', dot: '#31A4A5' },
   minivan: { bg: '#ECFDF5', border: '#A7F3D0', text: '#065F46', dot: '#10B981' },
-  sedan: { bg: '#FEF3C7', border: '#FDE68A', text: '#F59E0B', dot: '#F59E0B' },
-  empty: { bg: '#F8FAFC', border: '#CBD5E1', text: '#475569', dot: '#94A3B8' },
+  sedan: { bg: '#F2F5E9', border: '#DCE8C6', text: '#687C54', dot: '#687C54' },
+  empty: { bg: '#F5FAFB', border: '#D4E3E7', text: '#626C8B', dot: '#AAB5AE' },
 };
 
 const TRANSFER_TABS = [
   ...TRANSFER_BAR_OPTIONS.map(transfer => ({ key: transfer, label: transfer })),
+];
+const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
+  { value: 'microbus', label: 'Микроавтобус' },
+  { value: 'minivan', label: 'Минивэн' },
+  { value: 'sedan', label: 'Седан' },
 ];
 const DEFAULT_MODE_FILTERS: ModeFilters = {
   activeTab: 'ALL',
   quickTransfer: '',
   quickChildStatus: '',
   quickPaymentStatus: '',
+};
+const DEFAULT_MODE_COLLAPSED: Record<FamiliesMode, boolean> = {
+  requests: false,
+  payments: false,
+  cashier: false,
+  logistics: false,
+};
+const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
+  requests: true,
+  payments: true,
+  cashier: true,
+  logistics: true,
 };
 
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', allowedSchools }: FamiliesPageProps) {
@@ -482,10 +773,26 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
-  const [logisticsDashboardCollapsed, setLogisticsDashboardCollapsed] = useState(false);
+  const [logisticsDashboardCollapsedByMode, setLogisticsDashboardCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
+  const [tableBarsCollapsedByMode, setTableBarsCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
+  const [schoolsBarCollapsedByMode, setSchoolsBarCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_SIDEBAR_COLLAPSED });
+  const [dashboardSchoolByMode, setDashboardSchoolByMode] = useState<Partial<Record<FamiliesMode, string>>>({});
+  const [dashboardMetricByMode, setDashboardMetricByMode] = useState<Partial<Record<FamiliesMode, LogisticsDashboardMetric>>>({});
+  const [dashboardVehicleFilterByMode, setDashboardVehicleFilterByMode] = useState<Partial<Record<FamiliesMode, LogisticsVehicleFilter>>>({});
+  const [transferTypeMenu, setTransferTypeMenu] = useState<{
+    x: number;
+    y: number;
+    transferNumber: string;
+  } | null>(null);
 
   const modeFilters = filtersByMode[mode] ?? DEFAULT_MODE_FILTERS;
   const { activeTab, quickTransfer, quickChildStatus, quickPaymentStatus } = modeFilters;
+  const logisticsDashboardCollapsed = logisticsDashboardCollapsedByMode[mode] ?? false;
+  const tableBarsCollapsed = tableBarsCollapsedByMode[mode] ?? false;
+  const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? true;
+  const dashboardSchoolKey = dashboardSchoolByMode[mode] ?? '';
+  const dashboardMetric = dashboardMetricByMode[mode] ?? 'average';
+  const dashboardVehicleFilter = dashboardVehicleFilterByMode[mode] ?? 'all';
   const setModeFilter = (patch: Partial<ModeFilters>) => {
     setFiltersByMode(prev => ({
       ...prev,
@@ -493,6 +800,42 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
         ...(prev[mode] ?? DEFAULT_MODE_FILTERS),
         ...patch,
       },
+    }));
+  };
+  const setLogisticsDashboardCollapsed = (next: boolean | ((current: boolean) => boolean)) => {
+    setLogisticsDashboardCollapsedByMode(prev => ({
+      ...prev,
+      [mode]: typeof next === 'function' ? next(prev[mode] ?? false) : next,
+    }));
+  };
+  const setTableBarsCollapsed = (next: boolean | ((current: boolean) => boolean)) => {
+    setTableBarsCollapsedByMode(prev => ({
+      ...prev,
+      [mode]: typeof next === 'function' ? next(prev[mode] ?? false) : next,
+    }));
+  };
+  const setSchoolsBarCollapsed = (next: boolean | ((current: boolean) => boolean)) => {
+    setSchoolsBarCollapsedByMode(prev => ({
+      ...prev,
+      [mode]: typeof next === 'function' ? next(prev[mode] ?? true) : next,
+    }));
+  };
+  const setDashboardSchoolKey = (key: string) => {
+    setDashboardSchoolByMode(prev => ({
+      ...prev,
+      [mode]: key,
+    }));
+  };
+  const setDashboardMetric = (metric: LogisticsDashboardMetric) => {
+    setDashboardMetricByMode(prev => ({
+      ...prev,
+      [mode]: metric,
+    }));
+  };
+  const setDashboardVehicleFilter = (filter: LogisticsVehicleFilter) => {
+    setDashboardVehicleFilterByMode(prev => ({
+      ...prev,
+      [mode]: filter,
     }));
   };
 
@@ -687,62 +1030,149 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
     }
   }
 
+  async function changeDashboardTransferVehicleType(vehicleType: VehicleType) {
+    if (!transferTypeMenu) return;
+    if (!selectedDashboardSchool || selectedDashboardSchool.key === 'ALL') {
+      alert('Сначала выберите конкретную школу');
+      setTransferTypeMenu(null);
+      return;
+    }
+    const sampleRow = dashboardSchoolRows.find(row => row.branchId);
+    if (!sampleRow?.branchId) {
+      alert('Не удалось определить филиал школы для трансфера');
+      setTransferTypeMenu(null);
+      return;
+    }
+    try {
+      await updateV2TransferVehicleType({
+        schoolId: sampleRow.schoolId,
+        branchId: sampleRow.branchId,
+        transferNumber: Number(transferTypeMenu.transferNumber),
+        vehicleType,
+      });
+      setRows(prev => {
+        const next = prev.map(row => (
+          row.branchId === sampleRow.branchId
+          && row.transferNumber === transferTypeMenu.transferNumber
+          && row.status !== 'rejected'
+            ? { ...row, vehicleType, vehicleLabel: VT_LABEL[vehicleType] ?? vehicleType }
+            : row
+        ));
+        familiesRowsCache = next;
+        return next;
+      });
+      setTransferTypeMenu(null);
+      void load(false);
+    } catch (error) {
+      console.error('Transfer vehicle type update failed', error);
+      alert('Не удалось изменить тип транспорта трансфера');
+      setTransferTypeMenu(null);
+    }
+  }
+
   const canManageProperties = userRole === 'admin' || userRole === 'director';
-  const modeRows = mode === 'logistics'
-      ? logisticsWorkRows(rows)
-      : rows;
+  const modeRows = useMemo(() => (
+    mode === 'logistics' ? logisticsWorkRows(rows) : rows
+  ), [mode, rows]);
 
   // Если у сотрудника ограниченный доступ — фильтруем по его школам
   const hasSchoolRestriction = allowedSchools && allowedSchools.length > 0 && !allowedSchools.includes('ALL');
 
   // Проверяем доступна ли вкладка сотруднику (сравнение без учёта регистра)
-  const isTabAllowed = (tabKey: string) => {
+  const isTabAllowed = useCallback((tabKey: string) => {
     if (!hasSchoolRestriction) return true;
     if (tabKey === 'ALL') return true;
     return allowedSchools!.some(k => k.toLowerCase() === tabKey.toLowerCase());
-  };
+  }, [allowedSchools, hasSchoolRestriction]);
 
-  const rowMatchesSchoolTab = (row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
+  const rowMatchesSchoolTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
     if (tabItem.key === 'ALL') return !hasSchoolRestriction || allowedSchools!.some(k => isTabAllowed(k));
     if (!isTabAllowed(tabItem.key)) return false;
     if (row.branchFilter === tabItem.key) return true;
     if (tabItem.branches.length > 0) return tabItem.branches.includes(row.branchName);
     if (tabItem.codes.length > 0) return tabItem.codes.includes(row.schoolCode);
     return false;
-  };
+  }, [allowedSchools, hasSchoolRestriction, isTabAllowed]);
 
-  const branchMetric: Record<string, { value: number; label: string; alert?: boolean }> = {};
-  const transferMetric: Record<string, { value: number; label: string; alert?: boolean }> = {};
+  const dashboardStatsForRows = useCallback((sourceRows: ChildRow[]) => {
+    const actualRows = logisticsWorkRows(sourceRows);
+    const workRows = dashboardVehicleFilter === 'all'
+      ? actualRows
+      : actualRows.filter(row => row.vehicleType === dashboardVehicleFilter);
+    const transferRows = workRows.filter(row => row.transferNumber);
+    const allTransfers = new Set(transferRows.map(row => row.transferNumber));
+    const averageRows = transferRows;
+    const averageTransfers = allTransfers;
+    const familyRows = uniqueFamilyRows(workRows);
+    const debtRows = familyRows.filter(row => row.debtAmount > 0);
+    return {
+      transferCount: allTransfers.size,
+      studentCount: workRows.length,
+      average: averageTransfers.size ? averageRows.length / averageTransfers.size : 0,
+      chargedSum: workRows.reduce((sum, row) => sum + Number(row.totalCharged || 0), 0),
+      paidSum: workRows.reduce((sum, row) => sum + Number(row.totalPaid || 0), 0),
+      balanceSum: workRows.reduce((sum, row) => sum + Number(row.balance || 0), 0),
+      debtorsCount: debtRows.length,
+      debtSum: debtRows.reduce((sum, row) => sum + Number(row.debtAmount || 0), 0),
+    };
+  }, [dashboardVehicleFilter]);
+  const dashboardMetricValue = useCallback((stats: ReturnType<typeof dashboardStatsForRows>) => {
+    if (dashboardMetric === 'count') return stats.studentCount;
+    if (dashboardMetric === 'debtSum') return stats.debtSum;
+    if (dashboardMetric === 'debtorsCount') return stats.debtorsCount;
+    if (dashboardMetric === 'chargedSum') return stats.chargedSum;
+    if (dashboardMetric === 'paidSum') return stats.paidSum;
+    if (dashboardMetric === 'balanceSum') return stats.balanceSum;
+    return stats.average;
+  }, [dashboardMetric]);
 
-  SCHOOL_TABS.forEach(tabItem => {
-    const branchRows = tabItem.key === 'ALL'
-      ? rows
-      : rows.filter(row => rowMatchesSchoolTab(row, tabItem));
+  const { branchMetric, branchStats } = useMemo(() => {
+    const metric: Record<string, { value: number; label: string; alert?: boolean }> = {};
+    const stats: Record<string, { newCount: number; totalCount: number; average: string; debtorsCount: number; debtSum: number }> = {};
+    const workRows = logisticsWorkRows(rows);
 
-    if (mode === 'requests') {
-      const count = branchRows.filter(row => row.status === 'new').length;
-      branchMetric[tabItem.key] = { value: count, label: String(count), alert: count > 0 };
-    } else if (mode === 'payments') {
-      const debt = uniqueFamilyRows(branchRows.filter(row => row.debtAmount > 0)).reduce((sum, row) => sum + row.debtAmount, 0);
-      branchMetric[tabItem.key] = { value: debt, label: compactMoney(debt), alert: debt > 0 };
-    } else if (mode === 'cashier') {
-      const pendingRows = uniqueFamilyRows(branchRows.filter(row => row.pendingPayment > 0));
-      branchMetric[tabItem.key] = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
-    } else {
+    SCHOOL_TABS.forEach(tabItem => {
+      const branchRows = tabItem.key === 'ALL'
+        ? rows
+        : rows.filter(row => rowMatchesSchoolTab(row, tabItem));
+      const actualBranchRows = logisticsWorkRows(branchRows);
+      const familyRows = uniqueFamilyRows(actualBranchRows);
+      const debtRows = familyRows.filter(row => row.debtAmount > 0);
       const avg = tabItem.key === 'ALL'
-        ? averageChildrenByVehicle(logisticsWorkRows(rows), 'microbus')
-        : averageMicrobusByBranch(logisticsWorkRows(rows), tabItem.key);
-      branchMetric[tabItem.key] = { value: avg, label: avg ? avg.toFixed(1) : '0' };
-    }
-  });
+        ? averageChildrenByVehicle(workRows, 'microbus')
+        : averageMicrobusByBranch(workRows, tabItem.key);
 
-  // Фильтрация
-  const tab = SCHOOL_TABS.find(t => t.key === activeTab);
-  const matchesSchool = (r: ChildRow) => {
+      stats[tabItem.key] = {
+        newCount: branchRows.filter(row => row.status === 'new').length,
+        totalCount: actualBranchRows.length,
+        average: avg ? avg.toFixed(1) : '0',
+        debtorsCount: debtRows.length,
+        debtSum: debtRows.reduce((sum, row) => sum + row.debtAmount, 0),
+      };
+
+      if (mode === 'requests') {
+        const count = branchRows.filter(row => row.status === 'new').length;
+        metric[tabItem.key] = { value: count, label: String(count), alert: count > 0 };
+      } else if (mode === 'payments') {
+        const debt = uniqueFamilyRows(branchRows.filter(row => row.debtAmount > 0)).reduce((sum, row) => sum + row.debtAmount, 0);
+        metric[tabItem.key] = { value: debt, label: compactMoney(debt), alert: debt > 0 };
+      } else if (mode === 'cashier') {
+        const pendingRows = uniqueFamilyRows(branchRows.filter(row => row.pendingPayment > 0));
+        metric[tabItem.key] = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
+      } else {
+        metric[tabItem.key] = { value: avg, label: avg ? avg.toFixed(1) : '0' };
+      }
+    });
+
+    return { branchMetric: metric, branchStats: stats };
+  }, [mode, rowMatchesSchoolTab, rows]);
+
+  const tab = useMemo(() => SCHOOL_TABS.find(t => t.key === activeTab), [activeTab]);
+  const matchesSchool = useCallback((r: ChildRow) => {
     if (!tab) return true;
     return rowMatchesSchoolTab(r, tab);
-  };
-  const matchesSearch = (r: ChildRow) => {
+  }, [rowMatchesSchoolTab, tab]);
+  const matchesSearch = useCallback((r: ChildRow) => {
     if (search) {
       const q = search.toLowerCase().replace(/\s+/g, '');
       const haystack = Object.values(r)
@@ -752,38 +1182,42 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
       if (!haystack.includes(q)) return false;
     }
     return true;
-  };
-  TRANSFER_BAR_OPTIONS.forEach(transfer => {
-    const transferRows = rows.filter(row => row.transferNumber === transfer && matchesSchool(row) && matchesSearch(row));
-    if (mode === 'payments') {
-      const debt = uniqueFamilyRows(transferRows.filter(row => row.debtAmount > 0)).reduce((sum, row) => sum + row.debtAmount, 0);
-      transferMetric[transfer] = { value: debt, label: compactMoney(debt), alert: debt > 0 };
-    } else if (mode === 'cashier') {
-      const pendingRows = uniqueFamilyRows(transferRows.filter(row => row.pendingPayment > 0));
-      transferMetric[transfer] = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
-    } else {
-      const count = logisticsWorkRows(transferRows).length;
-      transferMetric[transfer] = { value: count, label: String(count), alert: count > 0 };
-    }
-  });
-  if (mode === 'logistics') {
-    const emptyRows = logisticsWorkRows(rows.filter(row => !row.transferNumber && matchesSchool(row) && matchesSearch(row)));
-    transferMetric.empty = { value: emptyRows.length, label: String(emptyRows.length), alert: emptyRows.length > 0 };
-  } else {
+  }, [search]);
+  const transferMetric = useMemo(() => {
+    const metric: Record<string, { value: number; label: string; alert?: boolean }> = {};
+
+    TRANSFER_BAR_OPTIONS.forEach(transfer => {
+      const transferRows = rows.filter(row => row.transferNumber === transfer && matchesSchool(row) && matchesSearch(row));
+      if (mode === 'payments') {
+        const debt = uniqueFamilyRows(transferRows.filter(row => row.debtAmount > 0)).reduce((sum, row) => sum + row.debtAmount, 0);
+        metric[transfer] = { value: debt, label: compactMoney(debt), alert: debt > 0 };
+      } else if (mode === 'cashier') {
+        const pendingRows = uniqueFamilyRows(transferRows.filter(row => row.pendingPayment > 0));
+        metric[transfer] = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
+      } else {
+        const count = logisticsWorkRows(transferRows).length;
+        metric[transfer] = { value: count, label: String(count), alert: count > 0 };
+      }
+    });
+
     const emptyRows = rows.filter(row => !row.transferNumber && matchesSchool(row) && matchesSearch(row));
-    if (mode === 'payments') {
+    if (mode === 'logistics') {
+      const workRows = logisticsWorkRows(emptyRows);
+      metric.empty = { value: workRows.length, label: String(workRows.length), alert: workRows.length > 0 };
+    } else if (mode === 'payments') {
       const debt = uniqueFamilyRows(emptyRows.filter(row => row.debtAmount > 0)).reduce((sum, row) => sum + row.debtAmount, 0);
-      transferMetric.empty = { value: debt, label: compactMoney(debt), alert: debt > 0 };
+      metric.empty = { value: debt, label: compactMoney(debt), alert: debt > 0 };
     } else if (mode === 'cashier') {
       const pendingRows = uniqueFamilyRows(emptyRows.filter(row => row.pendingPayment > 0));
-      transferMetric.empty = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
+      metric.empty = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
     } else {
       const count = emptyRows.length;
-      transferMetric.empty = { value: count, label: String(count), alert: count > 0 };
+      metric.empty = { value: count, label: String(count), alert: count > 0 };
     }
-  }
+    return metric;
+  }, [matchesSchool, matchesSearch, mode, rows]);
 
-  const filtered = modeRows.filter(r => {
+  const filtered = useMemo(() => modeRows.filter(r => {
     if (!matchesSchool(r)) return false;
     if (!matchesSearch(r)) return false;
     if (quickTransfer === 'empty' && r.transferNumber) return false;
@@ -792,24 +1226,28 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
     if (quickChildStatus && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     if (quickPaymentStatus && r.paymentStatus !== quickPaymentStatus) return false;
     return true;
-  });
+  }), [matchesSchool, matchesSearch, modeRows, quickChildStatus, quickPaymentStatus, quickTransfer]);
 
-  const transferVehicleTone = (transfer: string) => {
-    if (!transfer || transfer === 'empty') return TRANSFER_TONE.empty;
+  const transferVehicleType = useCallback((transfer: string) => {
+    if (!transfer || transfer === 'empty') return 'empty';
     const transferRows = rows.filter(row => row.transferNumber === transfer && matchesSchool(row) && matchesSearch(row));
-    const vehicleType = transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
+    return transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
       ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
       ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType
       ?? 'empty';
+  }, [matchesSchool, matchesSearch, rows]);
+
+  const transferVehicleTone = useCallback((transfer: string) => {
+    const vehicleType = transferVehicleType(transfer);
     return TRANSFER_TONE[vehicleType] ?? TRANSFER_TONE.empty;
-  };
-  const quickStatusItems = [
+  }, [transferVehicleType]);
+  const quickStatusItems = useMemo(() => [
     {
       key: 'new',
       label: '?',
       title: 'Новые',
       count: rows.filter(row => row.status === 'new' && matchesSchool(row) && matchesSearch(row)).length,
-      tone: '#F59E0B',
+      tone: '#31A4A5',
     },
     {
       key: 'rejected',
@@ -818,16 +1256,109 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
       count: rows.filter(row => row.status === 'rejected' && matchesSchool(row) && matchesSearch(row)).length,
       tone: '#64748B',
     },
-  ];
+  ], [matchesSchool, matchesSearch, rows]);
   const schoolButtonItems = SCHOOL_TABS;
-  const logisticsAvgItems = schoolButtonItems
-    .filter(item => item.key !== 'ALL')
+  const selectedSchoolLabel = tab?.label ?? 'Все';
+  const selectedTransferLabel = quickChildStatus === 'new'
+    ? 'Новые'
+    : quickChildStatus === 'rejected'
+      ? 'Отказ'
+      : quickTransfer === 'empty'
+        ? 'Без трансфера'
+        : quickTransfer
+          ? `Трансфер ${quickTransfer}`
+          : 'Все трансферы';
+  const logisticsAvgItems = useMemo(() => schoolButtonItems
     .map((item, index) => ({
       key: item.key,
-      label: item.label,
-      value: averageMicrobusByBranch(logisticsWorkRows(rows), item.key),
+      label: item.key === 'ALL' ? '≡' : item.label,
+      value: dashboardMetricValue(dashboardStatsForRows(
+        item.key === 'ALL' ? rows : rows.filter(row => rowMatchesSchoolTab(row, item))
+      )),
       color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
-    }));
+    })), [dashboardMetricValue, dashboardStatsForRows, rowMatchesSchoolTab, rows, schoolButtonItems]);
+  const selectedDashboardSchool = schoolButtonItems.find(item => item.key === dashboardSchoolKey)
+    ?? schoolButtonItems.find(item => item.key === activeTab)
+    ?? schoolButtonItems[0];
+  const dashboardSchoolRows = selectedDashboardSchool
+    ? rows.filter(row => rowMatchesSchoolTab(row, selectedDashboardSchool))
+    : [];
+  const dashboardWorkRows = logisticsWorkRows(dashboardSchoolRows);
+  const dashboardVehicleRows = dashboardVehicleFilter === 'all'
+    ? dashboardWorkRows
+    : dashboardWorkRows.filter(row => row.vehicleType === dashboardVehicleFilter);
+  const dashboardTransferItems: LogisticsTransferDashboardItem[] = selectedDashboardSchool
+    ? [
+        ...TRANSFER_BAR_OPTIONS.map(transfer => {
+          const transferRows = dashboardVehicleRows.filter(row => row.transferNumber === transfer);
+          const originalTransferRows = dashboardWorkRows.filter(row => row.transferNumber === transfer);
+          const count = transferRows.length;
+          const vehicleType = originalTransferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
+            ?? originalTransferRows.find(row => row.vehicleType === 'sedan')?.vehicleType
+            ?? originalTransferRows.find(row => row.vehicleType === 'microbus')?.vehicleType;
+          return {
+            key: `transfer-${transfer}`,
+            label: `#${transfer}`,
+            group: 'Трансферы',
+            value: count,
+            count,
+            color: logisticsTransferCountColor(count),
+            vehicleType,
+          };
+        }),
+        {
+          key: 'new',
+          label: 'Новые',
+          group: 'Статус',
+          value: dashboardVehicleRows.filter(row => row.status === 'new').length,
+          count: dashboardVehicleRows.filter(row => row.status === 'new').length,
+          color: '#5A9FE8',
+        },
+        {
+          key: 'rejected',
+          label: 'Отказ',
+          group: 'Статус',
+          value: dashboardSchoolRows.filter(row => row.status === 'rejected').length,
+          count: dashboardSchoolRows.filter(row => row.status === 'rejected').length,
+          color: '#EF7168',
+        },
+        {
+          key: 'all',
+          label: '≡',
+          group: 'Все',
+          value: dashboardVehicleRows.length,
+          count: dashboardVehicleRows.length,
+          color: '#31A4A5',
+        },
+      ]
+    : [];
+  const activeDashboardDetailKey = quickChildStatus === 'new' || quickChildStatus === 'rejected'
+    ? quickChildStatus
+    : quickTransfer
+      ? `transfer-${quickTransfer}`
+      : 'all';
+  const dashboardSummaryRows = (() => {
+    if (quickChildStatus === 'new') return dashboardSchoolRows.filter(row => row.status === 'new');
+    if (quickChildStatus === 'rejected') return dashboardSchoolRows.filter(row => row.status === 'rejected');
+    if (quickTransfer === 'empty') return dashboardSchoolRows.filter(row => !row.transferNumber);
+    if (quickTransfer) return dashboardSchoolRows.filter(row => row.transferNumber === quickTransfer);
+    return dashboardSchoolRows;
+  })();
+  const dashboardSummaryStats = dashboardStatsForRows(dashboardSummaryRows);
+  const dashboardSummaryItems = [
+    { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
+    { label: 'К-во трансфер', value: String(dashboardSummaryStats.transferCount) },
+    { label: 'К-во учеников', value: String(dashboardSummaryStats.studentCount) },
+    { label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) },
+    { label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) },
+    { label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) },
+    { label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) },
+  ];
+  const selectedTransferVehicleType = transferTypeMenu
+    ? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'minivan')?.vehicleType
+      ?? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'sedan')?.vehicleType
+      ?? dashboardWorkRows.find(row => row.transferNumber === transferTypeMenu.transferNumber && row.vehicleType === 'microbus')?.vehicleType
+    : undefined;
   const tableQuickSelectStyle: React.CSSProperties = {
     height: 26,
     minWidth: 124,
@@ -860,10 +1391,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
             style={{
               height: 22,
               padding: '0 9px',
-              border: '1px solid #E8ECEF',
+              border: '1px solid #D4E3E7',
               borderRadius: 6,
               background: '#fff',
-              color: '#F59E0B',
+              color: '#237F81',
               fontSize: 10,
               fontWeight: 800,
               cursor: 'pointer',
@@ -958,117 +1489,67 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
   ];
 
   return (
-    <div style={{ height: '100%', overflowY: 'auto', overflowX: 'hidden' }}>
+    <div style={{ height: '100%', overflow: 'hidden', background: 'var(--active-bg)', borderRadius: 22, display: 'flex' }}>
 
       {/* ── ОСНОВНОЙ КОНТЕНТ ── */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '8px', minHeight: '100%' }}>
-        <div style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 40,
-          background: '#fff',
-          border: '1px solid var(--border)',
-          borderRadius: 10,
-          padding: '6px 8px 0',
-          boxShadow: '0 8px 20px rgba(8,11,11,0.06)',
-          flexShrink: 0,
-        }}>
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 8,
-            minHeight: 34,
-            overflow: 'hidden',
-            padding: '3px 2px 0',
-            borderBottom: '3px solid #EEF3F5',
-          }}>
-            {schoolButtonItems.map((t, index) => {
-              const isActive = activeTab === t.key;
-              const allowed = isTabAllowed(t.key);
-              const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
-              const hasBadge = Boolean(metric.alert);
-              return (
-                <React.Fragment key={t.key}>
-                  <button
-                    onClick={() => allowed && setModeFilter({ activeTab: t.key })}
-                    style={{
-                      height: 31,
-                      position: 'relative',
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: 6,
-                      padding: '0 0 8px',
-                      border: 'none',
-                      borderBottom: `3px solid ${isActive ? '#3F46D3' : 'transparent'}`,
-                      background: 'transparent',
-                      color: isActive ? '#3F46D3' : allowed ? '#5A5C61' : '#C0C0C8',
-                      fontSize: 11,
-                      fontWeight: isActive ? 800 : 700,
-                      cursor: allowed ? 'pointer' : 'default',
-                      whiteSpace: 'nowrap',
-                      flex: '0 1 auto',
-                      minWidth: 0,
-                      overflow: 'visible',
-                      opacity: allowed ? 1 : 0.4,
-                    }}
-                  >
-                    <span style={{
-                      width: 5,
-                      height: 5,
-                      borderRadius: '50%',
-                      background: hasBadge ? '#EF4444' : '#159A6A',
-                      flexShrink: 0,
-                    }} />
-                    <span>{t.label}</span>
-                    {metric.value > 0 && (
-                      <span style={{
-                        minWidth: 18,
-                        height: 16,
-                        padding: '0 6px',
-                        borderRadius: 999,
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: 9,
-                        fontWeight: 800,
-                        color: '#fff',
-                        background: '#EF4444',
-                      }}>
-                        {metric.label}
-                      </span>
-                    )}
-                  </button>
-                  {index < schoolButtonItems.length - 1 && (
-                    <span style={{
-                      width: 1,
-                      height: 18,
-                      alignSelf: 'center',
-                      background: '#DDE7EB',
-                      opacity: 0.9,
-                      flexShrink: 0,
-                    }} />
-                  )}
-                </React.Fragment>
-              );
-            })}
-          </div>
+      <div
+        className="no-scrollbar"
+        onClick={() => {
+          if (!schoolsBarCollapsed) setSchoolsBarCollapsed(true);
+          if (transferTypeMenu) setTransferTypeMenu(null);
+        }}
+        style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 8px 8px', minHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}
+      >
 
-        </div>
-
-        {mode === 'logistics' && (
-          <LogisticsMicrobusDashboard
-            items={logisticsAvgItems}
-            collapsed={logisticsDashboardCollapsed}
-            onToggle={() => setLogisticsDashboardCollapsed(value => !value)}
-          />
-        )}
+        <LogisticsMicrobusDashboard
+          items={logisticsAvgItems}
+          collapsed={logisticsDashboardCollapsed}
+          onToggle={() => setLogisticsDashboardCollapsed(value => !value)}
+          selectedKey={selectedDashboardSchool?.key}
+          onSelect={(key) => {
+            setDashboardSchoolKey(key);
+            setModeFilter({ activeTab: key });
+            setLogisticsDashboardCollapsed(false);
+          }}
+          metric={dashboardMetric}
+          onMetricChange={setDashboardMetric}
+          vehicleFilter={dashboardVehicleFilter}
+          onVehicleFilterChange={setDashboardVehicleFilter}
+          summaryItems={dashboardSummaryItems}
+          primaryValue={dashboardMetricValue(dashboardSummaryStats)}
+          detailItems={dashboardTransferItems}
+          activeDetailKey={activeDashboardDetailKey}
+          onDetailSelect={(item) => {
+            if (item.key === 'all') {
+              setModeFilter({ quickTransfer: '', quickChildStatus: '' });
+              return;
+            }
+            if (item.key === 'new' || item.key === 'rejected') {
+              setModeFilter({ quickChildStatus: item.key, quickTransfer: '' });
+              return;
+            }
+            if (item.key.startsWith('transfer-')) {
+              setModeFilter({ quickTransfer: item.key.replace('transfer-', ''), quickChildStatus: '' });
+            }
+          }}
+          onDetailContextMenu={(event, item) => {
+            event.preventDefault();
+            event.stopPropagation();
+            const transferNumber = item.key.replace('transfer-', '');
+            setTransferTypeMenu({
+              x: event.clientX,
+              y: event.clientY,
+              transferNumber,
+            });
+          }}
+        />
 
         {/* ── ТАБЛИЦА ── */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'visible', minWidth: 0 }}>
-          <div style={{
-            position: 'sticky',
-            top: 49,
+          {!tableBarsCollapsed ? (
+          <div className="no-scrollbar" style={{
+            position: 'relative',
+            top: 'auto',
             zIndex: 35,
             display: 'flex',
             alignItems: 'flex-end',
@@ -1077,67 +1558,86 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
             overflowY: 'hidden',
             padding: '4px 8px 0',
             marginBottom: -1,
-            background: '#F8FAFC',
-            border: '1px solid #E8ECEF',
+            background: '#F5FAFB',
+            border: '1px solid #D4E3E7',
             borderBottom: 'none',
             borderRadius: '10px 10px 0 0',
             scrollbarWidth: 'none',
             flexShrink: 0,
           }}>
+            <span style={{
+              height: 31,
+              width: 150,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 6,
+              padding: '0 10px',
+              borderRadius: '8px 8px 0 0',
+              background: '#fff',
+              color: '#17222F',
+              fontSize: 12,
+              fontWeight: 850,
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              flexShrink: 0,
+            }}>
+              {selectedSchoolLabel} · {selectedTransferLabel}
+            </span>
+            <div style={{ width: 54, flexShrink: 0 }} />
             {TRANSFER_TABS.map(tabItem => {
               const isActive = quickTransfer === tabItem.key && quickChildStatus === '';
               const metric = tabItem.key ? transferMetric[tabItem.key] : { value: filtered.length, label: String(filtered.length), alert: filtered.length > 0 };
+              const vehicleType = transferVehicleType(tabItem.key);
+              const vehicleLabel = vehicleTypeShortLabel(vehicleType);
               const tone = transferVehicleTone(tabItem.key);
-              const showBadge = Boolean(metric?.value);
+              const isActual = Boolean(metric?.value);
               return (
                 <button
                   key={tabItem.key || 'all'}
                   onClick={() => setModeFilter({ quickTransfer: tabItem.key, quickChildStatus: '' })}
                   title={tabItem.label}
                   style={{
-                    height: 31,
-                    minWidth: tabItem.key === 'empty' ? 94 : tabItem.key === '' ? 46 : 32,
-                    padding: tabItem.key === 'empty' ? '0 10px' : '0 8px',
-                    border: '1px solid #E4E8EC',
-                    borderBottomColor: isActive ? '#fff' : '#E4E8EC',
+                    height: 34,
+                    minWidth: tabItem.key === 'empty' ? 94 : tabItem.key === '' ? 46 : 36,
+                    padding: tabItem.key === 'empty' ? '0 10px' : '3px 8px 2px',
+                    border: '1px solid transparent',
+                    borderBottomColor: 'transparent',
                     borderRadius: '8px 8px 0 0',
-                    background: isActive ? '#fff' : '#F8FAFC',
-                    color: isActive ? '#111827' : '#6B7280',
+                    background: isActive
+                      ? '#fff'
+                      : isActual
+                        ? '#F5FAFB'
+                        : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
+                    color: isActive ? '#17222F' : isActual ? '#626C8B' : '#9AA7AE',
                     fontSize: 12,
-                    fontWeight: isActive ? 800 : 650,
+                    fontWeight: isActive ? 800 : isActual ? 650 : 600,
                     cursor: 'pointer',
                     whiteSpace: 'nowrap',
                     display: 'inline-flex',
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    gap: 5,
-                    boxShadow: isActive ? '0 -1px 0 #fff inset' : 'none',
+                    gap: 2,
+                    boxShadow: 'none',
+                    opacity: isActive || isActual ? 1 : 0.78,
                     flexShrink: 0,
                   }}
                 >
-                  {tabItem.key && tabItem.key !== 'empty' && (
-                    <span style={{ width: 5, height: 5, borderRadius: 999, background: tone.dot, opacity: 0.75 }} />
-                  )}
-                  <span>{tabItem.label}</span>
-                  {showBadge && (
-                    <span style={{
-                      minWidth: 16,
-                      height: 16,
-                      padding: '0 5px',
-                      borderRadius: 999,
-                      background: isActive ? '#F1F5F9' : '#EEF2F5',
-                      color: metric?.alert ? '#475569' : '#94A3B8',
-                      fontSize: 9,
-                      fontWeight: 800,
-                      lineHeight: '16px',
-                    }}>
-                      {metric?.label}
-                    </span>
-                  )}
+                  <span style={{ lineHeight: 1, fontWeight: 850 }}>#{tabItem.label}</span>
+                  <span style={{
+                    minHeight: 8,
+                    color: isActual ? tone.dot : '#AEBAB7',
+                    fontSize: 7,
+                    fontWeight: 900,
+                    lineHeight: 1,
+                  }}>
+                    {vehicleLabel || ' '}
+                  </span>
                 </button>
               );
             })}
-            <div style={{ width: 8, height: 22, borderLeft: '1px solid #E4E8EC', flexShrink: 0 }} />
+            <div style={{ width: 54, height: 22, flexShrink: 0 }} />
             {quickStatusItems.map(item => {
               const isActive = quickChildStatus === item.key;
               return (
@@ -1148,30 +1648,29 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
                   style={{
                     width: 31,
                     height: 31,
-                    border: `1px solid ${isActive ? item.tone : '#E4E8EC'}`,
-                    borderBottomColor: isActive ? '#fff' : '#E4E8EC',
+                    border: '1px solid transparent',
+                    borderBottomColor: 'transparent',
                     borderRadius: '8px 8px 0 0',
-                    background: isActive ? '#fff' : '#F8FAFC',
-                    color: isActive ? item.tone : '#6B7280',
+                    background: isActive ? '#fff' : '#F5FAFB',
+                    color: isActive ? item.tone : '#626C8B',
                     fontSize: item.key === 'rejected' ? 17 : 13,
                     fontWeight: 900,
                     cursor: 'pointer',
-                    position: 'relative',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 5,
                     flexShrink: 0,
                   }}
                 >
+                  <span style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: 999,
+                    background: item.count > 0 ? item.tone : '#B7C3C0',
+                    opacity: item.count > 0 ? 0.95 : 0.55,
+                  }} />
                   {item.label}
-                  {item.count > 0 && (
-                    <span style={{
-                      position: 'absolute',
-                      top: 3,
-                      right: 3,
-                      width: 5,
-                      height: 5,
-                      borderRadius: 999,
-                      background: item.tone,
-                    }} />
-                  )}
                 </button>
               );
             })}
@@ -1179,23 +1678,93 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
               onClick={() => setModeFilter({ quickTransfer: '', quickChildStatus: '' })}
               style={{
                 height: 31,
-                padding: '0 10px',
-                border: '1px solid #E4E8EC',
-                borderBottomColor: quickTransfer === '' && quickChildStatus === '' ? '#fff' : '#E4E8EC',
+                width: 31,
+                padding: 0,
+                border: '1px solid transparent',
+                borderBottomColor: 'transparent',
                 borderRadius: '8px 8px 0 0',
-                background: quickTransfer === '' && quickChildStatus === '' ? '#fff' : '#F8FAFC',
-                color: '#475569',
-                fontSize: 12,
+                background: quickTransfer === '' && quickChildStatus === '' ? '#fff' : '#F5FAFB',
+                color: quickTransfer === '' && quickChildStatus === '' ? '#17222F' : '#626C8B',
+                fontSize: 15,
                 fontWeight: 750,
                 cursor: 'pointer',
                 whiteSpace: 'nowrap',
                 flexShrink: 0,
               }}
             >
-              Все
+              ≡
+            </button>
+            <div style={{ flex: 1, minWidth: 8 }} />
+            <button
+              onClick={() => setTableBarsCollapsed(true)}
+              title="Скрыть панели"
+              style={{
+                width: 31,
+                height: 31,
+                border: '1px solid transparent',
+                borderRadius: '8px 8px 0 0',
+                background: '#F5FAFB',
+                color: '#626C8B',
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                flexShrink: 0,
+              }}
+            >
+              <ChevronUp size={15} />
             </button>
           </div>
+          ) : (
+            <div style={{
+              height: 22,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 8,
+              padding: '0 8px',
+              background: '#F5FAFB',
+              border: '1px solid #D4E3E7',
+              borderBottom: 'none',
+              borderRadius: '10px 10px 0 0',
+              flexShrink: 0,
+            }}>
+              <span style={{
+                height: 18,
+                display: 'inline-flex',
+                alignItems: 'center',
+                padding: '0 8px',
+                borderRadius: 8,
+                background: '#fff',
+                color: '#17222F',
+                fontSize: 11,
+                fontWeight: 850,
+                whiteSpace: 'nowrap',
+              }}>
+                {selectedSchoolLabel} · {selectedTransferLabel}
+              </span>
+              <button
+                onClick={() => setTableBarsCollapsed(false)}
+                title="Показать панели"
+                style={{
+                  width: 22,
+                  height: 18,
+                  border: 'none',
+                  borderRadius: 8,
+                  background: 'transparent',
+                  color: '#626C8B',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                }}
+              >
+                <ChevronDown size={15} />
+              </button>
+            </div>
+          )}
           <DataTable<ChildRow>
+            key={`families_table_${mode}`}
             columns={tableColumns}
             data={filtered}
             rowKey="rowId"
@@ -1207,6 +1776,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
             onRowDelete={(row) => console.log('delete', row.rowId)}
             onRowEdit={(row) => console.log('edit', row.rowId)}
             onCellSave={handleCellSave}
+            hideToolbar={tableBarsCollapsed}
             toolbarExtra={(
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                 <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
@@ -1252,7 +1822,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
                   height: 30,
                   border: 'none',
                   borderRadius: 10,
-                  background: '#F59E0B',
+                  background: '#31A4A5',
                   color: '#fff',
                   display: 'inline-flex',
                   alignItems: 'center',
@@ -1267,11 +1837,248 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
         </div>
       </div>
 
+      <aside style={{
+        width: schoolsBarCollapsed ? 58 : 260,
+        height: '100%',
+        background: '#fff',
+        borderRadius: '22px 0 0 22px',
+        marginLeft: 10,
+        overflow: 'hidden',
+        flexShrink: 0,
+        display: 'flex',
+        flexDirection: 'column',
+        transition: 'width .18s ease',
+      }}
+      onClick={event => event.stopPropagation()}>
+        <div style={{
+          minHeight: 48,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: schoolsBarCollapsed ? 'center' : 'space-between',
+          gap: 6,
+          padding: schoolsBarCollapsed ? '0 8px' : '0 10px 0 12px',
+          borderBottom: '1px solid var(--border)',
+          color: '#626C8B',
+          fontSize: 11,
+          fontWeight: 850,
+          textTransform: 'uppercase',
+        }}>
+          {!schoolsBarCollapsed && <span>Школы</span>}
+          <button
+            onClick={() => setSchoolsBarCollapsed(value => !value)}
+            title={schoolsBarCollapsed ? 'Показать школы' : 'Скрыть школы'}
+            style={{
+              width: 28,
+              height: 28,
+              border: '1px solid var(--border)',
+              borderRadius: 10,
+              background: '#F5FAFB',
+              color: '#626C8B',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            {schoolsBarCollapsed ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
+          </button>
+        </div>
+        <nav style={{ flex: 1, padding: schoolsBarCollapsed ? '7px 0 7px 0' : '7px 8px 7px 0', overflow: 'visible' }}>
+          {schoolButtonItems.map(t => {
+            const isActive = activeTab === t.key;
+            const allowed = isTabAllowed(t.key);
+            const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
+            const hasBadge = Boolean(metric.alert);
+            const stats = branchStats[t.key] ?? { newCount: 0, totalCount: 0, average: '0', debtorsCount: 0, debtSum: 0 };
+            return (
+              <button
+                key={t.key}
+                onClick={() => {
+                  if (!allowed) return;
+                  setModeFilter({ activeTab: t.key });
+                  if (mode === 'logistics') {
+                    setDashboardSchoolKey(t.key);
+                    setLogisticsDashboardCollapsed(false);
+                  }
+                }}
+                title={t.label}
+                style={{
+                  width: isActive ? (schoolsBarCollapsed ? 'calc(100% + 8px)' : 'calc(100% + 10px)') : '100%',
+                  minHeight: 34,
+                  display: 'flex',
+                  alignItems: schoolsBarCollapsed ? 'center' : 'stretch',
+                  justifyContent: schoolsBarCollapsed ? 'center' : 'flex-start',
+                  gap: 5,
+                  padding: schoolsBarCollapsed ? '8px 0' : '8px 8px 8px 10px',
+                  marginLeft: isActive ? (schoolsBarCollapsed ? -8 : -10) : 0,
+                  marginBottom: 1,
+                  border: '1px solid transparent',
+                  borderRadius: isActive ? '0 16px 16px 0' : 14,
+                  background: isActive ? 'var(--active-bg)' : 'transparent',
+                  color: isActive ? '#17222F' : allowed ? '#626C8B' : '#C0C0C8',
+                  fontSize: schoolsBarCollapsed ? 9 : 10,
+                  fontWeight: isActive ? 800 : 650,
+                  cursor: allowed ? 'pointer' : 'default',
+                  opacity: allowed ? 1 : 0.45,
+                  boxShadow: isActive ? 'inset -4px 0 0 #31A4A5' : 'none',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                }}
+              >
+                {schoolsBarCollapsed ? (
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
+                ) : (
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 7, width: '100%', minWidth: 0 }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
+                      <span style={{
+                        width: 6,
+                        height: 6,
+                        borderRadius: 999,
+                        background: hasBadge ? '#EF4444' : '#159A6A',
+                        flexShrink: 0,
+                      }} />
+                      <span style={{ width: 42, overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 11 }}>{t.label}</span>
+                    </span>
+                    <span style={{
+                      minWidth: 0,
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      color: stats.debtSum > 0 ? '#EF4444' : '#626C8B',
+                      fontSize: 9,
+                      fontWeight: 500,
+                      lineHeight: 1,
+                    }}>
+                      Все: {stats.totalCount} · Новые: {stats.newCount} · Долг: {stats.debtorsCount}/{compactMoney(stats.debtSum)}
+                    </span>
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </nav>
+      </aside>
+
       {showNewFamily && (
         <NewFamilyModal
           onClose={() => setShowNewFamily(false)}
           
         />
+      )}
+
+      {transferTypeMenu && (
+        <div
+          onClick={event => event.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: transferTypeMenu.x,
+            top: transferTypeMenu.y,
+            zIndex: 1600,
+            width: 188,
+            padding: 8,
+            border: '1px solid #D4E3E7',
+            borderRadius: 14,
+            background: '#fff',
+            boxShadow: '0 18px 44px rgba(20, 35, 48, 0.18)',
+          }}
+        >
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 8,
+            padding: '4px 6px 9px',
+            borderBottom: '1px solid #EEF3F5',
+            marginBottom: 6,
+          }}>
+            <span style={{
+              color: '#17222F',
+              fontSize: 12,
+              fontWeight: 900,
+              whiteSpace: 'nowrap',
+            }}>
+              Трансфер №{transferTypeMenu.transferNumber}
+            </span>
+            <span style={{
+              height: 20,
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '0 7px',
+              borderRadius: 999,
+              background: '#F5FAFB',
+              color: '#626C8B',
+              fontSize: 9,
+              fontWeight: 850,
+              textTransform: 'uppercase',
+              whiteSpace: 'nowrap',
+            }}>
+              Фильтр
+            </span>
+          </div>
+          <div style={{
+            padding: '1px 6px 6px',
+            color: '#626C8B',
+            fontSize: 10,
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: 0,
+          }}>
+            Тип транспорта
+          </div>
+          <div style={{ display: 'grid', gap: 3 }}>
+            {VEHICLE_TYPE_OPTIONS.map(option => {
+              const active = selectedTransferVehicleType === option.value;
+              const tone = TRANSFER_TONE[option.value] ?? TRANSFER_TONE.empty;
+              return (
+                <button
+                  key={option.value}
+                  onClick={() => changeDashboardTransferVehicleType(option.value)}
+                  style={{
+                    width: '100%',
+                    minHeight: 34,
+                    border: `1px solid ${active ? tone.border : 'transparent'}`,
+                    borderRadius: 10,
+                    background: active ? tone.bg : '#fff',
+                    color: active ? tone.text : '#17222F',
+                    display: 'grid',
+                    gridTemplateColumns: '14px minmax(0, 1fr) 18px',
+                    alignItems: 'center',
+                    gap: 8,
+                    padding: '0 8px',
+                    fontSize: 12,
+                    fontWeight: active ? 900 : 750,
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                  }}
+                >
+                  <span style={{
+                    width: 8,
+                    height: 8,
+                    borderRadius: 999,
+                    background: tone.dot,
+                    justifySelf: 'center',
+                    opacity: active ? 1 : 0.72,
+                  }} />
+                  <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {option.label}
+                  </span>
+                  <span style={{
+                    width: 18,
+                    height: 18,
+                    borderRadius: 999,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    background: active ? '#fff' : 'transparent',
+                    color: active ? tone.text : 'transparent',
+                  }}>
+                    <Check size={13} strokeWidth={3} />
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       )}
 
       {expandedFamilyId && (
@@ -1289,13 +2096,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', al
             backdropFilter: 'blur(3px)',
           }}
         >
-          <div onClick={event => event.stopPropagation()} style={{ width: 'min(1080px, calc(100vw - 48px))' }}>
+          <div onClick={event => event.stopPropagation()} style={{ width: 'min(1240px, calc(100vw - 36px))' }}>
             {expandedFamily ? (
               <InlineFamilyCard
                 family={expandedFamily}
                 userRole={userRole}
                 userName="Кайрат"
                 initialTab={expandedInitialTab}
+                onUpdated={() => load(false)}
                 onClose={() => { setExpandedFamilyId(null); setExpandedFamily(null); setExpandedInitialTab('overview'); }}
               />
             ) : (

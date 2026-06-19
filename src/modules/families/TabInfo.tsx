@@ -230,8 +230,8 @@ const mapLinkStyle: React.CSSProperties = {
 const savingStyle: React.CSSProperties = {
   marginTop: 8,
   borderRadius: 8,
-  background: '#FFF6ED',
-  color: '#F59E0B',
+  background: '#D7EEEE',
+  color: '#237F81',
   padding: '7px 10px',
   fontSize: 12,
   fontWeight: 750,

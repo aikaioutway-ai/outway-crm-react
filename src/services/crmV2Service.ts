@@ -396,6 +396,37 @@ export async function updateV2ChildRoute(params: {
   });
 }
 
+export async function updateV2TransferVehicleType(params: {
+  schoolId?: string | null;
+  branchId?: string | null;
+  transferNumber: number;
+  vehicleType: VehicleType;
+}): Promise<string> {
+  if (!params.branchId) throw new Error('Не указан филиал трансфера');
+
+  const transferId = await ensureV2Transfer({
+    schoolId: params.schoolId ?? undefined,
+    branchId: params.branchId,
+    transferNumber: params.transferNumber,
+    vehicleType: params.vehicleType,
+  });
+
+  const { error: transferError } = await supabase
+    .from('v2_transfers')
+    .update({ vehicle_type: params.vehicleType })
+    .eq('id', transferId);
+  if (transferError) throw new Error(transferError.message);
+
+  const { error: childrenError } = await supabase
+    .from('v2_children')
+    .update({ vehicle_type: params.vehicleType })
+    .eq('transfer_id', transferId)
+    .neq('status', 'rejected');
+  if (childrenError) throw new Error(childrenError.message);
+
+  return transferId;
+}
+
 export async function deleteV2Child(childId: string): Promise<void> {
   const { error } = await supabase.from('v2_children').delete().eq('id', childId);
   if (error) throw new Error(error.message);

@@ -141,7 +141,7 @@ export default function EmployeesPage() {
     <div style={pageStyle}>
       <header style={headerStyle}>
         <div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#111827' }}>Сотрудники</div>
+          <div style={{ fontSize: 22, fontWeight: 900, color: '#17222F' }}>Сотрудники</div>
           <div style={{ marginTop: 3, fontSize: 12, fontWeight: 650, color: '#7B8491' }}>
             должности, доступы, контакты и школы
           </div>
@@ -184,7 +184,7 @@ export default function EmployeesPage() {
                 {filtered.map(employee => {
                   const active = selectedId === employee.id;
                   return (
-                    <tr key={employee.id} onClick={() => selectEmployee(employee)} style={{ cursor: 'pointer', background: active ? '#FFEDD5' : '#fff' }}>
+                    <tr key={employee.id} onClick={() => selectEmployee(employee)} style={{ cursor: 'pointer', background: active ? '#D7EEEE' : '#fff' }}>
                       <Td strong>{employee.fullName}</Td>
                       <Td>{employee.position || '-'}</Td>
                       <Td>{roleLabel(employee.role)}</Td>
@@ -213,7 +213,7 @@ export default function EmployeesPage() {
             <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
               <div style={avatarStyle}><UserCog size={19} /></div>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 16, fontWeight: 900, color: '#111827' }}>
+                <div style={{ fontSize: 16, fontWeight: 900, color: '#17222F' }}>
                   {draft.id ? 'Карточка сотрудника' : 'Новый сотрудник'}
                 </div>
                 <div style={{ marginTop: 2, fontSize: 11, color: '#7B8491', fontWeight: 700 }}>
@@ -396,7 +396,7 @@ const pageStyle: React.CSSProperties = {
   height: '100%',
   overflow: 'hidden',
   padding: 12,
-  background: '#F7F9FB',
+  background: 'transparent',
   display: 'flex',
   flexDirection: 'column',
   gap: 10,
@@ -407,8 +407,8 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   background: '#fff',
-  border: '1px solid #E8ECEF',
-  borderRadius: 10,
+  border: '1px solid #D4E3E7',
+  borderRadius: 18,
   padding: '12px 14px',
 };
 
@@ -419,7 +419,7 @@ const primaryButtonStyle: React.CSSProperties = {
   gap: 6,
   border: 'none',
   borderRadius: 8,
-  background: '#F59E0B',
+  background: '#31A4A5',
   color: '#fff',
   padding: '0 12px',
   fontSize: 12,
@@ -435,14 +435,14 @@ const statsStyle: React.CSSProperties = {
 
 const metricStyle: React.CSSProperties = {
   height: 40,
-  border: '1px solid #E8ECEF',
-  borderRadius: 10,
+  border: '1px solid #D4E3E7',
+  borderRadius: 16,
   background: '#fff',
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'space-between',
   padding: '0 12px',
-  color: '#6B7280',
+  color: '#626C8B',
   fontSize: 12,
   fontWeight: 800,
 };
@@ -459,8 +459,8 @@ const listStyle: React.CSSProperties = {
   minWidth: 0,
   minHeight: 0,
   background: '#fff',
-  border: '1px solid #E8ECEF',
-  borderRadius: 10,
+  border: '1px solid #D4E3E7',
+  borderRadius: 18,
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
@@ -468,14 +468,14 @@ const listStyle: React.CSSProperties = {
 
 const listToolbarStyle: React.CSSProperties = {
   padding: 10,
-  borderBottom: '1px solid #E8ECEF',
+  borderBottom: '1px solid #D4E3E7',
 };
 
 const searchStyle: React.CSSProperties = {
   width: '100%',
   height: 30,
-  border: '1px solid #E8ECEF',
-  borderRadius: 8,
+  border: '1px solid #D4E3E7',
+  borderRadius: 14,
   padding: '0 10px',
   fontSize: 12,
   fontWeight: 650,
@@ -496,14 +496,14 @@ const thStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 850,
   textAlign: 'left',
-  background: '#F8FAFC',
+  background: '#F5FAFB',
 };
 
 const tdStyle: React.CSSProperties = {
   height: 38,
   padding: '0 10px',
   borderBottom: '1px solid #F0F3F5',
-  color: '#111827',
+  color: '#17222F',
   fontSize: 12,
   overflow: 'hidden',
   textOverflow: 'ellipsis',
@@ -514,8 +514,8 @@ const editorStyle: React.CSSProperties = {
   minHeight: 0,
   overflowY: 'auto',
   background: '#fff',
-  border: '1px solid #E8ECEF',
-  borderRadius: 10,
+  border: '1px solid #D4E3E7',
+  borderRadius: 18,
   padding: 12,
 };
 
@@ -524,16 +524,16 @@ const editorHeaderStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   gap: 10,
-  borderBottom: '1px solid #E8ECEF',
+  borderBottom: '1px solid #D4E3E7',
   paddingBottom: 10,
 };
 
 const avatarStyle: React.CSSProperties = {
   width: 38,
   height: 38,
-  borderRadius: 10,
-  background: '#FFEDD5',
-  color: '#F59E0B',
+  borderRadius: 14,
+  background: '#D7EEEE',
+  color: '#237F81',
   display: 'grid',
   placeItems: 'center',
   flexShrink: 0,
@@ -547,8 +547,8 @@ const saveButtonStyle: React.CSSProperties = {
   gap: 5,
   border: 'none',
   borderRadius: 8,
-  background: '#FFEDD5',
-  color: '#F59E0B',
+  background: '#D7EEEE',
+  color: '#237F81',
   padding: '0 10px',
   fontSize: 11,
   fontWeight: 850,
@@ -588,7 +588,7 @@ const fieldStyle: React.CSSProperties = {
   minHeight: 34,
   padding: '0 8px',
   borderRadius: 8,
-  background: '#F8FAFC',
+  background: '#F5FAFB',
 };
 
 const fieldLabelStyle: React.CSSProperties = {
@@ -604,7 +604,7 @@ const controlStyle: React.CSSProperties = {
   border: '1px solid transparent',
   borderRadius: 7,
   background: 'transparent',
-  color: '#111827',
+  color: '#17222F',
   padding: '0 8px',
   fontSize: 12,
   fontWeight: 750,
@@ -636,10 +636,10 @@ const schoolGridStyle: React.CSSProperties = {
 function schoolChipStyle(active: boolean): React.CSSProperties {
   return {
     height: 27,
-    border: `1px solid ${active ? '#FED7AA' : '#E8ECEF'}`,
+    border: `1px solid ${active ? '#AAD4D4' : '#D4E3E7'}`,
     borderRadius: 7,
-    background: active ? '#FFEDD5' : '#fff',
-    color: active ? '#F59E0B' : '#6B7280',
+    background: active ? '#D7EEEE' : '#fff',
+    color: active ? '#237F81' : '#626C8B',
     padding: '0 8px',
     fontSize: 11,
     fontWeight: 850,
@@ -651,7 +651,7 @@ function statusBadgeStyle(status: EmployeeStatus): React.CSSProperties {
   const tone = status === 'active'
     ? { bg: '#ECFDF5', text: '#065F46' }
     : status === 'inactive'
-      ? { bg: '#FEF3C7', text: '#F59E0B' }
+      ? { bg: '#F2F5E9', text: '#687C54' }
       : { bg: '#FEE2E2', text: '#991B1B' };
   return {
     display: 'inline-flex',
