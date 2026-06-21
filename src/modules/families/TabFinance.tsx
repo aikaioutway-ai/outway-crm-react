@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AlertTriangle, Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
-import { extractReceiptData } from '../../services/receiptOcr';
+import { useReceiptOcr } from '../../hooks/useReceiptOcr';
 import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentStatus, PaymentType, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL, PERIOD_ORDER } from './constants';
@@ -68,10 +68,7 @@ export default function TabFinance({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptCode, setReceiptCode] = useState('');
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrMsg, setOcrMsg] = useState('');
+  const { ocrLoading, ocrMsg, receiptFile, receiptCode, setReceiptCode, handleFileChange: handleOcrFile, reset: resetOcr } = useReceiptOcr();
   const [comment, setComment] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
@@ -103,9 +100,7 @@ export default function TabFinance({
     if (ok) {
       setMsg('Платёж отправлен кассиру на проверку');
       setPaymentAmount('');
-      setReceiptFile(null);
-      setReceiptCode('');
-      setOcrMsg('');
+      resetOcr();
       setComment('');
       setTimeout(() => setMsg(''), 2500);
     } else {
@@ -174,24 +169,13 @@ export default function TabFinance({
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={async e => {
-                        const file = e.target.files?.[0] ?? null;
-                        setReceiptFile(file);
-                        if (!file) return;
-                        setOcrLoading(true);
-                        setOcrMsg('');
-                        try {
-                          const result = await extractReceiptData(file);
-                          if (result.receipt_code) setReceiptCode(result.receipt_code);
-                          if (result.amount) setPaymentAmount(String(result.amount));
-                          if (result.date) setPaymentDate(result.date);
-                          setOcrMsg(result.receipt_code ? '✓ Данные извлечены' : 'Код не найден');
-                        } catch (err: any) {
-                          console.error('OCR error:', err);
-                          setOcrMsg('OCR ошибка: ' + (err?.message ?? String(err)));
-                        }
-                        setOcrLoading(false);
-                      }}
+                      onChange={e => handleOcrFile(
+                        e.target.files?.[0] ?? null,
+                        (amount, date) => {
+                          if (amount) setPaymentAmount(String(amount));
+                          if (date) setPaymentDate(date);
+                        },
+                      )}
                       style={{ display: 'none' }}
                     />
                   </label>

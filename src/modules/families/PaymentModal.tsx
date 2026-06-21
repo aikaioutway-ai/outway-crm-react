@@ -5,7 +5,7 @@ import { money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { createFamilyPayment, fetchFinanceSnapshot } from '../../services/financeService';
 import { addV2Audit, fetchV2Children } from '../../services/crmV2Service';
-import { extractReceiptData } from '../../services/receiptOcr';
+import { useReceiptOcr } from '../../hooks/useReceiptOcr';
 
 interface Props {
   family: Family;
@@ -21,10 +21,7 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
   const [amount, setAmount] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
-  const [receiptFile, setReceiptFile] = useState<File | null>(null);
-  const [receiptCode, setReceiptCode] = useState('');
-  const [ocrLoading, setOcrLoading] = useState(false);
-  const [ocrMsg, setOcrMsg] = useState('');
+  const { ocrLoading, ocrMsg, receiptFile, receiptCode, setReceiptCode, handleFileChange: handleOcrFile, reset: resetOcr } = useReceiptOcr();
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState('');
@@ -84,9 +81,7 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
 
       setMsg('Платёж отправлен кассиру на проверку');
       setAmount('');
-      setReceiptFile(null);
-      setReceiptCode('');
-      setOcrMsg('');
+      resetOcr();
       setComment('');
       await load();
     } catch (e: any) {
@@ -180,23 +175,13 @@ export default function PaymentModal({ family, onClose, userName = 'Менедж
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={async e => {
-                        const file = e.target.files?.[0] ?? null;
-                        setReceiptFile(file);
-                        if (!file) return;
-                        setOcrLoading(true);
-                        setOcrMsg('');
-                        try {
-                          const result = await extractReceiptData(file);
-                          if (result.receipt_code) setReceiptCode(result.receipt_code);
-                          if (result.amount) setAmount(String(result.amount));
-                          if (result.date) setPaymentDate(result.date);
-                          setOcrMsg(result.receipt_code ? '✓ Данные извлечены из чека' : 'Код чека не найден — введите вручную');
-                        } catch {
-                          setOcrMsg('OCR недоступен — введите данные вручную');
-                        }
-                        setOcrLoading(false);
-                      }}
+                      onChange={e => handleOcrFile(
+                        e.target.files?.[0] ?? null,
+                        (amount, date) => {
+                          if (amount) setAmount(String(amount));
+                          if (date) setPaymentDate(date);
+                        },
+                      )}
                       style={{ display: 'none' }}
                     />
                   </label>

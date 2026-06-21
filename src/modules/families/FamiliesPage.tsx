@@ -4,10 +4,11 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { clearV2TransferVehicleType, fetchV2Branches, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { clearV2TransferVehicleType, deleteV2Family, fetchV2Branches, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
+import BankStatementPage from '../finance/BankStatementPage';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
@@ -937,6 +938,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
   const [showNewDriver, setShowNewDriver]       = useState(false);
+  const [showBankStatement, setShowBankStatement] = useState(false);
   const [driverBranches, setDriverBranches]     = useState<V2BranchOption[]>([]);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [logisticsDashboardCollapsedByMode, setLogisticsDashboardCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
@@ -1104,6 +1106,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         if (key === 'vehicleLabel') updates.vehicle_type = value;
         if (key === 'stopNumber') updates.stop_order = value === '' ? null : Number(value);
         if (key === 'timeMorning') updates.time_morning = value || null;
+
+        if (key === 'branchShort') {
+          const branch = driverBranches.find(b => b.id === value);
+          if (!branch) return false;
+          updates.branch_id = branch.id;
+          updates.school_id = branch.schoolId;
+          updates.status = 'new';
+          rowPatch.branchId = branch.id;
+          rowPatch.branchShort = branch.shortName || branch.code;
+          rowPatch.branchName = branch.name;
+          rowPatch.status = 'new';
+        }
 
         if (key === 'childClass') rowPatch.childClass = formatClassName(value);
         if (key === 'streetAddress') rowPatch.streetAddress = String(value);
@@ -1304,6 +1318,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }
 
   const canManageProperties = userRole === 'admin';
+  const canDeleteFamily = ['admin', 'gen_director', 'director'].includes(userRole ?? '');
   const modeRows = useMemo(() => (
     mode === 'logistics' ? logisticsWorkRows(rows) : rows
   ), [mode, rows]);
@@ -1928,9 +1943,19 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       },
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     },
-    ...COLUMNS,
+    ...COLUMNS.map(col => {
+      if (col.key !== 'branchShort') return col;
+      const canEditSchool = ['admin', 'gen_director', 'director'].includes(userRole ?? '');
+      if (!canEditSchool) return col;
+      return {
+        ...col,
+        editable: true,
+        options: driverBranches.map(b => ({ value: b.id, label: b.shortName || b.code })),
+        getValue: (row: ChildRow) => row.branchId ?? '',
+      };
+    }),
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [userRole]);
+  ], [userRole, driverBranches]);
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: 'var(--active-bg)', borderRadius: 22, display: 'flex' }}>
@@ -2297,7 +2322,19 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               emptyText="Заявок не найдено"
               canManageProperties={canManageProperties}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
-              onRowDelete={(row) => console.log('delete', row.rowId)}
+              onRowDelete={canDeleteFamily ? async (row) => {
+                if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return;
+                try {
+                  await deleteV2Family(row.familyId);
+                  setRows(prev => {
+                    const next = prev.filter(r => r.familyId !== row.familyId);
+                    familiesRowsCache = next;
+                    return next;
+                  });
+                } catch (e: any) {
+                  window.alert('Не удалось удалить: ' + (e?.message ?? String(e)));
+                }
+              } : undefined}
               onRowEdit={(row) => console.log('edit', row.rowId)}
               onCellSave={handleCellSave}
               hideToolbar={tableBarsCollapsed}
@@ -2335,6 +2372,28 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
+                  {mode === 'cashier' && (
+                    <button
+                      onClick={() => setShowBankStatement(true)}
+                      style={{
+                        height: 26,
+                        padding: '0 10px',
+                        border: '1px solid var(--border)',
+                        borderRadius: 10,
+                        background: '#fff',
+                        color: 'var(--text)',
+                        fontSize: 12,
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: 5,
+                        flexShrink: 0,
+                      }}
+                    >
+                      Выписка
+                    </button>
+                  )}
                 </div>
               )}
               toolbarRightExtra={(
@@ -3000,6 +3059,41 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           onClose={() => setShowNewFamily(false)}
           
         />
+      )}
+
+      {showBankStatement && (
+        <>
+          <div
+            onClick={() => setShowBankStatement(false)}
+            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 800 }}
+          />
+          <div style={{
+            position: 'fixed', top: '50%', left: '50%',
+            transform: 'translate(-50%, -50%)',
+            width: 'min(1100px, calc(100vw - 32px))',
+            height: 'min(88vh, 900px)',
+            background: '#fff',
+            borderRadius: 18,
+            zIndex: 801,
+            display: 'flex',
+            flexDirection: 'column',
+            overflow: 'hidden',
+            boxShadow: '0 24px 60px rgba(23,34,47,0.22)',
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Выписка</span>
+              <button
+                onClick={() => setShowBankStatement(false)}
+                style={{ width: 32, height: 32, border: '1px solid var(--border)', borderRadius: 10, background: '#F5FAFB', color: 'var(--text-2)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto' }}>
+              <BankStatementPage userName={userName} />
+            </div>
+          </div>
+        </>
       )}
 
       {showNewDriver && (

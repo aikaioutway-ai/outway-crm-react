@@ -6,7 +6,7 @@ import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { fetchV2FamiliesTable } from './services/crmV2Service';
 import { UserRole } from './types';
-import BankStatementPage from './modules/finance/BankStatementPage';
+import DriversPage from './modules/drivers/DriversPage';
 import './index.css';
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
@@ -110,8 +110,8 @@ export default function App() {
           />
         ) : section === 'employees' ? (
           <EmployeesPage />
-        ) : section === 'bank_statement' ? (
-          <BankStatementPage userName={currentUser?.name} />
+        ) : section === 'drivers' ? (
+          <DriversPage userRole={currentUserRole} userName={currentUser?.name} allowedSchools={currentUser?.schoolKeys} />
         ) : (
           <div style={{
             flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',

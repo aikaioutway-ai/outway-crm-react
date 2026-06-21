@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
-import { normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 
 export interface V2BranchOption {
   id: string;
@@ -313,7 +313,7 @@ export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
         schoolCode,
         branchName: branch?.name ?? branchCode,
         branchShort: branch?.short_name ?? branchCode,
-        branchFilter: branchCode === 'ING_A' ? 'ING' : branchCode,
+        branchFilter: getBranchFilter(branch?.name ?? null, branchCode),
         streetAddress: stripAddress(child?.address ?? ''),
         distanceKm: child?.distance_km == null ? null : Number(child.distance_km),
         zone: normalizeZone(child?.zone, 'A'),
@@ -395,6 +395,11 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
     comment: updated.comment || null,
     status: updated.status,
   }).eq('id', familyId);
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteV2Family(familyId: string): Promise<void> {
+  const { error } = await supabase.from('v2_families').delete().eq('id', familyId);
   if (error) throw new Error(error.message);
 }
 

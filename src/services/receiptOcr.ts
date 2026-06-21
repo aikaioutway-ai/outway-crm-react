@@ -27,6 +27,10 @@ const PROMPT = `Извлеки из этого банковского чека:
 Если поле не найдено — ставь null.`;
 
 export async function extractReceiptData(file: File): Promise<OcrResult> {
+  if (file.size > 10 * 1024 * 1024) {
+    throw new Error('Файл слишком большой (макс. 10 МБ)');
+  }
+
   const { base64, mediaType } = await fileToBase64(file);
   const isPdf = file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf');
 
