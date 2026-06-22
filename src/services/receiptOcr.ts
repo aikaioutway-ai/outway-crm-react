@@ -88,3 +88,4 @@ export async function extractReceiptData(file: File): Promise<OcrResult> {
     return { receipt_code: null, amount: null, date: null };
   }
 }
+// build: Mon Jun 22 15:35:20 +06 2026
