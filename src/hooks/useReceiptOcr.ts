@@ -41,8 +41,9 @@ export function useReceiptOcr(): ReceiptOcrState {
       if (result.receipt_code) setReceiptCode(result.receipt_code);
       onExtracted?.(result.amount, result.date);
       setOcrMsg(result.receipt_code ? '✓ Данные извлечены из чека' : 'Код чека не найден — введите вручную');
-    } catch {
-      setOcrMsg('OCR недоступен — введите данные вручную');
+    } catch (e: any) {
+      console.error('OCR error:', e);
+      setOcrMsg(`OCR недоступен — ${e?.message ?? 'неизвестная ошибка'}`);
     }
     setOcrLoading(false);
   }
