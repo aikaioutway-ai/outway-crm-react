@@ -1457,7 +1457,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   async function changeDashboardTransferVehicleType(vehicleType: VehicleType | 'unassigned') {
     if (!transferTypeMenu) return;
-    if (!selectedDashboardSchool || selectedDashboardSchool.key === 'ALL') {
+    if (!isDriversModule && (!selectedDashboardSchool || selectedDashboardSchool.key === 'ALL')) {
       alert('Сначала выберите конкретную школу');
       setTransferTypeMenu(null);
       return;
@@ -1465,7 +1465,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     const savedTransfer = dashboardTransfers.find(item =>
       item.transferNumber === transferTypeMenu.transferNumber
       && (
-        item.branchCode === selectedDashboardSchool.key
+        !selectedDashboardSchool
+        || selectedDashboardSchool.key === 'ALL'
+        || item.branchCode === selectedDashboardSchool.key
         || item.branchShort === selectedDashboardSchool.label
         || item.branchId === dashboardSchoolRows.find(row => row.branchId)?.branchId
       )
