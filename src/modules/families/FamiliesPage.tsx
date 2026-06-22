@@ -4,16 +4,15 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { clearV2TransferVehicleType, deleteV2Family, fetchV2Branches, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, updateV2Child, updateV2ChildRoute, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Family, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
-import BankStatementPage from '../finance/BankStatementPage';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus, X } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus, X, Save } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 
 interface ChildRow {
@@ -70,7 +69,7 @@ interface FamiliesPageProps {
   userRole?: UserRole;
   userName?: string;
   allowedSchools?: string[];
-  dashboardMode?: 'logistics' | 'drivers';
+  settingsScope?: string;
 }
 
 interface ModeFilters {
@@ -325,13 +324,12 @@ type TransferCardData = {
   childrenCount: number;
   history: {
     driverName: string;
-    phone: string;
     startDate: string;
     endDate: string;
     status: string;
   }[];
 };
-type DriverCardTab = 'main' | 'finance';
+type DriverCardTab = 'main' | 'documents' | 'finance';
 type DriverFinanceRow = {
   month: string;
   days: number;
@@ -342,6 +340,20 @@ type DriverFinanceRow = {
   advances: number;
   paid: number;
   balance: number;
+};
+
+type DriverDraft = {
+  fullName: string;
+  phone: string;
+  secondPhone: string;
+  status: string;
+  address: string;
+  comment: string;
+  vehicleType: VehicleType | '';
+  brand: string;
+  model: string;
+  plateNumber: string;
+  seats: string;
 };
 
 const DRIVER_FINANCE_MONTHS = [
@@ -358,6 +370,24 @@ const DRIVER_FINANCE_MONTHS = [
   'Ноябрь',
   'Декабрь',
 ];
+
+const DRIVER_STATUS_OPTIONS = [
+  { value: 'active', label: 'Активен' },
+  { value: 'inactive', label: 'Неактивен' },
+  { value: 'vacation', label: 'Ожидание' },
+  { value: 'dismissed', label: 'Уволен' },
+  { value: 'archive', label: 'Архив' },
+];
+
+function driverDocumentMissing(document: V2DriverDocumentInput): boolean {
+  return document.required && (!document.number.trim() || !document.issuedAt || !document.expiresAt || !document.scanUrl);
+}
+
+function driverDocumentExpired(document: V2DriverDocumentInput): boolean {
+  if (!document.expiresAt) return false;
+  const expires = new Date(`${document.expiresAt}T23:59:59`);
+  return !Number.isNaN(expires.getTime()) && expires.getTime() < Date.now();
+}
 
 const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
   { key: 'average', label: 'Средний' },
@@ -404,6 +434,13 @@ function vehicleTypeShortLabel(vehicleType?: string): string {
   if (vehicleType === 'minivan') return 'MINI';
   if (vehicleType === 'sedan') return 'CAR';
   return '';
+}
+
+function vehicleTypeCodeLabel(vehicleType?: string): string {
+  if (vehicleType === 'microbus') return 'B';
+  if (vehicleType === 'minivan') return 'M';
+  if (vehicleType === 'sedan') return 'C';
+  return '-';
 }
 
 function formatDateShort(value?: string): string {
@@ -565,6 +602,7 @@ function LogisticsMicrobusDashboard({
   onDetailContextMenu,
   detailValueMode = 'count',
   showMetricFilter = true,
+  driversDashboard = false,
 }: {
   items: LogisticsDashboardItem[];
   collapsed: boolean;
@@ -584,6 +622,7 @@ function LogisticsMicrobusDashboard({
   onDetailContextMenu?: (event: React.MouseEvent, item: LogisticsTransferDashboardItem) => void;
   detailValueMode?: 'count' | 'vehicleType';
   showMetricFilter?: boolean;
+  driversDashboard?: boolean;
 }) {
   const maxValue = Math.max(20, ...items.map(item => Math.max(0, item.value)));
   const maxDetailValue = Math.max(1, ...detailItems.map(item => item.count));
@@ -600,6 +639,180 @@ function LogisticsMicrobusDashboard({
   const gap = 4;
   const totalValue = items.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
   let offset = 0;
+
+  if (driversDashboard) {
+    if (collapsed) {
+      return (
+        <div style={logisticsCollapsedStyle}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+            <span style={logisticsCollapsedDotStyle} />
+            <span style={{ fontSize: 12, fontWeight: 850, color: '#17222F' }}>Водители</span>
+            <span style={{ fontSize: 12, fontWeight: 900, color: '#31A4A5' }}>{gaugeValue.toFixed(0)}</span>
+          </div>
+          <button
+            onClick={onToggle}
+            title="Показать дашборд"
+            style={{
+              width: 28,
+              height: 24,
+              border: 'none',
+              borderRadius: 8,
+              background: 'transparent',
+              color: '#626C8B',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              flexShrink: 0,
+            }}
+          >
+            <ChevronDown size={15} />
+          </button>
+        </div>
+      );
+    }
+
+    return (
+      <div style={{ ...logisticsDashboardMainStyle, minHeight: 206, padding: '12px 42px 14px 14px' }}>
+        <button
+          onClick={onToggle}
+          title="Скрыть дашборд"
+          style={{
+            position: 'absolute',
+            top: 8,
+            right: 8,
+            width: 31,
+            height: 28,
+            border: 'none',
+            borderRadius: 8,
+            background: 'transparent',
+            color: '#626C8B',
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+          }}
+        >
+          <ChevronUp size={15} />
+        </button>
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#31A4A5', whiteSpace: 'nowrap' }}>Водители</span>
+            <span style={{ fontSize: 13, fontWeight: 900, color: '#17222F', whiteSpace: 'nowrap' }}>{gaugeValue.toFixed(0)}</span>
+          </div>
+          <NotionSelect
+            value={vehicleFilter}
+            options={LOGISTICS_VEHICLE_FILTERS.map(option => ({ value: option.key, label: option.label }))}
+            onChange={value => onVehicleFilterChange(value as LogisticsVehicleFilter)}
+            variant="inline"
+            panelWidth={210}
+          />
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${items.length || 1}, minmax(44px, 1fr))`,
+          gap: 8,
+          alignItems: 'end',
+          minWidth: 0,
+          paddingTop: 8,
+        }}>
+          {items.map(item => {
+            const height = Math.max(8, Math.round((Math.max(0, item.value) / maxValue) * 58));
+            const active = selectedKey === item.key;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onSelect?.(item.key)}
+                style={{
+                  display: 'grid',
+                  gridTemplateRows: '64px 22px',
+                  justifyItems: 'center',
+                  alignItems: 'end',
+                  minWidth: 0,
+                  padding: '0 3px 2px',
+                  border: '1px solid transparent',
+                  borderRadius: 8,
+                  background: active ? 'var(--active-bg)' : 'transparent',
+                  boxShadow: active ? 'inset 0 -3px 0 #31A4A5' : 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                <div style={{ height: 58, display: 'flex', alignItems: 'end', justifyContent: 'center' }}>
+                  <div style={{ ...logisticsBarStyle, height, background: item.color, width: 18 }}>
+                    <span style={{ ...logisticsBarValueStyle, top: -18 }}>{item.value.toFixed(0)}</span>
+                  </div>
+                </div>
+                <div style={{ ...logisticsBarLabelStyle, color: active ? '#17222F' : '#626C8B', fontWeight: active ? 900 : 700 }}>
+                  {item.label}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7, alignItems: 'center', minWidth: 0, paddingTop: 4 }}>
+          {detailItems.length ? detailItems.map(item => {
+            const isActive = activeDetailKey === item.key;
+            const isEmpty = !item.vehicleType;
+            const tone = TRANSFER_TONE[item.vehicleType ?? 'empty'] ?? TRANSFER_TONE.empty;
+            return (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => onDetailSelect?.(item)}
+                onContextMenu={(event) => {
+                  event.preventDefault();
+                  event.stopPropagation();
+                  onDetailContextMenu?.(event, item);
+                }}
+                title={item.label}
+                style={{
+                  minWidth: 42,
+                  height: 30,
+                  padding: '0 8px',
+                  border: `1px solid ${isActive ? '#31A4A5' : tone.border}`,
+                  borderRadius: 8,
+                  background: isActive ? '#E8F7F7' : tone.bg,
+                  color: isEmpty ? '#7A859D' : tone.text,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 5,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  boxShadow: isActive ? 'inset 0 -2px 0 #31A4A5' : 'none',
+                }}
+              >
+                <span>{item.label.replace('#', '')}</span>
+                <span style={{
+                  minWidth: 17,
+                  height: 17,
+                  borderRadius: 6,
+                  background: isEmpty ? '#fff' : tone.dot,
+                  color: isEmpty ? '#7A859D' : '#fff',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 10,
+                  lineHeight: 1,
+                }}>
+                  {vehicleTypeCodeLabel(item.vehicleType)}
+                </span>
+              </button>
+            );
+          }) : (
+            <div style={{ fontSize: 12, fontWeight: 700, color: '#626C8B', padding: '8px 0' }}>
+              По этой школе пока нет трансферов
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   if (collapsed) {
     return (
@@ -920,7 +1133,7 @@ const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
   logistics: true,
 };
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, dashboardMode = 'logistics' as 'logistics' | 'drivers' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [dashboardTransfers, setDashboardTransfers] = useState<V2TransferDashboardRow[]>([]);
   const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
@@ -938,7 +1151,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
   const [showNewDriver, setShowNewDriver]       = useState(false);
-  const [showBankStatement, setShowBankStatement] = useState(false);
   const [driverBranches, setDriverBranches]     = useState<V2BranchOption[]>([]);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [logisticsDashboardCollapsedByMode, setLogisticsDashboardCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
@@ -950,6 +1162,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedDriverTab, setSelectedDriverTab] = useState<DriverCardTab>('main');
+  const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
+  const [driverDocumentsDraft, setDriverDocumentsDraft] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
+  const [savingDriver, setSavingDriver] = useState(false);
   const [transferTypeMenu, setTransferTypeMenu] = useState<{
     x: number;
     y: number;
@@ -958,10 +1173,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   const modeFilters = filtersByMode[mode] ?? DEFAULT_MODE_FILTERS;
   const { activeTab, quickTransfer, quickChildStatus, quickPaymentStatus } = modeFilters;
+  const isDriversModule = settingsScope === 'drivers';
   const logisticsDashboardCollapsed = logisticsDashboardCollapsedByMode[mode] ?? false;
   const tableBarsCollapsed = tableBarsCollapsedByMode[mode] ?? false;
   const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? true;
-  const schoolsSidebarCollapsed = dashboardMode === 'drivers' || schoolsBarCollapsed;
+  const schoolsSidebarCollapsed = isDriversModule || schoolsBarCollapsed;
   const dashboardSchoolKey = dashboardSchoolByMode[mode] ?? '';
   const DEFAULT_METRIC_BY_MODE: Record<FamiliesMode, LogisticsDashboardMetric> = {
     requests: 'count',
@@ -971,6 +1187,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   };
   const dashboardMetric = dashboardMetricByMode[mode] ?? DEFAULT_METRIC_BY_MODE[mode];
   const dashboardVehicleFilter = dashboardVehicleFilterByMode[mode] ?? 'all';
+  const tableStorageKey = settingsScope ? `families_table_${settingsScope}_${mode}` : `families_table_${mode}`;
+  const moduleLabel = settingsScope === 'drivers' ? 'Водители' : MODE_LABEL[mode];
   const setModeFilter = (patch: Partial<ModeFilters>) => {
     setFiltersByMode(prev => ({
       ...prev,
@@ -1022,11 +1240,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, []);
 
   useEffect(() => {
-    if (dashboardMode !== 'drivers') return;
+    if (!isDriversModule) return;
     void fetchV2Branches()
       .then(setDriverBranches)
       .catch(error => console.error('Branches load failed', error));
-  }, [dashboardMode]);
+  }, [isDriversModule]);
 
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
@@ -1106,18 +1324,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         if (key === 'vehicleLabel') updates.vehicle_type = value;
         if (key === 'stopNumber') updates.stop_order = value === '' ? null : Number(value);
         if (key === 'timeMorning') updates.time_morning = value || null;
-
-        if (key === 'branchShort') {
-          const branch = driverBranches.find(b => b.id === value);
-          if (!branch) return false;
-          updates.branch_id = branch.id;
-          updates.school_id = branch.schoolId;
-          updates.status = 'new';
-          rowPatch.branchId = branch.id;
-          rowPatch.branchShort = branch.shortName || branch.code;
-          rowPatch.branchName = branch.name;
-          rowPatch.status = 'new';
-        }
 
         if (key === 'childClass') rowPatch.childClass = formatClassName(value);
         if (key === 'streetAddress') rowPatch.streetAddress = String(value);
@@ -1318,7 +1524,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }
 
   const canManageProperties = userRole === 'admin';
-  const canDeleteFamily = ['admin', 'gen_director', 'director'].includes(userRole ?? '');
   const modeRows = useMemo(() => (
     mode === 'logistics' ? logisticsWorkRows(rows) : rows
   ), [mode, rows]);
@@ -1523,7 +1728,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const logisticsAvgItems = useMemo(() => schoolButtonItems
     .map((item, index) => {
       const itemRows = item.key === 'ALL' ? rows : rows.filter(row => rowMatchesSchoolTab(row, item));
-      const value = dashboardMode === 'drivers'
+      const value = isDriversModule
         ? new Set(logisticsWorkRows(itemRows).map(row => row.driverId).filter(Boolean)).size
         : dashboardMetricValue(dashboardStatsForRows(itemRows));
       return {
@@ -1532,7 +1737,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         value,
         color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
       };
-    }), [dashboardMetricValue, dashboardMode, dashboardStatsForRows, rowMatchesSchoolTab, rows, schoolButtonItems]);
+    }), [dashboardMetricValue, dashboardStatsForRows, isDriversModule, rowMatchesSchoolTab, rows, schoolButtonItems]);
   const selectedDashboardSchool = schoolButtonItems.find(item => item.key === dashboardSchoolKey)
     ?? schoolButtonItems.find(item => item.key === activeTab)
     ?? schoolButtonItems[0];
@@ -1565,7 +1770,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             ?? originalTransferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
             ?? originalTransferRows.find(row => row.vehicleType === 'sedan')?.vehicleType
             ?? originalTransferRows.find(row => row.vehicleType === 'microbus')?.vehicleType;
-          const driverMode = dashboardMode === 'drivers';
+          const driverMode = isDriversModule;
           return {
             key: `transfer-${transfer}`,
             label: `#${transfer}`,
@@ -1576,7 +1781,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             vehicleType,
           };
         }),
-        ...(dashboardMode === 'drivers' ? [] : [{
+        ...(isDriversModule ? [] : [{
           key: 'new',
           label: '?',
           group: 'Статус',
@@ -1609,17 +1814,17 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const dashboardSummaryStats = dashboardStatsForRows(dashboardSummaryRows);
   const allowedMetrics = METRICS_BY_ROLE[userRole] ?? METRICS_BY_ROLE.admin;
   const visibleDashboardMetrics = LOGISTICS_DASHBOARD_METRICS.filter(m => allowedMetrics.includes(m.key));
-  const dashboardMetricOptions = dashboardMode === 'drivers'
+  const dashboardMetricOptions = isDriversModule
     ? [{ key: 'count' as LogisticsDashboardMetric, label: 'Водители' }]
     : visibleDashboardMetrics;
-  const dashboardDisplayMetric = dashboardMode === 'drivers'
+  const dashboardDisplayMetric = isDriversModule
     ? 'count' as LogisticsDashboardMetric
     : (allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]);
-  const dashboardPrimaryValue = dashboardMode === 'drivers'
+  const dashboardPrimaryValue = isDriversModule
     ? new Set(logisticsWorkRows(dashboardSummaryRows).map(row => row.driverId).filter(Boolean)).size
     : dashboardMetricValue(dashboardSummaryStats);
   const dashboardSummaryItems = [
-    ...(dashboardMode === 'drivers' ? (() => {
+    ...(isDriversModule ? (() => {
       const selectedTransfers = dashboardTransfers.filter(item =>
         selectedDashboardSchool?.key === 'ALL'
         || item.branchCode === selectedDashboardSchool?.key
@@ -1674,6 +1879,85 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
+  useEffect(() => {
+    if (!selectedDriver) {
+      setDriverDraft(null);
+      setDriverDocumentsDraft(createDefaultV2DriverDocuments());
+      return;
+    }
+    setDriverDraft({
+      fullName: selectedDriver.fullName,
+      phone: selectedDriver.phone,
+      secondPhone: selectedDriver.secondPhone,
+      status: selectedDriver.status || 'active',
+      address: selectedDriver.address,
+      comment: selectedDriver.comment,
+      vehicleType: selectedDriver.vehicleType,
+      brand: selectedDriver.brand,
+      model: selectedDriver.model,
+      plateNumber: selectedDriver.plateNumber,
+      seats: selectedDriver.seats == null ? '' : String(selectedDriver.seats),
+    });
+  }, [selectedDriver]);
+  useEffect(() => {
+    if (!selectedDriverId) return;
+    let cancelled = false;
+    fetchV2DriverDocuments(selectedDriverId)
+      .then(documents => {
+        if (!cancelled) setDriverDocumentsDraft(documents.map(({ id, driverId, ...document }) => document));
+      })
+      .catch(error => {
+        console.error('Driver documents load failed', error);
+        if (!cancelled) setDriverDocumentsDraft(createDefaultV2DriverDocuments());
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDriverId]);
+  const setDriverDraftField = <K extends keyof DriverDraft>(key: K, value: DriverDraft[K]) => {
+    setDriverDraft(prev => prev ? { ...prev, [key]: value } : prev);
+  };
+  const setDriverDocumentField = <K extends keyof V2DriverDocumentInput>(index: number, key: K, value: V2DriverDocumentInput[K]) => {
+    setDriverDocumentsDraft(prev => prev.map((document, itemIndex) => (
+      itemIndex === index ? { ...document, [key]: value } : document
+    )));
+  };
+  const missingDriverDocuments = driverDocumentsDraft.filter(driverDocumentMissing).length;
+  const expiredDriverDocuments = driverDocumentsDraft.filter(document => !driverDocumentMissing(document) && driverDocumentExpired(document)).length;
+  const saveSelectedDriver = async () => {
+    if (!selectedDriver || !driverDraft) return;
+    if (!driverDraft.fullName.trim()) {
+      alert('Укажите ФИО водителя');
+      return;
+    }
+    if (!driverDraft.phone.trim()) {
+      alert('Укажите телефон водителя');
+      return;
+    }
+    setSavingDriver(true);
+    try {
+      await updateV2Driver(selectedDriver.driverId, {
+        fullName: driverDraft.fullName,
+        phone: driverDraft.phone,
+        secondPhone: driverDraft.secondPhone,
+        status: driverDraft.status,
+        address: driverDraft.address,
+        comment: driverDraft.comment,
+        vehicleType: driverDraft.vehicleType,
+        brand: driverDraft.brand,
+        model: driverDraft.model,
+        plateNumber: driverDraft.plateNumber,
+        seats: driverDraft.seats.trim() ? Number(driverDraft.seats) : null,
+      });
+      await saveV2DriverDocuments(selectedDriver.driverId, driverDocumentsDraft);
+      await load(false);
+    } catch (error) {
+      console.error('Driver save failed', error);
+      alert('Не удалось сохранить водителя');
+    } finally {
+      setSavingDriver(false);
+    }
+  };
   const selectedDriverChildren = useMemo(() => (
     selectedDriverId
       ? rows
@@ -1759,13 +2043,22 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     const driver = transfer.driverId
       ? driverRows.find(item => item.driverId === transfer.driverId)
       : undefined;
+    const driverOnOtherTransfer = driver
+      ? !driver.transferNumbers.includes(`№${transfer.transferNumber}`) && Boolean(driver.transferNumbers)
+      : false;
+    const driverStatus = driver
+      ? driver.status !== 'active'
+        ? 'Уволен'
+        : driverOnOtherTransfer
+          ? `Другой трансфер (${driver.branchShorts[0] || '-'} / ${driver.transferNumbers})`
+          : 'Действует'
+      : '';
     const history = driver
       ? [{
           driverName: driver.fullName || 'Без имени',
-          phone: driver.phone || '-',
           startDate: formatDateShort(transfer.createdAt),
           endDate: '-',
-          status: 'Действует',
+          status: driverStatus,
         }]
       : [];
 
@@ -1943,19 +2236,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       },
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     },
-    ...COLUMNS.map(col => {
-      if (col.key !== 'branchShort') return col;
-      const canEditSchool = ['admin', 'gen_director', 'director'].includes(userRole ?? '');
-      if (!canEditSchool) return col;
-      return {
-        ...col,
-        editable: true,
-        options: driverBranches.map(b => ({ value: b.id, label: b.shortName || b.code })),
-        getValue: (row: ChildRow) => row.branchId ?? '',
-      };
-    }),
+    ...COLUMNS,
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [userRole, driverBranches]);
+  ], [userRole]);
 
   return (
     <div style={{ height: '100%', overflow: 'hidden', background: 'var(--active-bg)', borderRadius: 22, display: 'flex' }}>
@@ -1964,19 +2247,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       <div
         className="no-scrollbar"
         onClick={() => {
-          if (!schoolsBarCollapsed) setSchoolsBarCollapsed(true);
+          if (!schoolsBarCollapsed && !isDriversModule) setSchoolsBarCollapsed(true);
           if (transferTypeMenu) setTransferTypeMenu(null);
         }}
         style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 8, padding: '8px 0 8px 8px', minHeight: '100%', overflowY: 'auto', overflowX: 'hidden' }}
       >
 
-        {dashboardMode !== 'drivers' && <LogisticsMicrobusDashboard
+        <LogisticsMicrobusDashboard
           items={logisticsAvgItems}
           collapsed={logisticsDashboardCollapsed}
           onToggle={() => setLogisticsDashboardCollapsed(value => !value)}
           selectedKey={selectedDashboardSchool?.key}
           onSelect={(key) => {
-            if (key === 'ALL') return;
             setDashboardSchoolKey(key);
             setModeFilter(getSchoolSwitchFilters(key));
             setLogisticsDashboardCollapsed(false);
@@ -1989,8 +2271,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           summaryItems={dashboardSummaryItems}
           primaryValue={dashboardPrimaryValue}
           detailItems={dashboardTransferItems}
+          driversDashboard={isDriversModule}
           detailValueMode={'count'}
-          showMetricFilter={true}
+          showMetricFilter={!isDriversModule}
           activeDetailKey={activeDashboardDetailKey}
           onDetailSelect={(item) => {
             if (item.key === 'all') {
@@ -2003,6 +2286,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             }
             if (item.key.startsWith('transfer-')) {
               const transferNumber = item.key.replace('transfer-', '');
+              if (isDriversModule) {
+                setTransferCardNumber(transferNumber);
+                return;
+              }
               setModeFilter({ quickTransfer: transferNumber, quickChildStatus: '' });
             }
           }}
@@ -2016,11 +2303,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               transferNumber,
             });
           }}
-        />}
+        />
 
         {/* ── ТАБЛИЦА ── */}
         <div style={{ display: 'flex', flexDirection: 'column', overflow: 'visible', minWidth: 0 }}>
-          {dashboardMode !== 'drivers' && !tableBarsCollapsed ? (
+          {!isDriversModule && !tableBarsCollapsed ? (
           <div className="no-scrollbar" style={{
             position: 'relative',
             top: 'auto',
@@ -2053,7 +2340,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}>
-              <span style={{ color: '#31A4A5', fontWeight: 900 }}>{MODE_LABEL[mode]}</span>
+              <span style={{ color: '#31A4A5', fontWeight: 900 }}>{moduleLabel}</span>
               <span style={{ color: '#C8D8DC' }}>·</span>
               {selectedSchoolLabel}
               <span style={{ color: '#C8D8DC' }}>·</span>
@@ -2190,7 +2477,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               <ChevronUp size={15} />
             </button>
           </div>
-          ) : dashboardMode !== 'drivers' ? (
+          ) : !isDriversModule ? (
             <div style={{
               height: 22,
               display: 'flex',
@@ -2217,7 +2504,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 fontWeight: 850,
                 whiteSpace: 'nowrap',
               }}>
-                <span style={{ color: '#31A4A5' }}>{MODE_LABEL[mode]}</span>
+                <span style={{ color: '#31A4A5' }}>{moduleLabel}</span>
                 <span style={{ color: '#D4E3E7' }}>·</span>
                 {selectedSchoolLabel}
                 <span style={{ color: '#D4E3E7' }}>·</span>
@@ -2243,7 +2530,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               </button>
             </div>
           ) : null}
-          {dashboardMode === 'drivers' ? (
+          {isDriversModule ? (
             <DataTable<V2DriverTableRow>
               key="drivers_table"
               columns={DRIVER_COLUMNS}
@@ -2253,6 +2540,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               loading={loading}
               emptyText="Водители не найдены"
               canManageProperties={canManageProperties}
+              onRowClick={(row) => {
+                setSelectedDriverTab('main');
+                setSelectedDriverId(row.driverId);
+              }}
               onRowOpen={(row) => {
                 setSelectedDriverTab('main');
                 setSelectedDriverId(row.driverId);
@@ -2317,24 +2608,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               columns={tableColumns}
               data={filtered}
               rowKey="rowId"
-              storageKey={`families_table_${mode}`}
+              storageKey={tableStorageKey}
               loading={loading}
               emptyText="Заявок не найдено"
               canManageProperties={canManageProperties}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
-              onRowDelete={canDeleteFamily ? async (row) => {
-                if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return;
-                try {
-                  await deleteV2Family(row.familyId);
-                  setRows(prev => {
-                    const next = prev.filter(r => r.familyId !== row.familyId);
-                    familiesRowsCache = next;
-                    return next;
-                  });
-                } catch (e: any) {
-                  window.alert('Не удалось удалить: ' + (e?.message ?? String(e)));
-                }
-              } : undefined}
+              onRowDelete={userRole === 'admin' ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
               onRowEdit={(row) => console.log('edit', row.rowId)}
               onCellSave={handleCellSave}
               hideToolbar={tableBarsCollapsed}
@@ -2372,28 +2651,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       <option key={option.value} value={option.value}>{option.label}</option>
                     ))}
                   </select>
-                  {mode === 'cashier' && (
-                    <button
-                      onClick={() => setShowBankStatement(true)}
-                      style={{
-                        height: 26,
-                        padding: '0 10px',
-                        border: '1px solid var(--border)',
-                        borderRadius: 10,
-                        background: '#fff',
-                        color: 'var(--text)',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: 5,
-                        flexShrink: 0,
-                      }}
-                    >
-                      Выписка
-                    </button>
-                  )}
                 </div>
               )}
               toolbarRightExtra={(
@@ -2450,9 +2707,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           {!schoolsSidebarCollapsed && <span>Школы</span>}
           <button
             onClick={() => {
-              if (dashboardMode !== 'drivers') setSchoolsBarCollapsed(value => !value);
+              if (!isDriversModule) setSchoolsBarCollapsed(value => !value);
             }}
-            title={dashboardMode === 'drivers' ? 'Школы' : schoolsSidebarCollapsed ? 'Показать школы' : 'Скрыть школы'}
+            title={isDriversModule ? 'Школы' : schoolsSidebarCollapsed ? 'Показать школы' : 'Скрыть школы'}
             style={{
               width: 28,
               height: 28,
@@ -2463,7 +2720,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               display: 'inline-flex',
               alignItems: 'center',
               justifyContent: 'center',
-              cursor: dashboardMode === 'drivers' ? 'default' : 'pointer',
+              cursor: isDriversModule ? 'default' : 'pointer',
               flexShrink: 0,
             }}
           >
@@ -2471,7 +2728,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           </button>
         </div>
         <nav style={{ flex: 1, padding: schoolsSidebarCollapsed ? '7px 0 7px 0' : '7px 8px 7px 0', overflow: 'visible' }}>
-          {schoolButtonItems.filter(t => t.key !== 'ALL' || !schoolsSidebarCollapsed).map(t => {
+          {schoolButtonItems.map(t => {
             const isActive = activeTab === t.key;
             const allowed = isTabAllowed(t.key);
             const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
@@ -2583,39 +2840,76 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               borderBottom: '1px solid #E5EEF1',
             }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 22, fontWeight: 900, color: '#17222F', lineHeight: 1.15 }}>
-                  {selectedDriver.fullName || 'Водитель'}
-                </div>
+                <input
+                  value={driverDraft?.fullName ?? ''}
+                  onChange={event => setDriverDraftField('fullName', event.target.value)}
+                  placeholder="ФИО водителя"
+                  style={{
+                    width: 'min(460px, 70vw)',
+                    height: 34,
+                    border: '1px solid #DDE9EC',
+                    borderRadius: 10,
+                    padding: '0 10px',
+                    fontSize: 20,
+                    fontWeight: 900,
+                    color: '#17222F',
+                    outline: 'none',
+                  }}
+                />
                 <div style={{ marginTop: 5, display: 'flex', gap: 12, flexWrap: 'wrap', color: '#626C8B', fontSize: 13, fontWeight: 750 }}>
-                  <span>{selectedDriver.phone || 'номер не указан'}</span>
+                  <span>{driverDraft?.phone || 'номер не указан'}</span>
                   <span>ID: {selectedDriver.driverId.slice(0, 8)}</span>
-                  <span>{selectedDriver.status === 'active' ? 'Активен' : selectedDriver.status || 'Статус не указан'}</span>
+                  <span>{DRIVER_STATUS_OPTIONS.find(option => option.value === driverDraft?.status)?.label ?? 'Статус не указан'}</span>
                 </div>
                 <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: '#17222F', fontSize: 13, fontWeight: 800 }}>
                   <span>Наш долг: {money(selectedDriverFinanceTotals.balance)}</span>
-                  <span>Не хватает документов: данные не заведены</span>
-                  <span>Просрочены: нет данных</span>
+                  <span>Не хватает документов: {missingDriverDocuments}</span>
+                  <span>Просрочены: {expiredDriverDocuments}</span>
                 </div>
               </div>
-              <button
-                onClick={() => setSelectedDriverId(null)}
-                title="Закрыть"
-                style={{
-                  width: 36,
-                  height: 36,
-                  border: '1px solid #D4E3E7',
-                  borderRadius: 12,
-                  background: '#fff',
-                  color: '#626C8B',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  flexShrink: 0,
-                }}
-              >
-                <X size={18} />
-              </button>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <button
+                  onClick={saveSelectedDriver}
+                  disabled={savingDriver || !driverDraft}
+                  title="Сохранить"
+                  style={{
+                    height: 36,
+                    padding: '0 12px',
+                    border: 'none',
+                    borderRadius: 12,
+                    background: savingDriver ? '#A7CFCF' : '#31A4A5',
+                    color: '#fff',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 7,
+                    cursor: savingDriver ? 'default' : 'pointer',
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  <Save size={15} />
+                  {savingDriver ? 'Сохранение...' : 'Сохранить'}
+                </button>
+                <button
+                  onClick={() => setSelectedDriverId(null)}
+                  title="Закрыть"
+                  style={{
+                    width: 36,
+                    height: 36,
+                    border: '1px solid #D4E3E7',
+                    borderRadius: 12,
+                    background: '#fff',
+                    color: '#626C8B',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                  }}
+                >
+                  <X size={18} />
+                </button>
+              </div>
             </header>
 
             <div style={{
@@ -2629,6 +2923,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             }}>
               {[
                 { key: 'main' as DriverCardTab, label: 'Основная' },
+                { key: 'documents' as DriverCardTab, label: 'Документы' },
                 { key: 'finance' as DriverCardTab, label: 'Финансы' },
               ].map(tabItem => {
                 const active = selectedDriverTab === tabItem.key;
@@ -2664,30 +2959,88 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 marginBottom: 12,
               }}>
                 <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Школа / трансфер</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13 }}>
+                  <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Школа / авто</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13, alignItems: 'center' }}>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Школа</span>
                     <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.branchShorts.join(', ') || '-'}</span>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Трансфер</span>
                     <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.transferNumbers || '-'}</span>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Тип ТС</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.vehicleLabel || '-'}</span>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Авто</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>
-                      {[selectedDriver.brand, selectedDriver.model, selectedDriver.plateNumber].filter(Boolean).join(' · ') || '-'}
-                    </span>
+                    <select
+                      value={driverDraft?.vehicleType ?? ''}
+                      onChange={event => setDriverDraftField('vehicleType', event.target.value as VehicleType | '')}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', background: '#fff', outline: 'none' }}
+                    >
+                      <option value="">Не указан</option>
+                      {VEHICLE_TYPE_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Марка</span>
+                    <input
+                      value={driverDraft?.brand ?? ''}
+                      onChange={event => setDriverDraftField('brand', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Модель</span>
+                    <input
+                      value={driverDraft?.model ?? ''}
+                      onChange={event => setDriverDraftField('model', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Гос. номер</span>
+                    <input
+                      value={driverDraft?.plateNumber ?? ''}
+                      onChange={event => setDriverDraftField('plateNumber', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Мест</span>
+                    <input
+                      value={driverDraft?.seats ?? ''}
+                      onChange={event => setDriverDraftField('seats', event.target.value.replace(/\D/g, ''))}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
                   </div>
                 </section>
 
                 <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
                   <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Контакты / адрес</div>
-                  <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13 }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13, alignItems: 'center' }}>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Телефон</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.phone || '-'}</span>
+                    <input
+                      value={driverDraft?.phone ?? ''}
+                      onChange={event => setDriverDraftField('phone', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Доп. контакт</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.secondPhone || '-'}</span>
+                    <input
+                      value={driverDraft?.secondPhone ?? ''}
+                      onChange={event => setDriverDraftField('secondPhone', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Статус</span>
+                    <select
+                      value={driverDraft?.status ?? 'active'}
+                      onChange={event => setDriverDraftField('status', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', background: '#fff', outline: 'none' }}
+                    >
+                      {DRIVER_STATUS_OPTIONS.map(option => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
+                    </select>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Адрес</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.address || '-'}</span>
+                    <input
+                      value={driverDraft?.address ?? ''}
+                      onChange={event => setDriverDraftField('address', event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                    />
+                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Комментарий</span>
+                    <textarea
+                      value={driverDraft?.comment ?? ''}
+                      onChange={event => setDriverDraftField('comment', event.target.value)}
+                      rows={3}
+                      style={{ minHeight: 58, border: '1px solid #DDE9EC', borderRadius: 8, padding: '7px 8px', fontSize: 12, fontWeight: 700, color: '#17222F', outline: 'none', resize: 'vertical' }}
+                    />
                   </div>
                 </section>
               </div>
@@ -2777,6 +3130,95 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 </div>
               </section>
               </>
+              ) : selectedDriverTab === 'documents' ? (
+              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+                <div style={{
+                  height: 42,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 10,
+                  padding: '0 14px',
+                  borderBottom: '1px solid #E5EEF1',
+                  fontSize: 13,
+                  fontWeight: 900,
+                  color: '#17222F',
+                }}>
+                  <span>Документы</span>
+                  <span style={{ color: '#7A859D', fontSize: 11, fontWeight: 850 }}>
+                    Не хватает: {missingDriverDocuments} · Просрочены: {expiredDriverDocuments}
+                  </span>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr>
+                        {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
+                          <th key={label} style={{
+                            height: 34,
+                            padding: '0 10px',
+                            borderBottom: '1px solid #E5EEF1',
+                            textAlign: 'left',
+                            fontSize: 11,
+                            fontWeight: 900,
+                            color: '#7A859D',
+                            textTransform: 'uppercase',
+                            whiteSpace: 'nowrap',
+                          }}>
+                            {label}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {driverDocumentsDraft.map((document, index) => {
+                        const missing = driverDocumentMissing(document);
+                        const expired = !missing && driverDocumentExpired(document);
+                        return (
+                          <tr key={document.type}>
+                            <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                              <input value={document.title} onChange={event => setDriverDocumentField(index, 'title', event.target.value)} style={{ width: '100%', height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 800, color: '#17222F', outline: 'none' }} />
+                            </td>
+                            <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                              <input value={document.number} onChange={event => setDriverDocumentField(index, 'number', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${missing && !document.number.trim() ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 700, color: '#17222F', outline: 'none' }} />
+                            </td>
+                            <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                              <input type="date" value={document.issuedAt} onChange={event => setDriverDocumentField(index, 'issuedAt', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${missing && !document.issuedAt ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 700, color: '#17222F', outline: 'none' }} />
+                            </td>
+                            <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                              <input type="date" value={document.expiresAt} onChange={event => setDriverDocumentField(index, 'expiresAt', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${expired || (missing && !document.expiresAt) ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 700, color: expired ? '#B42318' : '#17222F', outline: 'none' }} />
+                            </td>
+                            <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                                <label style={{ height: 30, padding: '0 9px', border: `1px solid ${missing && !document.scanUrl ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, background: '#fff', color: '#52606F', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 850, whiteSpace: 'nowrap' }}>
+                                  {document.scanFile ? document.scanFile.name : document.scanUrl ? 'Заменить' : 'Добавить'}
+                                  <input
+                                    type="file"
+                                    accept="image/*,.pdf"
+                                    onChange={event => setDriverDocumentField(index, 'scanFile', event.target.files?.[0] ?? null)}
+                                    style={{ display: 'none' }}
+                                  />
+                                </label>
+                                {document.scanUrl && (
+                                  <a href={document.scanUrl} target="_blank" rel="noreferrer" style={{ color: '#237F81', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                                    Открыть
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                            <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: missing ? '#B42318' : expired ? '#B45309' : '#237F81', fontSize: 12, fontWeight: 850 }}>
+                                <input type="checkbox" checked={document.required} onChange={event => setDriverDocumentField(index, 'required', event.target.checked)} />
+                                {missing ? 'Не хватает' : expired ? 'Просрочен' : 'ОК'}
+                              </label>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </section>
               ) : (
                 <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                   <div style={{
@@ -2998,7 +3440,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
                     <thead>
                       <tr>
-                        {['Водитель', 'Телефон', 'Начало', 'Конец', 'Статус'].map(label => (
+                        {['ФИО водителя', 'Дата начала', 'Дата конец', 'Статус'].map(label => (
                           <th key={label} style={{
                             height: 36,
                             padding: '0 12px',
@@ -3018,14 +3460,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                     <tbody>
                       {selectedTransferCard.history.length ? selectedTransferCard.history.map((entry, index) => (
                         <tr key={`${entry.driverName}-${index}`}>
-                          {[entry.driverName, entry.phone, entry.startDate, entry.endDate, entry.status].map((value, cellIndex) => (
+                          {[entry.driverName, entry.startDate, entry.endDate, entry.status].map((value, cellIndex) => (
                             <td key={cellIndex} style={{
                               height: 42,
                               padding: '0 12px',
                               borderBottom: index === selectedTransferCard.history.length - 1 ? 'none' : '1px solid #EEF4F6',
                               fontSize: 13,
                               fontWeight: cellIndex === 0 ? 850 : 650,
-                              color: cellIndex === 4 ? '#237F81' : '#17222F',
+                              color: cellIndex === 3 ? '#237F81' : '#17222F',
                               whiteSpace: 'nowrap',
                             }}>
                               {value || '-'}
@@ -3034,7 +3476,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                         </tr>
                       )) : (
                         <tr>
-                          <td colSpan={5} style={{
+                          <td colSpan={4} style={{
                             height: 58,
                             padding: '0 14px',
                             color: '#7A859D',
@@ -3059,41 +3501,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           onClose={() => setShowNewFamily(false)}
           
         />
-      )}
-
-      {showBankStatement && (
-        <>
-          <div
-            onClick={() => setShowBankStatement(false)}
-            style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 800 }}
-          />
-          <div style={{
-            position: 'fixed', top: '50%', left: '50%',
-            transform: 'translate(-50%, -50%)',
-            width: 'min(1100px, calc(100vw - 32px))',
-            height: 'min(88vh, 900px)',
-            background: '#fff',
-            borderRadius: 18,
-            zIndex: 801,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-            boxShadow: '0 24px 60px rgba(23,34,47,0.22)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
-              <span style={{ fontSize: 16, fontWeight: 800, color: 'var(--text)' }}>Выписка</span>
-              <button
-                onClick={() => setShowBankStatement(false)}
-                style={{ width: 32, height: 32, border: '1px solid var(--border)', borderRadius: 10, background: '#F5FAFB', color: 'var(--text-2)', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-              >
-                <X size={16} />
-              </button>
-            </div>
-            <div style={{ flex: 1, overflow: 'auto' }}>
-              <BankStatementPage userName={userName} />
-            </div>
-          </div>
-        </>
       )}
 
       {showNewDriver && (
@@ -3274,5 +3681,3 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     </div>
   );
 }
-
-

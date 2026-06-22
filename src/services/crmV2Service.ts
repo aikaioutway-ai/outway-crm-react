@@ -48,6 +48,53 @@ export interface V2DriverTableRow {
   branchNames: string[];
 }
 
+export type V2DriverDocumentType =
+  | 'license'
+  | 'contract'
+  | 'insurance'
+  | 'patent'
+  | 'vehicle_certificate'
+  | 'driver_license'
+  | 'passport';
+
+export interface V2DriverDocumentRow {
+  id?: string;
+  driverId: string;
+  type: V2DriverDocumentType;
+  title: string;
+  number: string;
+  issuedAt: string;
+  expiresAt: string;
+  required: boolean;
+  scanUrl: string;
+  scanFile?: File | null;
+}
+
+export type V2DriverDocumentInput = Omit<V2DriverDocumentRow, 'id' | 'driverId'>;
+
+export const V2_DRIVER_DOCUMENT_TYPES: { type: V2DriverDocumentType; title: string; required: boolean }[] = [
+  { type: 'license', title: 'Лицензия', required: true },
+  { type: 'contract', title: 'Договор', required: true },
+  { type: 'insurance', title: 'Страхование', required: true },
+  { type: 'patent', title: 'Патент', required: true },
+  { type: 'vehicle_certificate', title: 'Свидетельство ТС', required: true },
+  { type: 'driver_license', title: 'Права', required: true },
+  { type: 'passport', title: 'Паспорт', required: true },
+];
+
+export function createDefaultV2DriverDocuments(): V2DriverDocumentInput[] {
+  return V2_DRIVER_DOCUMENT_TYPES.map(item => ({
+    type: item.type,
+    title: item.title,
+    number: '',
+    issuedAt: '',
+    expiresAt: '',
+    required: item.required,
+    scanUrl: '',
+    scanFile: null,
+  }));
+}
+
 export interface NewV2DriverInput {
   fullName: string;
   phone: string;
@@ -63,6 +110,69 @@ export interface NewV2DriverInput {
   model?: string;
   seats?: number | null;
   comment?: string;
+  documents?: V2DriverDocumentInput[];
+}
+
+export interface UpdateV2DriverInput {
+  fullName: string;
+  phone: string;
+  secondPhone?: string;
+  address?: string;
+  status: string;
+  comment?: string;
+  vehicleType?: VehicleType | '';
+  plateNumber?: string;
+  brand?: string;
+  model?: string;
+  seats?: number | null;
+}
+
+function normalizeDriverDocuments(driverId: string, rows: any[]): V2DriverDocumentRow[] {
+  const byType = new Map<string, any>((rows ?? []).map(row => [String(row.document_type), row]));
+  return V2_DRIVER_DOCUMENT_TYPES.map(defaultDoc => {
+    const row = byType.get(defaultDoc.type);
+    return {
+      id: row?.id ? String(row.id) : undefined,
+      driverId,
+      type: defaultDoc.type,
+      title: row?.title ?? defaultDoc.title,
+      number: row?.document_number ?? '',
+      issuedAt: row?.issued_at ?? '',
+      expiresAt: row?.expires_at ?? '',
+      required: row?.required ?? defaultDoc.required,
+      scanUrl: row?.scan_url ?? '',
+      scanFile: null,
+    };
+  });
+}
+
+async function uploadV2DriverDocumentScan(driverId: string, type: V2DriverDocumentType, file: File): Promise<string> {
+  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${driverId}/${type}/${Date.now()}_${safeName}`;
+  const { error } = await supabase.storage
+    .from('driver-documents')
+    .upload(path, file, { upsert: false });
+  if (error) throw new Error(error.message);
+  const { data } = supabase.storage.from('driver-documents').getPublicUrl(path);
+  return data.publicUrl;
+}
+
+async function prepareV2DriverDocumentsForSave(driverId: string, documents: V2DriverDocumentInput[]) {
+  return Promise.all(documents.map(async document => {
+    const scanUrl = document.scanFile
+      ? await uploadV2DriverDocumentScan(driverId, document.type, document.scanFile)
+      : document.scanUrl;
+    return {
+      driver_id: driverId,
+      document_type: document.type,
+      title: document.title.trim() || V2_DRIVER_DOCUMENT_TYPES.find(item => item.type === document.type)?.title || document.type,
+      document_number: document.number.trim() || null,
+      issued_at: document.issuedAt || null,
+      expires_at: document.expiresAt || null,
+      required: document.required,
+      scan_url: scanUrl || null,
+    };
+  }));
 }
 
 export interface FamilyListRow {
@@ -398,11 +508,6 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
   if (error) throw new Error(error.message);
 }
 
-export async function deleteV2Family(familyId: string): Promise<void> {
-  const { error } = await supabase.from('v2_families').delete().eq('id', familyId);
-  if (error) throw new Error(error.message);
-}
-
 export async function updateV2Child(childId: string, updates: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('v2_children').update(updates).eq('id', childId);
   if (error) throw new Error(error.message);
@@ -628,7 +733,85 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
     if (transferError) throw new Error(transferError.message);
   }
 
+  const documents = input.documents ?? createDefaultV2DriverDocuments();
+  if (documents.length) {
+    const preparedDocuments = await prepareV2DriverDocumentsForSave(driverId, documents);
+    const { error: documentsError } = await supabase
+      .from('v2_driver_documents')
+      .upsert(preparedDocuments, { onConflict: 'driver_id,document_type' });
+    if (documentsError) throw new Error(documentsError.message);
+  }
+
   return driverId;
+}
+
+export async function fetchV2DriverDocuments(driverId: string): Promise<V2DriverDocumentRow[]> {
+  const { data, error } = await supabase
+    .from('v2_driver_documents')
+    .select('*')
+    .eq('driver_id', driverId);
+  if (error) throw new Error(error.message);
+  return normalizeDriverDocuments(driverId, data ?? []);
+}
+
+export async function saveV2DriverDocuments(driverId: string, documents: V2DriverDocumentInput[]): Promise<void> {
+  const preparedDocuments = await prepareV2DriverDocumentsForSave(driverId, documents);
+  const { error } = await supabase
+    .from('v2_driver_documents')
+    .upsert(preparedDocuments, { onConflict: 'driver_id,document_type' });
+  if (error) throw new Error(error.message);
+}
+
+export async function updateV2Driver(driverId: string, input: UpdateV2DriverInput): Promise<void> {
+  const { error: driverError } = await supabase
+    .from('v2_drivers')
+    .update({
+      full_name: input.fullName.trim(),
+      phone: input.phone.trim(),
+      second_phone: input.secondPhone?.trim() || null,
+      address: input.address?.trim() || null,
+      status: input.status || 'active',
+      comment: input.comment?.trim() || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', driverId);
+  if (driverError) throw new Error(driverError.message);
+
+  const { data: existingVehicle, error: vehicleLookupError } = await supabase
+    .from('v2_vehicles')
+    .select('id')
+    .eq('driver_id', driverId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (vehicleLookupError) throw new Error(vehicleLookupError.message);
+
+  const vehiclePayload = {
+    driver_id: driverId,
+    vehicle_type: input.vehicleType || 'microbus',
+    plate_number: input.plateNumber?.trim() || null,
+    brand: input.brand?.trim() || null,
+    model: input.model?.trim() || null,
+    seats: input.seats ?? null,
+    status: 'active',
+    updated_at: new Date().toISOString(),
+  };
+
+  if (existingVehicle?.id) {
+    const { error } = await supabase
+      .from('v2_vehicles')
+      .update(vehiclePayload)
+      .eq('id', existingVehicle.id);
+    if (error) throw new Error(error.message);
+    return;
+  }
+
+  if (input.vehicleType || input.plateNumber || input.brand || input.model || input.seats) {
+    const { error } = await supabase
+      .from('v2_vehicles')
+      .insert(vehiclePayload);
+    if (error) throw new Error(error.message);
+  }
 }
 
 export async function updateV2TransferVehicleType(params: {
@@ -718,5 +901,10 @@ export async function addV2Audit(params: {
     new_value: params.newValue ?? null,
     comment: params.comment ?? null,
   });
+  if (error) throw new Error(error.message);
+}
+
+export async function deleteV2Family(familyId: string): Promise<void> {
+  const { error } = await supabase.from('v2_families').delete().eq('id', familyId);
   if (error) throw new Error(error.message);
 }

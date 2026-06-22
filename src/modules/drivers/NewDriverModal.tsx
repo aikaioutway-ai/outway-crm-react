@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { VehicleType } from '../../types';
-import { createV2Driver, V2BranchOption } from '../../services/crmV2Service';
+import { createDefaultV2DriverDocuments, createV2Driver, V2BranchOption, V2DriverDocumentInput } from '../../services/crmV2Service';
 import { VT_LABEL } from '../families/constants';
 
 const DISTRICTS = [
@@ -79,6 +79,8 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
   const [model, setModel] = useState('');
   const [seats, setSeats] = useState('');
   const [comment, setComment] = useState('');
+  const [documents, setDocuments] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
+  const [activeTab, setActiveTab] = useState<'main' | 'documents'>('main');
   const [districts, setDistricts] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
 
@@ -90,6 +92,12 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
         ? prev.filter(item => item !== name)
         : [...prev, name]
     ));
+  }
+
+  function setDocumentField<K extends keyof V2DriverDocumentInput>(index: number, key: K, value: V2DriverDocumentInput[K]) {
+    setDocuments(prev => prev.map((document, itemIndex) => (
+      itemIndex === index ? { ...document, [key]: value } : document
+    )));
   }
 
   async function submit() {
@@ -119,6 +127,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
         model,
         seats: seats ? Number(seats) : null,
         comment,
+        documents,
       });
       onCreated(driverId);
     } catch (error) {
@@ -142,7 +151,35 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
           </button>
         </header>
 
+        <div style={{ height: 48, display: 'flex', alignItems: 'center', gap: 8, padding: '0 18px', borderBottom: '1px solid #E5EEF1' }}>
+          {[
+            { key: 'main' as const, label: 'Основная' },
+            { key: 'documents' as const, label: 'Документы' },
+          ].map(tab => (
+            <button
+              key={tab.key}
+              type="button"
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                height: 30,
+                padding: '0 12px',
+                border: `1px solid ${activeTab === tab.key ? '#31A4A5' : '#DDE9EC'}`,
+                borderRadius: 10,
+                background: activeTab === tab.key ? '#DFF4F4' : '#fff',
+                color: activeTab === tab.key ? '#237F81' : '#52606F',
+                fontSize: 12,
+                fontWeight: 900,
+                cursor: 'pointer',
+              }}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
         <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB', display: 'grid', gap: 12 }}>
+          {activeTab === 'main' ? (
+          <>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
             <label style={labelStyle}>ФИО<input style={inputStyle} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
             <label style={labelStyle}>Номер<input style={inputStyle} value={phone} onChange={event => setPhone(event.target.value)} /></label>
@@ -193,6 +230,63 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
           <label style={labelStyle}>Комментарий
             <textarea value={comment} onChange={event => setComment(event.target.value)} style={{ ...inputStyle, height: 72, padding: 10, resize: 'vertical' }} />
           </label>
+          </>
+          ) : (
+
+          <div style={{ border: '1px solid #DDE9EC', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
+            <div style={{ height: 42, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid #E5EEF1', fontSize: 13, fontWeight: 900, color: '#17222F' }}>
+              Документы
+            </div>
+            <div style={{ overflowX: 'auto' }}>
+              <table style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr>
+                    {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
+                      <th key={label} style={{ height: 34, padding: '0 10px', borderBottom: '1px solid #E5EEF1', textAlign: 'left', fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                        {label}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {documents.map((document, index) => (
+                    <tr key={document.type}>
+                      <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                        <input value={document.title} onChange={event => setDocumentField(index, 'title', event.target.value)} style={{ ...inputStyle, height: 30, fontSize: 12 }} />
+                      </td>
+                      <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                        <input value={document.number} onChange={event => setDocumentField(index, 'number', event.target.value)} style={{ ...inputStyle, height: 30, fontSize: 12 }} />
+                      </td>
+                      <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                        <input type="date" value={document.issuedAt} onChange={event => setDocumentField(index, 'issuedAt', event.target.value)} style={{ ...inputStyle, height: 30, fontSize: 12 }} />
+                      </td>
+                      <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                        <input type="date" value={document.expiresAt} onChange={event => setDocumentField(index, 'expiresAt', event.target.value)} style={{ ...inputStyle, height: 30, fontSize: 12 }} />
+                      </td>
+                      <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                        <label style={{ height: 30, padding: '0 9px', border: '1px solid #DDE9EC', borderRadius: 8, background: '#fff', color: '#52606F', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 850, whiteSpace: 'nowrap' }}>
+                          {document.scanFile ? document.scanFile.name : 'Добавить'}
+                          <input
+                            type="file"
+                            accept="image/*,.pdf"
+                            onChange={event => setDocumentField(index, 'scanFile', event.target.files?.[0] ?? null)}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                      </td>
+                      <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 850, color: '#52606F' }}>
+                          <input type="checkbox" checked={document.required} onChange={event => setDocumentField(index, 'required', event.target.checked)} />
+                          Да
+                        </label>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          )}
         </div>
 
         <footer style={{ padding: 14, borderTop: '1px solid #E5EEF1', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>

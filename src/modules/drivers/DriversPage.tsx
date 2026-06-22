@@ -12,7 +12,7 @@ export default function DriversPage({ userRole, userName, allowedSchools }: Driv
   return (
     <FamiliesPage
       mode="logistics"
-      dashboardMode="drivers"
+      settingsScope="drivers"
       userRole={userRole}
       userName={userName}
       allowedSchools={allowedSchools}
