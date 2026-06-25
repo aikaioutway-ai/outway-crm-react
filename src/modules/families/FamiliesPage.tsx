@@ -12,7 +12,7 @@ import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financ
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus, X, Save, SlidersHorizontal, Paperclip } from 'lucide-react';
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus, X, Save, Paperclip } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS } from './constants';
 
@@ -462,12 +462,6 @@ function vehicleTypeShortLabel(vehicleType?: string): string {
   return '';
 }
 
-function vehicleTypeCodeLabel(vehicleType?: string): string {
-  if (vehicleType === 'microbus') return 'B';
-  if (vehicleType === 'minivan') return 'M';
-  if (vehicleType === 'sedan') return 'C';
-  return '-';
-}
 
 function formatDateShort(value?: string): string {
   if (!value) return '-';
@@ -558,21 +552,6 @@ const logisticsCollapsedDotStyle: React.CSSProperties = {
   borderRadius: 999,
   background: '#31A4A5',
   flexShrink: 0,
-};
-
-const logisticsGaugeTitleStyle: React.CSSProperties = {
-  justifySelf: 'start',
-  marginLeft: 6,
-  fontSize: 12,
-  fontWeight: 850,
-  color: '#17222F',
-};
-
-const logisticsGaugeValueStyle: React.CSSProperties = {
-  position: 'absolute',
-  fontSize: 24,
-  fontWeight: 900,
-  color: '#17222F',
 };
 
 const logisticsBarsStyle: React.CSSProperties = {
@@ -684,7 +663,6 @@ function LogisticsMicrobusDashboard({
   onMainTabChange?: (tab: 'payments' | 'statement') => void;
   showDetailBars?: boolean;
 }) {
-  const activeMainTab = dashboardMainTab ?? 'payments';
   const maxValue = Math.max(20, ...items.filter(i => i.key !== 'ALL').map(item => Math.max(0, item.value)));
   const maxDetailValue = Math.max(1, ...detailItems.map(item => item.count));
   const compactDetailBars = detailValueMode === 'vehicleType';
@@ -694,7 +672,6 @@ function LogisticsMicrobusDashboard({
     : 0;
   const selectedGaugeItem = selectedKey ? items.find(item => item.key === selectedKey) : undefined;
   const gaugeValue = primaryValue ?? selectedGaugeItem?.value ?? averageGaugeValue;
-  const radius = 38;
 
   if (collapsed) {
     return (

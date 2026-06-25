@@ -91,11 +91,6 @@ export default function App() {
     fetchV2FamiliesTable()
       .then(rows => {
         const logisticsChildren = rows.filter(row => row.status !== 'new' && row.status !== 'rejected').length;
-        const pendingFamilies = new Set(
-          rows
-            .filter(row => row.pendingPayment > 0)
-            .map(row => row.familyId)
-        );
         setBadges({
           logistics: logisticsChildren,
         });
@@ -134,20 +129,6 @@ export default function App() {
     position: 'relative' as const,
     zIndex: active ? 3 : 1,
     marginBottom: active ? -1 : 0,
-  } as React.CSSProperties);
-
-  const adminTabStyle = (active: boolean) => ({
-    height: 28,
-    padding: '0 10px',
-    border: `1px solid ${active ? '#2DD4BF' : 'rgba(45,212,191,0.25)'}`,
-    borderRadius: 7,
-    background: active ? 'rgba(45,212,191,0.1)' : 'transparent',
-    color: active ? '#0F7B75' : '#9AABB0',
-    fontSize: 11,
-    fontWeight: 600,
-    cursor: 'pointer',
-    transition: 'all 0.15s',
-    letterSpacing: '0.02em',
   } as React.CSSProperties);
 
   const sectionLabel = (label: string) => (
