@@ -695,11 +695,6 @@ function LogisticsMicrobusDashboard({
   const selectedGaugeItem = selectedKey ? items.find(item => item.key === selectedKey) : undefined;
   const gaugeValue = primaryValue ?? selectedGaugeItem?.value ?? averageGaugeValue;
   const radius = 38;
-  const stroke = 11;
-  const circumference = 2 * Math.PI * radius;
-  const gap = 4;
-  const totalValue = items.reduce((sum, item) => sum + Math.max(0, item.value), 0) || 1;
-  let offset = 0;
 
   if (collapsed) {
     return (
@@ -1462,7 +1457,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [cashierDates, cashierConfirmingId]);
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
-  const [loadingPeriod, setLoadingPeriod] = useState(false);
+  const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedDriverTab, setSelectedDriverTab] = useState<DriverCardTab>('main');
@@ -2212,6 +2207,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (quickChildStatus === 'transfered' && !r.transferNumber) return false;
     if (quickChildStatus && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [dashboardMetric, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
 
   const filteredSorted = useMemo(() => {
@@ -2802,18 +2798,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       history,
     };
   }, [dashboardSchoolRows, dashboardTransfers, driverRows, selectedDashboardSchool, transferCardNumber]);
-  const tableQuickSelectStyle: React.CSSProperties = {
-    height: 26,
-    minWidth: 124,
-    padding: '0 8px',
-    border: '1px solid var(--border)',
-    borderRadius: 6,
-    background: '#fff',
-    color: 'var(--text)',
-    fontSize: 12,
-    fontWeight: 600,
-    outline: 'none',
-  };
   const getSchoolSwitchFilters = useCallback((schoolKey: string): Partial<ModeFilters> => {
     if (userRole === 'manager' || userRole === 'logist') {
       return { activeTab: schoolKey, quickChildStatus: 'new', quickTransfer: '' };
@@ -3670,7 +3654,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             const metric = branchMetric[t.key] ?? { value: 0, label: '0' };
             const hasBadge = Boolean(metric.alert);
             const stats = branchStats[t.key] ?? { newCount: 0, totalCount: 0, average: '0', debtorsCount: 0, debtSum: 0 };
-            const hasAdminFilter = Boolean(tabDefaultFilters[`${mode}:${t.key}`]);
             return (
               <div key={t.key} style={{ position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 1 }}>
                 <button
