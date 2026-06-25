@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
-import { fetchV2Branches, updateV2Child, updateV2ChildRoute, V2BranchOption } from '../../services/crmV2Service';
+import { createV2Child, deleteV2Child, fetchV2Branches, updateV2Child, updateV2ChildRoute, V2BranchOption } from '../../services/crmV2Service';
 import { autoChargeOnBoarding } from '../../services/financeService';
 import { Section, Spinner } from './DrawerUI';
-import { formatClassName } from '../../utils/format';
+import { formatClassName, formatName } from '../../utils/format';
 
 interface KidState {
   id: string;
@@ -61,6 +61,7 @@ export default function TabChildren({ children, loading, family, isAdmin, compac
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
+  const [childActionBusy, setChildActionBusy] = useState(false);
 
   useEffect(() => {
     setKids(children.map(toKidState));
@@ -177,6 +178,67 @@ export default function TabChildren({ children, loading, family, isAdmin, compac
     onReload?.();
   }
 
+  function nextChildName() {
+    const base = 'Новый ребёнок';
+    const names = new Set(kids.map(kid => kid.childName.trim().toLowerCase()));
+    if (!names.has(base.toLowerCase())) return base;
+    let index = kids.length + 1;
+    while (names.has(`${base} ${index}`.toLowerCase())) index++;
+    return `${base} ${index}`;
+  }
+
+  async function addKid() {
+    if (childActionBusy) return;
+    const template = kids[kids.length - 1];
+    const branch = template?.branchId ? branches.find(item => item.id === template.branchId) : undefined;
+    const branchCode = branch?.code ?? template?.branchCode ?? '';
+    const schoolCode = (branchCode ? normalizeBranchSchool(branchCode) : family.schoolCode || 'KINGS') as SchoolCode;
+    const zone = template?.zone ?? family.zone ?? 'A';
+    const vehicleType = template?.vehicleType ?? family.vehicleType ?? 'microbus';
+    const basePrice = getPriceByZone(schoolCode, zone, vehicleType);
+    setChildActionBusy(true);
+    try {
+      await createV2Child(family, {
+        childName: nextChildName(),
+        class: '',
+        schoolId: branch?.schoolId ?? template?.schoolId,
+        branchId: branch?.id ?? template?.branchId ?? family.branchId,
+        address: template?.address ?? family.fullAddress,
+        zone,
+        vehicleType,
+        basePrice,
+        finalPrice: basePrice,
+        status: 'new',
+      });
+      setMsg('Ребёнок добавлен');
+      setTimeout(() => setMsg(''), 2400);
+      onReload?.();
+    } catch (error: any) {
+      setMsg(`Ошибка: ${error.message}`);
+      setTimeout(() => setMsg(''), 6000);
+    } finally {
+      setChildActionBusy(false);
+    }
+  }
+
+  async function removeKid(kid: KidState) {
+    if (childActionBusy) return;
+    if (!window.confirm(`Удалить ребёнка "${kid.childName || 'Без имени'}"?`)) return;
+    setChildActionBusy(true);
+    try {
+      await deleteV2Child(kid.id);
+      setKids(current => current.filter(item => item.id !== kid.id));
+      setMsg('Ребёнок удалён');
+      setTimeout(() => setMsg(''), 2400);
+      onReload?.();
+    } catch (error: any) {
+      setMsg(`Ошибка: ${error.message}`);
+      setTimeout(() => setMsg(''), 6000);
+    } finally {
+      setChildActionBusy(false);
+    }
+  }
+
   return (
     <div>
       {msg && (
@@ -195,7 +257,10 @@ export default function TabChildren({ children, loading, family, isAdmin, compac
 
       <TotalBar count={kids.length} amount={familyTotal} />
 
-      <Section title={`Дети (${kids.length})`}>
+      <Section
+        title={`Дети (${kids.length})`}
+        action={<button type="button" onClick={addKid} disabled={childActionBusy} style={addKidBtnStyle}>{childActionBusy ? '...' : '+ Добавить ребёнка'}</button>}
+      >
         <div style={kidsGridStyle(kids.length, compactColumns)}>
           {kids.length === 0 && (
             <div style={{ textAlign: 'center', padding: '18px 0', color: 'var(--text-2)', fontSize: 12 }}>
@@ -209,17 +274,18 @@ export default function TabChildren({ children, loading, family, isAdmin, compac
             return (
               <article key={kid.id} style={kidCardStyle}>
                 <div style={kidHeaderStyle}>
-                  <span style={kidIndexStyle}>{index + 1}</span>
+	                  <span style={kidIndexStyle}>{index + 1}</span>
                   <input
                     className="family-card-control"
                     value={kid.childName}
                     onChange={e => patchKid(kid.id, { childName: e.target.value })}
-                    onBlur={e => commitKid(kid, { childName: e.currentTarget.value })}
+                    onBlur={e => commitKid(kid, { childName: formatName(e.currentTarget.value) })}
                     placeholder="Имя ребёнка"
                     style={{ ...notionControlStyle, fontSize: 13, fontWeight: 850 }}
                   />
-                  <span style={saveStateStyle}>{saving ? 'сохранение...' : CHILD_STATUS_LABEL[kid.status]}</span>
-                </div>
+	                  <span style={saveStateStyle}>{saving ? 'сохранение...' : CHILD_STATUS_LABEL[kid.status]}</span>
+	                  <button type="button" onClick={() => removeKid(kid)} disabled={childActionBusy} title="Удалить ребёнка" style={deleteKidBtnStyle}>×</button>
+	                </div>
 
                 <div style={fieldsGridStyle(compactColumns)}>
                   <Field label="Класс" tone="soft">
@@ -482,7 +548,7 @@ const kidCardStyle: React.CSSProperties = {
 
 const kidHeaderStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '24px minmax(0, 1fr) auto',
+  gridTemplateColumns: '24px minmax(0, 1fr) auto 28px',
   gap: 8,
   alignItems: 'center',
   paddingBottom: 6,
@@ -510,6 +576,31 @@ const saveStateStyle: React.CSSProperties = {
   fontSize: 10,
   fontWeight: 800,
   whiteSpace: 'nowrap',
+};
+
+const addKidBtnStyle: React.CSSProperties = {
+  height: 28,
+  border: 'none',
+  borderRadius: 8,
+  background: '#31A4A5',
+  color: '#fff',
+  padding: '0 11px',
+  fontSize: 11,
+  fontWeight: 850,
+  cursor: 'pointer',
+};
+
+const deleteKidBtnStyle: React.CSSProperties = {
+  width: 26,
+  height: 26,
+  border: '1px solid #F5C8C8',
+  borderRadius: 8,
+  background: '#FFF5F5',
+  color: '#C62828',
+  fontSize: 18,
+  lineHeight: 1,
+  fontWeight: 800,
+  cursor: 'pointer',
 };
 
 function fieldsGridStyle(compactColumns: boolean): React.CSSProperties {

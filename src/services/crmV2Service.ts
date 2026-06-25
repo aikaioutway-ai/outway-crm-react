@@ -118,6 +118,7 @@ export interface UpdateV2DriverInput {
   phone: string;
   secondPhone?: string;
   address?: string;
+  districts?: string[];
   status: string;
   comment?: string;
   vehicleType?: VehicleType | '';
@@ -125,6 +126,15 @@ export interface UpdateV2DriverInput {
   brand?: string;
   model?: string;
   seats?: number | null;
+}
+
+export interface V2DriverAdvance {
+  id: string;
+  driverId: string;
+  amount: number;
+  date: string;
+  comment: string;
+  createdAt: string;
 }
 
 function normalizeDriverDocuments(driverId: string, rows: any[]): V2DriverDocumentRow[] {
@@ -211,13 +221,22 @@ export interface FamilyListRow {
   discountAmount: number;
   totalCharged: number;
   totalPaid: number;
+  paidPaymentCount: number;
+  paidPaymentAmount: number;
   pendingPayment: number;
+  pendingPaymentCount: number;
   pendingPaymentId: string | null;
   pendingPaymentAmount: number;
   pendingPaymentDate: string | null;
   pendingActualPaymentDate: string | null;
   pendingPaymentType: string | null;
+  pendingPaymentReceiptUrl: string | null;
   pendingPaymentComment: string;
+  rejectedPaymentCount: number;
+  rejectedPaymentAmount: number;
+  allPaymentCount: number;
+  allPaymentAmount: number;
+  childDebtAmount: number;
   debtAmount: number;
   balance: number;
 }
@@ -332,6 +351,41 @@ const CHILD_SELECT = `
   v2_transfers(id, transfer_number, driver_id)
 `;
 
+export interface PeriodChargeStats {
+  familyId: string;
+  charged: number;
+  paid: number;
+  debt: number;
+}
+
+export async function fetchChargesForPeriod(
+  periodMonth: number | null,
+  periodYear: number | null,
+  chargeType: string | null,
+): Promise<PeriodChargeStats[]> {
+  let query = supabase
+    .from('v2_charges')
+    .select('family_id, amount, paid_amount');
+  if (chargeType) {
+    query = query.eq('charge_type', chargeType);
+  } else if (periodMonth !== null && periodYear !== null) {
+    query = query.eq('period_month', periodMonth).eq('period_year', periodYear);
+  }
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+  const map: Record<string, PeriodChargeStats> = {};
+  (data ?? []).forEach((row: any) => {
+    const fid = String(row.family_id);
+    if (!map[fid]) map[fid] = { familyId: fid, charged: 0, paid: 0, debt: 0 };
+    const amount = Number(row.amount ?? 0);
+    const paid = Number(row.paid_amount ?? 0);
+    map[fid].charged += amount;
+    map[fid].paid += paid;
+    map[fid].debt += Math.max(0, amount - paid);
+  });
+  return Object.values(map);
+}
+
 export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
   const [famRes, childRes, chargeRes, paymentRes, walletRes] = await Promise.all([
     supabase.from('v2_families').select('*').order('created_at', { ascending: false }),
@@ -339,7 +393,7 @@ export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
     supabase.from('v2_charges').select('child_id, amount, paid_amount, status'),
     supabase
       .from('v2_payments')
-      .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, comment, created_at')
+      .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, receipt_url, comment, created_at')
       .order('created_at', { ascending: false }),
     supabase.from('v2_family_wallets').select('family_id, main_balance'),
   ]);
@@ -366,13 +420,39 @@ export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
     }
   });
   const pendingPaymentByFamily: Record<string, number> = {};
+  const pendingPaymentCountByFamily: Record<string, number> = {};
   const pendingPaymentDetailsByFamily: Record<string, any> = {};
+  const paidPaymentCountByFamily: Record<string, number> = {};
+  const paidPaymentAmountByFamily: Record<string, number> = {};
+  const rejectedPaymentCountByFamily: Record<string, number> = {};
+  const rejectedPaymentAmountByFamily: Record<string, number> = {};
+  const allPaymentCountByFamily: Record<string, number> = {};
+  const allPaymentAmountByFamily: Record<string, number> = {};
+  const lastPaymentMethodByFamily: Record<string, string | null> = {};
+  const lastPaymentReceiptUrlByFamily: Record<string, string | null> = {};
   (paymentRes.data ?? []).forEach((payment: any) => {
+    allPaymentCountByFamily[payment.family_id] = (allPaymentCountByFamily[payment.family_id] ?? 0) + 1;
+    allPaymentAmountByFamily[payment.family_id] = (allPaymentAmountByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
+    if (!(payment.family_id in lastPaymentMethodByFamily)) {
+      lastPaymentMethodByFamily[payment.family_id] = payment.payment_method ?? null;
+    }
+    if (!(payment.family_id in lastPaymentReceiptUrlByFamily) && payment.receipt_url) {
+      lastPaymentReceiptUrlByFamily[payment.family_id] = payment.receipt_url;
+    }
     if (payment.status === 'pending') {
       pendingPaymentByFamily[payment.family_id] = (pendingPaymentByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
+      pendingPaymentCountByFamily[payment.family_id] = (pendingPaymentCountByFamily[payment.family_id] ?? 0) + 1;
       if (!pendingPaymentDetailsByFamily[payment.family_id]) {
         pendingPaymentDetailsByFamily[payment.family_id] = payment;
       }
+    }
+    if (payment.status === 'confirmed') {
+      paidPaymentCountByFamily[payment.family_id] = (paidPaymentCountByFamily[payment.family_id] ?? 0) + 1;
+      paidPaymentAmountByFamily[payment.family_id] = (paidPaymentAmountByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
+    }
+    if (payment.status === 'rejected') {
+      rejectedPaymentCountByFamily[payment.family_id] = (rejectedPaymentCountByFamily[payment.family_id] ?? 0) + 1;
+      rejectedPaymentAmountByFamily[payment.family_id] = (rejectedPaymentAmountByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
     }
   });
   const balanceByFamily: Record<string, number> = {};
@@ -442,13 +522,22 @@ export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
         discountAmount: Math.max(0, Number(child?.base_price ?? 0) - Number(child?.final_price ?? 0)),
         totalCharged,
         totalPaid,
+        paidPaymentCount: paidPaymentCountByFamily[family.id] ?? 0,
+        paidPaymentAmount: paidPaymentAmountByFamily[family.id] ?? 0,
         pendingPayment: pendingPaymentByFamily[family.id] ?? 0,
+        pendingPaymentCount: pendingPaymentCountByFamily[family.id] ?? 0,
         pendingPaymentId: pendingPayment?.id ? String(pendingPayment.id) : null,
         pendingPaymentAmount: Number(pendingPayment?.amount ?? 0),
         pendingPaymentDate: pendingPayment?.payment_date ?? null,
         pendingActualPaymentDate: pendingPayment?.actual_payment_date ?? null,
-        pendingPaymentType: pendingPayment?.payment_method ?? null,
+        pendingPaymentType: pendingPayment?.payment_method ?? lastPaymentMethodByFamily[family.id] ?? null,
+        pendingPaymentReceiptUrl: pendingPayment?.receipt_url ?? lastPaymentReceiptUrlByFamily[family.id] ?? null,
         pendingPaymentComment: pendingPayment?.comment ?? '',
+        rejectedPaymentCount: rejectedPaymentCountByFamily[family.id] ?? 0,
+        rejectedPaymentAmount: rejectedPaymentAmountByFamily[family.id] ?? 0,
+        allPaymentCount: allPaymentCountByFamily[family.id] ?? 0,
+        allPaymentAmount: allPaymentAmountByFamily[family.id] ?? 0,
+        childDebtAmount: childDebt,
         debtAmount,
         balance: balanceByFamily[family.id] ?? 0,
       });
@@ -511,6 +600,35 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
 export async function updateV2Child(childId: string, updates: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('v2_children').update(updates).eq('id', childId);
   if (error) throw new Error(error.message);
+}
+
+export async function createV2Child(family: Family, input: Partial<Child> & { childName: string }): Promise<Child> {
+  const { data, error } = await supabase
+    .from('v2_children')
+    .insert({
+      family_id: family.id,
+      child_name: input.childName,
+      class_name: input.class ?? null,
+      self_exit_allowed: Boolean(input.selfExitAllowed),
+      school_id: input.schoolId ?? null,
+      branch_id: input.branchId ?? null,
+      address: input.address ?? family.fullAddress ?? null,
+      latitude: input.latitude ?? family.latitude ?? null,
+      longitude: input.longitude ?? family.longitude ?? null,
+      distance_km: input.distanceKm ?? family.distanceKm ?? null,
+      zone: input.zone ?? family.zone ?? 'A',
+      vehicle_type: input.vehicleType ?? family.vehicleType ?? 'microbus',
+      base_price: input.basePrice ?? input.finalPrice ?? 0,
+      sibling_discount_percent: input.siblingDiscountPercent ?? 0,
+      manual_discount_percent: input.manualDiscountPercent ?? 0,
+      manual_discount_amount: input.manualDiscountAmount ?? 0,
+      final_price: input.finalPrice ?? input.basePrice ?? 0,
+      status: input.status ?? 'new',
+    })
+    .select(CHILD_SELECT)
+    .single();
+  if (error) throw new Error(error.message);
+  return mapV2Child(data, family);
 }
 
 export async function ensureV2Transfer(params: {
@@ -701,7 +819,7 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
       .from('v2_vehicles')
       .insert({
         driver_id: driverId,
-        vehicle_type: input.vehicleType ?? 'microbus',
+        vehicle_type: input.vehicleType ?? null,
         plate_number: input.plateNumber?.trim() || null,
         brand: input.brand?.trim() || null,
         model: input.model?.trim() || null,
@@ -763,6 +881,9 @@ export async function saveV2DriverDocuments(driverId: string, documents: V2Drive
 }
 
 export async function updateV2Driver(driverId: string, input: UpdateV2DriverInput): Promise<void> {
+  const districtsText = input.districts?.length ? `Районы: ${input.districts.join(', ')}` : '';
+  const comment = [districtsText, input.comment?.trim() ?? ''].filter(Boolean).join('\n') || null;
+
   const { error: driverError } = await supabase
     .from('v2_drivers')
     .update({
@@ -771,7 +892,7 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
       second_phone: input.secondPhone?.trim() || null,
       address: input.address?.trim() || null,
       status: input.status || 'active',
-      comment: input.comment?.trim() || null,
+      comment,
       updated_at: new Date().toISOString(),
     })
     .eq('id', driverId);
@@ -786,9 +907,11 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
     .maybeSingle();
   if (vehicleLookupError) throw new Error(vehicleLookupError.message);
 
+  const hasVehicleData = input.vehicleType || input.plateNumber || input.brand || input.model || input.seats;
+
   const vehiclePayload = {
     driver_id: driverId,
-    vehicle_type: input.vehicleType || 'microbus',
+    vehicle_type: input.vehicleType || null,
     plate_number: input.plateNumber?.trim() || null,
     brand: input.brand?.trim() || null,
     model: input.model?.trim() || null,
@@ -806,12 +929,54 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
     return;
   }
 
-  if (input.vehicleType || input.plateNumber || input.brand || input.model || input.seats) {
+  if (hasVehicleData) {
     const { error } = await supabase
       .from('v2_vehicles')
       .insert(vehiclePayload);
     if (error) throw new Error(error.message);
   }
+}
+
+export async function fetchV2DriverAdvances(driverId: string): Promise<V2DriverAdvance[]> {
+  const { data, error } = await supabase
+    .from('v2_driver_advances')
+    .select('*')
+    .eq('driver_id', driverId)
+    .order('date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    id: String(row.id),
+    driverId: String(row.driver_id),
+    amount: Number(row.amount),
+    date: row.date ?? '',
+    comment: row.comment ?? '',
+    createdAt: row.created_at ?? '',
+  }));
+}
+
+export async function createV2DriverAdvance(driverId: string, amount: number, date: string, comment: string): Promise<V2DriverAdvance> {
+  const { data, error } = await supabase
+    .from('v2_driver_advances')
+    .insert({ driver_id: driverId, amount, date, comment: comment.trim() || null })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+  return {
+    id: String(data.id),
+    driverId: String(data.driver_id),
+    amount: Number(data.amount),
+    date: data.date ?? '',
+    comment: data.comment ?? '',
+    createdAt: data.created_at ?? '',
+  };
+}
+
+export async function deleteV2DriverAdvance(advanceId: string): Promise<void> {
+  const { error } = await supabase
+    .from('v2_driver_advances')
+    .delete()
+    .eq('id', advanceId);
+  if (error) throw new Error(error.message);
 }
 
 export async function updateV2TransferVehicleType(params: {
@@ -861,21 +1026,11 @@ export async function clearV2TransferVehicleType(params: {
   if (transferFindError) throw new Error(transferFindError.message);
   if (!transfer?.id) return;
 
-  const { count, error: childrenCountError } = await supabase
-    .from('v2_children')
-    .select('id', { count: 'exact', head: true })
-    .eq('transfer_id', transfer.id)
-    .neq('status', 'rejected');
-  if (childrenCountError) throw new Error(childrenCountError.message);
-  if ((count ?? 0) > 0) {
-    throw new Error('У трансфера есть дети. Сначала перенесите детей или очистите трансфер.');
-  }
-
-  const { error: archiveError } = await supabase
+  const { error } = await supabase
     .from('v2_transfers')
-    .update({ status: 'archive' })
+    .update({ vehicle_type: null })
     .eq('id', transfer.id);
-  if (archiveError) throw new Error(archiveError.message);
+  if (error) throw new Error(error.message);
 }
 
 export async function deleteV2Child(childId: string): Promise<void> {
@@ -907,4 +1062,177 @@ export async function addV2Audit(params: {
 export async function deleteV2Family(familyId: string): Promise<void> {
   const { error } = await supabase.from('v2_families').delete().eq('id', familyId);
   if (error) throw new Error(error.message);
+}
+
+// crm_page_filters: id uuid pk, mode text, tab_key text, metric text, vehicle_filter text, updated_at timestamptz
+// unique(mode, tab_key)
+export interface PageFilterSettings {
+  mode: string;
+  tab_key: string;
+  metric: string;
+  vehicle_filter: string;
+}
+
+export async function fetchPageFilters(mode: string): Promise<PageFilterSettings[]> {
+  const { data } = await supabase
+    .from('crm_page_filters')
+    .select('mode, tab_key, metric, vehicle_filter')
+    .eq('mode', mode);
+  return data ?? [];
+}
+
+export async function savePageFilter(settings: PageFilterSettings): Promise<void> {
+  const { error } = await supabase
+    .from('crm_page_filters')
+    .upsert({ ...settings, updated_at: new Date().toISOString() }, { onConflict: 'mode,tab_key' });
+  if (error) throw new Error(error.message);
+}
+
+export interface CashierPaymentRow {
+  id: string;
+  paymentNumber: number | null;
+  familyId: string;
+  parentName: string;
+  phone: string;
+  childrenNames: string;
+  branchShort: string;
+  transferNumber: string | null;
+  amount: number;
+  status: string;
+  paymentMethod: string | null;
+  receiptUrl: string | null;
+  paymentDate: string | null;
+  actualPaymentDate: string | null;
+  comment: string;
+  createdAt: string;
+}
+
+export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> {
+  const [paymentRes, familyRes, childRes] = await Promise.all([
+    supabase
+      .from('v2_payments')
+      .select('id, family_id, amount, status, payment_method, receipt_url, payment_number, payment_date, actual_payment_date, comment, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false }),
+    supabase.from('v2_families').select('id, parent_name, phone'),
+    supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)'),
+  ]);
+
+  const familyMap: Record<string, { parentName: string; phone: string }> = {};
+  (familyRes.data ?? []).forEach((f: any) => {
+    familyMap[f.id] = { parentName: f.parent_name ?? '', phone: f.phone ?? '' };
+  });
+
+  const childrenByFamily: Record<string, { names: string[]; branchShort: string; transferNumber: string | null }> = {};
+  (childRes.data ?? []).forEach((c: any) => {
+    if (!childrenByFamily[c.family_id]) {
+      const branch = Array.isArray(c.v2_school_branches) ? c.v2_school_branches[0] : c.v2_school_branches;
+      const transfer = Array.isArray(c.v2_transfers) ? c.v2_transfers[0] : c.v2_transfers;
+      childrenByFamily[c.family_id] = {
+        names: [],
+        branchShort: branch?.short_name ?? '',
+        transferNumber: transfer?.transfer_number ? String(transfer.transfer_number) : null,
+      };
+    }
+    const parts = (c.child_name ?? '').trim().split(' ');
+    const name = parts[1] ?? parts[0] ?? '';
+    if (name) childrenByFamily[c.family_id].names.push(name);
+  });
+
+  return (paymentRes.data ?? []).map((p: any): CashierPaymentRow => {
+    const family = familyMap[p.family_id] ?? { parentName: '', phone: '' };
+    const children = childrenByFamily[p.family_id];
+    return {
+      id: String(p.id),
+      paymentNumber: p.payment_number ?? null,
+      familyId: String(p.family_id),
+      parentName: family.parentName,
+      phone: family.phone,
+      childrenNames: children?.names.join(', ') ?? '',
+      branchShort: children?.branchShort ?? '',
+      transferNumber: children?.transferNumber ?? null,
+      amount: Number(p.amount ?? 0),
+      status: p.status ?? '',
+      paymentMethod: p.payment_method ?? null,
+      receiptUrl: p.receipt_url ?? null,
+      paymentDate: p.payment_date ?? null,
+      actualPaymentDate: p.actual_payment_date ?? null,
+      comment: p.comment ?? '',
+      createdAt: String(p.created_at ?? ''),
+    };
+  });
+}
+
+export interface PaymentTableRow {
+  id: string;
+  paymentNumber: number | null;
+  familyId: string;
+  parentName: string;
+  phone: string;
+  childrenNames: string;
+  branchShort: string;
+  transferNumber: string | null;
+  amount: number;
+  status: string;
+  paymentMethod: string | null;
+  receiptUrl: string | null;
+  receiptCode: string | null;
+  paymentDate: string | null;
+  actualPaymentDate: string | null;
+  createdAt: string;
+}
+
+export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
+  const [paymentRes, familyRes, childRes] = await Promise.all([
+    supabase
+      .from('v2_payments')
+      .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, created_at')
+      .order('created_at', { ascending: false }),
+    supabase.from('v2_families').select('id, parent_name, phone'),
+    supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)'),
+  ]);
+
+  const familyMap: Record<string, { parentName: string; phone: string }> = {};
+  (familyRes.data ?? []).forEach((f: any) => {
+    familyMap[f.id] = { parentName: f.parent_name ?? '', phone: f.phone ?? '' };
+  });
+
+  const childrenByFamily: Record<string, { names: string[]; branchShort: string; transferNumber: string | null }> = {};
+  (childRes.data ?? []).forEach((c: any) => {
+    if (!childrenByFamily[c.family_id]) {
+      const branch = Array.isArray(c.v2_school_branches) ? c.v2_school_branches[0] : c.v2_school_branches;
+      const transfer = Array.isArray(c.v2_transfers) ? c.v2_transfers[0] : c.v2_transfers;
+      childrenByFamily[c.family_id] = {
+        names: [],
+        branchShort: branch?.short_name ?? '',
+        transferNumber: transfer?.transfer_number ? String(transfer.transfer_number) : null,
+      };
+    }
+    const parts = (c.child_name ?? '').trim().split(' ');
+    const name = parts[1] ?? parts[0] ?? '';
+    if (name) childrenByFamily[c.family_id].names.push(name);
+  });
+
+  return (paymentRes.data ?? []).map((p: any): PaymentTableRow => {
+    const family = familyMap[p.family_id] ?? { parentName: '', phone: '' };
+    const children = childrenByFamily[p.family_id];
+    return {
+      id: String(p.id),
+      paymentNumber: p.payment_number ?? null,
+      familyId: String(p.family_id),
+      parentName: family.parentName,
+      phone: family.phone,
+      childrenNames: children?.names.join(', ') ?? '',
+      branchShort: children?.branchShort ?? '',
+      transferNumber: children?.transferNumber ?? null,
+      amount: Number(p.amount ?? 0),
+      status: p.status ?? '',
+      paymentMethod: p.payment_method ?? null,
+      receiptUrl: p.receipt_url ?? null,
+      receiptCode: p.receipt_code ?? null,
+      paymentDate: p.payment_date ?? null,
+      actualPaymentDate: p.actual_payment_date ?? null,
+      createdAt: String(p.created_at ?? ''),
+    };
+  });
 }

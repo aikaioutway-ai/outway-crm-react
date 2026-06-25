@@ -3,6 +3,7 @@ import { MapPin } from 'lucide-react';
 import { Family } from '../../types';
 import { SCHOOL_NAME } from './constants';
 import { Section } from './DrawerUI';
+import { formatName, formatPhone } from '../../utils/format';
 
 interface Props {
   family: Family;
@@ -39,7 +40,7 @@ export default function TabInfo({ family, saving, onSave }: Props) {
               className="family-card-control"
               value={form.parentName}
               onChange={e => patch({ parentName: e.target.value })}
-              onBlur={e => commit({ parentName: e.currentTarget.value })}
+              onBlur={e => commit({ parentName: formatName(e.currentTarget.value) })}
               style={notionControlStyle}
             />
           </Field>
@@ -48,7 +49,7 @@ export default function TabInfo({ family, saving, onSave }: Props) {
               className="family-card-control"
               value={form.phone}
               onChange={e => patch({ phone: e.target.value })}
-              onBlur={e => commit({ phone: e.currentTarget.value })}
+              onBlur={e => commit({ phone: formatPhone(e.currentTarget.value) })}
               style={notionControlStyle}
             />
           </Field>
@@ -57,7 +58,7 @@ export default function TabInfo({ family, saving, onSave }: Props) {
               className="family-card-control"
               value={form.secondPhone ?? ''}
               onChange={e => patch({ secondPhone: e.target.value })}
-              onBlur={e => commit({ secondPhone: e.currentTarget.value })}
+              onBlur={e => commit({ secondPhone: formatPhone(e.currentTarget.value) })}
               placeholder="—"
               style={notionControlStyle}
             />
@@ -68,7 +69,7 @@ export default function TabInfo({ family, saving, onSave }: Props) {
               className="family-card-control"
               value={form.contactName ?? ''}
               onChange={e => patch({ contactName: e.target.value })}
-              onBlur={e => commit({ contactName: e.currentTarget.value })}
+              onBlur={e => commit({ contactName: formatName(e.currentTarget.value) })}
               placeholder="—"
               style={notionControlStyle}
             />
@@ -78,7 +79,7 @@ export default function TabInfo({ family, saving, onSave }: Props) {
               className="family-card-control"
               value={form.contactPhone ?? ''}
               onChange={e => patch({ contactPhone: e.target.value })}
-              onBlur={e => commit({ contactPhone: e.currentTarget.value })}
+              onBlur={e => commit({ contactPhone: formatPhone(e.currentTarget.value) })}
               placeholder="—"
               style={notionControlStyle}
             />

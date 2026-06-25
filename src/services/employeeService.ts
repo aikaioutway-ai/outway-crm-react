@@ -23,6 +23,7 @@ export interface AuthenticatedUser {
   login: string;
   role: UserRole;
   schoolKeys: string[];
+  position?: string;
 }
 
 // ─── МАППИНГ ────────────────────────────────────────────────────────────────
@@ -74,6 +75,12 @@ export async function fetchEmployees(): Promise<Employee[]> {
   return (data ?? []).map(mapRow);
 }
 
+export async function getEmployeeById(id: string): Promise<Employee | null> {
+  const { data, error } = await supabase.from('v2_employees').select('*').eq('id', id).single();
+  if (error || !data) return null;
+  return mapRow(data);
+}
+
 // ─── АВТОРИЗАЦИЯ ────────────────────────────────────────────────────────────
 
 export async function authenticateEmployee(
@@ -107,6 +114,7 @@ export async function authenticateEmployee(
     login: data.login,
     role: data.role as UserRole,
     schoolKeys: Array.isArray(data.school_keys) ? data.school_keys : ['ALL'],
+    position: data.position ?? undefined,
   };
 }
 

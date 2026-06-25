@@ -1,6 +1,7 @@
 import React, {
   useState, useRef, useEffect, useCallback, useMemo
 } from 'react';
+import ReactDOM from 'react-dom';
 import NotionSelect from '../selects/NotionSelect';
 import { supabase } from '../../services/supabase';
 
@@ -63,6 +64,8 @@ export interface DataTableProps<T = any> {
   toolbarRightExtra?: React.ReactNode;
   hideToolbar?: boolean;
   canManageProperties?: boolean;
+  showProperties?: boolean;
+  onShowPropertiesChange?: (show: boolean) => void;
   expandedRowKey?: React.Key | null;
   getExpandedRowKey?: (row: T) => React.Key;
   onExpandedRowKeyChange?: (key: React.Key | null, row?: T) => void;
@@ -109,6 +112,12 @@ function calcColumnValues<T>(rows: T[], col: ColumnDef<T>, mode: CalcMode): stri
     case 'not_empty': return String(allVals.filter(v => v != null && v !== '').length);
     default:          return '';
   }
+}
+
+function isTransferColumn<T>(col: ColumnDef<T>): boolean {
+  const key = col.key.toLowerCase();
+  const label = col.label.toLowerCase();
+  return key.includes('transfer') || label.includes('трансфер');
 }
 
 const OPERATORS: { value: FilterOperator; label: string }[] = [
@@ -207,6 +216,8 @@ export function DataTable<T extends Record<string, any>>({
   toolbarRightExtra,
   hideToolbar = false,
   canManageProperties = true,
+  showProperties: showPropertiesExternal,
+  onShowPropertiesChange,
   expandedRowKey,
   getExpandedRowKey,
   onExpandedRowKeyChange,
@@ -246,7 +257,13 @@ export function DataTable<T extends Record<string, any>>({
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [showSortPanel, setShowSortPanel] = useState(false);
-  const [showProps, setShowProps] = useState(false);
+  const [showPropsInternal, setShowPropsInternal] = useState(false);
+  const showProps = showPropertiesExternal !== undefined ? showPropertiesExternal : showPropsInternal;
+  const setShowProps = (v: boolean | ((prev: boolean) => boolean)) => {
+    const next = typeof v === 'function' ? v(showProps) : v;
+    setShowPropsInternal(next);
+    onShowPropertiesChange?.(next);
+  };
   const [propsSearch, setPropsSearch] = useState('');
   // openCats removed — props panel uses Shown/Hidden sections now
   const [calcModes, setCalcModes] = useState<Record<string, CalcMode>>({});
@@ -307,7 +324,7 @@ export function DataTable<T extends Record<string, any>>({
 
   useEffect(() => {
     setPage(1);
-  }, [filters, sorts, data, storageKey]);
+  }, [filters, sorts, storageKey]);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -370,22 +387,165 @@ export function DataTable<T extends Record<string, any>>({
   const setColumnSort = (key: string, dir: SortConfig['dir']) => {
     setSorts(prev => [{ key, dir }, ...prev.filter(sort => sort.key !== key)]);
     setColMenu(null);
+    setCalcPopup(null);
   };
 
   const clearColumnSort = (key: string) => {
     setSorts(prev => prev.filter(sort => sort.key !== key));
+    setColMenu(null);
+    setCalcPopup(null);
+  };
+
+  const toggleColumnSort = (key: string) => {
+    setSorts(prev => {
+      const current = prev.find(sort => sort.key === key);
+      const rest = prev.filter(sort => sort.key !== key);
+      if (!current) return [{ key, dir: 'asc' }, ...rest];
+      if (current.dir === 'asc') return [{ key, dir: 'desc' }, ...rest];
+      return rest;
+    });
+    setColMenu(null);
+    setCalcPopup(null);
+  };
+
+  const openCalcPopup = (key: string, target: HTMLElement) => {
+    const rect = target.getBoundingClientRect();
+    setCalcPopup({ key, x: rect.left, y: rect.bottom + 4 });
     setColMenu(null);
   };
 
   // ─── COMPACT CALC BAR (для вставки наверху снаружи) ───────────────────────
   // Этот ref передаётся через calcBarRef — внешний компонент может его использовать
 
+  // ─── PROPERTIES PANEL (built before return so portal can be rendered separately) ───
+  const TYPE_ICON: Record<string, string> = {
+    text: 'Aa', number: '#', date: '▦', select: '≡', badge: '◉', currency: '₸',
+  };
+  const EyeOpenIcon = () => (
+    <svg className="dt-eye-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/>
+      <circle cx="10" cy="10" r="2.5"/>
+    </svg>
+  );
+  const EyeOffIcon = () => (
+    <svg className="dt-eye-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
+      <path d="M3 3l14 14M8.5 8.6A2.5 2.5 0 0012.4 12M6.2 6.3C3.9 7.7 2 10 2 10s3.5 6 8 6c1.6 0 3-.5 4.2-1.3M10 4c4.5 0 8 6 8 6s-.9 1.5-2.3 3"/>
+    </svg>
+  );
+  const q = propsSearch.trim().toLowerCase();
+  const propertyCols = cols.filter(c => c.showInProperties !== false);
+  const filteredPropertyCols = propertyCols.filter(c => {
+    const category = c.category ?? 'Основные';
+    return !q || c.label.toLowerCase().includes(q) || category.toLowerCase().includes(q);
+  });
+  const groupColumns = (items: ColumnDef<T>[]) => items.reduce<{ category: string; items: ColumnDef<T>[] }[]>((acc, col) => {
+    const category = col.category ?? 'Основные';
+    const group = acc.find(item => item.category === category);
+    if (group) group.items.push(col);
+    else acc.push({ category, items: [col] });
+    return acc;
+  }, []);
+  const visiblePropertyCols = filteredPropertyCols.filter(c => c.visible !== false);
+  const hiddenPropertyCols = filteredPropertyCols.filter(c => c.visible === false);
+  const visiblePropGroups = groupColumns(visiblePropertyCols);
+  const hiddenPropGroups = groupColumns(hiddenPropertyCols);
+
+  const PropsPanel = () => {
+    const ColItem = ({ col, isVisible }: { col: ColumnDef<T>; isVisible: boolean }) => {
+      const globalIdx = cols.findIndex(c => c.key === col.key);
+      return (
+        <div
+          className={`dt-props-item-v2 ${!isVisible ? 'dt-props-item-v2--hidden' : ''}`}
+          draggable={isVisible}
+          onDragStart={() => onDragStart(globalIdx)}
+          onDragOver={e => onDragOver(e, globalIdx)}
+          onDragEnd={onDragEnd}
+          onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: !c.visible } : c))}
+          title={isVisible ? 'Скрыть колонку' : 'Показать колонку'}
+        >
+          <span className="dt-props-item-drag">⠿</span>
+          <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
+            {TYPE_ICON[col.type] ?? '○'}
+          </span>
+          <span className="dt-props-item-name">{col.label}</span>
+          {isVisible ? <EyeOpenIcon /> : <EyeOffIcon />}
+        </div>
+      );
+    };
+    const renderGroups = (groups: { category: string; items: ColumnDef<T>[] }[], isVisible: boolean) => (
+      <>
+        {groups.length === 0 && <div className="dt-props-empty">{q ? 'Ничего не найдено' : 'Пусто'}</div>}
+        {groups.map(group => (
+          <div key={group.category} className="dt-props-category-group">
+            <div
+              className="dt-props-section-title dt-props-section-title--clickable"
+              onClick={() => setCollapsedCats(prev => {
+                const key = `${isVisible ? 'visible' : 'hidden'}:${group.category}`;
+                const next = new Set(prev);
+                if (next.has(key)) next.delete(key); else next.add(key);
+                return next;
+              })}
+            >
+              <span>{group.category}</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <span className="dt-props-section-count">{group.items.length}</span>
+                <span className="dt-props-cat-arrow">{collapsedCats.has(`${isVisible ? 'visible' : 'hidden'}:${group.category}`) ? '▶' : '▼'}</span>
+              </div>
+            </div>
+            {!collapsedCats.has(`${isVisible ? 'visible' : 'hidden'}:${group.category}`)
+              && group.items.map(col => <ColItem key={col.key} col={col} isVisible={isVisible} />)}
+          </div>
+        ))}
+      </>
+    );
+
+    return (
+      <div className="dt-props-panel-v2" style={{ zIndex: 1, position: 'relative', top: 'auto', left: 'auto' }} onClick={e => e.stopPropagation()}>
+        <div className="dt-props-header-v2">
+          <div>
+            <div className="dt-props-title-v2">Колонки таблицы</div>
+            <div className="dt-props-subtitle-v2">Перетащи видимые колонки для смены порядка</div>
+          </div>
+        </div>
+        <div className="dt-props-search">
+          <input autoFocus placeholder="Поиск свойств..." value={propsSearch} onChange={e => setPropsSearch(e.target.value)} />
+        </div>
+        <div className="dt-props-split">
+          <section className="dt-props-column">
+            <div className="dt-props-column-head">
+              <span>Показываются</span>
+              <strong>{visiblePropertyCols.length}/{propertyCols.length}</strong>
+            </div>
+            <div className="dt-props-column-body">
+              {renderGroups(visiblePropGroups, true)}
+            </div>
+            <div className="dt-props-column-footer">
+              <button className="dt-props-section-action" onClick={() => saveCols(cols.map(c => c.showInProperties !== false ? { ...c, visible: false } : c))}>Скрыть все</button>
+            </div>
+          </section>
+          <section className="dt-props-column">
+            <div className="dt-props-column-head">
+              <span>Скрытые</span>
+              <strong>{hiddenPropertyCols.length}/{propertyCols.length}</strong>
+            </div>
+            <div className="dt-props-column-body">
+              {renderGroups(hiddenPropGroups, false)}
+            </div>
+            <div className="dt-props-column-footer">
+              <button className="dt-props-section-action" onClick={() => saveCols(cols.map(c => c.showInProperties !== false ? { ...c, visible: true } : c))}>Показать все</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    );
+  };
+
   // ─────────────────────────────────────────────────────────────────────────────
   return (
     <div className="dt-root">
 
       {/* ── OVERLAY для закрытия панелей кликом (003) ── */}
-      {(showFilterPanel || showSortPanel || showProps || rowMenu !== null || colMenu !== null || calcPopup !== null) && (
+      {(showFilterPanel || showSortPanel || (showProps && showPropertiesExternal === undefined) || rowMenu !== null || colMenu !== null || calcPopup !== null) && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 99 }}
           onClick={() => {
@@ -412,7 +572,7 @@ export function DataTable<T extends Record<string, any>>({
                 <rect x="2" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
                 <rect x="9" y="9" width="5" height="5" rx="1" stroke="currentColor" strokeWidth="1.5"/>
               </svg>
-              Свойства
+              Колонки
             </button>
           )}
         </div>
@@ -517,7 +677,7 @@ export function DataTable<T extends Record<string, any>>({
                 <select className="dt-select dt-select--md" value={s.key}
                   onChange={e => setSorts(prev => prev.map((x, j) => j === i ? { ...x, key: e.target.value } : x))}>
                   {(() => {
-                    const sortable = cols.filter(c => c.sortable !== false);
+                    const sortable = cols;
                     const cats = Array.from(new Set(sortable.map(c => c.category ?? 'Основные')));
                     return cats.map(cat => (
                       <optgroup key={cat} label={cat}>
@@ -551,152 +711,18 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      {/* ── PROPERTIES PANEL — Shown/Hidden (006) ── */}
-      {showProps && (() => {
-        const TYPE_ICON: Record<string, string> = {
-          text: 'Aa', number: '#', date: '▦', select: '≡', badge: '◉', currency: '₸',
-        };
-        const EyeOpen = () => (
-          <svg className="dt-eye-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M1 10s3.5-6 9-6 9 6 9 6-3.5 6-9 6-9-6-9-6z"/>
-            <circle cx="10" cy="10" r="2.5"/>
-          </svg>
-        );
-        const EyeOff = () => (
-          <svg className="dt-eye-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.5">
-            <path d="M3 3l14 14M8.5 8.6A2.5 2.5 0 0012.4 12M6.2 6.3C3.9 7.7 2 10 2 10s3.5 6 8 6c1.6 0 3-.5 4.2-1.3M10 4c4.5 0 8 6 8 6s-.9 1.5-2.3 3"/>
-          </svg>
-        );
-
-        const q = propsSearch.trim().toLowerCase();
-        const propertyCols = cols.filter(c => c.showInProperties !== false);
-        const filteredPropertyCols = propertyCols.filter(c => {
-          const category = c.category ?? 'Основные';
-          return !q || c.label.toLowerCase().includes(q) || category.toLowerCase().includes(q);
-        });
-        const propGroups = filteredPropertyCols.reduce<{ category: string; items: ColumnDef<T>[] }[]>((acc, col) => {
-          const category = col.category ?? 'Основные';
-          const group = acc.find(item => item.category === category);
-          if (group) group.items.push(col);
-          else acc.push({ category, items: [col] });
-          return acc;
-        }, []);
-
-        const ColItem = ({ col, isVisible }: { col: ColumnDef<T>; isVisible: boolean }) => {
-          const globalIdx = cols.findIndex(c => c.key === col.key);
-          return (
-            <div
-              className={`dt-props-item-v2 ${!isVisible ? 'dt-props-item-v2--hidden' : ''}`}
-              draggable
-              onDragStart={() => onDragStart(globalIdx)}
-              onDragOver={e => onDragOver(e, globalIdx)}
-              onDragEnd={onDragEnd}
-              onClick={() => saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: !c.visible } : c))}
-            >
-              <span className="dt-props-item-drag">⠿</span>
-              <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
-                {TYPE_ICON[col.type] ?? '○'}
-              </span>
-              <span className="dt-props-item-name">{col.label}</span>
-              {isVisible ? <EyeOpen /> : <EyeOff />}
-            </div>
-          );
-        };
-
-        return (
-          <div className="dt-props-panel-v2" style={{ zIndex: 100 }} onClick={e => e.stopPropagation()}>
-            {/* chips removed — 001 */}
-
-            {/* Активные колонки — список */}
-            {(() => {
-              const activeCols = cols.filter(c => c.visible !== false && c.showInProperties !== false);
-              if (activeCols.length === 0) return null;
-              return (
-                <div className="dt-props-active-cols">
-                  <div className="dt-props-active-title">Отображается</div>
-                  {activeCols.map(col => {
-                    const globalIdx = cols.findIndex(c => c.key === col.key);
-                    return (
-                      <div
-                        key={col.key}
-                        className="dt-props-active-row"
-                        draggable
-                        title="Перетащи чтобы переместить"
-                        onDragStart={() => onDragStart(globalIdx)}
-                        onDragOver={e => onDragOver(e, globalIdx)}
-                        onDragEnd={onDragEnd}
-                      >
-                        <span className="dt-props-item-drag">⠿</span>
-                        <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
-                          {TYPE_ICON[col.type] ?? '○'}
-                        </span>
-                        <span className="dt-props-active-row-label">{col.label}</span>
-                        <span
-                          className="dt-props-active-row-hide"
-                          title="Скрыть"
-                          onClick={e => { e.stopPropagation(); saveCols(cols.map((c, j) => j === globalIdx ? { ...c, visible: false } : c)); }}
-                        >
-                          <EyeOpen />
-                        </span>
-                      </div>
-                    );
-                  })}
-                </div>
-              );
-            })()}
-
-            {/* Search */}
-            <div className="dt-props-search">
-              <input autoFocus placeholder="Поиск свойств..."
-                value={propsSearch} onChange={e => setPropsSearch(e.target.value)} />
-            </div>
-
-            <div className="dt-props-body">
-              {propGroups.length === 0 && (
-                <div className="dt-props-empty">Ничего не найдено</div>
-              )}
-              {propGroups.map(group => {
-                const visibleCount = group.items.filter(col => col.visible !== false).length;
-                return (
-                  <div key={group.category} className="dt-props-category-group">
-                    <div
-                      className="dt-props-section-title dt-props-section-title--clickable"
-                      onClick={() => setCollapsedCats(prev => {
-                        const next = new Set(prev);
-                        if (next.has(group.category)) next.delete(group.category); else next.add(group.category);
-                        return next;
-                      })}
-                    >
-                      <span>{group.category}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                        <span className="dt-props-section-count">{visibleCount}/{group.items.length}</span>
-                        <span className="dt-props-cat-arrow">{collapsedCats.has(group.category) ? '▶' : '▼'}</span>
-                      </div>
-                    </div>
-                    {!collapsedCats.has(group.category) && group.items.map(col => <ColItem key={col.key} col={col} isVisible={col.visible !== false} />)}
-                  </div>
-                );
-              })}
-              {propertyCols.length > 0 && (
-                <div className="dt-props-footer-actions">
-                  <button
-                    className="dt-props-section-action"
-                    onClick={() => saveCols(cols.map(c => c.showInProperties !== false ? { ...c, visible: true } : c))}
-                  >
-                    Показать все
-                  </button>
-                  <button
-                    className="dt-props-section-action"
-                    onClick={() => saveCols(cols.map(c => c.showInProperties !== false ? { ...c, visible: false } : c))}
-                  >
-                    Скрыть все
-                  </button>
-                </div>
-              )}
-            </div>
+      {/* ── PROPERTIES PANEL PORTAL (external control) ── */}
+      {showPropertiesExternal ? ReactDOM.createPortal(
+        <div
+          onClick={() => setShowProps(false)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1700, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(23,34,47,0.18)', backdropFilter: 'blur(2px)' }}
+        >
+          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', boxShadow: '0 16px 48px rgba(30,56,75,0.18)' }}>
+            <PropsPanel />
           </div>
-        );
-      })()}
+        </div>,
+        document.body
+      ) : null}
 
       {/* ── TABLE WRAPPER ── */}
       <div className="dt-wrap" ref={wrapRef}>
@@ -725,16 +751,16 @@ export function DataTable<T extends Record<string, any>>({
                       style={{ width: col.width ?? col.minWidth ?? 140, minWidth: col.minWidth ?? 80 }}
                       onContextMenu={e => {
                         e.preventDefault();
-                        setColMenu({ key: col.key, x: e.clientX, y: e.clientY });
+                        if (isTransferColumn(col)) return;
+                        openCalcPopup(col.key, e.currentTarget);
                       }}
                     >
                       <div className="dt-th-inner"
                         onClick={e => {
                           e.stopPropagation();
-                          const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                          setCalcPopup({ key: col.key, x: rect.left, y: rect.bottom + 4 });
+                          toggleColumnSort(col.key);
                         }}
-                        title="Нажмите для вычисления"
+                        title="ЛКМ: сортировка. ПКМ: вычисление"
                         style={{ cursor: 'pointer', userSelect: 'none', width: '100%' }}
                       >
                         <span className="dt-th-label">{col.label}</span>
@@ -878,22 +904,20 @@ export function DataTable<T extends Record<string, any>>({
       {colMenu && (
         <div className="dt-ctx-menu" style={{ left: colMenu.x, top: colMenu.y }} onClick={e => e.stopPropagation()}>
           <div className="dt-ctx-section">{cols.find(c => c.key === colMenu.key)?.label ?? 'Колонка'}</div>
-          {cols.find(c => c.key === colMenu.key)?.sortable !== false && (
-            <>
-              <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'asc')}>
-                <span>↑</span> Сортировать по возрастанию
+          <>
+            <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'asc')}>
+              <span>↑</span> Сортировать по возрастанию
+            </button>
+            <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'desc')}>
+              <span>↓</span> Сортировать по убыванию
+            </button>
+            {sorts.some(sort => sort.key === colMenu.key) && (
+              <button className="dt-ctx-item" onClick={() => clearColumnSort(colMenu.key)}>
+                <span>×</span> Убрать сортировку
               </button>
-              <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'desc')}>
-                <span>↓</span> Сортировать по убыванию
-              </button>
-              {sorts.some(sort => sort.key === colMenu.key) && (
-                <button className="dt-ctx-item" onClick={() => clearColumnSort(colMenu.key)}>
-                  <span>×</span> Убрать сортировку
-                </button>
-              )}
-              <hr className="dt-ctx-divider" />
-            </>
-          )}
+            )}
+            <hr className="dt-ctx-divider" />
+          </>
           <button className="dt-ctx-item" onClick={() => {
             saveCols(cols.map(c => c.key === colMenu.key ? { ...c, visible: false } : c));
             setColMenu(null);
@@ -943,5 +967,3 @@ export function DataTable<T extends Record<string, any>>({
 
 // @keyframes dtExpandIn добавлены в DataTable.css
 export default DataTable;
-
-

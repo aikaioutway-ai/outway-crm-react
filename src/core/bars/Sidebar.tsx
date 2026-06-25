@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Wallet, Map, Car, DollarSign, Settings, Receipt, UserCog, ChevronLeft, ChevronRight, LogOut, FileText } from 'lucide-react';
+import { Users, Wallet, Route, Receipt, UserCog, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 
 export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'payroll' | 'expenses' | 'settings' | 'bank_statement';
@@ -11,27 +11,27 @@ interface SidebarProps {
   userRole: UserRole;
   onLogout?: () => void;
   collapseSignal?: number;
+  onFiltersClick?: () => void;
+  onColumnsClick?: () => void;
+  filtersActive?: boolean;
+  columnsActive?: boolean;
 }
 
 const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'families',  label: 'Менеджер',   icon: <Users size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
-  { key: 'logistics', label: 'Логистика',  icon: <Map size={18} /> },
-  { key: 'drivers',   label: 'Водители',   icon: <Car size={18} /> },
-  { key: 'payroll',   label: 'Зарплата',   icon: <DollarSign size={18} /> },
-  { key: 'expenses',  label: 'Расходы',    icon: <Receipt size={18} /> },
+  { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
+  { key: 'expenses',  label: 'Финансы',    icon: <Receipt size={18} /> },
   { key: 'employees', label: 'Сотрудники', icon: <UserCog size={18} /> },
-  { key: 'bank_statement', label: 'Выписка', icon: <FileText size={18} /> },
-  { key: 'settings',  label: 'Настройки',  icon: <Settings size={18} /> },
 ];
 
 export function getAllowedSections(role: UserRole): NavSection[] {
-  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'bank_statement', 'settings'];
-  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'payroll', 'expenses', 'bank_statement'];
-  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'bank_statement'];
+  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'expenses'];
+  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'expenses'];
+  if (role === 'director')     return ['families', 'cashier', 'logistics'];
   if (role === 'manager')      return ['families'];
-  if (role === 'logist')       return ['logistics', 'drivers'];
-  if (role === 'cashier')      return ['cashier', 'payroll', 'expenses', 'bank_statement'];
+  if (role === 'logist')       return ['logistics'];
+  if (role === 'cashier')      return ['cashier', 'expenses'];
   return ['families'];
 }
 
@@ -39,7 +39,7 @@ export function canAccessSection(role: UserRole, section: NavSection): boolean {
   return getAllowedSections(role).includes(section);
 }
 
-export default function Sidebar({ active, onChange, badges = {}, userRole, onLogout, collapseSignal = 0 }: SidebarProps) {
+export default function Sidebar({ active, onChange, badges = {}, userRole, onLogout, collapseSignal = 0, onFiltersClick, onColumnsClick, filtersActive, columnsActive }: SidebarProps) {
   const [collapsedBySection, setCollapsedBySection] = useState<Partial<Record<NavSection, boolean>>>({});
   const collapsed = collapsedBySection[active] ?? true;
   const setCollapsed = (next: boolean) => {
@@ -57,7 +57,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, onLog
   return (
     <aside style={{
       width: w,
-      minHeight: '100vh',
+      height: 'calc(100vh - 20px)',
       background: '#FFFFFF',
       borderRight: 'none',
       display: 'flex',
@@ -185,6 +185,45 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, onLog
           );
         })}
       </nav>
+
+      {/* Filters + Columns buttons */}
+      {(onFiltersClick || onColumnsClick) && (
+        <div style={{ padding: collapsed ? '4px 0 4px 12px' : '4px 0 4px 12px', borderTop: '1px solid var(--border)' }}>
+          {[
+            { label: 'Фильтры', icon: <SlidersHorizontal size={17} />, onClick: onFiltersClick, active: filtersActive },
+            { label: 'Колонки', icon: <Columns3 size={17} />, onClick: onColumnsClick, active: columnsActive },
+          ].map(item => (
+            <button
+              key={item.label}
+              onClick={item.onClick}
+              title={collapsed ? item.label : undefined}
+              style={{
+                width: '100%',
+                height: 38,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: collapsed ? 'center' : 'flex-start',
+                gap: 10,
+                padding: collapsed ? 0 : '0 14px',
+                borderRadius: 14,
+                border: item.active ? '1px solid #2DD4BF' : '1px solid transparent',
+                background: item.active ? '#E6FAF8' : 'transparent',
+                color: item.active ? '#2DD4BF' : 'var(--text-2)',
+                fontSize: 13,
+                fontWeight: item.active ? 800 : 600,
+                cursor: 'pointer',
+                marginBottom: 2,
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                transition: 'all 0.15s',
+              }}
+            >
+              <span style={{ flexShrink: 0 }}>{item.icon}</span>
+              {!collapsed && <span>{item.label}</span>}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Bottom */}
       <div style={{

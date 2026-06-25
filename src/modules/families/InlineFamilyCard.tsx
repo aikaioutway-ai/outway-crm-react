@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X } from 'lucide-react';
+import { CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X, Trash2 } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
 import { getFamilyPrice, getPriceByZone, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
-import { addV2Audit, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
+import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
@@ -57,6 +57,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [, setSaving] = useState(false);
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [saveMsg, setSaveMsg] = useState('');
+  const [childActionBusy, setChildActionBusy] = useState(false);
 
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
@@ -262,6 +263,72 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     }
   }
 
+  function nextChildName() {
+    const base = 'Новый ребёнок';
+    const names = new Set(children.map(child => child.childName.trim().toLowerCase()));
+    if (!names.has(base.toLowerCase())) return base;
+    let index = children.length + 1;
+    while (names.has(`${base} ${index}`.toLowerCase())) index++;
+    return `${base} ${index}`;
+  }
+
+  async function handleAddChild() {
+    if (childActionBusy) return;
+    const template = children[children.length - 1];
+    const schoolCode = (template?.schoolCode || savedFamily.schoolCode || 'KINGS') as any;
+    const zone = (template?.zone || savedFamily.zone || 'A') as Zone;
+    const vehicleType = (template?.vehicleType || savedFamily.vehicleType || 'microbus') as VehicleType;
+    const basePrice = getPriceByZone(schoolCode, zone, vehicleType);
+    setChildActionBusy(true);
+    try {
+      const created = await createV2Child(savedFamily, {
+        childName: nextChildName(),
+        class: '',
+        schoolCode,
+        schoolId: template?.schoolId,
+        branchId: template?.branchId ?? savedFamily.branchId,
+        branchCode: template?.branchCode ?? savedFamily.branchCode,
+        branchShort: template?.branchShort ?? savedFamily.branchShort,
+        branchName: template?.branchName ?? savedFamily.branchName,
+        address: template?.address ?? savedFamily.fullAddress,
+        zone,
+        vehicleType,
+        basePrice,
+        finalPrice: basePrice,
+        status: 'new',
+      });
+      const next = [...children, created];
+      setChildren(next);
+      await loadFinance(next);
+      await addAudit('Добавлен ребёнок', 'child', '-', created.childName);
+      await loadAudit();
+      onUpdated?.();
+    } catch (error: any) {
+      window.alert('Не удалось добавить ребёнка: ' + (error?.message ?? String(error)));
+    } finally {
+      setChildActionBusy(false);
+    }
+  }
+
+  async function handleDeleteChild(child: Child) {
+    if (childActionBusy) return;
+    if (!window.confirm(`Удалить ребёнка "${child.childName || 'Без имени'}"?`)) return;
+    setChildActionBusy(true);
+    try {
+      await deleteV2Child(String(child.id));
+      const next = children.filter(item => item.id !== child.id);
+      setChildren(next);
+      await loadFinance(next);
+      await addAudit('Удалён ребёнок', 'child', child.childName, '-');
+      await loadAudit();
+      onUpdated?.();
+    } catch (error: any) {
+      window.alert('Не удалось удалить ребёнка: ' + (error?.message ?? String(error)));
+    } finally {
+      setChildActionBusy(false);
+    }
+  }
+
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
   const totalCharged = charges.reduce((s, c) => s + c.amount, 0);
@@ -379,7 +446,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
 
               <DetailPanel title={`Дети (${children.length})`}>
-                <ChildrenOverviewTable children={children} branches={branches} onSaveChild={handleSaveChild} />
+                <ChildrenOverviewTable children={children} branches={branches} onSaveChild={handleSaveChild} onAddChild={handleAddChild} onDeleteChild={handleDeleteChild} busy={childActionBusy} />
               </DetailPanel>
             </div>
           )}
@@ -502,62 +569,83 @@ function ChildrenOverviewTable({
   children,
   branches,
   onSaveChild,
+  onAddChild,
+  onDeleteChild,
+  busy,
 }: {
   children: Child[];
   branches: V2BranchOption[];
   onSaveChild: (child: Child, patch: Partial<Child>) => Promise<boolean>;
+  onAddChild: () => void;
+  onDeleteChild: (child: Child) => void;
+  busy?: boolean;
 }) {
-  if (children.length === 0) {
-    return <div style={{ fontSize: 12, color: '#7B8491' }}>Детей нет</div>;
-  }
-
   return (
-    <div className="no-scrollbar" style={{ overflowX: 'auto', border: '1px solid #E8EEF1', borderRadius: 10 }}>
-      <table className="family-child-table" style={{ width: '100%', minWidth: 1040, borderCollapse: 'collapse', background: '#fff' }}>
-        <thead>
-          <tr>
-            {['ФИО', 'Школа', 'Класс', 'Зона', 'Тип ТС', 'Самовыход', 'Трансфер', 'Остановка', 'Утро', 'Скидка %', 'Скидка', 'Цена', 'Итого'].map(label => (
-              <th key={label} style={childTableHeadStyle}>{label}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {children.map(child => (
-            <tr key={child.id}>
-              <td style={{ ...childTableCellStyle, minWidth: 170 }}><EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /></td>
-              <td style={childTableCellStyle}>
-                <EditableSelect
-                  value={child.branchId ?? ''}
-                  options={branches.map(branch => ({ value: branch.id, label: branch.shortName || branch.code }))}
-                  onCommit={value => {
-                    const branch = branches.find(item => item.id === value);
-                    if (!branch) return Promise.resolve(false);
-                    return onSaveChild(child, {
-                      branchId: branch.id,
-                      schoolId: branch.schoolId,
-                      branchCode: branch.code,
-                      branchShort: branch.shortName,
-                      branchName: branch.name,
-                      schoolCode: branch.code as Child['schoolCode'],
-                    });
-                  }}
-                />
-              </td>
-              <td style={childTableCellStyle}><EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /></td>
-              <td style={childTableCellStyle}><EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={52} panelWidth={120} /></td>
-              <td style={childTableCellStyle}><EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={116} panelWidth={190} /></td>
-              <td style={childTableCellStyle}><input type="checkbox" checked={child.selfExitAllowed} onChange={event => void onSaveChild(child, { selfExitAllowed: event.currentTarget.checked })} /></td>
-              <td style={childTableCellStyle}><EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={64} panelWidth={130} /></td>
-              <td style={childTableCellStyle}><EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={60} panelWidth={120} /></td>
-              <td style={childTableCellStyle}><EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /></td>
-              <td style={childTableCellStyle}><EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /></td>
-              <td style={childTableCellStyle}><EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, Number(child.basePrice || child.finalPrice || 0))} /></td>
-              <td style={childTableCellStyle}><EditableNumber value={child.basePrice || undefined} onCommit={value => onSaveChild(child, { basePrice: value ?? 0 })} /></td>
-              <td style={childTableCellStyle}><EditableNumber value={child.finalPrice || undefined} onCommit={value => onSaveChild(child, { finalPrice: value ?? 0 })} strong /></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div style={{ display: 'grid', gap: 10 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+        <span style={{ fontSize: 12, color: '#7B8491', fontWeight: 750 }}>{children.length ? `${children.length} детей` : 'Детей нет'}</span>
+        <button type="button" onClick={onAddChild} disabled={busy} style={smallAddChildBtnStyle}>
+          {busy ? '...' : '+ Добавить ребёнка'}
+        </button>
+      </div>
+      {children.length === 0 ? (
+        <div style={{ fontSize: 12, color: '#7B8491', padding: '12px 0' }}>Добавьте первого ребёнка</div>
+      ) : (
+        <div className="no-scrollbar" style={{ overflowX: 'auto', border: '1px solid #E8EEF1', borderRadius: 10 }}>
+          <table className="family-child-table" style={{ width: '100%', minWidth: 1100, borderCollapse: 'collapse', background: '#fff' }}>
+            <thead>
+              <tr>
+                {['ФИО', 'Школа', 'Класс', 'Зона', 'Тип ТС', 'Самовыход', 'Трансфер', 'Остановка', 'Утро', 'Скидка %', 'Скидка', 'Цена', 'Итого'].map(label => (
+                  <th key={label} style={childTableHeadStyle}>{label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {children.map(child => (
+                <tr key={child.id}>
+                  <td style={{ ...childTableCellStyle, minWidth: 210 }}>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) 28px', gap: 6, alignItems: 'center' }}>
+                      <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong />
+                      <button type="button" onClick={() => onDeleteChild(child)} disabled={busy} title="Удалить ребёнка" style={deleteChildBtnStyle}>
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </td>
+                  <td style={childTableCellStyle}>
+                    <EditableSelect
+                      value={child.branchId ?? ''}
+                      options={branches.map(branch => ({ value: branch.id, label: branch.shortName || branch.code }))}
+                      onCommit={value => {
+                        const branch = branches.find(item => item.id === value);
+                        if (!branch) return Promise.resolve(false);
+                        return onSaveChild(child, {
+                          branchId: branch.id,
+                          schoolId: branch.schoolId,
+                          branchCode: branch.code,
+                          branchShort: branch.shortName,
+                          branchName: branch.name,
+                          schoolCode: branch.code as Child['schoolCode'],
+                        });
+                      }}
+                    />
+                  </td>
+                  <td style={childTableCellStyle}><EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /></td>
+                  <td style={childTableCellStyle}><EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={52} panelWidth={120} /></td>
+                  <td style={childTableCellStyle}><EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={116} panelWidth={190} /></td>
+                  <td style={childTableCellStyle}><input type="checkbox" checked={child.selfExitAllowed} onChange={event => void onSaveChild(child, { selfExitAllowed: event.currentTarget.checked })} /></td>
+                  <td style={childTableCellStyle}><EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={64} panelWidth={130} /></td>
+                  <td style={childTableCellStyle}><EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={60} panelWidth={120} /></td>
+                  <td style={childTableCellStyle}><EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /></td>
+                  <td style={childTableCellStyle}><EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /></td>
+                  <td style={childTableCellStyle}><EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, Number(child.basePrice || child.finalPrice || 0))} /></td>
+                  <td style={childTableCellStyle}><EditableNumber value={child.basePrice || undefined} onCommit={value => onSaveChild(child, { basePrice: value ?? 0 })} /></td>
+                  <td style={childTableCellStyle}><EditableNumber value={child.finalPrice || undefined} onCommit={value => onSaveChild(child, { finalPrice: value ?? 0 })} strong /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }
@@ -852,6 +940,31 @@ const childTableCellStyle: React.CSSProperties = {
   fontSize: 11,
   fontWeight: 700,
   whiteSpace: 'nowrap',
+};
+
+const smallAddChildBtnStyle: React.CSSProperties = {
+  height: 30,
+  border: 'none',
+  borderRadius: 9,
+  background: '#31A4A5',
+  color: '#fff',
+  padding: '0 12px',
+  fontSize: 12,
+  fontWeight: 850,
+  cursor: 'pointer',
+};
+
+const deleteChildBtnStyle: React.CSSProperties = {
+  width: 28,
+  height: 28,
+  border: '1px solid #F5C8C8',
+  borderRadius: 8,
+  background: '#FFF5F5',
+  color: '#C62828',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
 };
 
 function childTableControlStyle(strong?: boolean): React.CSSProperties {

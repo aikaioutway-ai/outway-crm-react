@@ -1,18 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { AlertTriangle, Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
+import { Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useReceiptOcr } from '../../hooks/useReceiptOcr';
-import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentStatus, PaymentType, UserRole } from '../../types';
+import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentType, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
-import { ALL_PERIODS, PERIOD_LABEL, PERIOD_ORDER } from './constants';
+import { ALL_PERIODS, PERIOD_LABEL } from './constants';
 import { Section, Spinner, Empty } from './DrawerUI';
-
-const STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  'Оплачено':          { bg: '#F3F4F6', color: '#374151' },
-  'Частично оплачено': { bg: '#F2F5E9', color: '#687C54' },
-  'Просрочено':        { bg: '#FEE2E2', color: '#991B1B' },
-  'Заморожено':        { bg: '#EEF2F5', color: '#475569' },
-  'Не оплачено':       { bg: '#F3F4F6', color: '#374151' },
-};
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
   cash: 'Наличные',
@@ -48,14 +40,14 @@ export default function TabFinance({
   payments,
   paymentItems,
   loading,
-  children,
+  children: _children,
   mainBalance,
   depositBalance,
   isAdmin,
   isCashier,
-  userRole,
-  onSaveCharge,
-  onDeleteCharge,
+  userRole: _userRole,
+  onSaveCharge: _onSaveCharge,
+  onDeleteCharge: _onDeleteCharge,
   onAddCharges,
   onCreatePayment,
   onConfirmPayment,
@@ -74,20 +66,16 @@ export default function TabFinance({
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
-  const sortedCharges = useMemo(() => {
-    return [...charges].sort((a, b) => (
-      PERIOD_ORDER.indexOf(periodKeyOfCharge(a)) -
-      PERIOD_ORDER.indexOf(periodKeyOfCharge(b))
-    ) || a.childName?.localeCompare(b.childName ?? '', 'ru') || 0);
-  }, [charges]);
-
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const canCreatePayment = !isCashier || isAdmin;
   const canConfirmPayment = isCashier || isAdmin;
 
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));
   const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(`${p.month}:${p.year}`));
-  const forecastRows = buildForecastRows(children, charges);
+  const periodRows = useMemo(() => buildPeriodRows(charges, payments, paymentItems), [charges, payments, paymentItems]);
+  const sortedPayments = useMemo(() => [...payments].sort((a, b) => (
+    new Date(b.createdAt || b.paymentDate || 0).getTime() - new Date(a.createdAt || a.paymentDate || 0).getTime()
+  )), [payments]);
 
   if (loading) return <Spinner />;
 
@@ -131,71 +119,35 @@ export default function TabFinance({
         </div>
       )}
 
-      <div style={threeColumnsStyle}>
-        {/* Левая колонка: платёж + прогноз */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={financeLayoutStyle}>
+        <div style={financeTopGridStyle}>
           {canCreatePayment && (
             <Section title="Новый платёж">
               <div style={paymentPanelStyle}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
-                  <input
-                    type="number"
-                    value={paymentAmount}
-                    onChange={e => setPaymentAmount(e.target.value)}
-                    placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'}
-                    style={{ ...inputStyle, width: '100%' }}
-                  />
-                  <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={{ ...inputStyle, width: '100%' }}>
+                <div style={newPaymentGridStyle}>
+                  <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'} style={inputStyle} />
+                  <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
                     <option value="cash">Наличные</option>
                     <option value="transfer">Безналичный QR</option>
                   </select>
-                  <input
-                    type="date"
-                    value={paymentDate}
-                    onChange={e => setPaymentDate(e.target.value)}
-                    style={{ ...inputStyle, width: '100%' }}
-                  />
-                  <input
-                    value={comment}
-                    onChange={e => setComment(e.target.value)}
-                    placeholder="Комментарий"
-                    style={{ ...inputStyle, width: '100%' }}
-                  />
+                  <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
+                  <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={inputStyle} />
                   <label style={{ ...fileInputStyle, width: '100%', boxSizing: 'border-box' }}>
                     {ocrLoading ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Paperclip size={14} />}
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {receiptFile ? receiptFile.name : 'Прикрепить чек'}
-                    </span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{receiptFile ? receiptFile.name : 'Прикрепить чек'}</span>
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={e => handleOcrFile(
-                        e.target.files?.[0] ?? null,
-                        (amount, date) => {
-                          if (amount) setPaymentAmount(String(amount));
-                          if (date) setPaymentDate(date);
-                        },
-                      )}
+                      onChange={e => handleOcrFile(e.target.files?.[0] ?? null, (amount, date) => {
+                        if (amount) setPaymentAmount(String(amount));
+                        if (date) setPaymentDate(date);
+                      })}
                       style={{ display: 'none' }}
                     />
                   </label>
-                  {ocrMsg && (
-                    <div style={{ fontSize: 10, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '2px 2px' }}>
-                      {ocrMsg}
-                    </div>
-                  )}
-                  <input
-                    value={receiptCode}
-                    onChange={e => setReceiptCode(e.target.value)}
-                    placeholder="Код чека"
-                    style={{ ...inputStyle, width: '100%' }}
-                  />
-                  <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={{
-                    width: '100%', height: 34, border: 'none', borderRadius: 8,
-                    background: '#D7EEEE', color: '#237F81', fontSize: 12, fontWeight: 800,
-                    cursor: savingPayment || !paymentAmount ? 'default' : 'pointer',
-                    opacity: savingPayment || !paymentAmount ? 0.6 : 1,
-                  }}>
+                  <input value={receiptCode} onChange={e => setReceiptCode(e.target.value)} placeholder="Код чека" style={inputStyle} />
+                  {ocrMsg && <div style={{ gridColumn: '1 / -1', fontSize: 10, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '0 2px' }}>{ocrMsg}</div>}
+                  <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={submitPaymentBtnStyle(savingPayment || !paymentAmount)}>
                     {savingPayment ? 'Сохраняем...' : 'На проверку →'}
                   </button>
                 </div>
@@ -203,33 +155,28 @@ export default function TabFinance({
             </Section>
           )}
 
-          <Section title="Прогноз">
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {forecastRows.filter(row => row.state !== 'paid').map((row, i, arr) => (
-                <div key={row.key} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: '#111827' }}>{row.label}</div>
-                    {row.note && <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{row.note}</div>}
-                  </div>
-                  <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: row.state === 'created' ? '#374151' : '#111827' }}>{money(row.amount)}</div>
-                    <div style={{ fontSize: 10, color: '#9CA3AF', marginTop: 1 }}>{row.state === 'created' ? 'создано' : 'план'}</div>
-                  </div>
-                </div>
+          <Section title={`Платежи (${payments.length})`}>
+            <div style={paymentsListStyle}>
+              {sortedPayments.length === 0 ? <Empty text="Платежей нет" /> : sortedPayments.map(payment => (
+                <PaymentRow
+                  key={payment.id}
+                  payment={payment}
+                  items={paymentItems.filter(i => i.paymentId === payment.id)}
+                  canConfirm={canConfirmPayment && payment.status === 'На проверке'}
+                  confirming={confirmingPaymentId === payment.id}
+                  onConfirm={(actualPaymentDate) => confirmPayment(payment, actualPaymentDate)}
+                  onSave={updates => onSavePayment(payment, updates)}
+                  onDelete={() => onDeletePayment(payment)}
+                  onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
+                  isAdmin={isAdmin}
+                />
               ))}
-              {forecastRows.filter(r => r.state !== 'paid').length > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px solid #E8EEF1', paddingTop: 8, marginTop: 2 }}>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: '#374151' }}>Итого</span>
-                  <span style={{ fontSize: 12, fontWeight: 800, color: '#111827' }}>{money(forecastRows.filter(r => r.state !== 'paid').reduce((s, r) => s + r.amount, 0))}</span>
-                </div>
-              )}
             </div>
           </Section>
         </div>
 
-        {/* Средняя колонка: начисления */}
         <Section
-          title={`Начисления (${charges.length})`}
+          title="Месячная таблица"
           action={isAdmin && (
             <button onClick={() => setAddingPeriod(p => !p)} style={smallAccentBtn}>
               <Plus size={11} /> Период
@@ -247,156 +194,48 @@ export default function TabFinance({
               </div>
             </div>
           )}
-          {sortedCharges.length === 0
-            ? <Empty text="Начислений нет" />
-            : sortedCharges.map(charge => (
-              <ChargeRow
-                key={charge.id}
-                charge={charge}
-                isAdmin={isAdmin}
-                userRole={userRole}
-                onSave={updates => onSaveCharge(charge, updates)}
-                onDelete={() => onDeleteCharge(charge)}
-              />
-            ))
-          }
-          {charges.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 105px 105px auto', gap: 8, padding: '8px 12px', borderTop: '2px solid #E8EEF1', marginTop: 4 }}>
-              <div style={{ fontSize: 11, fontWeight: 800, color: '#374151' }}>Итого</div>
-              <div style={{ textAlign: 'right', fontSize: 11, fontWeight: 800, color: '#111827' }}>{money(charges.reduce((s, c) => s + c.amount, 0))}</div>
-              <div style={{ textAlign: 'right', fontSize: 11, fontWeight: 800, color: charges.reduce((s, c) => s + c.debtAmount, 0) > 0 ? '#991B1B' : '#111827' }}>{money(charges.reduce((s, c) => s + c.debtAmount, 0))}</div>
-              <div />
-            </div>
-          )}
-        </Section>
 
-        {/* Правая колонка: платежи */}
-        <Section title={`Платежи (${payments.length})`}>
-          {payments.length === 0 ? <Empty text="Платежей нет" /> : payments.map(payment => (
-            <PaymentRow
-              key={payment.id}
-              payment={payment}
-              items={paymentItems.filter(i => i.paymentId === payment.id)}
-              canConfirm={canConfirmPayment && payment.status === 'На проверке'}
-              confirming={confirmingPaymentId === payment.id}
-              onConfirm={(actualPaymentDate) => confirmPayment(payment, actualPaymentDate)}
-              onSave={updates => onSavePayment(payment, updates)}
-              onDelete={() => onDeletePayment(payment)}
-              onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
-              isAdmin={isAdmin}
-            />
-          ))}
+          <div style={financeTableWrapStyle}>
+            <table style={financeTableStyle}>
+              <thead>
+                <tr>
+                  {['Месяц', 'Начисления', 'Оплата', 'Дата списания'].map(label => (
+                    <th key={label} style={financeThStyle}>{label}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {periodRows.length === 0 ? (
+                  <tr><td colSpan={4} style={financeEmptyCellStyle}>Начислений нет</td></tr>
+                ) : periodRows.map(row => (
+                  <tr key={row.key}>
+                    <td style={financeTdStyle}>
+                      <div style={{ fontWeight: 900, color: '#17222F' }}>{row.label}</div>
+                      <div style={{ fontSize: 10, color: '#8A94A3', marginTop: 2 }}>{row.childrenCount} начисл.</div>
+                    </td>
+                    <td style={{ ...financeTdStyle, textAlign: 'right', fontWeight: 900 }}>{money(row.charged)}</td>
+                    <td style={{ ...financeTdStyle, textAlign: 'right' }}>
+                      <div style={{ fontWeight: 900, color: row.debt > 0 ? '#991B1B' : '#17222F' }}>{money(row.paid)}</div>
+                      {row.debt > 0 && <div style={{ fontSize: 10, color: '#C62828', marginTop: 2 }}>долг {money(row.debt)}</div>}
+                    </td>
+                    <td style={financeTdStyle}>{row.writeOffDate || '-'}</td>
+                  </tr>
+                ))}
+              </tbody>
+              {periodRows.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td style={financeTotalCellStyle}>Итого</td>
+                    <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + row.charged, 0))}</td>
+                    <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + row.paid, 0))}</td>
+                    <td style={financeTotalCellStyle} />
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
         </Section>
       </div>
-    </div>
-  );
-}
-
-const CAN_REMOVE_PENALTY: UserRole[] = ['admin', 'gen_director', 'director'];
-
-function ChargeRow({ charge, isAdmin, userRole, onSave, onDelete }: {
-  charge: Charge;
-  isAdmin: boolean;
-  userRole?: UserRole;
-  onSave: (updates: Partial<Charge>) => Promise<boolean>;
-  onDelete: () => void;
-}) {
-  const canRemovePenalty = !!userRole && CAN_REMOVE_PENALTY.includes(userRole);
-  const [amount, setAmount] = useState(String(charge.amount));
-  const [status, setStatus] = useState<PaymentStatus>(charge.status);
-  const [reason, setReason] = useState('');
-  const [editing, setEditing] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const sc = STATUS_COLORS[charge.status] ?? STATUS_COLORS['Не оплачено'];
-  const period = periodKeyOfCharge(charge) === 'deposit' ? 'Депозит' : PERIOD_LABEL[String(charge.periodMonth)] ?? String(charge.periodMonth);
-
-  async function save() {
-    if (!reason.trim()) {
-      window.alert('Напишите комментарий: почему меняете начисление.');
-      return;
-    }
-    setSaving(true);
-    const ok = await onSave({ amount: Number(amount), status, isFrozen: status === 'Заморожено', comment: reason });
-    setSaving(false);
-    if (ok) {
-      setReason('');
-      setEditing(false);
-    }
-  }
-
-  function cancel() {
-    setAmount(String(charge.amount));
-    setStatus(charge.status);
-    setReason('');
-    setEditing(false);
-  }
-
-  return (
-    <div style={{ border: `1px solid ${sc.bg}`, borderLeft: `3px solid ${sc.color}`, borderRadius: 8, background: '#fff', padding: '9px 12px', marginBottom: 7 }}>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 105px 105px auto', gap: 8, alignItems: 'center' }}>
-        <div>
-          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{charge.childName ?? charge.childId}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>{period} {charge.year}</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(charge.amount)}</div>
-          <div style={{ fontSize: 10, color: '#6B7280' }}>опл. {money(charge.paidAmount)}</div>
-        </div>
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: charge.debtAmount > 0 ? '#991B1B' : '#111827' }}>{money(charge.debtAmount)}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-2)' }}>долг</div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, justifyContent: 'flex-end' }}>
-          <span style={{ background: sc.bg, color: sc.color, borderRadius: 6, padding: '3px 7px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
-            {charge.status}
-          </span>
-          {isAdmin && !editing && (
-            <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
-              <Pencil size={13} />
-            </button>
-          )}
-        </div>
-      </div>
-      {charge.penaltyAmount > 0 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6, padding: '5px 8px', background: '#FEF2F2', borderRadius: 6, border: '1px solid #FECACA' }}>
-          <AlertTriangle size={12} color="#DC2626" />
-          <span style={{ fontSize: 11, color: '#DC2626', fontWeight: 700, flex: 1 }}>
-            Пеня: {money(charge.penaltyAmount)} (макс. {money(Math.round(charge.amount * 0.15))})
-          </span>
-          {canRemovePenalty && (
-            <button
-              onClick={() => onSave({ penaltyAmount: 0 })}
-              title="Убрать пеню"
-              style={{ fontSize: 10, fontWeight: 700, background: '#FEE2E2', color: '#991B1B', border: '1px solid #FECACA', borderRadius: 5, padding: '2px 8px', cursor: 'pointer' }}
-            >
-              Убрать пеню
-            </button>
-          )}
-        </div>
-      )}
-      {isAdmin && editing && (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 155px auto auto auto', gap: 7, marginTop: 8 }}>
-          <input type="number" value={amount} onChange={e => setAmount(e.target.value)} style={inputStyle} />
-          <select value={status} onChange={e => setStatus(e.target.value as PaymentStatus)} style={inputStyle}>
-            {Object.keys(STATUS_COLORS).map(s => <option key={s} value={s}>{s}</option>)}
-          </select>
-          <button onClick={save} disabled={saving} title="Сохранить" style={smallAccentBtn}>
-            {saving ? '...' : <><Save size={12} /> Сохранить</>}
-          </button>
-          <button onClick={cancel} title="Закрыть" style={{ ...smallAccentBtn, background: '#F3F4F6', color: 'var(--text)' }}>
-            <X size={12} />
-          </button>
-          <button onClick={onDelete} style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}>
-            <Trash2 size={12} />
-          </button>
-          <input
-            value={reason}
-            onChange={e => setReason(e.target.value)}
-            placeholder="Комментарий к изменению"
-            style={{ ...inputStyle, gridColumn: '1 / -1' }}
-          />
-        </div>
-      )}
     </div>
   );
 }
@@ -560,62 +399,91 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
   );
 }
 
-type ForecastState = 'planned' | 'created' | 'paid';
-
-interface ForecastRow {
+interface PeriodFinanceRow {
   key: string;
   label: string;
-  note: string;
-  amount: number;
-  state: ForecastState;
+  charged: number;
+  paid: number;
+  debt: number;
+  childrenCount: number;
+  writeOffDate: string;
 }
 
 function periodKeyOfCharge(charge: Pick<Charge, 'periodMonth' | 'chargeType'>): string {
   return charge.chargeType === 'deposit' ? 'deposit' : String(charge.periodMonth);
 }
 
-function buildForecastRows(children: Child[], charges: Charge[]): ForecastRow[] {
-  const activeChildren = children.filter(child => child.status === 'boarded');
-  const monthlyAmount = activeChildren.reduce((sum, child) => sum + Number(child.finalPrice ?? 0), 0);
-  const hasActiveChildren = activeChildren.length > 0;
-  const byKey = new Map<string, Charge[]>();
-  charges.forEach(charge => {
-    const key = `${periodKeyOfCharge(charge)}:${charge.year}`;
-    byKey.set(key, [...(byKey.get(key) ?? []), charge]);
+function periodLabel(month: number, year: number, chargeType?: string): string {
+  if (chargeType === 'deposit' || month === 0) return 'Депозит';
+  return `${PERIOD_LABEL[String(month)] ?? month} ${year}`;
+}
+
+function formatShortDate(value?: string): string {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('ru-RU');
+}
+
+function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], paymentItems: PaymentItem[]): PeriodFinanceRow[] {
+  const paymentsById = new Map(payments.map(payment => [payment.id, payment]));
+  const grouped = new Map<string, PeriodFinanceRow & { rawMonth: number; rawYear: number; dateValue: number }>();
+
+  ALL_PERIODS.forEach(period => {
+    grouped.set(`${period.key}:${period.year}`, {
+      key: `${period.key}:${period.year}`,
+      label: period.label,
+      charged: 0,
+      paid: 0,
+      debt: 0,
+      childrenCount: 0,
+      writeOffDate: '',
+      rawMonth: period.key === 'deposit' ? 0 : period.month,
+      rawYear: period.year,
+      dateValue: 0,
+    });
   });
 
-  const currentYear = new Date().getFullYear();
-  const depositCharges = charges.filter(charge => periodKeyOfCharge(charge) === 'deposit');
-  const depositAmount = hasActiveChildren ? monthlyAmount : 0;
-  const depositPaid = depositCharges.length > 0 && depositCharges.every(charge => charge.debtAmount <= 0);
-  const depositCreated = depositCharges.length > 0;
-  const depositRow: ForecastRow = {
-    key: 'deposit',
-    label: 'Депозит',
-    note: hasActiveChildren ? `${activeChildren.length} детей на трансфере` : 'посаженных детей нет',
-    amount: depositCreated ? depositCharges.reduce((sum, charge) => sum + charge.amount, 0) : depositAmount,
-    state: depositPaid ? 'paid' : depositCreated ? 'created' : 'planned',
-  };
+  charges.forEach(charge => {
+    const key = `${periodKeyOfCharge(charge)}:${charge.year}`;
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.charged += Number(charge.amount || 0);
+      existing.paid += Number(charge.paidAmount || 0);
+      existing.debt += Number(charge.debtAmount || 0);
+      existing.childrenCount += 1;
+      return;
+    }
+    grouped.set(key, {
+      key,
+      label: periodLabel(charge.periodMonth, charge.year, charge.chargeType),
+      charged: Number(charge.amount || 0),
+      paid: Number(charge.paidAmount || 0),
+      debt: Number(charge.debtAmount || 0),
+      childrenCount: 1,
+      writeOffDate: '',
+      rawMonth: charge.chargeType === 'deposit' ? 0 : charge.periodMonth,
+      rawYear: charge.year,
+      dateValue: 0,
+    });
+  });
 
-  const nextPeriod = ALL_PERIODS.find(period => {
-    if (period.key === 'deposit') return false;
-    const periodCharges = byKey.get(`${period.month}:${period.year}`) ?? [];
-    return periodCharges.length === 0 || periodCharges.some(charge => charge.debtAmount > 0);
-  }) ?? ALL_PERIODS.find(period => period.key !== 'deposit');
+  paymentItems.forEach(item => {
+    const key = `${item.periodMonth}:${item.year}`;
+    const row = grouped.get(key);
+    if (!row) return;
+    const payment = paymentsById.get(item.paymentId);
+    const dateRaw = payment?.actualPaymentDate || payment?.paymentDate || item.createdAt;
+    const dateTime = dateRaw ? new Date(dateRaw).getTime() : 0;
+    if (dateTime >= row.dateValue) {
+      row.dateValue = dateTime;
+      row.writeOffDate = formatShortDate(dateRaw);
+    }
+  });
 
-  const periodCharges = nextPeriod ? byKey.get(`${nextPeriod.month}:${nextPeriod.year}`) ?? [] : [];
-  const periodPaid = periodCharges.length > 0 && periodCharges.every(charge => charge.debtAmount <= 0);
-  const periodCreated = periodCharges.length > 0;
-  const periodRow: ForecastRow = {
-    key: nextPeriod?.key ?? 'month',
-    label: nextPeriod?.label ?? 'Ближайший месяц',
-    note: hasActiveChildren ? `${activeChildren.length} детей на трансфере` : 'посаженных детей нет',
-    amount: periodCreated ? periodCharges.reduce((sum, charge) => sum + charge.amount, 0) : monthlyAmount,
-    state: periodPaid ? 'paid' : periodCreated ? 'created' : 'planned',
-  };
-
-  if (!nextPeriod && currentYear) return [depositRow];
-  return [depositRow, periodRow];
+  return Array.from(grouped.values())
+    .sort((a, b) => (a.rawYear - b.rawYear) || (a.rawMonth - b.rawMonth))
+    .map(({ rawMonth, rawYear, dateValue, ...row }) => row);
 }
 
 const inputStyle: React.CSSProperties = {
@@ -630,11 +498,22 @@ const inputStyle: React.CSSProperties = {
   boxSizing: 'border-box',
 };
 
-const threeColumnsStyle: React.CSSProperties = {
+const financeLayoutStyle: React.CSSProperties = {
   display: 'grid',
-  gridTemplateColumns: '220px minmax(0, 1fr) minmax(0, 1fr)',
-  gap: 12,
-  alignItems: 'start',
+  gap: 14,
+};
+
+const financeTopGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 14,
+  alignItems: 'stretch',
+};
+
+const newPaymentGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 8,
 };
 
 
@@ -680,6 +559,78 @@ const paymentPanelStyle: React.CSSProperties = {
   boxShadow: '0 8px 20px rgba(8,11,11,0.04)',
 };
 
+function submitPaymentBtnStyle(disabled: boolean): React.CSSProperties {
+  return {
+    gridColumn: '1 / -1',
+    width: '100%',
+    height: 34,
+    border: 'none',
+    borderRadius: 8,
+    background: '#31A4A5',
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: 850,
+    cursor: disabled ? 'default' : 'pointer',
+    opacity: disabled ? 0.55 : 1,
+  };
+}
+
+const paymentsListStyle: React.CSSProperties = {
+  maxHeight: 260,
+  overflowY: 'auto',
+  paddingRight: 2,
+};
+
+const financeTableWrapStyle: React.CSSProperties = {
+  overflowX: 'auto',
+  border: '1px solid #DDE7EB',
+  borderRadius: 12,
+  background: '#fff',
+};
+
+const financeTableStyle: React.CSSProperties = {
+  width: '100%',
+  minWidth: 720,
+  borderCollapse: 'collapse',
+};
+
+const financeThStyle: React.CSSProperties = {
+  height: 34,
+  padding: '0 14px',
+  background: '#F7FBFB',
+  borderBottom: '1px solid #E8EEF1',
+  color: '#667085',
+  fontSize: 11,
+  fontWeight: 900,
+  textAlign: 'left',
+};
+
+const financeTdStyle: React.CSSProperties = {
+  height: 44,
+  padding: '8px 14px',
+  borderBottom: '1px solid #F0F3F5',
+  color: '#374151',
+  fontSize: 12,
+  fontWeight: 750,
+};
+
+const financeTotalCellStyle: React.CSSProperties = {
+  height: 40,
+  padding: '8px 14px',
+  background: '#F8FCFC',
+  color: '#17222F',
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const financeEmptyCellStyle: React.CSSProperties = {
+  padding: '28px 14px',
+  textAlign: 'center',
+  color: '#7A859D',
+  fontSize: 12,
+  fontWeight: 750,
+};
+
 const receiptLinkStyle: React.CSSProperties = {
   display: 'inline-flex',
   alignItems: 'center',
@@ -704,4 +655,3 @@ const iconBtnStyle: React.CSSProperties = {
   cursor: 'pointer',
   flexShrink: 0,
 };
-
