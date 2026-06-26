@@ -4,7 +4,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, createV2DriverAdvance, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, createV2DriverAdvance, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesRPC, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
@@ -1333,8 +1333,42 @@ const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
   },
 ];
 
+function rowToFamily(row: ChildRow): Family {
+  return {
+    id: row.familyId,
+    schoolCode: row.schoolCode as any,
+    branchId: row.branchId ?? undefined,
+    branchCode: row.schoolCode,
+    branchName: row.branchName,
+    branchShort: row.branchShort,
+    parentName: row.parentName,
+    phone: row.phone,
+    phoneTelegram: '',
+    secondPhone: row.secondPhone,
+    secondPhoneTelegram: false,
+    contactName: row.contactName,
+    contactPhone: row.contactPhone,
+    contactPhoneTelegram: false,
+    fullAddress: row.streetAddress,
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
+    distanceKm: row.distanceKm ?? undefined,
+    zone: row.zone as any,
+    vehicleType: row.vehicleType as any,
+    vehicleLabel: row.vehicleLabel,
+    monthlyPrice: row.monthlyPrice,
+    comment: '',
+    createdAt: '',
+    status: row.status as any,
+    transferNumber: row.transferNumber ? Number(row.transferNumber) : undefined,
+    stopNumber: row.stopNumber ? Number(row.stopNumber) : undefined,
+  };
+}
+
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
+  const [financeLoaded, setFinanceLoaded] = useState(false);
+  const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
   const [paymentRows, setPaymentRows] = useState<PaymentTableRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
@@ -1615,6 +1649,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       .catch(error => console.error('Branches load failed', error));
   }, [isDriversModule]);
 
+  const FINANCE_MODES: FamiliesMode[] = ['payments', 'debtors', 'charges', 'cashier'];
+  useEffect(() => {
+    if (FINANCE_MODES.includes(mode)) loadFinanceRows();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
   useEffect(() => {
     if (!isChargesMode) return;
     if (chargesPeriodKey === 'ALL') { setPeriodStats([]); return; }
@@ -1638,9 +1678,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
+    setFinanceLoaded(false);
     try {
       const [families, transfers, drivers] = await Promise.all([
-        fetchV2FamiliesTable(),
+        fetchV2FamiliesTable(false),
         fetchV2TransfersDashboard().catch(() => []),
         fetchV2DriversTable().catch(() => []),
       ]);
@@ -1653,6 +1694,22 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       console.error('Families load failed', error);
     } finally {
       if (showSpinner) setLoading(false);
+    }
+  }
+
+  async function loadFinanceRows() {
+    if (financeLoaded || loadingFinanceRows) return;
+    setLoadingFinanceRows(true);
+    try {
+      const families = await fetchV2FamiliesTable(true);
+      const result = normalizeRows(families);
+      familiesRowsCache = result;
+      setRows(result);
+      setFinanceLoaded(true);
+    } catch (error) {
+      console.error('Finance rows load failed', error);
+    } finally {
+      setLoadingFinanceRows(false);
     }
   }
 
@@ -1700,6 +1757,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
     setExpandedInitialTab(initialTab);
     setExpandedFamilyId(familyId);
+    // Показываем карточку мгновенно из данных строки
+    const preview = rowToFamily(row);
+    setExpandedFamily(preview);
+    // Догружаем полные данные в фоне
     const family = await fetchV2Family(familyId);
     if (family) setExpandedFamily(family);
   }
@@ -2013,7 +2074,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       chargedSum: workRows.reduce((sum, row) => sum + Number(row.totalCharged || 0), 0),
       paidCount: paidFamilyRows.reduce((sum, row) => sum + Number(row.paidPaymentCount || 0), 0),
       paidPaymentSum: paidFamilyRows.reduce((sum, row) => sum + Number(row.paidPaymentAmount || row.totalPaid || 0), 0),
-      paidSum: workRows.reduce((sum, row) => sum + Number(row.totalPaid || 0), 0),
+      paidSum: uniqueFamilyRows(workRows).reduce((sum, row) => sum + Number(row.paidPaymentAmount || 0), 0),
       balanceSum: workRows.reduce((sum, row) => sum + Number(row.balance || 0), 0),
       debtorsCount: debtRows.length,
       debtSum: debtRows.reduce((sum, row) => sum + childDebtAmount(row), 0),
@@ -3488,6 +3549,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }
                 if (quickTransfer === 'empty' && r.transferNumber) return false;
                 if (quickTransfer && quickTransfer !== 'empty' && r.transferNumber !== quickTransfer) return false;
+                if (dashboardMetric === 'pendingSum' || dashboardMetric === 'pendingAmount') {
+                  if (r.status !== 'pending') return false;
+                }
+                if (dashboardMetric === 'paidCount' || dashboardMetric === 'paidSum') {
+                  if (r.status !== 'confirmed') return false;
+                }
+                if (dashboardMetric === 'rejectedCount' || dashboardMetric === 'rejectedSum') {
+                  if (r.status !== 'rejected') return false;
+                }
                 if (!search) return true;
                 const q = search.toLowerCase().replace(/\s+/g, '');
                 return [r.parentName, r.phone, r.childrenNames].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));

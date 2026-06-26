@@ -386,106 +386,170 @@ export async function fetchChargesForPeriod(
   return Object.values(map);
 }
 
-export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
-  const [famRes, childRes, chargeRes, paymentRes, walletRes] = await Promise.all([
+export interface FamiliesRPCResult {
+  rows: FamilyListRow[];
+  totalFamilies: number;
+}
+
+export async function fetchV2FamiliesRPC(
+  search: string = '',
+  limit: number = 150,
+  offset: number = 0,
+): Promise<FamiliesRPCResult> {
+  const { data, error } = await supabase.rpc('get_families_table', {
+    p_search: search || null,
+    p_limit: limit,
+    p_offset: offset,
+  });
+  if (error) throw new Error(error.message);
+
+  const rows: FamilyListRow[] = [];
+  let totalFamilies = 0;
+  let familyIndex = 0;
+  let prevFamilyId = '';
+
+  (data ?? []).forEach((row: any, idx: number) => {
+    if (idx === 0) totalFamilies = Number(row.total_families ?? 0);
+    if (row.family_id !== prevFamilyId) { familyIndex++; prevFamilyId = row.family_id; }
+
+    const branchCode = row.branch_code ?? '';
+    const schoolCode = normalizeSchoolCode(branchCode);
+    const vt = normalizeVehicle(row.vehicle_type);
+    const childChargedTotal = 0;
+    const childPaid = 0;
+    const childDebt = 0;
+    const totalCharged = Number(row.total_charged ?? 0);
+    const totalPaid = Number(row.total_paid ?? 0);
+    const debtAmount = Math.max(0, totalCharged - totalPaid);
+    const paymentStatus = totalCharged === 0
+      ? 'no_charges'
+      : debtAmount <= 0
+        ? 'paid'
+        : totalPaid > 0
+          ? 'partial'
+          : 'debt';
+
+    rows.push({
+      rowId: row.child_id ?? `${row.family_id}_empty`,
+      familyId: String(row.family_id),
+      familyIndex,
+      isFirstChild: idx === 0 || (data[idx - 1]?.family_id !== row.family_id),
+      childName: row.child_name ?? '',
+      childClass: row.class_name ?? '',
+      parentName: row.parent_name ?? '',
+      phone: row.phone ?? '',
+      secondPhone: row.second_phone ?? '',
+      contactName: row.contact_name ?? '',
+      contactPhone: row.contact_phone ?? '',
+      schoolId: row.school_id ?? null,
+      branchId: row.branch_id ?? null,
+      schoolCode,
+      branchName: row.branch_name ?? branchCode,
+      branchShort: row.branch_short ?? branchCode,
+      branchFilter: getBranchFilter(row.branch_name ?? null, branchCode),
+      streetAddress: stripAddress(row.address ?? ''),
+      distanceKm: row.distance_km == null ? null : Number(row.distance_km),
+      zone: normalizeZone(row.zone, 'A'),
+      vehicleType: vt,
+      vehicleLabel: '',
+      monthlyPrice: Number(row.final_price ?? row.base_price ?? 0),
+      status: mapChildStatus(row.child_status),
+      paymentStatus,
+      transferNumber: row.transfer_number ? String(row.transfer_number) : null,
+      driverId: row.driver_id ? String(row.driver_id) : null,
+      stopNumber: row.stop_order ? String(row.stop_order) : null,
+      timeMorning: row.time_morning ?? null,
+      selfExitAllowed: Boolean(row.self_exit_allowed),
+      latitude: row.latitude == null ? null : Number(row.latitude),
+      longitude: row.longitude == null ? null : Number(row.longitude),
+      discountAmount: Math.max(0, Number(row.base_price ?? 0) - Number(row.final_price ?? 0)),
+      totalCharged,
+      totalPaid,
+      paidPaymentCount: Number(row.paid_count ?? 0),
+      paidPaymentAmount: Number(row.paid_amount_sum ?? 0),
+      pendingPayment: Number(row.pending_amount ?? 0),
+      pendingPaymentCount: Number(row.pending_count ?? 0),
+      pendingPaymentId: row.pending_payment_id ?? null,
+      pendingPaymentAmount: Number(row.pending_amount ?? 0),
+      pendingPaymentDate: row.pending_payment_date ?? null,
+      pendingActualPaymentDate: row.pending_actual_date ?? null,
+      pendingPaymentType: row.pending_method ?? null,
+      pendingPaymentReceiptUrl: row.pending_receipt ?? null,
+      pendingPaymentComment: row.pending_comment ?? '',
+      rejectedPaymentCount: Number(row.rejected_count ?? 0),
+      rejectedPaymentAmount: Number(row.rejected_amount ?? 0),
+      allPaymentCount: Number(row.paid_count ?? 0) + Number(row.rejected_count ?? 0) + Number(row.pending_count ?? 0),
+      allPaymentAmount: Number(row.paid_amount_sum ?? 0),
+      childDebtAmount: debtAmount,
+      debtAmount,
+      balance: Number(row.balance ?? 0),
+    });
+  });
+
+  return { rows, totalFamilies };
+}
+
+export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, any>> {
+  const { data } = await supabase
+    .from('v2_payments')
+    .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, receipt_url, comment, created_at')
+    .eq('status', 'pending')
+    .order('created_at', { ascending: true });
+
+  const map: Record<string, any> = {};
+  (data ?? []).forEach((p: any) => {
+    if (!map[p.family_id]) map[p.family_id] = p;
+  });
+  return map;
+}
+
+export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
+  const [famRes, childRes, summaryRes, pendingMap, branches] = await Promise.all([
     supabase.from('v2_families').select('*').order('created_at', { ascending: false }),
     supabase.from('v2_children').select(CHILD_SELECT),
-    supabase.from('v2_charges').select('child_id, amount, paid_amount, status'),
-    supabase
-      .from('v2_payments')
-      .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, receipt_url, comment, created_at')
-      .order('created_at', { ascending: false }),
-    supabase.from('v2_family_wallets').select('family_id, main_balance'),
+    supabase.from('v2_families_summary').select('*'),
+    withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
+    fetchV2Branches(),
   ]);
   if (famRes.error) throw new Error(famRes.error.message);
   if (childRes.error) throw new Error(childRes.error.message);
-  if (chargeRes.error) throw new Error(chargeRes.error.message);
-  if (paymentRes.error) throw new Error(paymentRes.error.message);
-  if (walletRes.error) throw new Error(walletRes.error.message);
+
+  const branchById: Record<string, typeof branches[number]> = {};
+  branches.forEach(b => { branchById[b.id] = b; });
 
   const childMap: Record<string, any[]> = {};
   (childRes.data ?? []).forEach((child: any) => {
     if (!childMap[child.family_id]) childMap[child.family_id] = [];
     childMap[child.family_id].push(child);
   });
-  const chargeMap: Record<string, any[]> = {};
-  const familyChargeMap: Record<string, any[]> = {};
-  (chargeRes.data ?? []).forEach((charge: any) => {
-    if (!chargeMap[charge.child_id]) chargeMap[charge.child_id] = [];
-    chargeMap[charge.child_id].push(charge);
-    const child = (childRes.data ?? []).find((item: any) => item.id === charge.child_id);
-    if (child?.family_id) {
-      if (!familyChargeMap[child.family_id]) familyChargeMap[child.family_id] = [];
-      familyChargeMap[child.family_id].push(charge);
-    }
-  });
-  const pendingPaymentByFamily: Record<string, number> = {};
-  const pendingPaymentCountByFamily: Record<string, number> = {};
-  const pendingPaymentDetailsByFamily: Record<string, any> = {};
-  const paidPaymentCountByFamily: Record<string, number> = {};
-  const paidPaymentAmountByFamily: Record<string, number> = {};
-  const rejectedPaymentCountByFamily: Record<string, number> = {};
-  const rejectedPaymentAmountByFamily: Record<string, number> = {};
-  const allPaymentCountByFamily: Record<string, number> = {};
-  const allPaymentAmountByFamily: Record<string, number> = {};
-  const lastPaymentMethodByFamily: Record<string, string | null> = {};
-  const lastPaymentReceiptUrlByFamily: Record<string, string | null> = {};
-  (paymentRes.data ?? []).forEach((payment: any) => {
-    allPaymentCountByFamily[payment.family_id] = (allPaymentCountByFamily[payment.family_id] ?? 0) + 1;
-    allPaymentAmountByFamily[payment.family_id] = (allPaymentAmountByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
-    if (!(payment.family_id in lastPaymentMethodByFamily)) {
-      lastPaymentMethodByFamily[payment.family_id] = payment.payment_method ?? null;
-    }
-    if (!(payment.family_id in lastPaymentReceiptUrlByFamily) && payment.receipt_url) {
-      lastPaymentReceiptUrlByFamily[payment.family_id] = payment.receipt_url;
-    }
-    if (payment.status === 'pending') {
-      pendingPaymentByFamily[payment.family_id] = (pendingPaymentByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
-      pendingPaymentCountByFamily[payment.family_id] = (pendingPaymentCountByFamily[payment.family_id] ?? 0) + 1;
-      if (!pendingPaymentDetailsByFamily[payment.family_id]) {
-        pendingPaymentDetailsByFamily[payment.family_id] = payment;
-      }
-    }
-    if (payment.status === 'confirmed') {
-      paidPaymentCountByFamily[payment.family_id] = (paidPaymentCountByFamily[payment.family_id] ?? 0) + 1;
-      paidPaymentAmountByFamily[payment.family_id] = (paidPaymentAmountByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
-    }
-    if (payment.status === 'rejected') {
-      rejectedPaymentCountByFamily[payment.family_id] = (rejectedPaymentCountByFamily[payment.family_id] ?? 0) + 1;
-      rejectedPaymentAmountByFamily[payment.family_id] = (rejectedPaymentAmountByFamily[payment.family_id] ?? 0) + Number(payment.amount ?? 0);
-    }
-  });
-  const balanceByFamily: Record<string, number> = {};
-  (walletRes.data ?? []).forEach((wallet: any) => {
-    balanceByFamily[wallet.family_id] = Number(wallet.main_balance ?? 0);
-  });
+
+  const summaryMap: Record<string, any> = {};
+  (summaryRes.data ?? []).forEach((s: any) => { summaryMap[s.family_id] = s; });
 
   const rows: FamilyListRow[] = [];
   let familyIndex = 0;
   (famRes.data ?? []).forEach((family: any) => {
     const kids = childMap[family.id] ?? [];
     const items = kids.length > 0 ? kids : [null];
+    const s = summaryMap[family.id] ?? {};
+    const totalCharged = Number(s.total_charged ?? 0);
+    const totalPaid = Number(s.total_paid ?? 0);
+    const debtAmount = Number(s.debt_amount ?? 0);
 
     items.forEach((child: any, idx: number) => {
-      const branch = child?.v2_school_branches;
-      const childCharges = child ? chargeMap[child.id] ?? [] : [];
-      const familyCharges = familyChargeMap[family.id] ?? [];
-      const childDebt = childCharges.reduce((sum, charge) => sum + Math.max(0, Number(charge.amount ?? 0) - Number(charge.paid_amount ?? 0)), 0);
-      const childPaid = childCharges.reduce((sum, charge) => sum + Number(charge.paid_amount ?? 0), 0);
-      const totalCharged = familyCharges.reduce((sum, charge) => sum + Number(charge.amount ?? 0), 0);
-      const totalPaid = familyCharges.reduce((sum, charge) => sum + Number(charge.paid_amount ?? 0), 0);
-      const debtAmount = familyCharges.reduce((sum, charge) => sum + Math.max(0, Number(charge.amount ?? 0) - Number(charge.paid_amount ?? 0)), 0);
-      const paymentStatus = childCharges.length === 0
-        ? 'no_charges'
-        : childDebt <= 0
-          ? 'paid'
-          : childPaid > 0
-            ? 'partial'
-            : 'debt';
+      const branch = child?.branch_id ? branchById[String(child.branch_id)] : null;
       const branchCode = branch?.code ?? '';
       const schoolCode = normalizeSchoolCode(branchCode);
       const vt = normalizeVehicle(child?.vehicle_type);
-      const pendingPayment = pendingPaymentDetailsByFamily[family.id];
+      const paymentStatus = totalCharged === 0
+        ? 'no_charges'
+        : debtAmount <= 0
+          ? 'paid'
+          : totalPaid > 0
+            ? 'partial'
+            : 'debt';
+      const pp = pendingMap[family.id];
+
       rows.push({
         rowId: child ? String(child.id) : `${family.id}_empty`,
         familyId: String(family.id),
@@ -502,7 +566,7 @@ export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
         branchId: child?.branch_id ?? null,
         schoolCode,
         branchName: branch?.name ?? branchCode,
-        branchShort: branch?.short_name ?? branchCode,
+        branchShort: branch?.shortName ?? branchCode,
         branchFilter: getBranchFilter(branch?.name ?? null, branchCode),
         streetAddress: stripAddress(child?.address ?? ''),
         distanceKm: child?.distance_km == null ? null : Number(child.distance_km),
@@ -522,24 +586,24 @@ export async function fetchV2FamiliesTable(): Promise<FamilyListRow[]> {
         discountAmount: Math.max(0, Number(child?.base_price ?? 0) - Number(child?.final_price ?? 0)),
         totalCharged,
         totalPaid,
-        paidPaymentCount: paidPaymentCountByFamily[family.id] ?? 0,
-        paidPaymentAmount: paidPaymentAmountByFamily[family.id] ?? 0,
-        pendingPayment: pendingPaymentByFamily[family.id] ?? 0,
-        pendingPaymentCount: pendingPaymentCountByFamily[family.id] ?? 0,
-        pendingPaymentId: pendingPayment?.id ? String(pendingPayment.id) : null,
-        pendingPaymentAmount: Number(pendingPayment?.amount ?? 0),
-        pendingPaymentDate: pendingPayment?.payment_date ?? null,
-        pendingActualPaymentDate: pendingPayment?.actual_payment_date ?? null,
-        pendingPaymentType: pendingPayment?.payment_method ?? lastPaymentMethodByFamily[family.id] ?? null,
-        pendingPaymentReceiptUrl: pendingPayment?.receipt_url ?? lastPaymentReceiptUrlByFamily[family.id] ?? null,
-        pendingPaymentComment: pendingPayment?.comment ?? '',
-        rejectedPaymentCount: rejectedPaymentCountByFamily[family.id] ?? 0,
-        rejectedPaymentAmount: rejectedPaymentAmountByFamily[family.id] ?? 0,
-        allPaymentCount: allPaymentCountByFamily[family.id] ?? 0,
-        allPaymentAmount: allPaymentAmountByFamily[family.id] ?? 0,
-        childDebtAmount: childDebt,
+        paidPaymentCount: Number(s.paid_count ?? 0),
+        paidPaymentAmount: Number(s.confirmed_amount ?? 0),
+        pendingPayment: Number(s.pending_amount ?? 0),
+        pendingPaymentCount: Number(s.pending_count ?? 0),
+        pendingPaymentId: pp?.id ? String(pp.id) : null,
+        pendingPaymentAmount: Number(pp?.amount ?? s.pending_amount ?? 0),
+        pendingPaymentDate: pp?.payment_date ?? null,
+        pendingActualPaymentDate: pp?.actual_payment_date ?? null,
+        pendingPaymentType: pp?.payment_method ?? null,
+        pendingPaymentReceiptUrl: pp?.receipt_url ?? null,
+        pendingPaymentComment: pp?.comment ?? '',
+        rejectedPaymentCount: Number(s.rejected_count ?? 0),
+        rejectedPaymentAmount: Number(s.rejected_amount ?? 0),
+        allPaymentCount: Number(s.paid_count ?? 0) + Number(s.pending_count ?? 0) + Number(s.rejected_count ?? 0),
+        allPaymentAmount: Number(s.confirmed_amount ?? 0),
+        childDebtAmount: debtAmount,
         debtAmount,
-        balance: balanceByFamily[family.id] ?? 0,
+        balance: Number(s.balance ?? 0),
       });
     });
     familyIndex++;
@@ -568,19 +632,23 @@ export async function fetchV2Children(family: Family): Promise<Child[]> {
   return (data ?? []).map((row: any) => mapV2Child(row, family));
 }
 
+let branchesCache: V2BranchOption[] | null = null;
+
 export async function fetchV2Branches(): Promise<V2BranchOption[]> {
+  if (branchesCache) return branchesCache;
   const { data, error } = await supabase
     .from('v2_school_branches')
     .select('id, school_id, code, short_name, name')
     .order('code', { ascending: true });
   if (error) throw new Error(error.message);
-  return (data ?? []).map((row: any) => ({
+  branchesCache = (data ?? []).map((row: any) => ({
     id: String(row.id),
     schoolId: String(row.school_id),
     code: row.code ?? '',
     shortName: row.short_name ?? row.code ?? '',
     name: row.name ?? row.short_name ?? row.code ?? '',
   }));
+  return branchesCache;
 }
 
 export async function updateV2Family(familyId: string, updated: Family): Promise<void> {
