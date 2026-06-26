@@ -44,14 +44,10 @@ export async function extractReceiptData(file: File): Promise<OcrResult> {
         { type: 'text', text: PROMPT },
       ];
 
-  const apiKey = process.env.REACT_APP_ANTHROPIC_API_KEY ?? '';
-  const res = await fetch('https://api.anthropic.com/v1/messages', {
+  const res = await fetch('/anthropic/v1/messages', {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-access': 'true',
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
