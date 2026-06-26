@@ -493,13 +493,13 @@ function SideMetric({ label, value, alert, pending }: { label: string; value: st
 }
 
 function TabFinanceLazy({ loaded, onLoad, ...props }: { loaded: boolean; onLoad: () => void } & React.ComponentProps<typeof TabFinance>) {
-  useEffect(() => { if (!loaded) onLoad(); }, []);
+  useEffect(() => { if (!loaded) onLoad(); }, [loaded, onLoad]);
   if (!loaded) return <div style={{ padding: 40, textAlign: 'center', color: '#8A94A3', fontSize: 13 }}>Загрузка финансов...</div>;
   return <TabFinance {...props} />;
 }
 
 function TabHistoryLazy({ loaded, onLoad, audit }: { loaded: boolean; onLoad: () => void; audit: AuditEntry[] }) {
-  useEffect(() => { if (!loaded) onLoad(); }, []);
+  useEffect(() => { if (!loaded) onLoad(); }, [loaded, onLoad]);
   if (!loaded) return <div style={{ padding: 40, textAlign: 'center', color: '#8A94A3', fontSize: 13 }}>Загрузка истории...</div>;
   return <TabHistory audit={audit} />;
 }
@@ -949,28 +949,6 @@ const contentBodyStyle: React.CSSProperties = {
   background: 'var(--active-bg)',
 };
 
-const childTableHeadStyle: React.CSSProperties = {
-  height: 30,
-  padding: '0 8px',
-  borderBottom: '1px solid #E8EEF1',
-  background: '#F7FBFB',
-  color: '#667085',
-  fontSize: 10,
-  fontWeight: 850,
-  textAlign: 'left',
-  whiteSpace: 'nowrap',
-};
-
-const childTableCellStyle: React.CSSProperties = {
-  height: 34,
-  padding: '0 8px',
-  borderBottom: '1px solid #F0F3F5',
-  color: '#4B5563',
-  fontSize: 11,
-  fontWeight: 700,
-  whiteSpace: 'nowrap',
-};
-
 const smallAddChildBtnStyle: React.CSSProperties = {
   height: 30,
   border: 'none',
@@ -1036,22 +1014,6 @@ const childMatrixValueCellStyle: React.CSSProperties = {
   borderLeft: '1px solid #E8EEF1',
 };
 
-const childCardStyle: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #E8EEF1',
-  borderRadius: 10,
-  padding: '8px 10px',
-};
-
-const childCardHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  gap: 8,
-  paddingBottom: 6,
-  borderBottom: '1px solid #F0F3F5',
-  marginBottom: 6,
-};
-
 const childCardIndexStyle: React.CSSProperties = {
   width: 22,
   height: 22,
@@ -1065,43 +1027,6 @@ const childCardIndexStyle: React.CSSProperties = {
   fontWeight: 900,
   flexShrink: 0,
 };
-
-const childCardFieldsStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: '1fr',
-  gap: '2px 0',
-};
-
-const childCardPriceStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 16,
-  borderTop: '1px solid #F0F3F5',
-  marginTop: 6,
-  paddingTop: 6,
-};
-
-const childPriceLabelStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  color: '#8A94A3',
-  textTransform: 'uppercase',
-  marginRight: 4,
-};
-
-const childPriceValueStyle: React.CSSProperties = {
-  fontSize: 12,
-  fontWeight: 750,
-  color: 'var(--text)',
-};
-
-function ChildField({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label style={{ display: 'grid', gridTemplateColumns: '90px minmax(0,1fr)', alignItems: 'center', minHeight: 28, borderRadius: 6, padding: '0 4px', background: '#F8FAFC' }}>
-      <span style={{ fontSize: 11, fontWeight: 750, color: '#8A94A3' }}>{label}</span>
-      {children}
-    </label>
-  );
-}
 
 function childTableControlStyle(strong?: boolean): React.CSSProperties {
   return {

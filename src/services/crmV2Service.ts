@@ -415,9 +415,6 @@ export async function fetchV2FamiliesRPC(
     const branchCode = row.branch_code ?? '';
     const schoolCode = normalizeSchoolCode(branchCode);
     const vt = normalizeVehicle(row.vehicle_type);
-    const childChargedTotal = 0;
-    const childPaid = 0;
-    const childDebt = 0;
     const totalCharged = Number(row.total_charged ?? 0);
     const totalPaid = Number(row.total_paid ?? 0);
     const debtAmount = Math.max(0, totalCharged - totalPaid);
