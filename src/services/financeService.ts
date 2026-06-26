@@ -1,4 +1,4 @@
-import { supabase } from './supabase';
+import { SUPABASE_KEY, SUPABASE_URL, supabase } from './supabase';
 import {
   Charge,
   Child,
@@ -263,9 +263,15 @@ export async function createFamilyPayment(params: {
     ? await uploadPaymentReceipt(params.familyId, params.receiptFile)
     : null;
 
-  const { data: payment, error } = await supabase
-    .from('v2_payments')
-    .insert({
+  const response = await fetch(`${SUPABASE_URL}/rest/v1/v2_payments`, {
+    method: 'POST',
+    headers: {
+      apikey: SUPABASE_KEY,
+      Authorization: `Bearer ${SUPABASE_KEY}`,
+      'Content-Type': 'application/json',
+      Prefer: 'return=minimal',
+    },
+    body: JSON.stringify({
       family_id: params.familyId,
       amount: params.amount,
       suggested_main_amount: params.amount,
@@ -277,13 +283,32 @@ export async function createFamilyPayment(params: {
       status: 'pending',
       submitted_by: params.createdBy,
       comment: params.comment || null,
-    })
-    .select('*')
-    .single();
+    }),
+  });
 
-  if (error) throw new Error(error.message);
-  if (!payment) throw new Error('Платёж не создан');
-  return mapPayment(payment);
+  if (!response.ok) {
+    let message = `Не удалось сохранить платёж (${response.status})`;
+    try {
+      const error = await response.json();
+      message = error.message || error.details || message;
+    } catch {
+      // Response body is not always JSON.
+    }
+    throw new Error(message);
+  }
+
+  return {
+    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}`,
+    familyId: params.familyId,
+    amount: params.amount,
+    paymentType: params.paymentType,
+    receiptUrl: receiptUrl ?? undefined,
+    paymentDate: params.paymentDate,
+    status: 'На проверке',
+    createdBy: params.createdBy,
+    comment: params.comment ?? '',
+    createdAt: new Date().toISOString(),
+  };
 }
 
 async function uploadPaymentReceipt(familyId: string, file: File): Promise<string> {

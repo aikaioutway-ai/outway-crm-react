@@ -93,7 +93,7 @@ async function reconcileEntry(
   const { data: payments, error } = await supabase
     .from('v2_payments')
     .select('id, amount, status')
-    .eq('receipt_code', receiptCode)
+    .ilike('receipt_code', `%${receiptCode}`)
     .limit(1);
 
   if (error || !payments?.length) return 'unmatched';
@@ -239,10 +239,13 @@ export function parseBankXlsx(buffer: ArrayBuffer): BankStatementRow[] {
 
     if (!desc || isNaN(amount) || amount <= 0) continue;
 
-    // Извлекаем код MBIZ_S_xxxx из поля назначения
-    const match = desc.match(/MBIZ_S_([A-Za-z0-9_-]+)/);
-    if (!match) continue;
-    const receipt_code = `MBIZ_S_${match[1]}`;
+    // MBIZ_MBANK — банковский перевод без QR кода, пропускаем
+    if (desc.startsWith('MBIZ_MBANK')) continue;
+    // Извлекаем последние 12 hex-символов из любого QR кода в описании
+    // Все форматы (QR_452, QR_130, MBIZ-uuid, MBIZ_S_uuid) заканчиваются уникальным 12-символьным хвостом
+    const tailMatch = desc.match(/([0-9a-f]{12})(?=[.\s]|$)/i);
+    if (!tailMatch) continue;
+    const receipt_code = tailMatch[1];
 
     // Дата
     let statement_date: string | null = null;

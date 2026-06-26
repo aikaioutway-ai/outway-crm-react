@@ -7,7 +7,6 @@ import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { fetchV2FamiliesTable } from './services/crmV2Service';
 import { UserRole } from './types';
-import BankStatementPage from './modules/finance/BankStatementPage';
 import './index.css';
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
@@ -194,12 +193,12 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Кассир')}
-                {([['payments', 'Проверка'], ['manager_payments', 'Платежи'], ['statement', 'Выписка']] as const).map(([key, label]) => (
+                {([['payments', 'Проверка'], ['manager_payments', 'Платежи']] as const).map(([key, label]) => (
                   <button key={key} onClick={() => setCashierTab(key)} style={tabStyle(cashierTab === key)}>
                     {label}
                   </button>
                 ))}
-                {extraTabs(cashierTab !== 'statement')}
+                {extraTabs(true)}
               </div>
             </div>
             {cashierTab === 'payments' ? (
@@ -224,9 +223,7 @@ export default function App() {
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
               />
-            ) : (
-              <BankStatementPage userName={currentUser?.name} />
-            )}
+            ) : null}
           </div>
         ) : section === 'logistics' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
