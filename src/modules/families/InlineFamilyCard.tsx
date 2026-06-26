@@ -174,12 +174,20 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string): Promise<boolean> {
     try {
       await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentDate, receiptFile, receiptCode, comment, createdBy: userName });
-      await addAudit('Платёж', 'family_payment', '-', `${money(amount)} на проверке`);
+      try {
+        await addAudit('Платёж', 'family_payment', '-', `${money(amount)} на проверке`);
+      } catch (error) {
+        console.error('Payment audit save failed', error);
+      }
       await loadFinance();
       await loadAudit();
       onUpdated?.();
       return true;
-    } catch { return false; }
+    } catch (error) {
+      console.error('Payment save failed', error);
+      window.alert(error instanceof Error ? error.message : 'Не удалось внести платёж');
+      return false;
+    }
   }
   async function handleConfirmPayment(payment: FamilyPayment, actualPaymentDate: string): Promise<boolean> {
     try {

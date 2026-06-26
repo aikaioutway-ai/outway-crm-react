@@ -176,6 +176,15 @@ function buildColumns<T>(initialColumns: ColumnDef<T>[], saved: { key: string; v
   return initialColumns.map(c => ({ ...c, visible: c.visible ?? true }));
 }
 
+function columnConfigSignature<T>(columns: ColumnDef<T>[]): string {
+  return columns.map(column => [
+    column.key,
+    column.type,
+    column.editable ? 'editable' : 'readonly',
+    column.editOptions?.map(option => `${option.value}:${option.label}`).join('|') ?? '',
+  ].join(':')).join(',');
+}
+
 async function loadColumnSettings(storageKey: string): Promise<{ key: string; visible: boolean; width?: number }[] | null> {
   try {
     const { data } = await supabase
@@ -232,14 +241,14 @@ export function DataTable<T extends Record<string, any>>({
   useEffect(() => {
     loadColumnSettings(storageKey).then(saved => {
       setCols(buildColumns(initialColumns, saved));
-      prevColKeysRef.current = initialColumns.map(c => c.key).join(',');
+      prevColKeysRef.current = columnConfigSignature(initialColumns);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
-  // Пересчитываем если изменился набор ключей колонок в коде
+  // Пересчитываем если изменилась структура колонок в коде
   useEffect(() => {
-    const currentKeys = initialColumns.map(c => c.key).join(',');
+    const currentKeys = columnConfigSignature(initialColumns);
     if (currentKeys === prevColKeysRef.current) return;
     prevColKeysRef.current = currentKeys;
     loadColumnSettings(storageKey).then(saved => {
@@ -359,10 +368,13 @@ export function DataTable<T extends Record<string, any>>({
 
   const commitCellEdit = async (row: T, col: ColumnDef<T>, nextValue = draftValue) => {
     if (!editingCell || !onCellSave) return;
+    const previousEditingCell = editingCell;
+    if (col.editOptions) setEditingCell(null);
     setSavingCell(true);
     const ok = await Promise.resolve(onCellSave(row, col.key, nextValue));
     setSavingCell(false);
     if (ok) setEditingCell(null);
+    if (!ok && col.editOptions) setEditingCell(previousEditingCell);
   };
 
   const cancelCellEdit = () => {

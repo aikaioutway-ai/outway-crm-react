@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Family, FamilyPayment, UserRole, VehicleType, Zone } from '../../types';
+import { Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
@@ -106,6 +106,10 @@ const MODE_LABEL: Record<FamiliesMode, string> = {
 const TRANSFER_OPTIONS = Array.from({ length: 30 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }));
 const TRANSFER_BAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
 const STOP_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
+const PAYMENT_METHOD_OPTIONS: { value: PaymentType; label: string }[] = [
+  { value: 'cash', label: 'Наличные' },
+  { value: 'transfer', label: 'Безналичный QR' },
+];
 
 const COLUMNS: ColumnDef<ChildRow>[] = [
   {
@@ -1315,7 +1319,8 @@ const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
     },
   },
   {
-    key: 'paymentMethod', label: 'Вид оплаты', type: 'text', category: 'Платёж', width: 110, sortable: false, filterable: false,
+    key: 'paymentMethod', label: 'Вид оплаты', type: 'select', category: 'Платёж', width: 110, sortable: false, filterable: false,
+    editOptions: PAYMENT_METHOD_OPTIONS,
     render: (val) => {
       if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
       const lower = String(val).toLowerCase();
@@ -1453,7 +1458,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       },
     },
     {
-      key: 'paymentMethod', label: 'Вид оплаты', type: 'text', category: 'Платёж', width: 100, sortable: false, filterable: false,
+      key: 'paymentMethod', label: 'Вид оплаты', type: 'select', category: 'Платёж', width: 100, sortable: false, filterable: false,
+      editable: userRole === 'admin',
+      editOptions: PAYMENT_METHOD_OPTIONS,
       render: (val) => {
         if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
         const lower = String(val).toLowerCase();
@@ -1466,7 +1473,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       render: (val) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} />,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [cashierDates, cashierConfirmingId]);
+  ], [cashierDates, cashierConfirmingId, userRole]);
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
@@ -1592,6 +1599,38 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       .then(setCashierRows)
       .catch(console.error)
       .finally(() => setLoadingCashier(false));
+  }
+
+  const paymentTableColumns = useMemo(() => (
+    PAYMENT_TABLE_COLUMNS.map(column => (
+      column.key === 'paymentMethod'
+        ? { ...column, editable: userRole === 'admin' }
+        : column
+    ))
+  ), [userRole]);
+
+  async function handlePaymentMethodCellSave(row: PaymentTableRow | CashierPaymentRow, key: string, value: any): Promise<boolean> {
+    if (userRole !== 'admin') {
+      alert('Менять вид оплаты может только админ');
+      return false;
+    }
+    if (key !== 'paymentMethod') return false;
+
+    try {
+      const paymentType = value as PaymentType;
+      await updateFamilyPayment(row.id, { paymentType });
+      setPaymentRows(prev => prev.map(item => (
+        item.id === row.id ? { ...item, paymentMethod: paymentType } : item
+      )));
+      setCashierRows(prev => prev.map(item => (
+        item.id === row.id ? { ...item, paymentMethod: paymentType } : item
+      )));
+      return true;
+    } catch (error) {
+      console.error('Payment method save failed', error);
+      alert('Не удалось сохранить вид оплаты');
+      return false;
+    }
   }
 
   async function cashierConfirm(row: CashierPaymentRow, actualDate: string) {
@@ -3517,6 +3556,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               loading={loadingCashier}
               emptyText="Платежей на проверке нет"
               canManageProperties={false}
+              onCellSave={userRole === 'admin' ? handlePaymentMethodCellSave : undefined}
               showProperties={columnsOpen ?? false}
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => {
@@ -3541,7 +3581,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           ) : isPaymentsMode ? (
             <DataTable<PaymentTableRow>
               key="payments_table"
-              columns={PAYMENT_TABLE_COLUMNS}
+              columns={paymentTableColumns}
               data={paymentRows.filter(r => {
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
@@ -3567,6 +3607,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               loading={loadingPayments}
               emptyText="Платежей не найдено"
               canManageProperties={false}
+              onCellSave={userRole === 'admin' ? handlePaymentMethodCellSave : undefined}
               onRowOpen={(row) => {
                 const childRow = rows.find(r => r.familyId === row.familyId);
                 if (childRow) toggleExpandedFamily(row.familyId, childRow, 'finance');

@@ -209,11 +209,17 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
         comment,
         createdBy: userName,
       });
-      await addAudit('Внесение платежа', 'family_payment', '—', `${money(amount)} на проверке`);
+      try {
+        await addAudit('Внесение платежа', 'family_payment', '—', `${money(amount)} на проверке`);
+      } catch (error) {
+        console.error('Payment audit save failed', error);
+      }
       await loadFinance();
       await loadAudit();
       return true;
-    } catch {
+    } catch (error) {
+      console.error('Payment save failed', error);
+      window.alert(error instanceof Error ? error.message : 'Не удалось внести платёж');
       return false;
     }
   }
