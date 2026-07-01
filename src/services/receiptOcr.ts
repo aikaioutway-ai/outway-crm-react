@@ -26,6 +26,25 @@ const PROMPT = `Извлеки из этого банковского чека:
 Верни только JSON без пояснений: {"receipt_code": "...", "amount": 5500, "date": "2026-06-10"}
 Если поле не найдено — ставь null.`;
 
+async function readErrorMessage(res: Response): Promise<string> {
+  const fallback = `сервер вернул ${res.status}`;
+
+  try {
+    const text = await res.text();
+    if (!text) return fallback;
+
+    try {
+      const parsed = JSON.parse(text);
+      const message = parsed?.error?.message || parsed?.error || parsed?.message;
+      return typeof message === 'string' ? message : fallback;
+    } catch {
+      return text.length > 180 ? `${text.slice(0, 180)}...` : text;
+    }
+  } catch {
+    return fallback;
+  }
+}
+
 export async function extractReceiptData(file: File): Promise<OcrResult> {
   if (file.size > 10 * 1024 * 1024) {
     throw new Error('Файл слишком большой (макс. 10 МБ)');
@@ -44,7 +63,9 @@ export async function extractReceiptData(file: File): Promise<OcrResult> {
         { type: 'text', text: PROMPT },
       ];
 
-  const res = await fetch('/anthropic/v1/messages', {
+  const endpoint = import.meta.env.DEV ? '/anthropic/v1/messages' : '/api/receipt-ocr';
+
+  const res = await fetch(endpoint, {
     method: 'POST',
     headers: {
       'content-type': 'application/json',
@@ -57,8 +78,8 @@ export async function extractReceiptData(file: File): Promise<OcrResult> {
   });
 
   if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Anthropic API error: ${err}`);
+    const err = await readErrorMessage(res);
+    throw new Error(err);
   }
 
   const data = await res.json();

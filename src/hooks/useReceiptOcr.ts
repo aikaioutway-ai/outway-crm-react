@@ -44,8 +44,9 @@ export function useReceiptOcr(): ReceiptOcrState {
     } catch (e: any) {
       console.error('OCR error:', e);
       setOcrMsg(`OCR недоступен — ${e?.message ?? 'неизвестная ошибка'}`);
+    } finally {
+      setOcrLoading(false);
     }
-    setOcrLoading(false);
   }
 
   function reset() {
