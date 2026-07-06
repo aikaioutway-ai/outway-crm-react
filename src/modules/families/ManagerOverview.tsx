@@ -111,13 +111,13 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
 
         <div style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-          <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 12, padding: '0 20px 10px', flexShrink: 0 }}>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Школы</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Новые заявки</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Сумма долга</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Должники</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Сумма на проверке</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Баланс</span>
+          <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 12, padding: '4px 20px 14px', flexShrink: 0 }}>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Школы</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Новые заявки</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Сумма долга</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Должники</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Сумма на проверке</span>
+            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Баланс</span>
           </div>
 
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
