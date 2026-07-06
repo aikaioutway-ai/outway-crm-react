@@ -26,10 +26,7 @@ const SCHOOL_COLORS = [
 
 const CHART_COLORS = { requests: '#378ADD', pendingCount: '#BA7517', pendingSum: '#0F6E56' };
 
-const rowStyle: React.CSSProperties = { height: 30, display: 'flex', alignItems: 'center', padding: '0 12px', boxSizing: 'border-box', gap: 8 };
-const altRowStyle: React.CSSProperties = { ...rowStyle, background: 'var(--surface-2)' };
-const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid var(--border)', borderRadius: 18, padding: '8px 0' };
-const headStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--text-2)', padding: '0 12px 6px', textTransform: 'uppercase' };
+const GRID_COLUMNS = '1.4fr 0.7fr 1fr 1.1fr 1.1fr 1.1fr';
 
 function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
@@ -52,30 +49,11 @@ function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   });
 }
 
-function BarChartCard({ title, stats, valueKey, color, formatValue }: {
-  title: string;
-  stats: SchoolStat[];
-  valueKey: 'newRequests' | 'pendingCount' | 'pendingSum';
-  color: string;
-  formatValue: (n: number) => string;
-}) {
-  const max = Math.max(1, ...stats.map(s => s[valueKey]));
+function Bar({ value, max, color }: { value: number; max: number; color: string }) {
+  const width = Math.round((value / max) * 100);
   return (
-    <div style={cardStyle}>
-      <div style={headStyle}>{title}</div>
-      {stats.map((s, i) => {
-        const value = s[valueKey];
-        const width = Math.round((value / max) * 100);
-        return (
-          <div key={s.key} style={i % 2 === 1 ? altRowStyle : rowStyle}>
-            <span style={{ width: 76, flexShrink: 0, fontSize: 12, color: 'var(--text-2)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
-            <div style={{ flex: 1, position: 'relative', height: 9, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4 }}>
-              <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${width}%`, background: color, borderRadius: 4 }} />
-            </div>
-            <span style={{ minWidth: 46, flexShrink: 0, fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>{formatValue(value)}</span>
-          </div>
-        );
-      })}
+    <div style={{ flex: 1, position: 'relative', height: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4 }}>
+      <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${width}%`, background: color, borderRadius: 4 }} />
     </div>
   );
 }
@@ -91,6 +69,9 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
   }, []);
 
   const stats = useMemo(() => computeSchoolStats(rows ?? []), [rows]);
+  const maxRequests = Math.max(1, ...stats.map(s => s.newRequests));
+  const maxPendingCount = Math.max(1, ...stats.map(s => s.pendingCount));
+  const maxPendingSum = Math.max(1, ...stats.map(s => s.pendingSum));
 
   if (rows === null) {
     return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
@@ -98,53 +79,65 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex' }}>
+        <div style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
-        <div style={{ ...cardStyle, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0 16px' }}>
-          <div>
-            <div style={headStyle}>Школы</div>
+          <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 12, padding: '0 20px 10px', flexShrink: 0 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Школы</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Должники</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Сумма долга</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Новые заявки</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Чеков · к-во</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Чеков · сумма</span>
+          </div>
+
+          <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
             {stats.map((s, i) => (
               <div
                 key={s.key}
                 onClick={() => onSelectSchool(s.key)}
-                style={{ ...(i % 2 === 1 ? altRowStyle : rowStyle), cursor: 'pointer' }}
+                style={{
+                  flex: 1,
+                  display: 'grid',
+                  gridTemplateColumns: GRID_COLUMNS,
+                  gap: 12,
+                  alignItems: 'center',
+                  padding: '0 20px',
+                  cursor: 'pointer',
+                  background: i % 2 === 1 ? 'var(--surface-2)' : undefined,
+                }}
               >
-                <span style={{ width: 20, height: 20, borderRadius: 6, background: s.color, color: '#fff', fontSize: 9, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {s.label.slice(0, 2).toUpperCase()}
-                </span>
-                <span style={{ fontSize: 13, fontWeight: 650, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
-                <ChevronRight size={13} color="var(--text-2)" />
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                  <span style={{ width: 26, height: 26, borderRadius: 7, background: s.color, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {s.label.slice(0, 2).toUpperCase()}
+                  </span>
+                  <span style={{ fontSize: 14, fontWeight: 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
+                  <ChevronRight size={14} color="var(--text-2)" />
+                </div>
+
+                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
+
+                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Bar value={s.newRequests} max={maxRequests} color={CHART_COLORS.requests} />
+                  <span style={{ minWidth: 24, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.newRequests}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Bar value={s.pendingCount} max={maxPendingCount} color={CHART_COLORS.pendingCount} />
+                  <span style={{ minWidth: 24, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.pendingCount}</span>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <Bar value={s.pendingSum} max={maxPendingSum} color={CHART_COLORS.pendingSum} />
+                  <span style={{ minWidth: 56, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.pendingSum.toLocaleString('ru-RU')}</span>
+                </div>
               </div>
             ))}
           </div>
 
-          <div>
-            <div style={headStyle}>Должники</div>
-            {stats.map((s, i) => (
-              <div key={s.key} style={i % 2 === 1 ? altRowStyle : rowStyle}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
-              </div>
-            ))}
-          </div>
-
-          <div>
-            <div style={headStyle}>Сумма долга</div>
-            {stats.map((s, i) => (
-              <div key={s.key} style={i % 2 === 1 ? altRowStyle : rowStyle}>
-                <span style={{ width: 7, height: 7, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-                <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
-              </div>
-            ))}
-          </div>
         </div>
-
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
-          <BarChartCard title="Новые заявки" stats={stats} valueKey="newRequests" color={CHART_COLORS.requests} formatValue={n => String(n)} />
-          <BarChartCard title="Чеков на проверке · к-во" stats={stats} valueKey="pendingCount" color={CHART_COLORS.pendingCount} formatValue={n => String(n)} />
-          <BarChartCard title="Чеков на проверке · сумма" stats={stats} valueKey="pendingSum" color={CHART_COLORS.pendingSum} formatValue={n => n.toLocaleString('ru-RU')} />
-        </div>
-
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarCollapsed ? 78 : 280, flexShrink: 0, transition: 'width .18s ease' }} />
