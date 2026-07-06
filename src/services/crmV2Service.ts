@@ -395,7 +395,7 @@ export async function fetchChargesForPeriod(
     return query.range(from, to);
   });
   const pendingRows = await fetchAllRows<any>((from, to) => {
-    let query = supabase
+    const query = supabase
       .from('v2_payments')
       .select('family_id, amount, suggested_main_amount, suggested_deposit_amount')
       .eq('status', 'pending');

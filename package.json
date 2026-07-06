@@ -24,7 +24,8 @@
     "dev": "vite --host 127.0.0.1",
     "build": "vite build",
     "preview": "vite preview --host 127.0.0.1",
-    "test": "jest"
+    "test": "jest",
+    "lint": "eslint src"
   },
   "jest": {
     "testEnvironment": "jsdom",
@@ -35,7 +36,8 @@
       "^.+\\.(ts|tsx)$": "ts-jest"
     },
     "moduleNameMapper": {
-      "\\.(css|less|sass|scss)$": "identity-obj-proxy"
+      "\\.(css|less|sass|scss)$": "identity-obj-proxy",
+      "services/receiptOcr$": "<rootDir>/src/services/__mocks__/receiptOcr.ts"
     },
     "testMatch": [
       "<rootDir>/src/**/*.test.(ts|tsx)"
@@ -54,13 +56,18 @@
     ]
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.4",
     "@types/jest": "^30.0.0",
     "@types/node": "^20.19.0",
     "@vitejs/plugin-react": "^4.7.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "globals": "^15.15.0",
     "identity-obj-proxy": "^3.0.0",
     "jest": "^30.4.2",
     "jest-environment-jsdom": "^30.4.1",
     "ts-jest": "^29.4.11",
+    "typescript-eslint": "^8.62.1",
     "vite": "^5.4.21"
   }
 }

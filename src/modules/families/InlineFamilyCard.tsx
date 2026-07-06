@@ -111,7 +111,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     } catch { setAuditLoaded(true); }
   }
   async function addAudit(action: string, field: string, o: string, n: string) {
-    try { await addV2Audit({ actorName: userName, action, entityType: field, entityId: family.id, oldValue: o, newValue: n }); } catch {}
+    // audit logging failures must not block the save flow
+    try { await addV2Audit({ actorName: userName, action, entityType: field, entityId: family.id, oldValue: o, newValue: n }); } catch { /* noop */ }
   }
   async function handleSaveFamily(updated: Family) {
     setSaving(true);
