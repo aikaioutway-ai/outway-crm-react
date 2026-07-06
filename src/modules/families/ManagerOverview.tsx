@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, ChevronRight, Clock, Inbox, Landmark, Wallet } from 'lucide-react';
 import { fetchV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
 import { SCHOOL_TABS } from './constants';
 import { money } from '../../utils/pricing';
@@ -58,6 +58,20 @@ function Bar({ value, max, color }: { value: number; max: number; color: string 
   );
 }
 
+function KpiChip({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '12px 16px' }}>
+      <div style={{ width: 38, height: 38, borderRadius: 11, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+        {icon}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
+        <div style={{ fontSize: 11, fontWeight: 650, color: 'var(--text-2)', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{label}</div>
+      </div>
+    </div>
+  );
+}
+
 export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps) {
   const [rows, setRows] = useState<FamilyListRow[] | null>(null);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(true);
@@ -71,6 +85,13 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
   const stats = useMemo(() => computeSchoolStats(rows ?? []), [rows]);
   const maxRequests = Math.max(1, ...stats.map(s => s.newRequests));
   const maxPendingSum = Math.max(1, ...stats.map(s => s.pendingSum));
+  const totals = useMemo(() => stats.reduce((acc, s) => ({
+    newRequests: acc.newRequests + s.newRequests,
+    debtSum: acc.debtSum + s.debtSum,
+    debtorsCount: acc.debtorsCount + s.debtorsCount,
+    pendingSum: acc.pendingSum + s.pendingSum,
+    balance: acc.balance + s.balance,
+  }), { newRequests: 0, debtSum: 0, debtorsCount: 0, pendingSum: 0, balance: 0 }), [stats]);
 
   if (rows === null) {
     return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
@@ -78,7 +99,16 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex' }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+        <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+          <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(totals.newRequests)} color={CHART_COLORS.requests} />
+          <KpiChip icon={<Landmark size={18} color="#fff" />} label="Сумма долга" value={money(totals.debtSum)} color="var(--danger)" />
+          <KpiChip icon={<AlertTriangle size={18} color="#fff" />} label="Должники" value={String(totals.debtorsCount)} color="var(--warning)" />
+          <KpiChip icon={<Clock size={18} color="#fff" />} label="На проверке" value={money(totals.pendingSum)} color={CHART_COLORS.pending} />
+          <KpiChip icon={<Wallet size={18} color="#fff" />} label="Баланс" value={totals.balance.toLocaleString('ru-RU')} color="var(--success)" />
+        </div>
+
         <div style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 12, padding: '0 20px 10px', flexShrink: 0 }}>
