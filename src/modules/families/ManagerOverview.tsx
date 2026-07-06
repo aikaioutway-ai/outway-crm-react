@@ -27,6 +27,14 @@ const SCHOOL_COLORS = [
 const CHART_COLORS = { requests: '#378ADD', pending: '#BA7517' };
 
 const GRID_COLUMNS = '1.5fr 1.1fr 0.9fr 0.7fr 1.1fr 0.9fr';
+const COLUMN_COUNT = 6;
+
+function colStyle(index: number): React.CSSProperties {
+  return {
+    paddingRight: 16,
+    borderRight: index < COLUMN_COUNT - 1 ? '1px solid var(--border)' : 'none',
+  };
+}
 
 function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
@@ -112,12 +120,12 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
         <div style={{ flex: 1, minHeight: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 18, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
 
           <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 12, padding: '4px 20px 14px', flexShrink: 0 }}>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Школы</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Новые заявки</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Сумма долга</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Должники</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Сумма на проверке</span>
-            <span style={{ fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Баланс</span>
+            <span style={{ ...colStyle(0), fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Школы</span>
+            <span style={{ ...colStyle(1), fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Новые заявки</span>
+            <span style={{ ...colStyle(2), fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Сумма долга</span>
+            <span style={{ ...colStyle(3), fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Должники</span>
+            <span style={{ ...colStyle(4), fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Сумма на проверке</span>
+            <span style={{ ...colStyle(5), fontSize: 15, fontWeight: 800, color: 'var(--text)', textTransform: 'uppercase' }}>Баланс</span>
           </div>
 
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -130,13 +138,12 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
                   display: 'grid',
                   gridTemplateColumns: GRID_COLUMNS,
                   gap: 12,
-                  alignItems: 'center',
                   padding: '0 20px',
                   cursor: 'pointer',
                   background: i % 2 === 1 ? 'var(--surface-2)' : undefined,
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+                <div style={{ ...colStyle(0), display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
                   <span style={{ width: 26, height: 26, borderRadius: 7, background: s.color, color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                     {s.label.slice(0, 2).toUpperCase()}
                   </span>
@@ -144,21 +151,27 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
                   <ChevronRight size={14} color="var(--text-2)" />
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ ...colStyle(1), display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Bar value={s.newRequests} max={maxRequests} color={CHART_COLORS.requests} />
                   <span style={{ minWidth: 24, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.newRequests}</span>
                 </div>
 
-                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
+                <div style={{ ...colStyle(2), display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
+                </div>
 
-                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
+                <div style={{ ...colStyle(3), display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
+                </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ ...colStyle(4), display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Bar value={s.pendingSum} max={maxPendingSum} color={CHART_COLORS.pending} />
                   <span style={{ minWidth: 56, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.pendingSum.toLocaleString('ru-RU')}</span>
                 </div>
 
-                <span style={{ fontSize: 14, fontWeight: 700, color: s.balance < 0 ? 'var(--danger)' : s.balance > 0 ? 'var(--success)' : undefined }}>{s.balance.toLocaleString('ru-RU')}</span>
+                <div style={{ ...colStyle(5), display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: s.balance < 0 ? 'var(--danger)' : s.balance > 0 ? 'var(--success)' : undefined }}>{s.balance.toLocaleString('ru-RU')}</span>
+                </div>
               </div>
             ))}
           </div>
