@@ -1609,7 +1609,7 @@ const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
   debtors: true,
   directory: true,
   cashier: true,
-  logistics: false,
+  logistics: true,
 };
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -3542,7 +3542,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       <div
         className="no-scrollbar"
         onClick={() => {
-          if (!schoolsBarCollapsed && !isDriversModule) setSchoolsBarCollapsed(true);
+          if (!schoolsBarCollapsed) setSchoolsBarCollapsed(true);
           if (transferTypeMenu) setTransferTypeMenu(null);
         }}
         style={{
