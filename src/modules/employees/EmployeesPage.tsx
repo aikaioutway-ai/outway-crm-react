@@ -11,6 +11,7 @@ const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
   { value: 'manager', label: 'Менеджер' },
   { value: 'cashier', label: 'Кассир' },
   { value: 'logist', label: 'Логист' },
+  { value: 'senior_logist', label: 'Нач. Логистики' },
   { value: 'driver', label: 'Водитель' },
 ];
 

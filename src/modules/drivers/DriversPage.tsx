@@ -6,9 +6,10 @@ interface DriversPageProps {
   userRole?: UserRole;
   userName?: string;
   allowedSchools?: string[];
+  onSchoolsSidebarWidthChange?: (width: number) => void;
 }
 
-export default function DriversPage({ userRole, userName, allowedSchools }: DriversPageProps) {
+export default function DriversPage({ userRole, userName, allowedSchools, onSchoolsSidebarWidthChange }: DriversPageProps) {
   return (
     <FamiliesPage
       mode="logistics"
@@ -16,6 +17,7 @@ export default function DriversPage({ userRole, userName, allowedSchools }: Driv
       userRole={userRole}
       userName={userName}
       allowedSchools={allowedSchools}
+      onSchoolsSidebarWidthChange={onSchoolsSidebarWidthChange}
     />
   );
 }

@@ -7,13 +7,14 @@ import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { fetchV2FamiliesTable } from './services/crmV2Service';
 import { UserRole } from './types';
+import TimesheetModule from './modules/expenses/TimesheetModule';
 import './index.css';
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
   settings:  'Настройки — в разработке',
 };
 
-const ROLES: UserRole[] = ['admin', 'gen_director', 'director', 'manager', 'logist', 'cashier'];
+const ROLES: UserRole[] = ['admin', 'gen_director', 'director', 'manager', 'logist', 'senior_logist', 'cashier'];
 const SESSION_KEY = 'outway_auth_user';
 
 function getSavedRole(): UserRole {
@@ -44,6 +45,7 @@ export default function App() {
   const [managerTab, setManagerTab] = useState<'directory' | 'requests' | 'charges' | 'payments' | 'dispatch'>('directory');
   const [adminFiltersOpen, setAdminFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
+  const [schoolSidebarReserveWidth, setSchoolSidebarReserveWidth] = useState(78);
 
   const handleLogin = async (login: string, password: string) => {
     const user = await authenticateEmployee(login, password);
@@ -70,7 +72,11 @@ export default function App() {
     setColumnsOpen(false);
   }, [currentUserRole, section]);
 
-  useEffect(() => { setAdminFiltersOpen(false); setColumnsOpen(false); }, [cashierTab, logisticsTab, managerTab, expensesTab]);
+  useEffect(() => {
+    setAdminFiltersOpen(false);
+    setColumnsOpen(false);
+    setSchoolSidebarReserveWidth(78);
+  }, [section, cashierTab, logisticsTab, managerTab, expensesTab]);
 
   // Обновляем сессию если position ещё не загружен (старый localStorage)
   useEffect(() => {
@@ -162,7 +168,8 @@ export default function App() {
     display: 'flex',
     alignItems: 'flex-end',
     flexShrink: 0,
-    paddingRight: 78,
+    paddingRight: schoolSidebarReserveWidth,
+    transition: 'padding-right .18s ease',
   };
 
   if (!currentUser) {
@@ -211,6 +218,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : cashierTab === 'manager_payments' ? (
               <FamiliesPage
@@ -222,6 +230,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : null}
           </div>
@@ -248,6 +257,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : logisticsTab === 'transfers' ? (
               <FamiliesPage
@@ -259,12 +269,14 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : logisticsTab === 'drivers' ? (
               <DriversPage
                 userRole={currentUserRole}
                 userName={currentUser?.name}
                 allowedSchools={currentUser?.schoolKeys}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : logisticsTab === 'dispatch' ? (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
@@ -299,6 +311,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : managerTab === 'requests' ? (
               <FamiliesPage
@@ -310,6 +323,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : managerTab === 'charges' ? (
               <FamiliesPage
@@ -321,6 +335,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : managerTab === 'payments' ? (
               <FamiliesPage
@@ -332,6 +347,7 @@ export default function App() {
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
@@ -351,6 +367,7 @@ export default function App() {
               userRole={currentUserRole}
               userName={currentUser?.name}
               allowedSchools={currentUser?.schoolKeys}
+              onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
             />
           </div>
         ) : section === 'expenses' ? (
@@ -367,9 +384,25 @@ export default function App() {
               </div>
             </div>
             <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-              {expensesTab === 'payroll' ? 'Модуль Зарплата — в разработке' : expensesTab === 'advances' ? 'Модуль Авансы — в разработке' : 'Модуль Расходы — в разработке'}
+              {expensesTab === 'payroll'
+                ? 'Модуль Зарплата — в разработке'
+                : expensesTab === 'advances'
+                  ? 'Модуль Авансы — в разработке'
+                  : 'Модуль Расходы — в разработке'}
             </div>
           </div>
+        ) : section === 'timesheet' ? (
+          <TimesheetModule
+            userRole={currentUserRole}
+            userName={currentUser?.name}
+            allowedSchools={currentUser?.schoolKeys}
+            adminFiltersOpen={adminFiltersOpen}
+            onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+            columnsOpen={columnsOpen}
+            onColumnsOpenChange={setColumnsOpen}
+            rightReserveWidth={schoolSidebarReserveWidth}
+            onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+          />
         ) : section === 'employees' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>

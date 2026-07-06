@@ -695,6 +695,98 @@ begin
 end;
 $$;
 
+create or replace function public.v2_cancel_payment(
+  p_payment_id uuid,
+  p_reason text,
+  p_cancelled_by text default null
+)
+returns void
+language plpgsql
+security definer
+as $$
+declare
+  v_payment public.v2_payments%rowtype;
+  v_alloc record;
+  v_charge public.v2_charges%rowtype;
+  v_wallet_type text;
+  v_tx_type text;
+begin
+  select * into v_payment
+  from public.v2_charges
+  where false; -- dummy, reset
+
+  select * into v_payment
+  from public.v2_payments
+  where id = p_payment_id
+  for update;
+
+  if not found then
+    raise exception 'Payment not found: %', p_payment_id;
+  end if;
+
+  if v_payment.status <> 'confirmed' then
+    raise exception 'Only confirmed payments can be cancelled, current status: %', v_payment.status;
+  end if;
+
+  -- Откатываем каждую аллокацию связанную с транзакциями этого платежа
+  for v_alloc in
+    select ca.id as alloc_id, ca.charge_id, ca.amount, wt.wallet_type, wt.transaction_type
+    from public.v2_charge_allocations ca
+    join public.v2_wallet_transactions wt on wt.id = ca.wallet_transaction_id
+    where wt.source_type = 'payment' and wt.source_id = p_payment_id
+  loop
+    -- Откатываем paid_amount на начислении
+    update public.v2_charges
+      set paid_amount = greatest(paid_amount - v_alloc.amount, 0)
+      where id = v_alloc.charge_id;
+
+    perform public.v2_refresh_charge_status(v_alloc.charge_id);
+
+    -- Удаляем аллокацию
+    delete from public.v2_charge_allocations where id = v_alloc.alloc_id;
+  end loop;
+
+  -- Откатываем пополнение кошелька (main)
+  if v_payment.confirmed_main_amount > 0 then
+    perform public.v2_add_wallet_transaction(
+      v_payment.family_id, 'main', 'payment_cancelled',
+      -v_payment.confirmed_main_amount,
+      'payment', p_payment_id,
+      p_reason, p_cancelled_by
+    );
+  end if;
+
+  -- Откатываем пополнение депозита
+  if v_payment.confirmed_deposit_amount > 0 then
+    perform public.v2_add_wallet_transaction(
+      v_payment.family_id, 'deposit', 'payment_cancelled',
+      -v_payment.confirmed_deposit_amount,
+      'payment', p_payment_id,
+      p_reason, p_cancelled_by
+    );
+  end if;
+
+  -- Меняем статус платежа
+  update public.v2_payments
+    set status = 'cancelled',
+        reject_reason = p_reason,
+        reviewed_by = p_cancelled_by,
+        reviewed_at = now()
+    where id = p_payment_id;
+
+  insert into public.v2_audit_log(actor_name, action, entity_type, entity_id, old_value, new_value, comment)
+  values (
+    p_cancelled_by,
+    'cancel_payment',
+    'payment',
+    p_payment_id::text,
+    jsonb_build_object('status', 'confirmed', 'amount', v_payment.amount),
+    jsonb_build_object('status', 'cancelled'),
+    p_reason
+  );
+end;
+$$;
+
 -- Seed branches from current Google Sheets codes --------------------------------
 
 insert into public.v2_schools(code, name)

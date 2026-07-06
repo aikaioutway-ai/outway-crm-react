@@ -277,11 +277,13 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
   }
 
   async function remove() {
-    if (!window.confirm('Удалить платёж?')) return;
+    const msg = payment.status === 'Подтверждено'
+      ? 'Отменить подтверждённый платёж? Баланс и начисления будут откатаны.'
+      : 'Удалить платёж?';
+    if (!window.confirm(msg)) return;
     setSaving(true);
-    const ok = await onDelete();
+    await onDelete();
     setSaving(false);
-    if (!ok) window.alert('Подтверждённый платёж нельзя удалить: сначала нужен откат.');
   }
 
   return (

@@ -24,6 +24,7 @@ export interface ColumnDef<T = any> {
   editable?: boolean;
   editOptions?: { value: string; label: string }[];
   showInProperties?: boolean;
+  aggregateByKey?: string;
 }
 
 export interface SortConfig {
@@ -100,8 +101,15 @@ function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined)
 }
 
 function calcColumnValues<T>(rows: T[], col: ColumnDef<T>, mode: CalcMode): string {
-  const nums = rows.map(r => parseFloat(getCellValue(r, col))).filter(n => !isNaN(n));
-  const allVals = rows.map(r => getCellValue(r, col));
+  const calcRows = col.aggregateByKey
+    ? Array.from(rows.reduce<Map<any, T>>((map, row) => {
+        const key = (row as any)[col.aggregateByKey!];
+        if (!map.has(key)) map.set(key, row);
+        return map;
+      }, new Map()).values())
+    : rows;
+  const nums = calcRows.map(r => parseFloat(getCellValue(r, col))).filter(n => !isNaN(n));
+  const allVals = calcRows.map(r => getCellValue(r, col));
   switch (mode) {
     case 'count':     return String(allVals.filter(v => v != null && v !== '').length);
     case 'sum':       return nums.reduce((a, b) => a + b, 0).toLocaleString('ru-RU');

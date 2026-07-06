@@ -271,6 +271,23 @@ function firstPresent<T>(items: T[], pick: (item: T) => unknown): T | undefined 
   return items.find(item => pick(item) !== null && pick(item) !== undefined && pick(item) !== '');
 }
 
+const SUPABASE_PAGE_SIZE = 1000;
+
+async function fetchAllRows<T = any>(
+  buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+): Promise<T[]> {
+  const rows: T[] = [];
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
+    const to = from + SUPABASE_PAGE_SIZE - 1;
+    const { data, error } = await buildQuery(from, to);
+    if (error) throw new Error(error.message);
+    const batch = data ?? [];
+    rows.push(...batch);
+    if (batch.length < SUPABASE_PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 export function mapV2Family(row: any, children: any[] = []): Family {
   const firstChild = firstPresent(children, c => c.branch_id) ?? children[0];
   const branch = firstChild?.v2_school_branches;
@@ -353,9 +370,12 @@ const CHILD_SELECT = `
 
 export interface PeriodChargeStats {
   familyId: string;
+  childId: string;
   charged: number;
   paid: number;
   debt: number;
+  penalty: number;
+  pending: number;
 }
 
 export async function fetchChargesForPeriod(
@@ -363,25 +383,58 @@ export async function fetchChargesForPeriod(
   periodYear: number | null,
   chargeType: string | null,
 ): Promise<PeriodChargeStats[]> {
-  let query = supabase
-    .from('v2_charges')
-    .select('family_id, amount, paid_amount');
-  if (chargeType) {
-    query = query.eq('charge_type', chargeType);
-  } else if (periodMonth !== null && periodYear !== null) {
-    query = query.eq('period_month', periodMonth).eq('period_year', periodYear);
-  }
-  const { data, error } = await query;
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<any>((from, to) => {
+    let query = supabase
+      .from('v2_charges')
+      .select('family_id, child_id, amount, paid_amount, penalty_amount, debt_amount');
+    if (chargeType) {
+      query = query.eq('charge_type', chargeType);
+    } else if (periodMonth !== null && periodYear !== null) {
+      query = query.eq('period_month', periodMonth).eq('period_year', periodYear);
+    }
+    return query.range(from, to);
+  });
+  const pendingRows = await fetchAllRows<any>((from, to) => {
+    let query = supabase
+      .from('v2_payments')
+      .select('family_id, amount, suggested_main_amount, suggested_deposit_amount')
+      .eq('status', 'pending');
+    return query.range(from, to);
+  });
   const map: Record<string, PeriodChargeStats> = {};
-  (data ?? []).forEach((row: any) => {
+  data.forEach((row: any) => {
     const fid = String(row.family_id);
-    if (!map[fid]) map[fid] = { familyId: fid, charged: 0, paid: 0, debt: 0 };
+    const childId = String(row.child_id ?? '');
+    const key = childId || fid;
+    if (!map[key]) map[key] = { familyId: fid, childId, charged: 0, paid: 0, debt: 0, penalty: 0, pending: 0 };
     const amount = Number(row.amount ?? 0);
     const paid = Number(row.paid_amount ?? 0);
-    map[fid].charged += amount;
-    map[fid].paid += paid;
-    map[fid].debt += Math.max(0, amount - paid);
+    const penalty = Number(row.penalty_amount ?? 0);
+    map[key].charged += amount;
+    map[key].paid += paid;
+    map[key].penalty += penalty;
+    map[key].debt += Math.max(0, Number(row.debt_amount ?? amount + penalty - paid));
+  });
+  const pendingByFamily: Record<string, number> = {};
+  pendingRows.forEach((row: any) => {
+    const fid = String(row.family_id);
+    const suggested = chargeType === 'deposit'
+      ? Number(row.suggested_deposit_amount ?? 0)
+      : Number(row.suggested_main_amount ?? 0);
+    const amount = suggested > 0 ? suggested : Number(row.amount ?? 0);
+    pendingByFamily[fid] = (pendingByFamily[fid] ?? 0) + amount;
+  });
+  Object.entries(pendingByFamily).forEach(([familyId, amount]) => {
+    let remaining = amount;
+    Object.values(map)
+      .filter(row => row.familyId === familyId && row.debt > 0)
+      .sort((a, b) => b.debt - a.debt)
+      .forEach(row => {
+        if (remaining <= 0) return;
+        const applied = Math.min(remaining, row.debt);
+        row.pending += applied;
+        remaining -= applied;
+      });
   });
   return Object.values(map);
 }
@@ -476,7 +529,7 @@ export async function fetchV2FamiliesRPC(
       rejectedPaymentCount: Number(row.rejected_count ?? 0),
       rejectedPaymentAmount: Number(row.rejected_amount ?? 0),
       allPaymentCount: Number(row.paid_count ?? 0) + Number(row.rejected_count ?? 0) + Number(row.pending_count ?? 0),
-      allPaymentAmount: Number(row.paid_amount_sum ?? 0),
+      allPaymentAmount: Number(row.paid_amount_sum ?? 0) + Number(row.pending_amount ?? 0) + Number(row.rejected_amount ?? 0),
       childDebtAmount: debtAmount,
       debtAmount,
       balance: Number(row.balance ?? 0),
@@ -487,48 +540,51 @@ export async function fetchV2FamiliesRPC(
 }
 
 export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, any>> {
-  const { data } = await supabase
-    .from('v2_payments')
-    .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, receipt_url, comment, created_at')
-    .eq('status', 'pending')
-    .order('created_at', { ascending: true });
+  const data = await fetchAllRows<any>((from, to) => supabase
+      .from('v2_payments')
+      .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, receipt_url, comment, created_at')
+      .eq('status', 'pending')
+      .order('created_at', { ascending: true })
+      .range(from, to));
 
   const map: Record<string, any> = {};
-  (data ?? []).forEach((p: any) => {
+  data.forEach((p: any) => {
     if (!map[p.family_id]) map[p.family_id] = p;
   });
   return map;
 }
 
 export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
-  const [famRes, childRes, summaryRes, pendingMap, branches] = await Promise.all([
-    supabase.from('v2_families').select('*').order('created_at', { ascending: false }),
-    supabase.from('v2_children').select(CHILD_SELECT),
-    supabase.from('v2_families_summary').select('*'),
+  const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to)),
     withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
     fetchV2Branches(),
   ]);
-  if (famRes.error) throw new Error(famRes.error.message);
-  if (childRes.error) throw new Error(childRes.error.message);
 
   const branchById: Record<string, typeof branches[number]> = {};
   branches.forEach(b => { branchById[b.id] = b; });
 
   const childMap: Record<string, any[]> = {};
-  (childRes.data ?? []).forEach((child: any) => {
+  children.forEach((child: any) => {
     if (!childMap[child.family_id]) childMap[child.family_id] = [];
     childMap[child.family_id].push(child);
   });
 
   const summaryMap: Record<string, any> = {};
-  (summaryRes.data ?? []).forEach((s: any) => { summaryMap[s.family_id] = s; });
+  summaries.forEach((s: any) => { summaryMap[s.family_id] = s; });
+  const walletMap: Record<string, any> = {};
+  wallets.forEach((wallet: any) => { walletMap[wallet.family_id] = wallet; });
 
   const rows: FamilyListRow[] = [];
   let familyIndex = 0;
-  (famRes.data ?? []).forEach((family: any) => {
+  families.forEach((family: any) => {
     const kids = childMap[family.id] ?? [];
     const items = kids.length > 0 ? kids : [null];
     const s = summaryMap[family.id] ?? {};
+    const wallet = walletMap[family.id] ?? {};
     const totalCharged = Number(s.total_charged ?? 0);
     const totalPaid = Number(s.total_paid ?? 0);
     const debtAmount = Number(s.debt_amount ?? 0);
@@ -597,10 +653,10 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
         rejectedPaymentCount: Number(s.rejected_count ?? 0),
         rejectedPaymentAmount: Number(s.rejected_amount ?? 0),
         allPaymentCount: Number(s.paid_count ?? 0) + Number(s.pending_count ?? 0) + Number(s.rejected_count ?? 0),
-        allPaymentAmount: Number(s.confirmed_amount ?? 0),
+        allPaymentAmount: Number(s.confirmed_amount ?? 0) + Number(s.pending_amount ?? 0) + Number(s.rejected_amount ?? 0),
         childDebtAmount: debtAmount,
         debtAmount,
-        balance: Number(s.balance ?? 0),
+        balance: Number(wallet.main_balance ?? 0),
       });
     });
     familyIndex++;
@@ -753,14 +809,14 @@ export async function updateV2ChildRoute(params: {
 }
 
 export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRow[]> {
-  const { data, error } = await supabase
-    .from('v2_transfers')
-    .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, created_at, updated_at, v2_school_branches(id, code, short_name, name)')
-    .neq('status', 'archive')
-    .order('transfer_number', { ascending: true });
-  if (error) throw new Error(error.message);
+  const data = await fetchAllRows<any>((from, to) => supabase
+      .from('v2_transfers')
+      .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, created_at, updated_at, v2_school_branches(id, code, short_name, name)')
+      .neq('status', 'archive')
+      .order('transfer_number', { ascending: true })
+      .range(from, to));
 
-  return (data ?? []).map((row: any) => {
+  return data.map((row: any) => {
     const branch = row.v2_school_branches;
     return {
       id: String(row.id),
@@ -779,44 +835,41 @@ export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRo
 }
 
 export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
-  const [driverRes, vehicleRes, transferRes, childRes] = await Promise.all([
-    supabase.from('v2_drivers').select('*').order('full_name', { ascending: true }),
-    supabase.from('v2_vehicles').select('*').order('created_at', { ascending: true }),
-    supabase
-      .from('v2_transfers')
-      .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, v2_school_branches(id, code, short_name, name)')
-      .neq('status', 'archive')
-      .order('transfer_number', { ascending: true }),
-    supabase.from('v2_children').select('transfer_id').neq('status', 'rejected'),
+  const [drivers, vehicles, transfers, children] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase.from('v2_drivers').select('*').order('full_name', { ascending: true }).range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_vehicles').select('*').order('created_at', { ascending: true }).range(from, to)),
+    fetchAllRows<any>((from, to) => supabase
+        .from('v2_transfers')
+        .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, v2_school_branches(id, code, short_name, name)')
+        .neq('status', 'archive')
+        .order('transfer_number', { ascending: true })
+        .range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('transfer_id').neq('status', 'rejected').range(from, to)),
   ]);
-  if (driverRes.error) throw new Error(driverRes.error.message);
-  if (vehicleRes.error) throw new Error(vehicleRes.error.message);
-  if (transferRes.error) throw new Error(transferRes.error.message);
-  if (childRes.error) throw new Error(childRes.error.message);
 
   const childCountByTransfer: Record<string, number> = {};
-  (childRes.data ?? []).forEach((child: any) => {
+  children.forEach((child: any) => {
     if (!child.transfer_id) return;
     const key = String(child.transfer_id);
     childCountByTransfer[key] = (childCountByTransfer[key] ?? 0) + 1;
   });
 
   const vehiclesByDriver: Record<string, any> = {};
-  (vehicleRes.data ?? []).forEach((vehicle: any) => {
+  vehicles.forEach((vehicle: any) => {
     if (vehicle.driver_id && !vehiclesByDriver[vehicle.driver_id]) {
       vehiclesByDriver[vehicle.driver_id] = vehicle;
     }
   });
 
   const transfersByDriver: Record<string, any[]> = {};
-  (transferRes.data ?? []).forEach((transfer: any) => {
+  transfers.forEach((transfer: any) => {
     if (!transfer.driver_id) return;
     const key = String(transfer.driver_id);
     if (!transfersByDriver[key]) transfersByDriver[key] = [];
     transfersByDriver[key].push(transfer);
   });
 
-  return (driverRes.data ?? []).map((driver: any) => {
+  return drivers.map((driver: any) => {
     const vehicle = vehiclesByDriver[driver.id];
     const transfers = transfersByDriver[driver.id] ?? [];
     const transferNumbers = transfers
@@ -1173,23 +1226,24 @@ export interface CashierPaymentRow {
 }
 
 export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> {
-  const [paymentRes, familyRes, childRes] = await Promise.all([
-    supabase
-      .from('v2_payments')
-      .select('id, family_id, amount, status, payment_method, receipt_url, payment_number, payment_date, actual_payment_date, comment, created_at')
-      .eq('status', 'pending')
-      .order('created_at', { ascending: false }),
-    supabase.from('v2_families').select('id, parent_name, phone'),
-    supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)'),
+  const [payments, families, children] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase
+        .from('v2_payments')
+        .select('id, family_id, amount, status, payment_method, receipt_url, payment_number, payment_date, actual_payment_date, comment, created_at')
+        .eq('status', 'pending')
+        .order('created_at', { ascending: false })
+        .range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
-  (familyRes.data ?? []).forEach((f: any) => {
+  families.forEach((f: any) => {
     familyMap[f.id] = { parentName: f.parent_name ?? '', phone: f.phone ?? '' };
   });
 
   const childrenByFamily: Record<string, { names: string[]; branchShort: string; transferNumber: string | null }> = {};
-  (childRes.data ?? []).forEach((c: any) => {
+  children.forEach((c: any) => {
     if (!childrenByFamily[c.family_id]) {
       const branch = Array.isArray(c.v2_school_branches) ? c.v2_school_branches[0] : c.v2_school_branches;
       const transfer = Array.isArray(c.v2_transfers) ? c.v2_transfers[0] : c.v2_transfers;
@@ -1204,7 +1258,7 @@ export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> 
     if (name) childrenByFamily[c.family_id].names.push(name);
   });
 
-  return (paymentRes.data ?? []).map((p: any): CashierPaymentRow => {
+  return payments.map((p: any): CashierPaymentRow => {
     const family = familyMap[p.family_id] ?? { parentName: '', phone: '' };
     const children = childrenByFamily[p.family_id];
     return {
@@ -1248,22 +1302,23 @@ export interface PaymentTableRow {
 }
 
 export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
-  const [paymentRes, familyRes, childRes] = await Promise.all([
-    supabase
-      .from('v2_payments')
-      .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, created_at')
-      .order('created_at', { ascending: false }),
-    supabase.from('v2_families').select('id, parent_name, phone'),
-    supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)'),
+  const [payments, families, children] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase
+        .from('v2_payments')
+        .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, created_at')
+        .order('created_at', { ascending: false })
+        .range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
-  (familyRes.data ?? []).forEach((f: any) => {
+  families.forEach((f: any) => {
     familyMap[f.id] = { parentName: f.parent_name ?? '', phone: f.phone ?? '' };
   });
 
   const childrenByFamily: Record<string, { names: string[]; branchShort: string; transferNumber: string | null }> = {};
-  (childRes.data ?? []).forEach((c: any) => {
+  children.forEach((c: any) => {
     if (!childrenByFamily[c.family_id]) {
       const branch = Array.isArray(c.v2_school_branches) ? c.v2_school_branches[0] : c.v2_school_branches;
       const transfer = Array.isArray(c.v2_transfers) ? c.v2_transfers[0] : c.v2_transfers;
@@ -1278,7 +1333,7 @@ export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
     if (name) childrenByFamily[c.family_id].names.push(name);
   });
 
-  return (paymentRes.data ?? []).map((p: any): PaymentTableRow => {
+  return payments.map((p: any): PaymentTableRow => {
     const family = familyMap[p.family_id] ?? { parentName: '', phone: '' };
     const children = childrenByFamily[p.family_id];
     return {

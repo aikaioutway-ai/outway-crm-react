@@ -89,10 +89,8 @@ function mapPaymentItem(row: any): PaymentItem {
   };
 }
 
-export async function fetchFinanceSnapshot(familyId: string, children: Child[]): Promise<FinanceSnapshot> {
-  const childNameById = new Map(children.map(c => [String(c.id), c.childName]));
-
-  const [chargeRes, paymentRes, walletRes] = await Promise.all([
+export async function fetchFinanceSnapshot(familyId: string, children?: Child[]): Promise<FinanceSnapshot> {
+  const [chargeRes, paymentRes, walletRes, childrenRes] = await Promise.all([
     supabase
       .from('v2_charges')
       .select('*')
@@ -109,7 +107,13 @@ export async function fetchFinanceSnapshot(familyId: string, children: Child[]):
       .select('*')
       .eq('family_id', familyId)
       .maybeSingle(),
+    children
+      ? Promise.resolve({ data: children, error: null })
+      : supabase.from('v2_children').select('*').eq('family_id', familyId),
   ]);
+
+  const resolvedChildren: Child[] = children ?? (childrenRes.data ?? []);
+  const childNameById = new Map(resolvedChildren.map((c: any) => [String(c.id ?? c.child_id), c.childName ?? c.child_name]));
 
   const charges = chargeRes.error
     ? []
@@ -241,9 +245,18 @@ export async function updateFamilyPayment(paymentId: string, updates: {
   if (error) throw new Error(error.message);
 }
 
+export async function cancelConfirmedPayment(paymentId: string, reason: string, cancelledBy: string): Promise<void> {
+  const { error } = await supabase.rpc('v2_cancel_payment', {
+    p_payment_id: paymentId,
+    p_reason: reason,
+    p_cancelled_by: cancelledBy,
+  });
+  if (error) throw new Error(error.message);
+}
+
 export async function deleteFamilyPayment(payment: FamilyPayment): Promise<void> {
   if (payment.status === 'Подтверждено') {
-    throw new Error('Подтверждённый платёж нельзя удалить простым удалением: деньги уже попали в баланс/начисления. Нужен отдельный откат.');
+    throw new Error('Подтверждённый платёж нельзя удалить простым удалением: используй cancelConfirmedPayment.');
   }
   const { error } = await supabase.from('v2_payments').delete().eq('id', payment.id);
   if (error) throw new Error(error.message);

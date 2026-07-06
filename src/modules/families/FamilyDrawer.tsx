@@ -11,6 +11,7 @@ import {
   createChargesForPeriod,
   createFamilyPayment,
   deleteFamilyPayment,
+  cancelConfirmedPayment,
   deleteCharge,
   fetchFinanceSnapshot,
   updateFamilyPayment,
@@ -57,8 +58,7 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
   // Финансы — кэшируются, зависят от children
   const { data: financeSnapshot, isLoading: loadingFinance, refetch: refetchFinance } = useQuery({
     queryKey: ['finance', family.id],
-    queryFn: () => fetchFinanceSnapshot(family.id, children),
-    enabled: !loadingKids, // ждём пока загрузятся дети
+    queryFn: () => fetchFinanceSnapshot(family.id),
   });
 
   const charges      = financeSnapshot?.charges      ?? [];
@@ -172,8 +172,15 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
 
   async function handleDeletePayment(payment: FamilyPayment): Promise<boolean> {
     try {
-      await deleteFamilyPayment(payment);
-      await addAudit('Удаление платежа', 'family_payment', money(payment.amount), '—');
+      if (payment.status === 'Подтверждено') {
+        const reason = window.prompt('Причина отмены платежа (обязательно):');
+        if (!reason?.trim()) return false;
+        await cancelConfirmedPayment(payment.id, reason.trim(), userName);
+        await addAudit('Отмена подтверждённого платежа', 'family_payment', money(payment.amount), reason.trim());
+      } else {
+        await deleteFamilyPayment(payment);
+        await addAudit('Удаление платежа', 'family_payment', money(payment.amount), '—');
+      }
       await loadFinance();
       await loadAudit();
       return true;
@@ -298,29 +305,29 @@ export default function FamilyDrawer({ family, onClose, userRole = 'manager', us
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: 8, marginBottom: 0 }}>
             <HeaderChip
               label="НАЧИСЛЕНО"
-              value={money(totalCharged)}
+              value={loadingFinance ? '...' : money(totalCharged)}
             />
             <HeaderChip
               label="ПЛАТЕЖИ"
-              value={money(totalPaid)}
+              value={loadingFinance ? '...' : money(totalPaid)}
               chipBg="#D1FAE5"
               chipColor="#065F46"
             />
             <HeaderChip
               label="НА ПРОВЕРКЕ"
-              value={money(pendingAmount)}
+              value={loadingFinance ? '...' : money(pendingAmount)}
               chipBg={pendingAmount > 0 ? '#FEF9C3' : 'rgba(255,255,255,0.13)'}
               chipColor={pendingAmount > 0 ? '#92400E' : undefined}
             />
             <HeaderChip
               label="ДОЛГ"
-              value={money(totalDebt)}
+              value={loadingFinance ? '...' : money(totalDebt)}
               chipBg={totalDebt > 0 ? '#FFEBEE' : '#E8F5E9'}
               chipColor={totalDebt > 0 ? '#C62828' : '#1B5E20'}
             />
             <HeaderChip
               label="БАЛАНС"
-              value={money(mainBalance)}
+              value={loadingFinance ? '...' : money(mainBalance)}
               sub={familyMonthlyPrice > 0 ? `${money(familyMonthlyPrice)}/мес` : undefined}
               chipBg={mainBalance < 0 ? '#FFEBEE' : 'rgba(255,255,255,0.13)'}
               chipColor={mainBalance < 0 ? '#C62828' : undefined}
