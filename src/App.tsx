@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Sidebar, { canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import FamiliesPage from './modules/families/FamiliesPage';
+import ManagerOverview from './modules/families/ManagerOverview';
 import DriversPage from './modules/drivers/DriversPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
 import LoginPage from './modules/auth/LoginPage';
@@ -42,7 +43,7 @@ export default function App() {
   const [cashierTab, setCashierTab] = useState<'payments' | 'manager_payments' | 'statement'>('payments');
   const [logisticsTab, setLogisticsTab] = useState<'requests' | 'transfers' | 'drivers' | 'dispatch' | 'routes'>('transfers');
   const [expensesTab, setExpensesTab] = useState<'payroll' | 'advances' | 'expenses'>('payroll');
-  const [managerTab, setManagerTab] = useState<'directory' | 'requests' | 'charges' | 'payments' | 'dispatch'>('directory');
+  const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
   const [adminFiltersOpen, setAdminFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [schoolSidebarReserveWidth, setSchoolSidebarReserveWidth] = useState(78);
@@ -76,7 +77,7 @@ export default function App() {
     setAdminFiltersOpen(false);
     setColumnsOpen(false);
     setSchoolSidebarReserveWidth(78);
-  }, [section, cashierTab, logisticsTab, managerTab, expensesTab]);
+  }, [section, cashierTab, logisticsTab, managerSchoolKey, expensesTab]);
 
   // Обновляем сессию если position ещё не загружен (старый localStorage)
   useEffect(() => {
@@ -293,56 +294,20 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Менеджер')}
-                {([['directory', 'Справочник'], ['requests', 'Заявки'], ['charges', 'Финансы'], ['payments', 'Платежи'], ['dispatch', 'Диспетчер']] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setManagerTab(key)} style={tabStyle(managerTab === key)}>
-                    {label}
+                {managerSchoolKey && (
+                  <button onClick={() => setManagerSchoolKey(null)} style={tabStyle(false)}>
+                    ← Все школы
                   </button>
-                ))}
-                {extraTabs(managerTab !== 'dispatch')}
+                )}
+                {extraTabs(true)}
               </div>
             </div>
-            {managerTab === 'directory' ? (
+            {managerSchoolKey ? (
               <FamiliesPage
                 mode="directory"
                 userRole={currentUserRole}
                 userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
-            ) : managerTab === 'requests' ? (
-              <FamiliesPage
-                mode="requests"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
-            ) : managerTab === 'charges' ? (
-              <FamiliesPage
-                mode="charges"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
-            ) : managerTab === 'payments' ? (
-              <FamiliesPage
-                mode="payments"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
+                allowedSchools={[managerSchoolKey]}
                 adminFiltersOpen={adminFiltersOpen}
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
@@ -350,9 +315,7 @@ export default function App() {
                 onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-                Диспетчер — в разработке
-              </div>
+              <ManagerOverview onSelectSchool={setManagerSchoolKey} />
             )}
           </div>
         ) : section === 'drivers' ? (
