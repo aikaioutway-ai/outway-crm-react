@@ -8,11 +8,11 @@ interface SchoolStat {
   key: string;
   label: string;
   color: string;
-  debtorsCount: number;
-  debtSum: number;
   newRequests: number;
-  pendingCount: number;
+  debtSum: number;
+  debtorsCount: number;
   pendingSum: number;
+  balance: number;
 }
 
 interface ManagerOverviewProps {
@@ -24,9 +24,9 @@ const SCHOOL_COLORS = [
   '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
-const CHART_COLORS = { requests: '#378ADD', pendingCount: '#BA7517', pendingSum: '#0F6E56' };
+const CHART_COLORS = { requests: '#378ADD', pending: '#BA7517' };
 
-const GRID_COLUMNS = '1.4fr 0.7fr 1fr 1.1fr 1.1fr 1.1fr';
+const GRID_COLUMNS = '1.5fr 1.1fr 0.9fr 0.7fr 1.1fr 0.9fr';
 
 function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
@@ -40,11 +40,11 @@ function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
       key: tab.key,
       label: tab.label,
       color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
-      debtorsCount: families.filter(f => f.debtAmount > 0).length,
-      debtSum: families.reduce((sum, f) => sum + Math.max(0, f.debtAmount), 0),
       newRequests: schoolRows.filter(r => r.status === 'new').length,
-      pendingCount: families.reduce((sum, f) => sum + f.pendingPaymentCount, 0),
+      debtSum: families.reduce((sum, f) => sum + Math.max(0, f.debtAmount), 0),
+      debtorsCount: families.filter(f => f.debtAmount > 0).length,
       pendingSum: families.reduce((sum, f) => sum + f.pendingPayment, 0),
+      balance: families.reduce((sum, f) => sum + f.balance, 0),
     };
   });
 }
@@ -70,7 +70,6 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
 
   const stats = useMemo(() => computeSchoolStats(rows ?? []), [rows]);
   const maxRequests = Math.max(1, ...stats.map(s => s.newRequests));
-  const maxPendingCount = Math.max(1, ...stats.map(s => s.pendingCount));
   const maxPendingSum = Math.max(1, ...stats.map(s => s.pendingSum));
 
   if (rows === null) {
@@ -84,11 +83,11 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
 
           <div style={{ display: 'grid', gridTemplateColumns: GRID_COLUMNS, gap: 12, padding: '0 20px 10px', flexShrink: 0 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Школы</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Должники</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Сумма долга</span>
             <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Новые заявки</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Чеков · к-во</span>
-            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Чеков · сумма</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Сумма долга</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Должники</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Сумма на проверке</span>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase' }}>Баланс</span>
           </div>
 
           <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
@@ -115,24 +114,21 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
                   <ChevronRight size={14} color="var(--text-2)" />
                 </div>
 
-                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
-
-                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
-
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Bar value={s.newRequests} max={maxRequests} color={CHART_COLORS.requests} />
                   <span style={{ minWidth: 24, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.newRequests}</span>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Bar value={s.pendingCount} max={maxPendingCount} color={CHART_COLORS.pendingCount} />
-                  <span style={{ minWidth: 24, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.pendingCount}</span>
-                </div>
+                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
+
+                <span style={{ fontSize: 14, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
 
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Bar value={s.pendingSum} max={maxPendingSum} color={CHART_COLORS.pendingSum} />
+                  <Bar value={s.pendingSum} max={maxPendingSum} color={CHART_COLORS.pending} />
                   <span style={{ minWidth: 56, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.pendingSum.toLocaleString('ru-RU')}</span>
                 </div>
+
+                <span style={{ fontSize: 14, fontWeight: 700, color: s.balance < 0 ? 'var(--danger)' : s.balance > 0 ? 'var(--success)' : undefined }}>{s.balance.toLocaleString('ru-RU')}</span>
               </div>
             ))}
           </div>
