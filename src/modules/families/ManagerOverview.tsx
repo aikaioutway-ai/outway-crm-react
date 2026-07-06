@@ -57,12 +57,27 @@ function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   });
 }
 
-function Bar({ value, max, color }: { value: number; max: number; color: string }) {
-  const width = Math.round((value / max) * 100);
+function Ring({ value, max, color, size = 36 }: { value: number; max: number; color: string; size?: number }) {
+  const pct = Math.max(0, Math.min(1, value / max));
+  const strokeWidth = 5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
   return (
-    <div style={{ flex: 1, position: 'relative', height: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4 }}>
-      <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${width}%`, background: color, borderRadius: 4 }} />
-    </div>
+    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
+      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth} />
+      <circle
+        cx={size / 2}
+        cy={size / 2}
+        r={radius}
+        fill="none"
+        stroke={color}
+        strokeWidth={strokeWidth}
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={circumference * (1 - pct)}
+        transform={`rotate(-90 ${size / 2} ${size / 2})`}
+      />
+    </svg>
   );
 }
 
@@ -151,9 +166,9 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
                   <ChevronRight size={14} color="var(--text-2)" />
                 </div>
 
-                <div style={{ ...colStyle(1), display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Bar value={s.newRequests} max={maxRequests} color={CHART_COLORS.requests} />
-                  <span style={{ minWidth: 24, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.newRequests}</span>
+                <div style={{ ...colStyle(1), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{s.newRequests}</span>
+                  <Ring value={s.newRequests} max={maxRequests} color={CHART_COLORS.requests} />
                 </div>
 
                 <div style={{ ...colStyle(2), display: 'flex', alignItems: 'center' }}>
@@ -164,9 +179,9 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
                   <span style={{ fontSize: 14, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
                 </div>
 
-                <div style={{ ...colStyle(4), display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Bar value={s.pendingSum} max={maxPendingSum} color={CHART_COLORS.pending} />
-                  <span style={{ minWidth: 56, flexShrink: 0, fontSize: 13, color: 'var(--text-2)', textAlign: 'right' }}>{s.pendingSum.toLocaleString('ru-RU')}</span>
+                <div style={{ ...colStyle(4), display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+                  <span style={{ fontSize: 15, fontWeight: 700 }}>{s.pendingSum.toLocaleString('ru-RU')}</span>
+                  <Ring value={s.pendingSum} max={maxPendingSum} color={CHART_COLORS.pending} />
                 </div>
 
                 <div style={{ ...colStyle(5), display: 'flex', alignItems: 'center' }}>
