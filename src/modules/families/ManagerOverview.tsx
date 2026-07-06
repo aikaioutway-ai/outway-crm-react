@@ -26,10 +26,10 @@ const SCHOOL_COLORS = [
 
 const CHART_COLORS = { requests: '#378ADD', pendingCount: '#BA7517', pendingSum: '#0F6E56' };
 
-const rowStyle: React.CSSProperties = { height: 36, display: 'flex', alignItems: 'center', padding: '0 10px', boxSizing: 'border-box', gap: 8 };
+const rowStyle: React.CSSProperties = { height: 22, display: 'flex', alignItems: 'center', padding: '0 10px', boxSizing: 'border-box', gap: 6 };
 const altRowStyle: React.CSSProperties = { ...rowStyle, background: 'var(--surface-2)' };
-const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid var(--border)', borderRadius: 22, padding: '12px 0' };
-const headStyle: React.CSSProperties = { fontSize: 12, fontWeight: 700, color: 'var(--text-2)', padding: '0 12px 10px', textTransform: 'uppercase' };
+const cardStyle: React.CSSProperties = { background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '6px 0' };
+const headStyle: React.CSSProperties = { fontSize: 11, fontWeight: 700, color: 'var(--text-2)', padding: '0 10px 4px', textTransform: 'uppercase' };
 
 function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
@@ -68,11 +68,11 @@ function BarChartCard({ title, stats, valueKey, color, formatValue }: {
         const width = Math.round((value / max) * 100);
         return (
           <div key={s.key} style={i % 2 === 1 ? altRowStyle : rowStyle}>
-            <span style={{ width: 78, flexShrink: 0, fontSize: 12, color: 'var(--text-2)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
-            <div style={{ flex: 1, position: 'relative', height: 10, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4 }}>
+            <span style={{ width: 68, flexShrink: 0, fontSize: 11, color: 'var(--text-2)', textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
+            <div style={{ flex: 1, position: 'relative', height: 7, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 4 }}>
               <div style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: `${width}%`, background: color, borderRadius: 4 }} />
             </div>
-            <span style={{ minWidth: 50, flexShrink: 0, fontSize: 12, color: 'var(--text-2)', textAlign: 'right' }}>{formatValue(value)}</span>
+            <span style={{ minWidth: 42, flexShrink: 0, fontSize: 11, color: 'var(--text-2)', textAlign: 'right' }}>{formatValue(value)}</span>
           </div>
         );
       })}
@@ -96,9 +96,9 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ flex: 1, minHeight: 0, overflow: 'auto', padding: '6px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
 
-      <div style={{ ...cardStyle, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0 20px' }}>
+      <div style={{ ...cardStyle, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '0 16px' }}>
         <div>
           <div style={headStyle}>Школы</div>
           {stats.map((s, i) => (
@@ -107,11 +107,11 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
               onClick={() => onSelectSchool(s.key)}
               style={{ ...(i % 2 === 1 ? altRowStyle : rowStyle), cursor: 'pointer' }}
             >
-              <span style={{ width: 22, height: 22, borderRadius: 6, background: s.color, color: '#fff', fontSize: 10, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <span style={{ width: 16, height: 16, borderRadius: 5, background: s.color, color: '#fff', fontSize: 8, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {s.label.slice(0, 2).toUpperCase()}
               </span>
-              <span style={{ fontSize: 13, fontWeight: 650, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
-              <ChevronRight size={14} color="var(--text-2)" />
+              <span style={{ fontSize: 12, fontWeight: 650, flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{s.label}</span>
+              <ChevronRight size={12} color="var(--text-2)" />
             </div>
           ))}
         </div>
@@ -120,8 +120,8 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
           <div style={headStyle}>Должники</div>
           {stats.map((s, i) => (
             <div key={s.key} style={i % 2 === 1 ? altRowStyle : rowStyle}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: s.debtorsCount > 0 ? 'var(--danger)' : undefined }}>{s.debtorsCount}</span>
             </div>
           ))}
         </div>
@@ -130,14 +130,14 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
           <div style={headStyle}>Сумма долга</div>
           {stats.map((s, i) => (
             <div key={s.key} style={i % 2 === 1 ? altRowStyle : rowStyle}>
-              <span style={{ width: 8, height: 8, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
-              <span style={{ marginLeft: 'auto', fontSize: 13, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: s.color, flexShrink: 0 }} />
+              <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
             </div>
           ))}
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
         <BarChartCard title="Новые заявки" stats={stats} valueKey="newRequests" color={CHART_COLORS.requests} formatValue={n => String(n)} />
         <BarChartCard title="Чеков на проверке · к-во" stats={stats} valueKey="pendingCount" color={CHART_COLORS.pendingCount} formatValue={n => String(n)} />
         <BarChartCard title="Чеков на проверке · сумма" stats={stats} valueKey="pendingSum" color={CHART_COLORS.pendingSum} formatValue={n => n.toLocaleString('ru-RU')} />
