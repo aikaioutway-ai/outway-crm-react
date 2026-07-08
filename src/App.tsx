@@ -312,7 +312,7 @@ export default function App() {
             </div>
             {managerSchoolKey ? (
               <>
-                <SchoolKpiStrip schoolKey={managerSchoolKey} />
+                <SchoolKpiStrip schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} />
                 <FamiliesPage
                   key={managerSchoolKey}
                   mode="directory"

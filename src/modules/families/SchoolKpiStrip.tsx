@@ -6,9 +6,10 @@ import { money } from '../../utils/pricing';
 
 interface SchoolKpiStripProps {
   schoolKey: string;
+  rightReserveWidth?: number;
 }
 
-export default function SchoolKpiStrip({ schoolKey }: SchoolKpiStripProps) {
+export default function SchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: SchoolKpiStripProps) {
   const [rows, setRows] = useState<FamilyListRow[] | null>(null);
 
   useEffect(() => {
@@ -23,7 +24,7 @@ export default function SchoolKpiStrip({ schoolKey }: SchoolKpiStripProps) {
   if (!stat) return null;
 
   return (
-    <div style={{ display: 'flex', gap: 12, flexShrink: 0, padding: '10px 0 0' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(9, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
       <KpiChip
         icon={<span style={{ fontSize: 12, fontWeight: 800, color: '#fff' }}>{stat.label.slice(0, 2).toUpperCase()}</span>}
         label="Школа"
