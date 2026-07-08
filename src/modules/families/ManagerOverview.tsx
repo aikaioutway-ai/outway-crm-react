@@ -46,6 +46,10 @@ const COLUMN_WEIGHTS: Record<SortKey, number> = {
   balance: 1,
 };
 
+const GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'debtSum', 'balance']
+  .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
+  .join(' ');
+
 function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
   return schools.map((tab, index) => {
@@ -99,7 +103,7 @@ function Ring({ value, max, color, size = 34 }: { value: number; max: number; co
 
 function KpiChip({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
   return (
-    <div style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '12px 16px' }}>
+    <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '12px 16px' }}>
       <div style={{ width: 38, height: 38, borderRadius: 11, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
         {icon}
       </div>
@@ -111,17 +115,16 @@ function KpiChip({ icon, label, value, color }: { icon: React.ReactNode; label: 
   );
 }
 
-function ColumnCard({ sortKey, label, weight, sortState, onSort, children }: {
+function ColumnCard({ sortKey, label, sortState, onSort, children }: {
   sortKey: SortKey;
   label: string;
-  weight: number;
   sortState: { key: SortKey; dir: 'asc' | 'desc' };
   onSort: (key: SortKey) => void;
   children: React.ReactNode;
 }) {
   const active = sortState.key === sortKey;
   return (
-    <div style={{ flex: weight, minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+    <div style={{ minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
       <button
         onClick={() => onSort(sortKey)}
         style={{
@@ -195,7 +198,7 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        <div style={{ display: 'flex', gap: 12, flexShrink: 0 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
           <KpiChip icon={<Users size={18} color="#fff" />} label="К-во всех детей" value={String(totals.childrenCount)} color={KPI_COLORS.childrenCount} />
           <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(totals.newRequests)} color={KPI_COLORS.newRequests} />
           <KpiChip icon={<Receipt size={18} color="#fff" />} label="Начислено" value={money(totals.charged)} color={KPI_COLORS.charged} />
@@ -204,9 +207,9 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
           <KpiChip icon={<Wallet size={18} color="#fff" />} label="Баланс" value={totals.balance.toLocaleString('ru-RU')} color={KPI_COLORS.balance} />
         </div>
 
-        <div style={{ flex: 1, minHeight: 0, display: 'flex', gap: 12 }}>
+        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12 }}>
 
-          <ColumnCard sortKey="school" label="Школы" weight={COLUMN_WEIGHTS.school} sortState={sortState} onSort={handleSort}>
+          <ColumnCard sortKey="school" label="Школы" sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div
                 key={s.key}
@@ -222,7 +225,7 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="newRequests" label="Новые заявки" weight={COLUMN_WEIGHTS.newRequests} sortState={sortState} onSort={handleSort}>
+          <ColumnCard sortKey="newRequests" label="Новые заявки" sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700 }}>{s.newRequests}</span>
@@ -231,7 +234,7 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="charged" label="Начислено" weight={COLUMN_WEIGHTS.charged} sortState={sortState} onSort={handleSort}>
+          <ColumnCard sortKey="charged" label="Начислено" sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700 }}>{s.charged > 0 ? money(s.charged) : '0'}</span>
@@ -239,7 +242,7 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="paid" label="Оплачено" weight={COLUMN_WEIGHTS.paid} sortState={sortState} onSort={handleSort}>
+          <ColumnCard sortKey="paid" label="Оплачено" sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: s.paid > 0 ? 'var(--success)' : undefined }}>{s.paid > 0 ? money(s.paid) : '0'}</span>
@@ -247,7 +250,7 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="debtSum" label="Сумма долга" weight={COLUMN_WEIGHTS.debtSum} sortState={sortState} onSort={handleSort}>
+          <ColumnCard sortKey="debtSum" label="Сумма долга" sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: s.debtSum > 0 ? 'var(--danger)' : undefined }}>{s.debtSum > 0 ? money(s.debtSum) : '0'}</span>
@@ -255,7 +258,7 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="balance" label="Баланс" weight={COLUMN_WEIGHTS.balance} sortState={sortState} onSort={handleSort}>
+          <ColumnCard sortKey="balance" label="Баланс" sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: s.balance < 0 ? 'var(--danger)' : s.balance > 0 ? 'var(--success)' : undefined }}>{s.balance.toLocaleString('ru-RU')}</span>
