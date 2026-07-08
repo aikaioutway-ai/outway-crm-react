@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Inbox, Landmark, Receipt, Users, Wallet } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Clock, Inbox, Landmark, Receipt, Users, Wallet } from 'lucide-react';
 import { fetchV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
 import { SCHOOL_TABS } from './constants';
 import { money } from '../../utils/pricing';
@@ -12,11 +12,13 @@ export interface SchoolStat {
   newRequests: number;
   charged: number;
   paid: number;
+  pendingCount: number;
+  pendingSum: number;
   debtSum: number;
   balance: number;
 }
 
-type SortKey = 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' | 'debtSum' | 'balance';
+type SortKey = 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' | 'pendingCount' | 'pendingSum' | 'debtSum' | 'balance';
 
 interface ManagerOverviewProps {
   onSelectSchool: (key: string) => void;
@@ -32,6 +34,8 @@ export const KPI_COLORS = {
   newRequests: '#378ADD',
   charged: '#BA7517',
   paid: 'var(--success)',
+  pendingCount: '#B45309',
+  pendingSum: '#B45309',
   debtSum: 'var(--danger)',
   balance: 'var(--accent)',
 };
@@ -42,11 +46,13 @@ const COLUMN_WEIGHTS: Record<SortKey, number> = {
   newRequests: 1.1,
   charged: 1,
   paid: 1,
+  pendingCount: 0.8,
+  pendingSum: 1.1,
   debtSum: 1,
   balance: 1,
 };
 
-const GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'debtSum', 'balance']
+const GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'pendingCount', 'pendingSum', 'debtSum', 'balance']
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
 
@@ -66,6 +72,8 @@ export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
       newRequests: schoolRows.filter(r => r.status === 'new').length,
       charged: families.reduce((sum, f) => sum + f.totalCharged, 0),
       paid: families.reduce((sum, f) => sum + f.totalPaid, 0),
+      pendingCount: families.reduce((sum, f) => sum + f.pendingPaymentCount, 0),
+      pendingSum: families.reduce((sum, f) => sum + f.pendingPayment, 0),
       debtSum: families.reduce((sum, f) => sum + Math.max(0, f.debtAmount), 0),
       balance: families.reduce((sum, f) => sum + f.balance, 0),
     };
@@ -166,14 +174,17 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
 
   const stats = useMemo(() => computeSchoolStats(rows ?? []), [rows]);
   const maxRequests = Math.max(1, ...stats.map(s => s.newRequests));
+  const maxPendingCount = Math.max(1, ...stats.map(s => s.pendingCount));
   const totals = useMemo(() => stats.reduce((acc, s) => ({
     childrenCount: acc.childrenCount + s.childrenCount,
     newRequests: acc.newRequests + s.newRequests,
     charged: acc.charged + s.charged,
     paid: acc.paid + s.paid,
+    pendingCount: acc.pendingCount + s.pendingCount,
+    pendingSum: acc.pendingSum + s.pendingSum,
     debtSum: acc.debtSum + s.debtSum,
     balance: acc.balance + s.balance,
-  }), { childrenCount: 0, newRequests: 0, charged: 0, paid: 0, debtSum: 0, balance: 0 }), [stats]);
+  }), { childrenCount: 0, newRequests: 0, charged: 0, paid: 0, pendingCount: 0, pendingSum: 0, debtSum: 0, balance: 0 }), [stats]);
 
   const sortedStats = useMemo(() => {
     const copy = [...stats];
@@ -203,6 +214,8 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
           <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(totals.newRequests)} color={KPI_COLORS.newRequests} />
           <KpiChip icon={<Receipt size={18} color="#fff" />} label="Начислено" value={money(totals.charged)} color={KPI_COLORS.charged} />
           <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Оплачено" value={money(totals.paid)} color={KPI_COLORS.paid} />
+          <KpiChip icon={<Clock size={18} color="#fff" />} label="На проверке · к-во" value={String(totals.pendingCount)} color={KPI_COLORS.pendingCount} />
+          <KpiChip icon={<Clock size={18} color="#fff" />} label="На проверке · сумма" value={money(totals.pendingSum)} color={KPI_COLORS.pendingSum} />
           <KpiChip icon={<Landmark size={18} color="#fff" />} label="Сумма долга" value={money(totals.debtSum)} color={KPI_COLORS.debtSum} />
           <KpiChip icon={<Wallet size={18} color="#fff" />} label="Баланс" value={totals.balance.toLocaleString('ru-RU')} color={KPI_COLORS.balance} />
         </div>
@@ -246,6 +259,23 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: s.paid > 0 ? 'var(--success)' : undefined }}>{s.paid > 0 ? money(s.paid) : '0'}</span>
+              </div>
+            ))}
+          </ColumnCard>
+
+          <ColumnCard sortKey="pendingCount" label="На проверке · к-во" sortState={sortState} onSort={handleSort}>
+            {sortedStats.map((s, i) => (
+              <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{s.pendingCount}</span>
+                <Ring value={s.pendingCount} max={maxPendingCount} color={KPI_COLORS.pendingCount} />
+              </div>
+            ))}
+          </ColumnCard>
+
+          <ColumnCard sortKey="pendingSum" label="На проверке · сумма" sortState={sortState} onSort={handleSort}>
+            {sortedStats.map((s, i) => (
+              <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                <span style={{ fontSize: 14, fontWeight: 700 }}>{s.pendingSum > 0 ? money(s.pendingSum) : '0'}</span>
               </div>
             ))}
           </ColumnCard>

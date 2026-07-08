@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { CheckCircle2, Inbox, Landmark, Receipt, Users, Wallet } from 'lucide-react';
+import { CheckCircle2, Clock, Inbox, Landmark, Receipt, Users, Wallet } from 'lucide-react';
 import { fetchV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
 import { computeSchoolStats, KpiChip, KPI_COLORS } from './ManagerOverview';
 import { money } from '../../utils/pricing';
@@ -34,6 +34,8 @@ export default function SchoolKpiStrip({ schoolKey }: SchoolKpiStripProps) {
       <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(stat.newRequests)} color={KPI_COLORS.newRequests} />
       <KpiChip icon={<Receipt size={18} color="#fff" />} label="Начислено" value={money(stat.charged)} color={KPI_COLORS.charged} />
       <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Оплачено" value={money(stat.paid)} color={KPI_COLORS.paid} />
+      <KpiChip icon={<Clock size={18} color="#fff" />} label="На проверке · к-во" value={String(stat.pendingCount)} color={KPI_COLORS.pendingCount} />
+      <KpiChip icon={<Clock size={18} color="#fff" />} label="На проверке · сумма" value={money(stat.pendingSum)} color={KPI_COLORS.pendingSum} />
       <KpiChip icon={<Landmark size={18} color="#fff" />} label="Сумма долга" value={money(stat.debtSum)} color={KPI_COLORS.debtSum} />
       <KpiChip icon={<Wallet size={18} color="#fff" />} label="Баланс" value={stat.balance.toLocaleString('ru-RU')} color={KPI_COLORS.balance} />
     </div>
