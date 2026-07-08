@@ -111,7 +111,7 @@ export default function App() {
     minWidth: 0,
     background: '#FFFFFF',
     borderRadius: '14px 14px 0 0',
-    padding: '4px 6px 0',
+    padding: '8px 10px 0',
     gap: 2,
     marginBottom: 0,
     marginRight: 0,
@@ -121,14 +121,14 @@ export default function App() {
   };
 
   const tabStyle = (active: boolean) => ({
-    height: 30,
-    padding: '0 14px',
+    height: 34,
+    padding: '0 16px',
     border: 'none',
-    borderRadius: active ? '9px 9px 0 0' : 9,
+    borderRadius: active ? '10px 10px 0 0' : 10,
     background: active ? 'var(--active-bg)' : 'transparent',
     color: active ? '#0C7A74' : '#7A859D',
     fontSize: 13,
-    fontWeight: active ? 650 : 450,
+    fontWeight: active ? 700 : 500,
     cursor: 'pointer',
     whiteSpace: 'nowrap' as const,
     transition: 'background 0.15s, color 0.15s',
@@ -139,28 +139,35 @@ export default function App() {
 
   const sectionLabel = (label: string) => (
     <span style={{
-      fontSize: 13,
-      fontWeight: 700,
+      fontSize: 15,
+      fontWeight: 800,
       color: '#17222F',
-      paddingLeft: 8,
-      paddingRight: 10,
+      paddingLeft: 10,
+      paddingRight: 14,
+      paddingBottom: 10,
       whiteSpace: 'nowrap' as const,
       borderRight: '1px solid #E2ECEE',
-      marginRight: 4,
+      marginRight: 6,
       letterSpacing: '-0.01em',
     }}>{label}</span>
   );
 
+  const userInitials = (name?: string) => (name ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
+
   const extraTabs = (_hasFamiliesPage: boolean) => currentUser ? (
-    <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingRight: 8, gap: 4 }}>
-      {currentUser.position && (
-        <span style={{ fontSize: 12, fontWeight: 600, color: '#9AABB0' }}>{currentUser.position}</span>
-      )}
-      {currentUser.position && currentUser.name && (
-        <span style={{ fontSize: 12, color: '#C8D5D8' }}>·</span>
-      )}
+    <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingRight: 10, paddingBottom: 8, gap: 8 }}>
+      <div style={{ textAlign: 'right' }}>
+        {currentUser.position && (
+          <div style={{ fontSize: 11, fontWeight: 600, color: '#9AABB0', lineHeight: 1.3 }}>{currentUser.position}</div>
+        )}
+        {currentUser.name && (
+          <div style={{ fontSize: 13, fontWeight: 800, color: '#17222F', lineHeight: 1.3 }}>{currentUser.name}</div>
+        )}
+      </div>
       {currentUser.name && (
-        <span style={{ fontSize: 12, fontWeight: 700, color: '#17222F' }}>{currentUser.name}</span>
+        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          {userInitials(currentUser.name)}
+        </div>
       )}
     </div>
   ) : null;
