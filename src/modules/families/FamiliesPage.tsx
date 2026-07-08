@@ -1719,14 +1719,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
   const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
+  const restrictedSchoolKey = allowedSchools && allowedSchools.length === 1 && allowedSchools[0] !== 'ALL' ? allowedSchools[0] : null;
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
-    requests: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
-  payments: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
-  charges: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
-  debtors: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
-  directory: { ...DEFAULT_MODE_FILTERS, quickChildStatus: '' },
+    requests: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus },
+  payments: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
+  charges: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
+  debtors: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
+  directory: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: '' },
   cashier:  { ...DEFAULT_MODE_FILTERS, activeTab: 'ALL' },
-  logistics: { ...DEFAULT_MODE_FILTERS, quickChildStatus: roleDefaultChildStatus },
+  logistics: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus },
 });
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
   const [expandedFamily, setExpandedFamily]     = useState<Family | null>(null);

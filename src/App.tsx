@@ -311,6 +311,7 @@ export default function App() {
             </div>
             {managerSchoolKey ? (
               <FamiliesPage
+                key={managerSchoolKey}
                 mode="directory"
                 userRole={currentUserRole}
                 userName={currentUser?.name}
