@@ -89,6 +89,7 @@ interface FamiliesPageProps {
   hidePeriodAll?: boolean;
   hidePeriodDeposit?: boolean;
   hideTransferBars?: boolean;
+  hideDashboard?: boolean;
   customLeftPanel?: React.ReactNode;
   onPeriodKeyChange?: (key: string) => void;
   onSchoolKeyChange?: (key: string) => void;
@@ -1704,7 +1705,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTableContent, onSchoolsSidebarWidthChange }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, hideDashboard = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTableContent, onSchoolsSidebarWidthChange }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
@@ -3611,6 +3612,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           </div>
         )}
 
+        {!hideDashboard && (
         <LogisticsMicrobusDashboard
           items={customBarItems ?? logisticsAvgItems}
           collapsed={logisticsDashboardCollapsed}
@@ -3672,6 +3674,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           customLeftPanel={customLeftPanel}
           dashboardHeight={isChargesMode ? 390 : undefined}
         />
+        )}
 
         {/* ── ТАБЛИЦА ── */}
         <div style={customTableContent

@@ -4,7 +4,7 @@ import { fetchV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service
 import { SCHOOL_TABS } from './constants';
 import { money } from '../../utils/pricing';
 
-interface SchoolStat {
+export interface SchoolStat {
   key: string;
   label: string;
   color: string;
@@ -27,7 +27,7 @@ const SCHOOL_COLORS = [
   '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
-const KPI_COLORS = {
+export const KPI_COLORS = {
   childrenCount: '#7F77DD',
   newRequests: '#378ADD',
   charged: '#BA7517',
@@ -50,7 +50,7 @@ const GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'debtSum', 'b
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
 
-function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
+export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
   return schools.map((tab, index) => {
     const schoolRows = rows.filter(r => r.branchFilter === tab.key);
@@ -101,7 +101,7 @@ function Ring({ value, max, color, size = 34 }: { value: number; max: number; co
   );
 }
 
-function KpiChip({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
+export function KpiChip({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
   return (
     <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '12px 16px' }}>
       <div style={{ width: 38, height: 38, borderRadius: 11, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>

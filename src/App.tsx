@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Sidebar, { canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import FamiliesPage from './modules/families/FamiliesPage';
 import ManagerOverview from './modules/families/ManagerOverview';
+import SchoolKpiStrip from './modules/families/SchoolKpiStrip';
 import DriversPage from './modules/drivers/DriversPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
 import LoginPage from './modules/auth/LoginPage';
@@ -310,18 +311,22 @@ export default function App() {
               </div>
             </div>
             {managerSchoolKey ? (
-              <FamiliesPage
-                key={managerSchoolKey}
-                mode="directory"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={[managerSchoolKey]}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
+              <>
+                <SchoolKpiStrip schoolKey={managerSchoolKey} />
+                <FamiliesPage
+                  key={managerSchoolKey}
+                  mode="directory"
+                  userRole={currentUserRole}
+                  userName={currentUser?.name}
+                  allowedSchools={[managerSchoolKey]}
+                  hideDashboard
+                  adminFiltersOpen={adminFiltersOpen}
+                  onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+                  columnsOpen={columnsOpen}
+                  onColumnsOpenChange={setColumnsOpen}
+                  onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                />
+              </>
             ) : (
               <ManagerOverview onSelectSchool={setManagerSchoolKey} />
             )}
