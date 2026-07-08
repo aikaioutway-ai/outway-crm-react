@@ -222,14 +222,6 @@ export default function ManagerOverview({ onSelectSchool }: ManagerOverviewProps
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="childrenCount" label="К-во всех детей" weight={COLUMN_WEIGHTS.childrenCount} sortState={sortState} onSort={handleSort}>
-            {sortedStats.map((s, i) => (
-              <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>{s.childrenCount}</span>
-              </div>
-            ))}
-          </ColumnCard>
-
           <ColumnCard sortKey="newRequests" label="Новые заявки" weight={COLUMN_WEIGHTS.newRequests} sortState={sortState} onSort={handleSort}>
             {sortedStats.map((s, i) => (
               <div key={s.key} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
