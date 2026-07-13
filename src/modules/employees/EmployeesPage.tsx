@@ -44,6 +44,9 @@ export default function EmployeesPage() {
   const [draft, setDraft] = useState<EmployeeDraft>(EMPTY_DRAFT);
   const [loading, setLoading] = useState(true);
 
+  const [query, setQuery] = useState('');
+  const [message, setMessage] = useState('');
+
   useEffect(() => {
     fetchEmployees()
       .then(data => {
@@ -51,11 +54,9 @@ export default function EmployeesPage() {
         setSelectedId(data[0]?.id ?? null);
         if (data[0]) setDraft(toDraft(data[0]));
       })
-      .catch(() => {})
+      .catch(() => setMessage('Не удалось загрузить список сотрудников. Проверьте соединение и обновите страницу.'))
       .finally(() => setLoading(false));
   }, []);
-  const [query, setQuery] = useState('');
-  const [message, setMessage] = useState('');
   const [showPassword, setShowPassword] = useState(false);
 
   const selected = employees.find(item => item.id === selectedId) ?? null;
@@ -228,7 +229,7 @@ export default function EmployeesPage() {
             </button>
           </div>
 
-          {message && <div style={messageStyle(message.includes('Заполните') || message.includes('логин'))}>{message}</div>}
+          {message && <div style={messageStyle(message.includes('Заполните') || message.includes('логин') || message.includes('Не удалось'))}>{message}</div>}
 
           <Section title="Основное">
             <Field label="ФИО"><Input value={draft.fullName} onChange={value => patch({ fullName: value })} /></Field>
@@ -304,7 +305,7 @@ function toDraft(employee: Employee): EmployeeDraft {
     id: employee.id,
     fullName: employee.fullName,
     login: employee.login,
-    password: employee.passwordPlain ?? '',
+    password: '',
     role: employee.role,
     position: employee.position,
     phone1: employee.phone1,

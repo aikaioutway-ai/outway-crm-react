@@ -1,4 +1,5 @@
-import { SUPABASE_KEY, SUPABASE_URL, supabase } from './supabase';
+import { supabase } from './supabase';
+import { safeStorageFileName, uploadToBucket } from './storage';
 import {
   Charge,
   Child,
@@ -34,7 +35,8 @@ function fromPaymentStatus(status: PaymentStatus): string {
 function mapCharge(row: any, childName?: string): Charge {
   const amount = Number(row.amount ?? 0);
   const paidAmount = Number(row.paid_amount ?? 0);
-  const debtAmount = Math.max(0, amount - paidAmount);
+  const penaltyAmount = Number(row.penalty_amount ?? 0);
+  const debtAmount = Math.max(0, Number(row.debt_amount ?? amount + penaltyAmount - paidAmount));
   return {
     id: String(row.id),
     childId: String(row.child_id),
@@ -46,9 +48,9 @@ function mapCharge(row: any, childName?: string): Charge {
     amount,
     paidAmount,
     debtAmount,
-    penaltyAmount: 0,
+    penaltyAmount,
     status: toPaymentStatus(row.status ?? 'unpaid'),
-    isFrozen: row.status === 'cancelled',
+    isFrozen: Boolean(row.is_frozen ?? row.status === 'cancelled'),
     createdAt: String(row.created_at ?? ''),
     updatedAt: row.updated_at ? String(row.updated_at) : undefined,
   };
@@ -201,7 +203,7 @@ export async function updateCharge(chargeId: string, updates: Partial<Charge>): 
 
   const row: Record<string, unknown> = {};
   if (updates.status !== undefined) row.status = fromPaymentStatus(updates.status);
-  if (updates.isFrozen !== undefined && updates.isFrozen) row.status = 'cancelled';
+  if (updates.isFrozen !== undefined) row.is_frozen = updates.isFrozen;
   if (updates.penaltyAmount !== undefined) row.penalty_amount = updates.penaltyAmount;
 
   if (Object.keys(row).length === 0) return;
@@ -276,15 +278,9 @@ export async function createFamilyPayment(params: {
     ? await uploadPaymentReceipt(params.familyId, params.receiptFile)
     : null;
 
-  const response = await fetch(`${SUPABASE_URL}/rest/v1/v2_payments`, {
-    method: 'POST',
-    headers: {
-      apikey: SUPABASE_KEY,
-      Authorization: `Bearer ${SUPABASE_KEY}`,
-      'Content-Type': 'application/json',
-      Prefer: 'return=minimal',
-    },
-    body: JSON.stringify({
+  const { data, error } = await supabase
+    .from('v2_payments')
+    .insert({
       family_id: params.familyId,
       amount: params.amount,
       suggested_main_amount: params.amount,
@@ -296,44 +292,22 @@ export async function createFamilyPayment(params: {
       status: 'pending',
       submitted_by: params.createdBy,
       comment: params.comment || null,
-    }),
-  });
+    })
+    .select()
+    .single();
 
-  if (!response.ok) {
-    let message = `Не удалось сохранить платёж (${response.status})`;
-    try {
-      const error = await response.json();
-      message = error.message || error.details || message;
-    } catch {
-      // Response body is not always JSON.
-    }
-    throw new Error(message);
-  }
+  if (error) throw new Error(error.message);
 
-  return {
-    id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `local-${Date.now()}`,
-    familyId: params.familyId,
-    amount: params.amount,
-    paymentType: params.paymentType,
-    receiptUrl: receiptUrl ?? undefined,
-    paymentDate: params.paymentDate,
-    status: 'На проверке',
-    createdBy: params.createdBy,
-    comment: params.comment ?? '',
-    createdAt: new Date().toISOString(),
-  };
+  return mapPayment(data);
 }
 
 async function uploadPaymentReceipt(familyId: string, file: File): Promise<string> {
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `${familyId}/${Date.now()}-${safeName}`;
-  const { error } = await supabase.storage
-    .from('payment-receipts')
-    .upload(path, file, { upsert: false });
-  if (error) throw new Error(`Не удалось загрузить чек: ${error.message}`);
-
-  const { data } = supabase.storage.from('payment-receipts').getPublicUrl(path);
-  return data.publicUrl;
+  const path = `${familyId}/${Date.now()}-${safeStorageFileName(file.name)}`;
+  try {
+    return await uploadToBucket('payment-receipts', path, file);
+  } catch (error) {
+    throw new Error(`Не удалось загрузить чек: ${error instanceof Error ? error.message : String(error)}`);
+  }
 }
 
 export async function confirmFamilyPayment(params: {
@@ -461,87 +435,5 @@ export async function autoChargeOnBoarding(familyId: string, children: Child[]):
   // Депозит — только если ещё не было
   if (!hasDeposit) {
     await createDepositCharge(familyId, children);
-  }
-}
-
-/**
- * Ежемесячное начисление для всех семей с boarded детьми.
- * Вызывается 1-го числа каждого месяца (сентябрь–апрель).
- * Май — особый: списывается с депозитного кошелька.
- */
-export async function monthlyAutoCharge(): Promise<{ charged: number; skipped: number }> {
-  const period = currentAcademicPeriod();
-  if (!period) return { charged: 0, skipped: 0 };
-
-  // Получаем все семьи с boarded детьми
-  const { data: children, error } = await supabase
-    .from('v2_children')
-    .select('id, family_id, final_price, status, school_id, branch_id, zone, vehicle_type')
-    .eq('status', 'boarded');
-  if (error || !children?.length) return { charged: 0, skipped: 0 };
-
-  const familyMap = new Map<string, Child[]>();
-  children.forEach((c: any) => {
-    const fid = c.family_id;
-    if (!familyMap.has(fid)) familyMap.set(fid, []);
-    familyMap.get(fid)!.push({
-      id: c.id,
-      familyId: fid,
-      childName: '',
-      class: '',
-      selfExitAllowed: false,
-      schoolCode: 'KINGS' as any,
-      schoolId: c.school_id,
-      branchId: c.branch_id,
-      zone: c.zone,
-      vehicleType: c.vehicle_type,
-      finalPrice: Number(c.final_price ?? 0),
-      basePrice: Number(c.final_price ?? 0),
-      status: 'boarded',
-      transferNumber: undefined,
-      stopNumber: undefined,
-      timeMorning: undefined,
-      siblingDiscountPercent: 0,
-      manualDiscountPercent: 0,
-      manualDiscountAmount: 0,
-      latitude: undefined,
-      longitude: undefined,
-    });
-  });
-
-  let charged = 0;
-  let skipped = 0;
-  const entries = Array.from(familyMap.entries());
-  for (const [familyId, kids] of entries) {
-    try {
-      await createChargesForPeriod(familyId, kids, period.month, period.year);
-      charged++;
-    } catch {
-      skipped++;
-    }
-  }
-  return { charged, skipped };
-}
-
-export function chargePeriodLabel(charge: Pick<Charge, 'periodMonth' | 'year'>): string {
-  return `${charge.periodMonth}/${charge.year}`;
-}
-
-export async function recalcSiblingDiscounts(familyId: string, children: Child[]): Promise<void> {
-  // Пересчитываем скидку братьев/сестёр после добавления или удаления ребёнка
-  // Первый ребёнок — без скидки, второй и далее — 5%
-  const updates = children.map((child, index) => ({
-    id: child.id,
-    sibling_discount_percent: index === 0 ? 0 : 5,
-    final_price: index === 0
-      ? Number(child.basePrice ?? child.finalPrice ?? 0)
-      : Math.round(Number(child.basePrice ?? child.finalPrice ?? 0) * 0.95),
-  }));
-
-  for (const u of updates) {
-    await supabase
-      .from('v2_children')
-      .update({ sibling_discount_percent: u.sibling_discount_percent, final_price: u.final_price })
-      .eq('id', u.id);
   }
 }

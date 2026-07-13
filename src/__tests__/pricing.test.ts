@@ -4,7 +4,7 @@ import { getPriceByZone, getChildPrice, getFamilyPrice, getZoneByDistance, calcP
 
 describe('getPriceByZone', () => {
   test('минивэн всегда 9500 независимо от школы и зоны', () => {
-    expect(getPriceByZone('KINGS', 'A', 'minivan')).toBe(9500);
+    expect(getPriceByZone('LIGHT', 'A', 'minivan')).toBe(9500);
     expect(getPriceByZone('EDISON', 'C', 'minivan')).toBe(9500);
   });
 
@@ -12,16 +12,16 @@ describe('getPriceByZone', () => {
     expect(getPriceByZone('AES', 'B', 'sedan')).toBe(10500);
   });
 
-  test('KINGS зона A = 5000', () => {
-    expect(getPriceByZone('KINGS', 'A', 'microbus')).toBe(5000);
+  test('LIGHT зона A = 5000', () => {
+    expect(getPriceByZone('LIGHT', 'A', 'microbus')).toBe(5000);
   });
 
-  test('KINGS зона B = 5500', () => {
-    expect(getPriceByZone('KINGS', 'B', 'microbus')).toBe(5500);
+  test('LIGHT зона B = 5500', () => {
+    expect(getPriceByZone('LIGHT', 'B', 'microbus')).toBe(5500);
   });
 
-  test('KINGS зона C = 6000', () => {
-    expect(getPriceByZone('KINGS', 'C', 'microbus')).toBe(6000);
+  test('LIGHT зона C = 6000', () => {
+    expect(getPriceByZone('LIGHT', 'C', 'microbus')).toBe(6000);
   });
 
   test('AES зона A = 5500', () => {
@@ -118,7 +118,7 @@ describe('getFamilyPrice', () => {
   });
 
   test('разные школы — у каждого своя цена', () => {
-    const kid1 = { schoolCode: 'KINGS' as const, zone: 'A' as const, vehicleType: 'microbus' as const };
+    const kid1 = { schoolCode: 'LIGHT' as const, zone: 'A' as const, vehicleType: 'microbus' as const };
     const kid2 = { schoolCode: 'AES' as const, zone: 'B' as const, vehicleType: 'microbus' as const };
     // kid1 = 5000 (первый), kid2 = 6000 * 0.95 = 5700 (второй)
     expect(getFamilyPrice([kid1, kid2])).toBe(10700);

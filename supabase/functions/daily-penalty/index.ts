@@ -32,13 +32,18 @@ Deno.serve(async (req) => {
   }
 
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+  const today = now.toISOString().slice(0, 10); // YYYY-MM-DD
 
-  // Получаем все неоплаченные начисления с долгом > 0 и незамороженной пеней
+  // Получаем все неоплаченные начисления с долгом > 0 и незамороженной пеней,
+  // которым сегодня ещё не начисляли (защита от повторного вызова в тот же день —
+  // функция задеплоена с --no-verify-jwt и может быть вызвана кем угодно/сколько
+  // угодно раз за один день).
   const { data: charges, error } = await supabase
     .from('v2_charges')
-    .select('id, amount, paid_amount, penalty_amount, is_frozen')
+    .select('id, amount, paid_amount, penalty_amount, is_frozen, penalty_last_charged_on')
     .in('status', ['unpaid', 'partial'])
-    .eq('is_frozen', false);
+    .eq('is_frozen', false)
+    .or(`penalty_last_charged_on.is.null,penalty_last_charged_on.lt.${today}`);
 
   if (error) return Response.json({ ok: false, error: error.message }, { headers: corsHeaders, status: 500 });
   if (!charges?.length) return Response.json({ ok: true, message: 'Нет долгов для пени', updated: 0 }, { headers: corsHeaders });
@@ -50,13 +55,17 @@ Deno.serve(async (req) => {
 
     const maxPenalty = Math.round(charge.amount * PENALTY_MAX_PERCENT);
     const currentPenalty = charge.penalty_amount ?? 0;
-    if (currentPenalty >= maxPenalty) continue; // уже достигнут лимит
+    if (currentPenalty >= maxPenalty) {
+      // Лимит уже достигнут — просто помечаем как проверенное сегодня
+      await supabase.from('v2_charges').update({ penalty_last_charged_on: today }).eq('id', charge.id);
+      continue;
+    }
 
     const newPenalty = Math.min(currentPenalty + PENALTY_PER_DAY, maxPenalty);
 
     const { error: upErr } = await supabase
       .from('v2_charges')
-      .update({ penalty_amount: newPenalty })
+      .update({ penalty_amount: newPenalty, penalty_last_charged_on: today })
       .eq('id', charge.id);
 
     if (!upErr) updated++;

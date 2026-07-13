@@ -1,6 +1,14 @@
 import { supabase } from './supabase';
+import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+
+function derivePaymentStatus(totalCharged: number, totalPaid: number, debtAmount: number): 'no_charges' | 'paid' | 'partial' | 'debt' {
+  if (totalCharged === 0) return 'no_charges';
+  if (debtAmount <= 0) return 'paid';
+  if (totalPaid > 0) return 'partial';
+  return 'debt';
+}
 
 export interface V2BranchOption {
   id: string;
@@ -8,6 +16,8 @@ export interface V2BranchOption {
   code: string;
   shortName: string;
   name: string;
+  latitude?: number | null;
+  longitude?: number | null;
 }
 
 export interface V2TransferDashboardRow {
@@ -46,6 +56,8 @@ export interface V2DriverTableRow {
   branchCodes: string[];
   branchShorts: string[];
   branchNames: string[];
+  missingDocumentCount: number;
+  hasIncompleteDocuments: boolean;
 }
 
 export type V2DriverDocumentType =
@@ -157,14 +169,8 @@ function normalizeDriverDocuments(driverId: string, rows: any[]): V2DriverDocume
 }
 
 async function uploadV2DriverDocumentScan(driverId: string, type: V2DriverDocumentType, file: File): Promise<string> {
-  const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const path = `${driverId}/${type}/${Date.now()}_${safeName}`;
-  const { error } = await supabase.storage
-    .from('driver-documents')
-    .upload(path, file, { upsert: false });
-  if (error) throw new Error(error.message);
-  const { data } = supabase.storage.from('driver-documents').getPublicUrl(path);
-  return data.publicUrl;
+  const path = `${driverId}/${type}/${Date.now()}_${safeStorageFileName(file.name)}`;
+  return uploadToBucket('driver-documents', path, file);
 }
 
 async function prepareV2DriverDocumentsForSave(driverId: string, documents: V2DriverDocumentInput[]) {
@@ -252,7 +258,7 @@ function stripAddress(addr: string | null): string {
 
 function toSchoolCode(branchCode?: string | null): SchoolCode {
   const normalized = normalizeSchoolCode(branchCode ?? '') as SchoolCode;
-  return (normalized || 'KINGS') as SchoolCode;
+  return (normalized || 'AES') as SchoolCode;
 }
 
 function mapStatus(status: string | null | undefined): any {
@@ -383,6 +389,9 @@ export async function fetchChargesForPeriod(
   periodYear: number | null,
   chargeType: string | null,
 ): Promise<PeriodChargeStats[]> {
+  if (!chargeType && (periodMonth === null || periodYear === null)) {
+    throw new Error('fetchChargesForPeriod: нужно указать chargeType либо periodMonth+periodYear');
+  }
   const data = await fetchAllRows<any>((from, to) => {
     let query = supabase
       .from('v2_charges')
@@ -439,106 +448,6 @@ export async function fetchChargesForPeriod(
   return Object.values(map);
 }
 
-export interface FamiliesRPCResult {
-  rows: FamilyListRow[];
-  totalFamilies: number;
-}
-
-export async function fetchV2FamiliesRPC(
-  search: string = '',
-  limit: number = 150,
-  offset: number = 0,
-): Promise<FamiliesRPCResult> {
-  const { data, error } = await supabase.rpc('get_families_table', {
-    p_search: search || null,
-    p_limit: limit,
-    p_offset: offset,
-  });
-  if (error) throw new Error(error.message);
-
-  const rows: FamilyListRow[] = [];
-  let totalFamilies = 0;
-  let familyIndex = 0;
-  let prevFamilyId = '';
-
-  (data ?? []).forEach((row: any, idx: number) => {
-    if (idx === 0) totalFamilies = Number(row.total_families ?? 0);
-    if (row.family_id !== prevFamilyId) { familyIndex++; prevFamilyId = row.family_id; }
-
-    const branchCode = row.branch_code ?? '';
-    const schoolCode = normalizeSchoolCode(branchCode);
-    const vt = normalizeVehicle(row.vehicle_type);
-    const totalCharged = Number(row.total_charged ?? 0);
-    const totalPaid = Number(row.total_paid ?? 0);
-    const debtAmount = Math.max(0, totalCharged - totalPaid);
-    const paymentStatus = totalCharged === 0
-      ? 'no_charges'
-      : debtAmount <= 0
-        ? 'paid'
-        : totalPaid > 0
-          ? 'partial'
-          : 'debt';
-
-    rows.push({
-      rowId: row.child_id ?? `${row.family_id}_empty`,
-      familyId: String(row.family_id),
-      familyIndex,
-      isFirstChild: idx === 0 || (data[idx - 1]?.family_id !== row.family_id),
-      childName: row.child_name ?? '',
-      childClass: row.class_name ?? '',
-      parentName: row.parent_name ?? '',
-      phone: row.phone ?? '',
-      secondPhone: row.second_phone ?? '',
-      contactName: row.contact_name ?? '',
-      contactPhone: row.contact_phone ?? '',
-      schoolId: row.school_id ?? null,
-      branchId: row.branch_id ?? null,
-      schoolCode,
-      branchName: row.branch_name ?? branchCode,
-      branchShort: row.branch_short ?? branchCode,
-      branchFilter: getBranchFilter(row.branch_name ?? null, branchCode),
-      streetAddress: stripAddress(row.address ?? ''),
-      distanceKm: row.distance_km == null ? null : Number(row.distance_km),
-      zone: normalizeZone(row.zone, 'A'),
-      vehicleType: vt,
-      vehicleLabel: '',
-      monthlyPrice: Number(row.final_price ?? row.base_price ?? 0),
-      status: mapChildStatus(row.child_status),
-      paymentStatus,
-      transferNumber: row.transfer_number ? String(row.transfer_number) : null,
-      driverId: row.driver_id ? String(row.driver_id) : null,
-      stopNumber: row.stop_order ? String(row.stop_order) : null,
-      timeMorning: row.time_morning ?? null,
-      selfExitAllowed: Boolean(row.self_exit_allowed),
-      latitude: row.latitude == null ? null : Number(row.latitude),
-      longitude: row.longitude == null ? null : Number(row.longitude),
-      discountAmount: Math.max(0, Number(row.base_price ?? 0) - Number(row.final_price ?? 0)),
-      totalCharged,
-      totalPaid,
-      paidPaymentCount: Number(row.paid_count ?? 0),
-      paidPaymentAmount: Number(row.paid_amount_sum ?? 0),
-      pendingPayment: Number(row.pending_amount ?? 0),
-      pendingPaymentCount: Number(row.pending_count ?? 0),
-      pendingPaymentId: row.pending_payment_id ?? null,
-      pendingPaymentAmount: Number(row.pending_amount ?? 0),
-      pendingPaymentDate: row.pending_payment_date ?? null,
-      pendingActualPaymentDate: row.pending_actual_date ?? null,
-      pendingPaymentType: row.pending_method ?? null,
-      pendingPaymentReceiptUrl: row.pending_receipt ?? null,
-      pendingPaymentComment: row.pending_comment ?? '',
-      rejectedPaymentCount: Number(row.rejected_count ?? 0),
-      rejectedPaymentAmount: Number(row.rejected_amount ?? 0),
-      allPaymentCount: Number(row.paid_count ?? 0) + Number(row.rejected_count ?? 0) + Number(row.pending_count ?? 0),
-      allPaymentAmount: Number(row.paid_amount_sum ?? 0) + Number(row.pending_amount ?? 0) + Number(row.rejected_amount ?? 0),
-      childDebtAmount: debtAmount,
-      debtAmount,
-      balance: Number(row.balance ?? 0),
-    });
-  });
-
-  return { rows, totalFamilies };
-}
-
 export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, any>> {
   const data = await fetchAllRows<any>((from, to) => supabase
       .from('v2_payments')
@@ -554,7 +463,25 @@ export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, an
   return map;
 }
 
+const familiesTableInflight: Partial<Record<'withFinance' | 'base', Promise<FamilyListRow[]>>> = {};
+
+let cachedBaseFamilies: FamilyListRow[] | null = null;
+
+export function getCachedV2FamiliesTable(): FamilyListRow[] | null {
+  return cachedBaseFamilies;
+}
+
+export async function fetchV2FamiliesTableCached(): Promise<FamilyListRow[]> {
+  const rows = await fetchV2FamiliesTable(false);
+  cachedBaseFamilies = rows;
+  return rows;
+}
+
 export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
+  const cacheKey = withFinance ? 'withFinance' : 'base';
+  if (familiesTableInflight[cacheKey]) return familiesTableInflight[cacheKey]!;
+
+  const request = (async (): Promise<FamilyListRow[]> => {
   const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to)),
     fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to)),
@@ -594,13 +521,7 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
       const branchCode = branch?.code ?? '';
       const schoolCode = normalizeSchoolCode(branchCode);
       const vt = normalizeVehicle(child?.vehicle_type);
-      const paymentStatus = totalCharged === 0
-        ? 'no_charges'
-        : debtAmount <= 0
-          ? 'paid'
-          : totalPaid > 0
-            ? 'partial'
-            : 'debt';
+      const paymentStatus = derivePaymentStatus(totalCharged, totalPaid, debtAmount);
       const pp = pendingMap[family.id];
 
       rows.push({
@@ -663,6 +584,13 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
   });
 
   return rows;
+  })();
+
+  familiesTableInflight[cacheKey] = request;
+  request.finally(() => {
+    delete familiesTableInflight[cacheKey];
+  });
+  return request;
 }
 
 export async function fetchV2Family(familyId: string): Promise<Family | null> {
@@ -691,7 +619,7 @@ export async function fetchV2Branches(): Promise<V2BranchOption[]> {
   if (branchesCache) return branchesCache;
   const { data, error } = await supabase
     .from('v2_school_branches')
-    .select('id, school_id, code, short_name, name')
+    .select('id, school_id, code, short_name, name, latitude, longitude')
     .order('code', { ascending: true });
   if (error) throw new Error(error.message);
   branchesCache = (data ?? []).map((row: any) => ({
@@ -700,6 +628,8 @@ export async function fetchV2Branches(): Promise<V2BranchOption[]> {
     code: row.code ?? '',
     shortName: row.short_name ?? row.code ?? '',
     name: row.name ?? row.short_name ?? row.code ?? '',
+    latitude: row.latitude ?? null,
+    longitude: row.longitude ?? null,
   }));
   return branchesCache;
 }
@@ -834,8 +764,25 @@ export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRo
   });
 }
 
+let driversTableInflight: Promise<V2DriverTableRow[]> | null = null;
+let cachedDriversTable: V2DriverTableRow[] | null = null;
+
+export function getCachedV2DriversTable(): V2DriverTableRow[] | null {
+  return cachedDriversTable;
+}
+
 export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
-  const [drivers, vehicles, transfers, children] = await Promise.all([
+  if (driversTableInflight) return driversTableInflight;
+  const request = fetchV2DriversTableUncached();
+  driversTableInflight = request;
+  request.then(rows => { cachedDriversTable = rows; }).finally(() => {
+    driversTableInflight = null;
+  });
+  return request;
+}
+
+async function fetchV2DriversTableUncached(): Promise<V2DriverTableRow[]> {
+  const [drivers, vehicles, transfers, children, documents] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase.from('v2_drivers').select('*').order('full_name', { ascending: true }).range(from, to)),
     fetchAllRows<any>((from, to) => supabase.from('v2_vehicles').select('*').order('created_at', { ascending: true }).range(from, to)),
     fetchAllRows<any>((from, to) => supabase
@@ -845,6 +792,10 @@ export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
         .order('transfer_number', { ascending: true })
         .range(from, to)),
     fetchAllRows<any>((from, to) => supabase.from('v2_children').select('transfer_id').neq('status', 'rejected').range(from, to)),
+    fetchAllRows<any>((from, to) => supabase
+      .from('v2_driver_documents')
+      .select('driver_id, document_type, document_number, issued_at, expires_at, required, scan_url')
+      .range(from, to)).catch(() => []),
   ]);
 
   const childCountByTransfer: Record<string, number> = {};
@@ -869,6 +820,14 @@ export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
     transfersByDriver[key].push(transfer);
   });
 
+  const documentsByDriver: Record<string, any[]> = {};
+  documents.forEach((document: any) => {
+    if (!document.driver_id) return;
+    const key = String(document.driver_id);
+    if (!documentsByDriver[key]) documentsByDriver[key] = [];
+    documentsByDriver[key].push(document);
+  });
+
   return drivers.map((driver: any) => {
     const vehicle = vehiclesByDriver[driver.id];
     const transfers = transfersByDriver[driver.id] ?? [];
@@ -884,6 +843,17 @@ export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
     const transferVehicleType = transfers.find(transfer => transfer.vehicle_type)?.vehicle_type;
     const fallbackVehicleType = (transferVehicleType ? normalizeVehicle(transferVehicleType) : '') as VehicleType | '';
     const type = vehicleType || fallbackVehicleType;
+    const documentsByType = new Map<string, any>((documentsByDriver[String(driver.id)] ?? []).map(document => [String(document.document_type), document]));
+    const missingDocumentCount = V2_DRIVER_DOCUMENT_TYPES.filter(defaultDocument => {
+      const document = documentsByType.get(defaultDocument.type);
+      const required = document?.required ?? defaultDocument.required;
+      if (!required) return false;
+      return !document
+        || !String(document.document_number ?? '').trim()
+        || !document.issued_at
+        || !document.expires_at
+        || !document.scan_url;
+    }).length;
 
     return {
       rowId: String(driver.id),
@@ -907,6 +877,8 @@ export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
       branchCodes,
       branchShorts,
       branchNames,
+      missingDocumentCount,
+      hasIncompleteDocuments: missingDocumentCount > 0,
     };
   });
 }
@@ -1072,6 +1044,29 @@ export async function fetchV2DriverAdvances(driverId: string): Promise<V2DriverA
   }));
 }
 
+export async function fetchV2DriverAdvancesForPeriod(periodMonth: number, periodYear: number): Promise<V2DriverAdvance[]> {
+  if (periodMonth < 1 || periodMonth > 12 || !periodYear) return [];
+  const month = String(periodMonth).padStart(2, '0');
+  const startDate = `${periodYear}-${month}-01`;
+  const endDate = new Date(periodYear, periodMonth, 0).toISOString().slice(0, 10);
+  const data = await fetchAllRows<any>((from, to) => supabase
+    .from('v2_driver_advances')
+    .select('*')
+    .gte('date', startDate)
+    .lte('date', endDate)
+    .order('date', { ascending: false })
+    .range(from, to));
+
+  return data.map((row: any) => ({
+    id: String(row.id),
+    driverId: String(row.driver_id),
+    amount: Number(row.amount),
+    date: row.date ?? '',
+    comment: row.comment ?? '',
+    createdAt: row.created_at ?? '',
+  }));
+}
+
 export async function createV2DriverAdvance(driverId: string, amount: number, date: string, comment: string): Promise<V2DriverAdvance> {
   const { data, error } = await supabase
     .from('v2_driver_advances')
@@ -1225,7 +1220,24 @@ export interface CashierPaymentRow {
   createdAt: string;
 }
 
+let cashierPaymentsInflight: Promise<CashierPaymentRow[]> | null = null;
+let cachedCashierPayments: CashierPaymentRow[] | null = null;
+
+export function getCachedCashierPaymentsTable(): CashierPaymentRow[] | null {
+  return cachedCashierPayments;
+}
+
 export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> {
+  if (cashierPaymentsInflight) return cashierPaymentsInflight;
+  const request = fetchCashierPaymentsTableUncached();
+  cashierPaymentsInflight = request;
+  request.then(rows => { cachedCashierPayments = rows; }).finally(() => {
+    cashierPaymentsInflight = null;
+  });
+  return request;
+}
+
+async function fetchCashierPaymentsTableUncached(): Promise<CashierPaymentRow[]> {
   const [payments, families, children] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')
@@ -1301,7 +1313,24 @@ export interface PaymentTableRow {
   createdAt: string;
 }
 
+let paymentsTableInflight: Promise<PaymentTableRow[]> | null = null;
+let cachedPaymentsTable: PaymentTableRow[] | null = null;
+
+export function getCachedPaymentsTable(): PaymentTableRow[] | null {
+  return cachedPaymentsTable;
+}
+
 export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
+  if (paymentsTableInflight) return paymentsTableInflight;
+  const request = fetchPaymentsTableUncached();
+  paymentsTableInflight = request;
+  request.then(rows => { cachedPaymentsTable = rows; }).finally(() => {
+    paymentsTableInflight = null;
+  });
+  return request;
+}
+
+async function fetchPaymentsTableUncached(): Promise<PaymentTableRow[]> {
   const [payments, families, children] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')

@@ -133,7 +133,6 @@ outway-crm-react/src/
 
 | Код в БД | Название | access_key (форма) |
 |----------|----------|-------------------|
-| KINGS    | Kings International School | 1011 |
 | LIGHT    | Light Academy | 1010 |
 | BILIM    | Bilim KG | 1005 |
 | AES      | American-European School | 1004 |
@@ -226,7 +225,6 @@ access_key, active
 
 ```javascript
 const PRICE_RULES = {
-  KINGS:   { zone1: 5000, zone2: 5500, zone3: 6000 },
   LIGHT:   { zone1: 5000, zone2: 5500, zone3: 6000 },
   BILIM:   { zone1: 5000, zone2: 5500, zone3: 6500 },
   AES:     { zone1: 5500, zone2: 6000, zone3: 6500 },

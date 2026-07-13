@@ -71,6 +71,7 @@ export interface DataTableProps<T = any> {
   getExpandedRowKey?: (row: T) => React.Key;
   onExpandedRowKeyChange?: (key: React.Key | null, row?: T) => void;
   renderExpandedRow?: (row: T) => React.ReactNode;
+  onExport?: (rows: T[]) => void;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -154,19 +155,26 @@ const CALC_OPTIONS: { value: CalcMode; label: string }[] = [
 
 const PAGE_SIZE = 20;
 
-function useDragList<T>(list: T[], onChange: (next: T[]) => void) {
+function useDragList<T>(list: T[], onReorder: (next: T[]) => void, onDrop: (next: T[]) => void) {
   const dragIdx = useRef<number | null>(null);
-  const onDragStart = (i: number) => { dragIdx.current = i; };
+  const pendingRef = useRef<T[] | null>(null);
+  const onDragStart = (i: number) => { dragIdx.current = i; pendingRef.current = null; };
   const onDragOver  = (e: React.DragEvent, i: number) => {
     e.preventDefault();
     if (dragIdx.current === null || dragIdx.current === i) return;
-    const next = [...list];
+    const base = pendingRef.current ?? list;
+    const next = [...base];
     const [item] = next.splice(dragIdx.current, 1);
     next.splice(i, 0, item);
     dragIdx.current = i;
-    onChange(next);
+    pendingRef.current = next;
+    onReorder(next);
   };
-  const onDragEnd   = () => { dragIdx.current = null; };
+  const onDragEnd = () => {
+    dragIdx.current = null;
+    if (pendingRef.current) onDrop(pendingRef.current);
+    pendingRef.current = null;
+  };
   return { onDragStart, onDragOver, onDragEnd };
 }
 
@@ -239,6 +247,7 @@ export function DataTable<T extends Record<string, any>>({
   getExpandedRowKey,
   onExpandedRowKeyChange,
   renderExpandedRow,
+  onExport,
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
@@ -247,10 +256,13 @@ export function DataTable<T extends Record<string, any>>({
   // Загружаем настройки колонок из Supabase при монтировании
   const prevColKeysRef = useRef<string>('');
   useEffect(() => {
+    let cancelled = false;
     loadColumnSettings(storageKey).then(saved => {
+      if (cancelled) return;
       setCols(buildColumns(initialColumns, saved));
       prevColKeysRef.current = columnConfigSignature(initialColumns);
     });
+    return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
@@ -259,15 +271,22 @@ export function DataTable<T extends Record<string, any>>({
     const currentKeys = columnConfigSignature(initialColumns);
     if (currentKeys === prevColKeysRef.current) return;
     prevColKeysRef.current = currentKeys;
+    let cancelled = false;
     loadColumnSettings(storageKey).then(saved => {
+      if (cancelled) return;
       setCols(buildColumns(initialColumns, saved));
     });
+    return () => { cancelled = true; };
   }, [initialColumns, storageKey]);
+
+  const persistCols = useCallback((next: ColumnDef<T>[]) => {
+    saveColumnSettings(storageKey, next.map(c => ({ key: c.key, visible: c.visible ?? true, width: c.width })));
+  }, [storageKey]);
 
   const saveCols = useCallback((next: ColumnDef<T>[]) => {
     setCols(next);
-    saveColumnSettings(storageKey, next.map(c => ({ key: c.key, visible: c.visible ?? true, width: c.width })));
-  }, [storageKey]);
+    persistCols(next);
+  }, [persistCols]);
 
   const [sorts, setSorts] = useState<SortConfig[]>([]);
   const [filters, setFilters] = useState<FilterRule[]>([]);
@@ -295,6 +314,8 @@ export function DataTable<T extends Record<string, any>>({
 
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
   const wrapRef   = useRef<HTMLDivElement>(null);
+  const colsRef   = useRef<ColumnDef<T>[]>(cols);
+  useEffect(() => { colsRef.current = cols; }, [cols]);
 
 
 
@@ -334,6 +355,17 @@ export function DataTable<T extends Record<string, any>>({
     return rows;
   }, [data, filters, sorts, cols]);
 
+  const calcResults = useMemo(() => {
+    const result: Record<string, string> = {};
+    visibleCols.forEach(col => {
+      const mode = calcModes[col.key];
+      if (mode && mode !== 'none') {
+        result[col.key] = calcColumnValues(processedData, col, mode);
+      }
+    });
+    return result;
+  }, [visibleCols, calcModes, processedData]);
+
   const totalPages = Math.max(1, Math.ceil(processedData.length / PAGE_SIZE));
   const pageSafe = Math.min(page, totalPages);
   const pageStart = (pageSafe - 1) * PAGE_SIZE;
@@ -358,15 +390,21 @@ export function DataTable<T extends Record<string, any>>({
       if (!resizeRef.current) return;
       const delta = e.clientX - resizeRef.current.startX;
       const newW = Math.max(60, resizeRef.current.startW + delta);
-      saveCols(cols.map(c => c.key === resizeRef.current!.key ? { ...c, width: newW } : c));
+      const key = resizeRef.current.key;
+      setCols(prev => prev.map(c => c.key === key ? { ...c, width: newW } : c));
     };
-    const onUp = () => { resizeRef.current = null; };
+    const onUp = () => {
+      if (resizeRef.current) {
+        resizeRef.current = null;
+        persistCols(colsRef.current);
+      }
+    };
     document.addEventListener('mousemove', onMove);
     document.addEventListener('mouseup', onUp);
     return () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
-  }, [cols, saveCols]);
+  }, [persistCols]);
 
-  const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, saveCols);
+  const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, setCols, persistCols);
 
   const startCellEdit = (row: T, col: ColumnDef<T>) => {
     if (!col.editable || !onCellSave) return;
@@ -394,6 +432,10 @@ export function DataTable<T extends Record<string, any>>({
     const rows = selected.size > 0
       ? processedData.filter(r => selected.has(r[rowKey]))
       : processedData;
+    if (onExport) {
+      onExport(rows);
+      return;
+    }
     const header = visibleCols.map(c => c.label).join(',');
     const body = rows.map(r => visibleCols.map(c => {
       const v = getCellValue(r, c);
@@ -785,18 +827,15 @@ export function DataTable<T extends Record<string, any>>({
                       >
                         <span className="dt-th-label">{col.label}</span>
                         {sortEntry && <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>}
-                        {calcModes[col.key] && calcModes[col.key] !== 'none' && (() => {
-                          const result = calcColumnValues(processedData, col, calcModes[col.key] as any);
-                          return (
-                            <span style={{
-                              marginLeft: 5, fontSize: 10, fontWeight: 700,
-                              color: 'var(--dt-accent)', background: 'var(--dt-accent-l)',
-                              borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap',
-                            }}>
-                              {result}
-                            </span>
-                          );
-                        })()}
+                        {calcResults[col.key] !== undefined && (
+                          <span style={{
+                            marginLeft: 5, fontSize: 10, fontWeight: 700,
+                            color: 'var(--dt-accent)', background: 'var(--dt-accent-l)',
+                            borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap',
+                          }}>
+                            {calcResults[col.key]}
+                          </span>
+                        )}
                       </div>
                       <div
                         className="dt-resize-handle"

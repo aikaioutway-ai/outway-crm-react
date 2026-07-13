@@ -13,7 +13,10 @@ const SCHOOL_LINKS: { name: string; code: string; url: string }[] = [
   { name: 'Эпсилон',                   code: 'EPSILON',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
   { name: 'Гениум Чуйкова',            code: 'GENIUS', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
   { name: 'Light Academy',             code: 'LIGHT',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
-  { name: 'Kings International School',code: 'KINGS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1011' },
+  { name: 'Креатив-Таалим',            code: 'KRT',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1013' },
+  { name: 'Академия будущих лидеров',  code: 'ABL',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1014' },
+  { name: 'Калем Академи Скуул',       code: 'KLM',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1015' },
+  { name: 'Tesla Academy',             code: 'TSL',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1016' },
 ];
 
 interface Props { onClose: () => void; }

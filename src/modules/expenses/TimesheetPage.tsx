@@ -1,9 +1,11 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Calendar } from 'lucide-react';
 import { UserRole } from '../../types';
 import FamiliesPage from '../families/FamiliesPage';
 import { ALL_PERIODS, SCHOOL_TABS } from '../families/constants';
+import type { SchoolDockItem } from '../families/SchoolDockSidebar';
 import TimesheetTable from './TimesheetTable';
+import { PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, PayrollSchoolTab, TimesheetPayrollHeaderRenderArgs, TimesheetPayrollSummary } from './timesheetTypes';
 
 interface Props {
   userRole?: UserRole;
@@ -15,6 +17,13 @@ interface Props {
   onColumnsOpenChange?: (v: boolean) => void;
   vehicleType?: 'microbus' | 'minivan' | 'sedan';
   onSchoolsSidebarWidthChange?: (width: number) => void;
+  initialSchoolKey?: string;
+  externalQuickTransfer?: string;
+  onSchoolKeyChange?: (key: string) => void;
+  onPayrollSummaryChange?: (summary: TimesheetPayrollSummary) => void;
+  renderPayrollHeader?: (args: TimesheetPayrollHeaderRenderArgs) => React.ReactNode;
+  payrollSchoolTab?: PayrollSchoolTab;
+  extraSchoolDockItems?: SchoolDockItem[];
 }
 
 interface SchoolSettings {
@@ -23,10 +32,6 @@ interface SchoolSettings {
 }
 
 const DEFAULT_RATE = 3700;
-const CHART_COLORS = [
-  '#EF7168','#C9C9C7','#DD7FA9','#C79B7D','#74BE92',
-  '#E49A55','#5A9FE8','#B77BDA','#E1709B','#88A8D8',
-];
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
@@ -145,12 +150,22 @@ function CalendarPopup({
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
-export default function TimesheetPage({ vehicleType, ...props }: Props) {
+export default function TimesheetPage({
+  vehicleType,
+  initialSchoolKey = '',
+  externalQuickTransfer = '',
+  onSchoolKeyChange,
+  onPayrollSummaryChange,
+  renderPayrollHeader,
+  payrollSchoolTab = 'timesheet',
+  extraSchoolDockItems,
+  ...props
+}: Props) {
   const now = new Date();
   const [half, setHalf]         = useState<'advance' | 'settlement'>('advance');
   const [calOpen, setCalOpen]   = useState(false);
   const [periodKey, setPeriodKey] = useState('');
-  const [schoolKey, setSchoolKey] = useState('');
+  const [schoolKey, setSchoolKey] = useState(initialSchoolKey);
   // Настройки каждой школы: key → { selectedDays, rate }
   const [schoolSettings, setSchoolSettings] = useState<Record<string, SchoolSettings>>({});
   const calRef = useRef<HTMLDivElement>(null);
@@ -166,6 +181,15 @@ export default function TimesheetPage({ vehicleType, ...props }: Props) {
 
   const selectedDays = currentSettings.selectedDays;
   const rate         = currentSettings.rate;
+
+  useEffect(() => {
+    setSchoolKey(initialSchoolKey);
+  }, [initialSchoolKey]);
+
+  function handleSchoolKeyChange(key: string) {
+    setSchoolKey(key);
+    onSchoolKeyChange?.(key);
+  }
 
   function updateSettings(patch: Partial<SchoolSettings>) {
     setSchoolSettings(prev => ({
@@ -203,20 +227,9 @@ export default function TimesheetPage({ vehicleType, ...props }: Props) {
 
   const total = selectedDays.length * rate;
 
-  // Бары дашборда — у каждой школы свой итог
-  const customBarItems = useMemo(() =>
-    SCHOOL_TABS.filter(t => t.key !== 'ALL').map((t, i) => {
-      const s = schoolSettings[t.key] ?? { selectedDays: [], rate: DEFAULT_RATE };
-      return {
-        key: t.key,
-        label: t.label,
-        value: s.selectedDays.length * s.rate,
-        color: CHART_COLORS[i % CHART_COLORS.length],
-      };
-    }),
-  [schoolSettings]);
-
-  const schoolLabel = schoolKey
+  const schoolLabel = schoolKey === PAYROLL_OFFICE_KEY
+    ? PAYROLL_OFFICE_LABEL
+    : schoolKey
     ? (SCHOOL_TABS.find(t => t.key === schoolKey)?.label ?? schoolKey)
     : null;
 
@@ -307,12 +320,32 @@ export default function TimesheetPage({ vehicleType, ...props }: Props) {
     </div>
   );
 
+  const calculator = (
+    <div style={{
+      height: '100%',
+      minHeight: 176,
+      background: '#fff',
+      border: '1px solid #EEF2F6',
+      borderRadius: 16,
+      padding: 12,
+      boxSizing: 'border-box',
+      display: 'flex',
+    }}>
+      {leftPanel}
+    </div>
+  );
+
   const table = (
     <TimesheetTable
       schoolKey={schoolKey}
       globalDays={selectedDays.length}
       globalRate={rate}
       vehicleType={vehicleType}
+      transferFilter={externalQuickTransfer}
+      periodMonth={month}
+      periodYear={year}
+      onSummaryChange={onPayrollSummaryChange}
+      payrollView={payrollSchoolTab}
     />
   );
 
@@ -323,11 +356,15 @@ export default function TimesheetPage({ vehicleType, ...props }: Props) {
       hidePeriodAll
       hidePeriodDeposit
       hideTransferBars
-      customLeftPanel={leftPanel}
+      hideDashboard
+      compactPeriodBar
+      customTopContent={renderPayrollHeader?.({ calculator })}
+      initialQuickFilter={schoolKey ? { activeTab: schoolKey } : undefined}
+      externalQuickTransfer={externalQuickTransfer}
       onPeriodKeyChange={setPeriodKey}
-      onSchoolKeyChange={setSchoolKey}
-      customBarItems={customBarItems}
+      onSchoolKeyChange={handleSchoolKeyChange}
       customTableContent={table}
+      extraSchoolDockItems={extraSchoolDockItems}
       onSchoolsSidebarWidthChange={props.onSchoolsSidebarWidthChange}
     />
   );

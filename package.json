@@ -12,10 +12,10 @@
     "@testing-library/user-event": "^13.5.0",
     "@types/react": "^19.2.17",
     "@types/react-dom": "^19.2.3",
+    "exceljs": "^4.4.0",
     "lucide-react": "^1.17.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "tailwindcss": "^4.3.0",
     "typescript": "^4.9.5",
     "xlsx": "^0.18.5"
   },
@@ -37,7 +37,8 @@
     },
     "moduleNameMapper": {
       "\\.(css|less|sass|scss)$": "identity-obj-proxy",
-      "services/receiptOcr$": "<rootDir>/src/services/__mocks__/receiptOcr.ts"
+      "services/receiptOcr$": "<rootDir>/src/services/__mocks__/receiptOcr.ts",
+      "utils/yandexMaps$": "<rootDir>/src/utils/__mocks__/yandexMaps.ts"
     },
     "testMatch": [
       "<rootDir>/src/**/*.test.(ts|tsx)"

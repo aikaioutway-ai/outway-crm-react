@@ -24,7 +24,6 @@ const SHEET_RANGE       = 'Заявки!A2:K';
 // ─── Тарифы ──────────────────────────────────────────────────────────────────
 
 const PRICE_RULES: Record<string, { zone1: number; zone2: number; zone3: number | null }> = {
-  KINGS:   { zone1: 5000, zone2: 5500, zone3: 6000 },
   LIGHT:   { zone1: 5000, zone2: 5500, zone3: 6000 },
   BILIM:   { zone1: 5000, zone2: 5500, zone3: 6000 },
   AES:     { zone1: 5500, zone2: 6000, zone3: 6500 },

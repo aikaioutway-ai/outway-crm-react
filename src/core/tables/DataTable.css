@@ -2,16 +2,16 @@
 /* Использует CSS переменные из корневого стиля CRM                           */
 
 :root {
-  --dt-bg:         #E9F1F5;
-  --dt-white:      #FFFFFF;
-  --dt-accent:     #31A4A5;
-  --dt-accent-h:   #237F81;
-  --dt-accent-l:   #D7EEEE;
-  --dt-text:       #17222F;
-  --dt-text-2:     #626C8B;
-  --dt-border:     #D4E3E7;
-  --dt-hover:      #F5FAFB;
-  --dt-selected:   #D7EEEE;
+  --dt-bg:         var(--bg);
+  --dt-white:      var(--white);
+  --dt-accent:     var(--accent);
+  --dt-accent-h:   var(--accent-h);
+  --dt-accent-l:   var(--accent-l);
+  --dt-text:       var(--text);
+  --dt-text-2:     var(--text-2);
+  --dt-border:     var(--border);
+  --dt-hover:      var(--surface-2);
+  --dt-selected:   var(--active-bg);
   --dt-radius:     14px;
   --dt-font:       var(--font);
 }

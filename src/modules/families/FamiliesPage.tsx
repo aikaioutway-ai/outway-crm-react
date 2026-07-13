@@ -1,22 +1,30 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL
 } from './constants';
-import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, createV2DriverAdvance, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, createV2DriverAdvance, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
+import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Search, Plus, X, Save, Paperclip } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Search, Plus, X, Save, Paperclip } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
-import { ALL_PERIODS } from './constants';
+import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
+import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
+import {
+  childDebtAmount, childDebtorRows, compactMoney,
+  downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort, logisticsTransferCountColor,
+  logisticsVehicleTypeLineColor, logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod, transferVehicleSummary,
+  uniqueFamilyRows, vehicleTypeShortLabel, XLSX_BRAND,
+} from './familiesRowHelpers';
 
-interface ChildRow {
+export interface ChildRow {
   rowId: string;
   familyId: string;
   familyIndex: number;
@@ -90,12 +98,20 @@ interface FamiliesPageProps {
   hidePeriodDeposit?: boolean;
   hideTransferBars?: boolean;
   hideDashboard?: boolean;
+  compactPeriodBar?: boolean;
   customLeftPanel?: React.ReactNode;
   onPeriodKeyChange?: (key: string) => void;
   onSchoolKeyChange?: (key: string) => void;
   customBarItems?: LogisticsDashboardItem[];
+  customTopContent?: React.ReactNode;
   customTableContent?: React.ReactNode;
+  extraSchoolDockItems?: SchoolDockItem[];
   onSchoolsSidebarWidthChange?: (width: number) => void;
+  externalQuickTransfer?: string;
+  externalQuickChildStatus?: string;
+  externalPeriodKey?: string;
+  initialOpenFamilyId?: string | null;
+  onInitialFamilyOpened?: () => void;
 }
 
 interface ModeFilters {
@@ -292,87 +308,6 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
 
 let familiesRowsCache: ChildRow[] | null = null;
 
-function normalizeRows(rows: ChildRow[]): ChildRow[] {
-  return rows.map(row => ({
-    ...row,
-    parentName: formatName(row.parentName),
-    phone: formatPhone(row.phone),
-    childClass: formatClassName(row.childClass),
-    vehicleLabel: VT_LABEL[row.vehicleType] ?? row.vehicleType,
-  }));
-}
-
-function compactMoney(value: number): string {
-  const amount = Number(value || 0);
-  if (Math.abs(amount) >= 1000000) return `${(amount / 1000000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}м`;
-  if (Math.abs(amount) >= 10000) return `${Math.round(amount / 1000)}к`;
-  if (Math.abs(amount) >= 1000) return `${(amount / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}к`;
-  return Math.round(amount).toLocaleString('ru-RU');
-}
-
-function uniqueFamilyRows(rows: ChildRow[]): ChildRow[] {
-  const seen = new Set<string>();
-  return rows.filter(row => {
-    if (seen.has(row.familyId)) return false;
-    seen.add(row.familyId);
-    return true;
-  });
-}
-
-function childDebtAmount(row: ChildRow): number {
-  return Number(row.childDebtAmount ?? row.debtAmount ?? 0);
-}
-
-function childDebtorRows(rows: ChildRow[]): ChildRow[] {
-  return rows.filter(row => childDebtAmount(row) > 0);
-}
-
-function logisticsWorkRows(rows: ChildRow[]): ChildRow[] {
-  return rows.filter(row => row.status !== 'rejected');
-}
-
-function averageChildrenByVehicle(rows: ChildRow[], vehicleType: string): number {
-  const vehicleRows = rows.filter(row => row.vehicleType === vehicleType && row.transferNumber);
-  const transfers = new Set(vehicleRows.map(row => `${row.branchFilter}:${row.transferNumber}`));
-  return transfers.size ? vehicleRows.length / transfers.size : 0;
-}
-
-function averageMicrobusByBranch(rows: ChildRow[], branchKey: string): number {
-  const branchRows = rows.filter(row => row.branchFilter === branchKey && row.vehicleType === 'microbus' && row.transferNumber);
-  const transfers = new Set(branchRows.map(row => row.transferNumber));
-  return transfers.size ? branchRows.length / transfers.size : 0;
-}
-
-function transferVehicleSummary(rows: ChildRow[]) {
-  const transferMap = new Map<string, { vehicleType?: string; studentCount: number }>();
-
-  logisticsWorkRows(rows).forEach(row => {
-    if (!row.transferNumber) return;
-    const branchKey = row.branchId ?? row.branchFilter ?? row.branchShort ?? row.branchName ?? 'school';
-    const key = `${branchKey}:${row.transferNumber}`;
-    const prev = transferMap.get(key);
-    transferMap.set(key, {
-      vehicleType: prev?.vehicleType ?? row.vehicleType,
-      studentCount: (prev?.studentCount ?? 0) + 1,
-    });
-  });
-
-  const transfers = Array.from(transferMap.values());
-  const microbusTransfers = transfers.filter(item => item.vehicleType === 'microbus');
-  const minivanTransfers = transfers.filter(item => item.vehicleType === 'minivan');
-  const sedanTransfers = transfers.filter(item => item.vehicleType === 'sedan');
-  const microbusStudents = microbusTransfers.reduce((sum, item) => sum + item.studentCount, 0);
-
-  return {
-    transferCount: transfers.length,
-    studentCount: logisticsWorkRows(rows).length,
-    microbusCount: microbusTransfers.length,
-    minivanCount: minivanTransfers.length,
-    sedanCount: sedanTransfers.length,
-    microbusAverage: microbusTransfers.length ? microbusStudents / microbusTransfers.length : 0,
-  };
-}
-
 const LOGISTICS_CHART_COLORS = [
   '#EF7168', '#C9C9C7', '#DD7FA9', '#C79B7D', '#74BE92',
   '#E49A55', '#5A9FE8', '#B77BDA', '#E1709B', '#88A8D8',
@@ -445,16 +380,6 @@ const DRIVER_STATUS_OPTIONS = [
   { value: 'archive', label: 'Архив' },
 ];
 
-function driverDocumentMissing(document: V2DriverDocumentInput): boolean {
-  return document.required && (!document.number.trim() || !document.issuedAt || !document.expiresAt || !document.scanUrl);
-}
-
-function driverDocumentExpired(document: V2DriverDocumentInput): boolean {
-  if (!document.expiresAt) return false;
-  const expires = new Date(`${document.expiresAt}T23:59:59`);
-  return !Number.isNaN(expires.getTime()) && expires.getTime() < Date.now();
-}
-
 const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: string; money?: boolean }[] = [
   { key: 'average', label: 'Средний' },
   { key: 'count', label: 'К-во' },
@@ -487,34 +412,6 @@ const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[
   { key: 'sedan', label: 'Седан' },
 ];
 
-function logisticsTransferCountColor(count: number): string {
-  if (count <= 0) return '#C9D4D6';
-  if (count < 16) return '#EF7168';
-  if (count === 16) return '#E49A55';
-  if (count === 17) return '#74BE92';
-  return '#31A4A5';
-}
-
-function logisticsVehicleTypeLineColor(vehicleType?: string): string | null {
-  if (vehicleType === 'minivan') return '#74BE92';
-  if (vehicleType === 'sedan') return '#E49A55';
-  return null;
-}
-
-function vehicleTypeShortLabel(vehicleType?: string): string {
-  if (vehicleType === 'microbus') return 'BUS';
-  if (vehicleType === 'minivan') return 'MINI';
-  if (vehicleType === 'sedan') return 'CAR';
-  return '';
-}
-
-
-function formatDateShort(value?: string): string {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleDateString('ru-RU');
-}
 
 const logisticsDashboardBaseStyle: React.CSSProperties = {
   position: 'relative',
@@ -1604,13 +1501,13 @@ const DEFAULT_MODE_COLLAPSED: Record<FamiliesMode, boolean> = {
   logistics: false,
 };
 const DEFAULT_MODE_SIDEBAR_COLLAPSED: Record<FamiliesMode, boolean> = {
-  requests: true,
-  payments: true,
-  charges: true,
-  debtors: true,
-  directory: true,
-  cashier: true,
-  logistics: true,
+  requests: false,
+  payments: false,
+  charges: false,
+  debtors: false,
+  directory: false,
+  cashier: false,
+  logistics: false,
 };
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -1705,7 +1602,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, hideDashboard = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTableContent, onSchoolsSidebarWidthChange }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, hideDashboard = false, compactPeriodBar = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, onInitialFamilyOpened }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
@@ -1726,12 +1623,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   payments: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
   charges: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
   debtors: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus, ...initialQuickFilter },
-  directory: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: '' },
-  cashier:  { ...DEFAULT_MODE_FILTERS, activeTab: 'ALL' },
+  directory: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, ...initialQuickFilter, quickChildStatus: '' },
+  cashier:  { ...DEFAULT_MODE_FILTERS, activeTab: 'ALL', ...initialQuickFilter },
   logistics: { ...DEFAULT_MODE_FILTERS, activeTab: restrictedSchoolKey ?? DEFAULT_MODE_FILTERS.activeTab, quickChildStatus: roleDefaultChildStatus },
 });
   const [expandedFamilyId, setExpandedFamilyId] = useState<string | null>(null);
   const [expandedFamily, setExpandedFamily]     = useState<Family | null>(null);
+  const expandedFamilyRequestRef = useRef<string | null>(null);
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
   const [showNewDriver, setShowNewDriver]       = useState(false);
@@ -1846,9 +1744,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const isDirectoryMode = mode === 'directory';
   const logisticsDashboardCollapsed = logisticsDashboardCollapsedByMode[mode] ?? false;
   const tableBarsCollapsed = tableBarsCollapsedByMode[mode] ?? false;
-  const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? true;
+  const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? false;
   const schoolsSidebarCollapsed = schoolsBarCollapsed;
-  const schoolsSidebarReserveWidth = schoolsSidebarCollapsed ? 78 : 280;
+  const schoolsSidebarReserveWidth = schoolsSidebarCollapsed ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH;
   const dashboardSchoolKey = dashboardSchoolByMode[mode] ?? '';
   const DEFAULT_METRIC_BY_MODE: Record<FamiliesMode, LogisticsDashboardMetric> = {
     requests: 'count',
@@ -1878,6 +1776,29 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       },
     }));
   };
+  useEffect(() => {
+    if (externalQuickTransfer === undefined && externalQuickChildStatus === undefined) return;
+    setFiltersByMode(prev => ({
+      ...prev,
+      [mode]: {
+        ...(prev[mode] ?? DEFAULT_MODE_FILTERS),
+        quickTransfer: externalQuickTransfer ?? '',
+        quickChildStatus: externalQuickChildStatus ?? '',
+      },
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [externalQuickTransfer, externalQuickChildStatus]);
+
+  useEffect(() => {
+    if (externalPeriodKey === undefined) return;
+    setPaymentsPeriodKey(externalPeriodKey);
+  }, [externalPeriodKey]);
+
+  useEffect(() => {
+    if (!isCashierMode || externalPeriodKey !== undefined) return;
+    if (CASHIER_PERIODS.some(period => period.key === paymentsPeriodKey)) return;
+    setPaymentsPeriodKey(currentCashierPeriodKey());
+  }, [externalPeriodKey, isCashierMode, paymentsPeriodKey]);
   const setLogisticsDashboardCollapsed = (next: boolean | ((current: boolean) => boolean)) => {
     setLogisticsDashboardCollapsedByMode(prev => ({
       ...prev,
@@ -1913,6 +1834,65 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   useEffect(() => {
     load(!familiesRowsCache);
   }, []);
+
+  useEffect(() => {
+    if (!restrictedSchoolKey) return;
+    setFiltersByMode(prev => {
+      const current = prev[mode] ?? DEFAULT_MODE_FILTERS;
+      if (current.activeTab === restrictedSchoolKey && !current.quickTransfer) return prev;
+      return {
+        ...prev,
+        [mode]: {
+          ...current,
+          activeTab: restrictedSchoolKey,
+          quickTransfer: '',
+          quickChildStatus: mode === 'directory' ? '' : current.quickChildStatus,
+        },
+      };
+    });
+    setDashboardSchoolByMode(prev => (
+      prev[mode] === restrictedSchoolKey ? prev : { ...prev, [mode]: restrictedSchoolKey }
+    ));
+    setExpandedFamilyId(null);
+    setExpandedFamily(null);
+  }, [restrictedSchoolKey, mode]);
+
+  useEffect(() => {
+    const nextActiveTab = initialQuickFilter?.activeTab;
+    if (!nextActiveTab) return;
+    setFiltersByMode(prev => {
+      const current = prev[mode] ?? DEFAULT_MODE_FILTERS;
+      if (current.activeTab === nextActiveTab) return prev;
+      return {
+        ...prev,
+        [mode]: {
+          ...current,
+          activeTab: nextActiveTab,
+          quickTransfer: '',
+          quickChildStatus: mode === 'directory' ? '' : current.quickChildStatus,
+        },
+      };
+    });
+    setDashboardSchoolByMode(prev => (
+      prev[mode] === nextActiveTab ? prev : { ...prev, [mode]: nextActiveTab }
+    ));
+  }, [initialQuickFilter?.activeTab, mode]);
+
+  useEffect(() => {
+    if (!initialOpenFamilyId) return;
+    const row = rows.find(r => r.familyId === initialOpenFamilyId);
+    if (!row) return;
+    setFiltersByMode(prev => ({
+      ...prev,
+      [mode]: { ...(prev[mode] ?? DEFAULT_MODE_FILTERS), activeTab: row.branchFilter, quickTransfer: '', quickChildStatus: '' },
+    }));
+    setDashboardSchoolByMode(prev => (
+      prev[mode] === row.branchFilter ? prev : { ...prev, [mode]: row.branchFilter }
+    ));
+    toggleExpandedFamily(row.familyId, row, 'overview');
+    onInitialFamilyOpened?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenFamilyId, rows]);
 
   useEffect(() => {
     if (mode !== 'payments') return;
@@ -2051,23 +2031,24 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       if (!cancelled) setLoadingPeriod(false);
     });
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isChargesMode, chargesPeriodKey]);
 
   async function load(showSpinner = true) {
     if (showSpinner) setLoading(true);
     setFinanceLoaded(false);
     try {
+      const shouldLoadTransportMeta = !hideDashboard || mode === 'logistics' || isDriversModule;
       const [families, transfers, drivers] = await Promise.all([
-        fetchV2FamiliesTable(false),
-        fetchV2TransfersDashboard().catch(() => []),
-        fetchV2DriversTable().catch(() => []),
+        fetchV2FamiliesTableCached(),
+        shouldLoadTransportMeta ? fetchV2TransfersDashboard().catch(() => []) : Promise.resolve([]),
+        shouldLoadTransportMeta ? fetchV2DriversTable().catch(() => []) : Promise.resolve([]),
       ]);
       const result = normalizeRows(families);
       familiesRowsCache = result;
       setRows(result);
       setDashboardTransfers(transfers);
       setDriverRows(drivers);
+      if (FINANCE_MODES.includes(mode)) void loadFinanceRows();
     } catch (error) {
       console.error('Families load failed', error);
     } finally {
@@ -2121,6 +2102,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   async function toggleExpandedFamily(key: React.Key | null, row?: ChildRow, initialTab: 'overview' | 'finance' = 'overview') {
     if (!key || !row) {
+      expandedFamilyRequestRef.current = null;
       setExpandedFamilyId(null);
       setExpandedFamily(null);
       setExpandedInitialTab('overview');
@@ -2128,19 +2110,22 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
     const familyId = String(key);
     if (expandedFamilyId === familyId && expandedInitialTab === initialTab) {
+      expandedFamilyRequestRef.current = null;
       setExpandedFamilyId(null);
       setExpandedFamily(null);
       setExpandedInitialTab('overview');
       return;
     }
+    expandedFamilyRequestRef.current = familyId;
     setExpandedInitialTab(initialTab);
     setExpandedFamilyId(familyId);
     // Показываем карточку мгновенно из данных строки
     const preview = rowToFamily(row);
     setExpandedFamily(preview);
-    // Догружаем полные данные в фоне
+    // Догружаем полные данные в фоне — применяем только если пользователь
+    // не успел открыть другую семью, пока шёл этот запрос
     const family = await fetchV2Family(familyId);
-    if (family) setExpandedFamily(family);
+    if (family && expandedFamilyRequestRef.current === familyId) setExpandedFamily(family);
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
@@ -2233,10 +2218,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           return next;
         });
       }
-      void load(false);
       if (expandedFamilyId === row.familyId) {
         void fetchV2Family(row.familyId).then(family => {
-          if (family) setExpandedFamily(family ?? null);
+          if (family && expandedFamilyRequestRef.current === row.familyId) setExpandedFamily(family);
         });
       }
       return true;
@@ -2481,58 +2465,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return stats.average;
   }, [dashboardMetric]);
 
-  const { branchMetric, branchStats } = useMemo(() => {
-    const metric: Record<string, { value: number; label: string; alert?: boolean }> = {};
-    const stats: Record<string, {
-      newCount: number;
-      totalCount: number;
-      transferCount: number;
-      microbusCount: number;
-      minivanCount: number;
-      sedanCount: number;
-      average: string;
-      debtorsCount: number;
-      debtSum: number;
-    }> = {};
-
-    SCHOOL_TABS.forEach(tabItem => {
-      const branchRows = tabItem.key === 'ALL'
-        ? rows
-        : rows.filter(row => rowMatchesSchoolTab(row, tabItem));
-      const actualBranchRows = logisticsWorkRows(branchRows);
-      const debtRows = childDebtorRows(actualBranchRows);
-      const transferSummary = transferVehicleSummary(branchRows);
-
-      stats[tabItem.key] = {
-        newCount: branchRows.filter(row => row.status === 'new').length,
-        totalCount: transferSummary.studentCount,
-        transferCount: transferSummary.transferCount,
-        microbusCount: transferSummary.microbusCount,
-        minivanCount: transferSummary.minivanCount,
-        sedanCount: transferSummary.sedanCount,
-        average: transferSummary.microbusAverage ? transferSummary.microbusAverage.toFixed(1) : '0',
-        debtorsCount: debtRows.length,
-        debtSum: debtRows.reduce((sum, row) => sum + childDebtAmount(row), 0),
-      };
-
-      if (mode === 'requests') {
-        const count = branchRows.filter(row => row.status === 'new').length;
-        metric[tabItem.key] = { value: count, label: String(count), alert: count > 0 };
-      } else if (isPaymentsDashboardMode) {
-        const debt = childDebtorRows(branchRows).reduce((sum, row) => sum + childDebtAmount(row), 0);
-        metric[tabItem.key] = { value: debt, label: compactMoney(debt), alert: debt > 0 };
-      } else if (mode === 'cashier') {
-        const pendingRows = uniqueFamilyRows(branchRows.filter(row => row.pendingPayment > 0));
-        metric[tabItem.key] = { value: pendingRows.length, label: String(pendingRows.length), alert: pendingRows.length > 0 };
-      } else {
-        const average = transferSummary.microbusAverage;
-        metric[tabItem.key] = { value: average, label: average ? average.toFixed(1) : '0' };
-      }
-    });
-
-    return { branchMetric: metric, branchStats: stats };
-  }, [isPaymentsDashboardMode, mode, rowMatchesSchoolTab, rows]);
-
   const tab = useMemo(() => SCHOOL_TABS.find(t => t.key === activeTab), [activeTab]);
   const matchesSchool = useCallback((r: ChildRow) => {
     if (!tab) return true;
@@ -2700,7 +2632,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     LA: 'Light Academy',
     BKG: 'Билим Бишкек KG',
     BJ: 'Билим Жолу',
-    KNG: 'Kings International School',
     ALL: 'Все',
   };
   const selectedSchoolLabel = tab?.label ?? 'Все';
@@ -2775,9 +2706,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
       };
     }), [chargesPeriodKey, dashboardMetric, dashboardMetricValue, dashboardStatsForRows, isChargesMode, isDirectoryMode, isDriversModule, isRequestsModule, periodStats, periodStatsByFamily, rowMatchesSchoolTab, rows, schoolButtonItems]);
-  const selectedDashboardSchool = schoolButtonItems.find(item => item.key === dashboardSchoolKey)
-    ?? schoolButtonItems.find(item => item.key === activeTab)
-    ?? schoolButtonItems[0];
+  const driverReserveSchool = { key: DRIVER_RESERVE_KEY, label: 'Резерв', branches: [], codes: [] };
+  const selectedDashboardSchool = isDriversModule && (dashboardSchoolKey === DRIVER_RESERVE_KEY || activeTab === DRIVER_RESERVE_KEY)
+    ? driverReserveSchool
+    : schoolButtonItems.find(item => item.key === dashboardSchoolKey)
+      ?? schoolButtonItems.find(item => item.key === activeTab)
+      ?? schoolButtonItems[0];
   const isAllDashboardSchools = selectedDashboardSchool?.key === 'ALL';
   const dashboardSchoolRows = useMemo(() => (
     selectedDashboardSchool
@@ -2984,16 +2918,17 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       return branch === selectedDashboardSchool.key.toLowerCase() || branch === selectedDashboardSchool.label.toLowerCase();
     })
     : cashierRows;
-  const cashierCashRows = cashierDashboardRows.filter(row => {
+  const periodCashierDashboardRows = cashierDashboardRows.filter(row => paymentRowMatchesPeriod(row, paymentsPeriodKey));
+  const periodCashierCashRows = periodCashierDashboardRows.filter(row => {
     const method = String(row.paymentMethod ?? 'cash').toLowerCase();
     return method === 'cash' || method.includes('нал');
   });
-  const cashierQrRows = cashierDashboardRows.filter(row => {
+  const periodCashierQrRows = periodCashierDashboardRows.filter(row => {
     const method = String(row.paymentMethod ?? '').toLowerCase();
     return method === 'transfer' || method === 'card' || method.includes('qr');
   });
-  const cashierWithReceiptCount = cashierDashboardRows.filter(row => row.receiptUrl).length;
-  const cashierWithoutReceiptCount = cashierDashboardRows.length - cashierWithReceiptCount;
+  const cashierWithReceiptCount = periodCashierDashboardRows.filter(row => row.receiptUrl).length;
+  const cashierWithoutReceiptCount = periodCashierDashboardRows.length - cashierWithReceiptCount;
   const dashboardSummaryItems = [
     ...(isDriversModule ? (() => {
       const selectedTransfers = dashboardTransfers.filter(item =>
@@ -3013,12 +2948,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       { label: 'Новые', value: String(dashboardSchoolRows.filter(row => row.status === 'new').length) },
     ] : isDirectoryMode ? directoryDashboardSummaryItems : mode === 'debtors' ? debtorsDashboardSummaryItems : isChargesMode ? chargesDashboardSummaryItems : isCashierMode ? [
       { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-      { label: 'На проверке', value: String(cashierDashboardRows.length), neutral: true },
-      { label: 'Сумма', value: compactMoney(cashierDashboardRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-      { label: 'Наличные сумма', value: compactMoney(cashierCashRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-      { label: 'Наличные к-во', value: String(cashierCashRows.length), neutral: true },
-      { label: 'QR сумма', value: compactMoney(cashierQrRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-      { label: 'QR к-во', value: String(cashierQrRows.length), neutral: true },
+      { label: 'На проверке', value: String(periodCashierDashboardRows.length), neutral: true },
+      { label: 'Сумма', value: compactMoney(periodCashierDashboardRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
+      { label: 'Наличные сумма', value: compactMoney(periodCashierCashRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
+      { label: 'Наличные к-во', value: String(periodCashierCashRows.length), neutral: true },
+      { label: 'QR сумма', value: compactMoney(periodCashierQrRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
+      { label: 'QR к-во', value: String(periodCashierQrRows.length), neutral: true },
       { label: 'С чеком', value: String(cashierWithReceiptCount), neutral: true },
       { label: 'Без чека', value: String(cashierWithoutReceiptCount), neutral: true },
     ] : isPaymentsDashboardMode ? paymentDashboardSummaryItems : mode === 'logistics' ? logisticsTransferSummaryItems : [
@@ -3035,14 +2970,33 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const filteredDriverRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return driverRows.filter(row => {
+      const isReserveSelected = selectedDashboardSchool?.key === DRIVER_RESERVE_KEY;
+      if (
+        selectedDashboardSchool
+        && selectedDashboardSchool.key !== 'ALL'
+        && !isReserveSelected
+        && isReserveDriver(row)
+      ) {
+        return false;
+      }
       const schoolMatch = !selectedDashboardSchool
         || selectedDashboardSchool.key === 'ALL'
+        || (isReserveSelected && isReserveDriver(row))
         || row.branchCodes.includes(selectedDashboardSchool.key)
         || row.branchShorts.includes(selectedDashboardSchool.label)
         || row.branchNames.includes(selectedDashboardSchool.label)
         || dashboardSchoolRows.some(schoolRow => row.branchIds.includes(String(schoolRow.branchId ?? '')));
       if (!schoolMatch) return false;
       if (dashboardVehicleFilter !== 'all' && row.vehicleType !== dashboardVehicleFilter) return false;
+      if (quickTransfer === 'empty' && row.transferCount > 0) return false;
+      if (quickTransfer === 'inactive' && row.status === 'active') return false;
+      if (quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive') {
+        const transferNumbers = row.transferNumbers
+          .split(',')
+          .map(item => item.replace(/\D/g, ''))
+          .filter(Boolean);
+        if (!transferNumbers.includes(quickTransfer)) return false;
+      }
       if (!q) return true;
       return [
         row.fullName,
@@ -3059,7 +3013,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         row.comment,
       ].some(value => String(value ?? '').toLowerCase().includes(q));
     });
-  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRows, search, selectedDashboardSchool]);
+  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRows, quickTransfer, search, selectedDashboardSchool]);
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
@@ -3321,7 +3275,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return { activeTab: schoolKey, quickChildStatus: '', quickTransfer: '' };
   }, [mode, rows, rowMatchesSchoolTab, userRole]);
 
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   const tableColumns: ColumnDef<ChildRow>[] = useMemo(() => {
     const openCardCol: ColumnDef<ChildRow> = {
       key: 'openCard',
@@ -3537,6 +3490,198 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isChargesMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, periodStatsByFamily]);
 
+  const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
+    const routeRows = exportRows
+      .filter(row => row.status !== 'rejected')
+      .slice()
+      .sort((a, b) => {
+        const transferDiff = Number(a.transferNumber || 999) - Number(b.transferNumber || 999);
+        if (transferDiff !== 0) return transferDiff;
+        const stopDiff = Number(a.stopNumber || 999) - Number(b.stopNumber || 999);
+        if (stopDiff !== 0) return stopDiff;
+        return a.childName.localeCompare(b.childName, 'ru');
+      });
+
+    if (!routeRows.length) {
+      window.alert('Нет данных для маршрутного листа');
+      return;
+    }
+
+    const unique = (values: Array<string | null | undefined>) => Array.from(new Set(values.filter(Boolean).map(String)));
+    const schools = unique(routeRows.map(row => row.branchShort || row.branchName));
+    const transfers = unique(routeRows.map(row => row.transferNumber)).sort((a, b) => Number(a) - Number(b));
+    const driverIds = unique(routeRows.map(row => row.driverId));
+    const transferMeta = transfers.length === 1
+      ? dashboardTransfers.find(item =>
+          item.transferNumber === transfers[0]
+          && (schools.length !== 1 || item.branchShort === schools[0] || item.branchCode === routeRows[0]?.branchFilter)
+        )
+      : undefined;
+    const driver = driverRows.find(item => item.driverId === (driverIds[0] || transferMeta?.driverId));
+    const transferTitle = transfers.length === 1 ? `№${transfers[0]}` : transfers.length ? transfers.map(item => `№${item}`).join(', ') : 'Без трансфера';
+    const schoolTitle = schools.join(', ') || '—';
+    const driverTitle = driver?.fullName || '—';
+    const driverContact = [driver?.phone, driver?.secondPhone].filter(Boolean).join(' / ') || '—';
+    const plateNumber = driver?.plateNumber || '—';
+    const vehicleTitle = driver?.vehicleLabel || routeRows.find(row => row.vehicleLabel)?.vehicleLabel || '—';
+    const today = new Date().toLocaleDateString('ru-RU');
+    const dayColumns = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ'];
+    const safeName = `${schoolTitle}_${transferTitle}`.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
+
+    const { default: ExcelJS } = await import('exceljs');
+    const workbook = new ExcelJS.Workbook();
+    workbook.creator = 'OutWay CRM';
+    workbook.created = new Date();
+    const ws = workbook.addWorksheet('Маршрут', {
+      pageSetup: {
+        orientation: 'landscape',
+        paperSize: 9,
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0, footer: 0 },
+      },
+      views: [{ showGridLines: false }],
+    });
+
+    const COLS = 15; // A..O
+    ws.columns = [
+      { width: 7 }, { width: 26 }, { width: 34 }, { width: 30 }, { width: 10 },
+      ...Array.from({ length: 10 }, () => ({ width: 7 })),
+    ];
+
+    const thin = { style: 'thin' as const, color: { argb: XLSX_BRAND.border } };
+    const allBorders = { top: thin, left: thin, bottom: thin, right: thin };
+    const fill = (argb: string) => ({ type: 'pattern' as const, pattern: 'solid' as const, fgColor: { argb } });
+
+    // ── Banner ──────────────────────────────────────────────────────────
+    ws.mergeCells(1, 1, 1, COLS);
+    const banner = ws.getCell(1, 1);
+    banner.value = 'OutWay  ·  Маршрутный лист';
+    banner.font = { name: 'Calibri', size: 16, bold: true, color: { argb: XLSX_BRAND.white } };
+    banner.alignment = { vertical: 'middle', horizontal: 'center' };
+    banner.fill = fill(XLSX_BRAND.teal);
+    ws.getRow(1).height = 30;
+
+    // ── Meta info (school/transfer/date, driver/contacts/vehicle) ─────────
+    const metaRow = (rowIndex: number, entries: [string, string][]) => {
+      const row = ws.getRow(rowIndex);
+      row.height = 20;
+      entries.forEach(([label, value], i) => {
+        const labelCol = i * 5 + 1;
+        const labelCell = ws.getCell(rowIndex, labelCol);
+        labelCell.value = label;
+        labelCell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: XLSX_BRAND.tealDark } };
+        labelCell.fill = fill(XLSX_BRAND.mint);
+        labelCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        labelCell.border = allBorders;
+
+        ws.mergeCells(rowIndex, labelCol + 1, rowIndex, labelCol + 4);
+        const valueCell = ws.getCell(rowIndex, labelCol + 1);
+        valueCell.value = value;
+        valueCell.font = { name: 'Calibri', size: 10, color: { argb: XLSX_BRAND.text } };
+        valueCell.alignment = { vertical: 'middle', horizontal: 'left', indent: 1 };
+        for (let c = labelCol + 1; c <= labelCol + 4; c++) {
+          ws.getCell(rowIndex, c).border = allBorders;
+        }
+      });
+    };
+    metaRow(2, [['Школа', schoolTitle], ['Трансфер', transferTitle], ['Дата', today]]);
+    metaRow(3, [['Водитель', driverTitle], ['Контакты', driverContact], ['Авто', `${vehicleTitle} / ${plateNumber}`]]);
+
+    ws.getRow(4).height = 8;
+
+    // ── Table header (rows 5-6) ────────────────────────────────────────
+    const HEADER_TOP = 5;
+    const HEADER_BOTTOM = 6;
+    const headerStyle = (cell: import('exceljs').Cell) => {
+      cell.font = { name: 'Calibri', size: 10, bold: true, color: { argb: XLSX_BRAND.white } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.fill = fill(XLSX_BRAND.teal);
+      cell.border = allBorders;
+    };
+    const baseHeaders = ['№ остановки', 'ФИО ребёнка', 'Адрес', 'Контактные данные', 'Время утро'];
+    baseHeaders.forEach((label, i) => {
+      const col = i + 1;
+      ws.mergeCells(HEADER_TOP, col, HEADER_BOTTOM, col);
+      const cell = ws.getCell(HEADER_TOP, col);
+      cell.value = label;
+      headerStyle(cell);
+    });
+    dayColumns.forEach((day, i) => {
+      const startCol = 6 + i * 2;
+      ws.mergeCells(HEADER_TOP, startCol, HEADER_TOP, startCol + 1);
+      const dayCell = ws.getCell(HEADER_TOP, startCol);
+      dayCell.value = day;
+      headerStyle(dayCell);
+      headerStyle(ws.getCell(HEADER_TOP, startCol + 1));
+
+      const morningCell = ws.getCell(HEADER_BOTTOM, startCol);
+      morningCell.value = 'утро';
+      headerStyle(morningCell);
+      const eveningCell = ws.getCell(HEADER_BOTTOM, startCol + 1);
+      eveningCell.value = 'вечер';
+      headerStyle(eveningCell);
+    });
+    ws.getRow(HEADER_TOP).height = 18;
+    ws.getRow(HEADER_BOTTOM).height = 16;
+
+    // ── Data rows ───────────────────────────────────────────────────────
+    const FIRST_DATA_ROW = HEADER_BOTTOM + 1;
+    routeRows.forEach((row, index) => {
+      const contacts = [
+        row.parentName && `Родитель: ${row.parentName}`,
+        row.phone,
+        row.secondPhone,
+        row.contactName && `Контакт: ${row.contactName}`,
+        row.contactPhone,
+      ].filter(Boolean).join(' / ');
+      const rowIndex = FIRST_DATA_ROW + index;
+      const excelRow = ws.getRow(rowIndex);
+      const values = [row.stopNumber || index + 1, row.childName, row.streetAddress, contacts, row.timeMorning || ''];
+      values.forEach((value, colOffset) => {
+        excelRow.getCell(colOffset + 1).value = value;
+      });
+
+      const zebra = index % 2 === 1;
+      for (let col = 1; col <= COLS; col++) {
+        const cell = excelRow.getCell(col);
+        cell.border = allBorders;
+        if (zebra) cell.fill = fill(XLSX_BRAND.stripe);
+        if (col <= 5) {
+          cell.font = { name: 'Calibri', size: 10, color: { argb: XLSX_BRAND.text } };
+          cell.alignment = col === 1 || col === 5
+            ? { vertical: 'middle', horizontal: 'center' }
+            : { vertical: 'middle', horizontal: 'left', wrapText: true, indent: 1 };
+        } else {
+          cell.font = { name: 'Calibri', size: 12, color: { argb: XLSX_BRAND.textMuted } };
+          cell.alignment = { vertical: 'middle', horizontal: 'center' };
+        }
+      }
+      excelRow.height = 24;
+    });
+
+    // ── Signature footer ───────────────────────────────────────────────
+    const footerRow = FIRST_DATA_ROW + routeRows.length + 1;
+    ws.mergeCells(footerRow, 1, footerRow, 7);
+    const driverSign = ws.getCell(footerRow, 1);
+    driverSign.value = 'Подпись водителя: _______________________';
+    driverSign.font = { name: 'Calibri', size: 10, italic: true, color: { argb: XLSX_BRAND.textMuted } };
+    driverSign.alignment = { vertical: 'middle', horizontal: 'left' };
+
+    ws.mergeCells(footerRow, 9, footerRow, COLS);
+    const dispatcherSign = ws.getCell(footerRow, 9);
+    dispatcherSign.value = 'Подпись диспетчера: _______________________';
+    dispatcherSign.font = { name: 'Calibri', size: 10, italic: true, color: { argb: XLSX_BRAND.textMuted } };
+    dispatcherSign.alignment = { vertical: 'middle', horizontal: 'left' };
+    ws.getRow(footerRow).height = 22;
+
+    ws.views = [{ state: 'frozen', ySplit: HEADER_BOTTOM, showGridLines: false }];
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadXlsxBuffer(`Маршрутный_лист_${safeName || 'logistics'}.xlsx`, buffer as ArrayBuffer);
+  };
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: customTableContent ? 'hidden' : 'visible', background: 'var(--active-bg)', borderRadius: '0 0 22px 22px', display: 'flex', padding: '0 0 10px 0' }}>
 
@@ -3562,21 +3707,28 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         }}
       >
 
+        {customTopContent && (
+          <div style={{ flexShrink: 0 }}>
+            {customTopContent}
+          </div>
+        )}
+
         {/* ── БАР ПЕРИОДОВ ── */}
-        {(isChargesMode || isPaymentsMode) && (
+        {(isChargesMode || isPaymentsMode || isCashierMode) && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
-            padding: '6px 8px',
-            background: '#F5FAFB',
-            border: '1px solid #D4E3E7',
+            padding: compactPeriodBar ? '8px 0 4px' : '6px 8px',
+            background: compactPeriodBar ? 'transparent' : '#F5FAFB',
+            border: compactPeriodBar ? 'none' : '1px solid #D4E3E7',
             borderRadius: 10,
             overflowX: 'auto',
             flexShrink: 0,
             scrollbarWidth: 'none',
             width: '100%',
             boxSizing: 'border-box',
+            gap: compactPeriodBar ? 10 : undefined,
           }}>
             {(() => {
               const periodKey = isChargesMode ? chargesPeriodKey : paymentsPeriodKey;
@@ -3586,19 +3738,19 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               };
               return (
                 <>
-                  {ALL_PERIODS.filter(p => !(hidePeriodDeposit && p.key === 'deposit')).map(period => {
+                  {(isCashierMode ? CASHIER_PERIODS : ALL_PERIODS.filter(p => !(hidePeriodDeposit && p.key === 'deposit'))).map(period => {
                     const isActive = periodKey === period.key;
                     return (
                       <button
                         key={period.key}
                         onClick={() => setPeriodKey(period.key)}
-                        style={{ padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 800 : 600, background: isActive ? '#2DD4BF' : '#fff', color: isActive ? '#fff' : '#374151', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s' }}
+                        style={{ flex: (isCashierMode || compactPeriodBar) ? 1 : undefined, minWidth: (isCashierMode || compactPeriodBar) ? 0 : undefined, padding: isCashierMode ? '4px 8px' : '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 800 : 600, background: isActive ? '#2DD4BF' : '#fff', color: isActive ? '#fff' : '#374151', whiteSpace: 'nowrap', flexShrink: (isCashierMode || compactPeriodBar) ? 1 : 0, overflow: (isCashierMode || compactPeriodBar) ? 'hidden' : undefined, textOverflow: (isCashierMode || compactPeriodBar) ? 'ellipsis' : undefined, transition: 'background 0.15s' }}
                       >
-                        {period.key === 'deposit' ? 'Депозит' : period.label.split(' ')[0]}
+                        {period.label.split(' ')[0]}
                       </button>
                     );
                   })}
-                  {!hidePeriodAll && (
+                  {!hidePeriodAll && !isCashierMode && (
                   <button
                     onClick={() => setPeriodKey('ALL')}
                     style={{ padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: periodKey === 'ALL' ? 800 : 600, background: periodKey === 'ALL' ? '#2DD4BF' : '#fff', color: periodKey === 'ALL' ? '#fff' : '#374151', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s' }}
@@ -3680,7 +3832,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         <div style={customTableContent
           ? { display: 'flex', flexDirection: 'column', flex: 1, minWidth: 0, minHeight: 0, overflow: 'hidden', paddingBottom: 10 }
           : { display: 'flex', flexDirection: 'column', overflow: 'visible', minWidth: 0, paddingBottom: 10 }}>
-          {!customTableContent && !isDriversModule && !isRequestsModule && !tableBarsCollapsed ? (
+          {mode !== 'directory' && !isCashierMode && !hideTransferBars && !customTableContent && !isDriversModule && !isRequestsModule && !tableBarsCollapsed ? (
           <div className="no-scrollbar" style={{
             position: 'relative',
             top: 'auto',
@@ -3863,7 +4015,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               </button>
             </div>
           </div>
-          ) : !customTableContent && !isDriversModule && !isRequestsModule ? (
+          ) : mode !== 'directory' && !isCashierMode && !hideTransferBars && !customTableContent && !isDriversModule && !isRequestsModule ? (
             <div style={{
               height: 22,
               display: 'flex',
@@ -3993,6 +4145,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               key="cashier_table"
               columns={cashierColumns}
               data={cashierRows.filter(r => {
+                if (!paymentRowMatchesPeriod(r, paymentsPeriodKey)) return false;
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
                   if (bs !== tab.key.toLowerCase() && bs !== tab.label.toLowerCase()) return false;
@@ -4095,8 +4248,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
               onRowDelete={userRole === 'admin' ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
-              onRowEdit={(row) => console.log('edit', row.rowId)}
               onCellSave={handleCellSave}
+              onExport={mode === 'logistics' ? exportLogisticsRouteSheet : undefined}
               hideToolbar={tableBarsCollapsed}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
@@ -4134,112 +4287,30 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         }}
       />
 
-      <aside style={{
-        width: schoolsSidebarCollapsed ? 58 : 260,
-        height: 'calc(100vh - 20px)',
-        background: '#fff',
-        borderRadius: 22,
-        overflow: 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'fixed',
-        top: 10,
-        right: 10,
-        zIndex: 80,
-        transition: 'width .18s ease',
-      }}
-      onClick={event => event.stopPropagation()}>
-        <div style={{
-          minHeight: 48,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: schoolsSidebarCollapsed ? 'center' : 'space-between',
-          gap: 6,
-          padding: schoolsSidebarCollapsed ? '0 8px' : '0 10px 0 12px',
-          borderBottom: '1px solid var(--border)',
-          color: '#626C8B',
-          fontSize: 12,
-          fontWeight: 850,
-          textTransform: 'uppercase',
-        }}>
-          {!schoolsSidebarCollapsed && <span>Школы</span>}
-          <button
-            onClick={() => {
-              setSchoolsBarCollapsed(value => !value);
-            }}
-            title={schoolsSidebarCollapsed ? 'Показать школы' : 'Скрыть школы'}
-            style={{
-              width: 28,
-              height: 28,
-              border: '1px solid var(--border)',
-              borderRadius: 10,
-              background: '#F5FAFB',
-              color: '#626C8B',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              flexShrink: 0,
-            }}
-          >
-            {schoolsSidebarCollapsed ? <ChevronLeft size={15} /> : <ChevronRight size={15} />}
-          </button>
-        </div>
-        <nav style={{ flex: 1, padding: schoolsSidebarCollapsed ? '7px 6px' : '7px 8px 7px 6px', overflow: 'visible' }}>
-          {schoolButtonItems.filter(t => !(t.key === 'ALL' && schoolsSidebarCollapsed)).map(t => {
-            const isActive = activeTab === t.key;
-            const allowed = isTabAllowed(t.key);
-            const schoolLabel = schoolSidebarFullLabel[t.key] ?? t.label;
-            return (
-              <div key={t.key} style={{ position: 'relative', display: 'flex', alignItems: 'center', marginBottom: 5 }}>
-                <button
-                  onClick={() => {
-                    if (!allowed) return;
-                    const currentMetric = dashboardMetric;
-                    setModeFilter(getSchoolSwitchFilters(t.key));
-                    setDashboardSchoolKey(t.key); // already calls onSchoolKeyChange
-                    setDashboardMetric(currentMetric);
-                    if (mode === 'logistics') {
-                      setLogisticsDashboardCollapsed(false);
-                    }
-                  }}
-                  title={schoolLabel}
-                  style={{
-                    flex: 1,
-                    width: isActive ? (schoolsSidebarCollapsed ? 'calc(100% + 6px)' : 'calc(100% + 6px)') : '100%',
-                    minHeight: mode === 'logistics' && !schoolsSidebarCollapsed ? 48 : 34,
-                    display: 'flex',
-                    alignItems: schoolsSidebarCollapsed ? 'center' : 'stretch',
-                    justifyContent: schoolsSidebarCollapsed ? 'center' : 'flex-start',
-                    gap: 5,
-                    padding: schoolsSidebarCollapsed ? '8px 0' : '8px 12px 8px 16px',
-                    marginLeft: isActive ? -6 : 0,
-                    border: '1px solid transparent',
-                    borderRadius: isActive ? '0 16px 16px 0' : 14,
-                    background: isActive ? 'var(--active-bg)' : 'transparent',
-                    color: isActive ? '#17222F' : allowed ? '#626C8B' : '#C0C0C8',
-                    fontSize: schoolsSidebarCollapsed ? 9 : 10,
-                    fontWeight: isActive ? 800 : 650,
-                    cursor: allowed ? 'pointer' : 'default',
-                    opacity: allowed ? 1 : 0.45,
-                    boxShadow: isActive ? 'inset -4px 0 0 #31A4A5' : 'none',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                  }}
-                >
-                  {schoolsSidebarCollapsed ? (
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.label}</span>
-                  ) : (
-                    <span style={{ width: '100%', minWidth: 0, display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', fontSize: 12, textAlign: 'left' }}>
-                      {schoolLabel}
-                    </span>
-                  )}
-                </button>
-              </div>
-            );
-          })}
-        </nav>
-      </aside>
+      <SchoolDockSidebar
+        hidden={schoolsSidebarCollapsed}
+        onHiddenChange={setSchoolsBarCollapsed}
+        items={[
+          ...schoolButtonItems.filter(t => t.key !== 'ALL').map((t, index) => ({
+            key: t.key,
+            label: schoolSidebarFullLabel[t.key] ?? t.label,
+            color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
+            logo: t.logo,
+            disabled: !isTabAllowed(t.key),
+            active: activeTab === t.key,
+          })),
+          ...extraSchoolDockItems,
+        ]}
+        onSelect={(key) => {
+          const currentMetric = dashboardMetric;
+          setModeFilter(getSchoolSwitchFilters(key));
+          setDashboardSchoolKey(key);
+          setDashboardMetric(currentMetric);
+          if (mode === 'logistics') {
+            setLogisticsDashboardCollapsed(false);
+          }
+        }}
+      />
 
       {selectedDriver && (
         <div
@@ -4772,48 +4843,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 </section>
               ) : selectedDriverTab === 'advances' ? (
               <>
-              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14, marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Новый аванс</div>
-                <div style={{ display: 'grid', gridTemplateColumns: '140px 160px minmax(0, 1fr) auto', gap: 8, alignItems: 'end' }}>
-                  <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
-                    Сумма (сом)
-                    <input
-                      type="number"
-                      min="0"
-                      value={advanceAmount}
-                      onChange={event => setAdvanceAmount(event.target.value)}
-                      placeholder="0"
-                      style={{ height: 34, border: '1px solid #D4E3E7', borderRadius: 8, padding: '0 10px', fontSize: 13, fontWeight: 700, color: '#17222F', outline: 'none' }}
-                    />
-                  </label>
-                  <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
-                    Дата
-                    <input
-                      type="date"
-                      value={advanceDate}
-                      onChange={event => setAdvanceDate(event.target.value)}
-                      style={{ height: 34, border: '1px solid #D4E3E7', borderRadius: 8, padding: '0 10px', fontSize: 13, fontWeight: 700, color: '#17222F', outline: 'none' }}
-                    />
-                  </label>
-                  <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
-                    Комментарий
-                    <input
-                      value={advanceComment}
-                      onChange={event => setAdvanceComment(event.target.value)}
-                      placeholder="Необязательно"
-                      style={{ height: 34, border: '1px solid #D4E3E7', borderRadius: 8, padding: '0 10px', fontSize: 13, fontWeight: 700, color: '#17222F', outline: 'none' }}
-                    />
-                  </label>
-                  <button
-                    onClick={addDriverAdvance}
-                    disabled={savingAdvance}
-                    style={{ height: 34, padding: '0 14px', border: 'none', borderRadius: 8, background: savingAdvance ? '#A7CFCF' : '#31A4A5', color: '#fff', fontSize: 12, fontWeight: 900, cursor: savingAdvance ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-                  >
-                    {savingAdvance ? 'Сохраняю...' : '+ Добавить'}
-                  </button>
-                </div>
-              </section>
-
               <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                 <div style={{ height: 42, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px', borderBottom: '1px solid #E5EEF1', fontSize: 13, fontWeight: 900, color: '#17222F' }}>
                   <span>История авансов</span>
@@ -5120,7 +5149,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       {showNewDriver && (
         <NewDriverModal
           branches={driverBranches}
-          initialBranchKey={selectedDashboardSchool?.key}
+          initialBranchKey={selectedDashboardSchool?.key === DRIVER_RESERVE_KEY ? undefined : selectedDashboardSchool?.key}
           onClose={() => setShowNewDriver(false)}
           onCreated={(driverId) => {
             setShowNewDriver(false);

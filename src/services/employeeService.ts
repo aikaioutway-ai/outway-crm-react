@@ -28,13 +28,13 @@ export interface AuthenticatedUser {
 
 // ─── МАППИНГ ────────────────────────────────────────────────────────────────
 
+const EMPLOYEE_COLUMNS = 'id, full_name, login, role, position, phone1, phone2, address, school_keys, status, start_date, comment, created_at, updated_at';
+
 function mapRow(row: any): Employee {
   return {
     id: String(row.id),
     fullName: String(row.full_name),
     login: String(row.login),
-    passwordHash: row.password_hash ?? undefined,
-    passwordPlain: row.password_plain ?? undefined,
     role: row.role as EmployeeRole,
     position: String(row.position ?? ''),
     phone1: String(row.phone1 ?? ''),
@@ -65,23 +65,28 @@ async function hashPassword(password: string): Promise<string> {
 }
 
 // ─── ЧТЕНИЕ ─────────────────────────────────────────────────────────────────
+// Пароли (password_hash) намеренно не выбираются здесь и не читаются анонимным
+// ключом с сервера (см. supabase/v2_employee_password_hardening.sql) — сверка
+// пароля происходит только внутри edge-функции employee-login под service-role.
 
 export async function fetchEmployees(): Promise<Employee[]> {
   const { data, error } = await supabase
     .from('v2_employees')
-    .select('*')
+    .select(EMPLOYEE_COLUMNS)
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map(mapRow);
 }
 
 export async function getEmployeeById(id: string): Promise<Employee | null> {
-  const { data, error } = await supabase.from('v2_employees').select('*').eq('id', id).single();
+  const { data, error } = await supabase.from('v2_employees').select(EMPLOYEE_COLUMNS).eq('id', id).single();
   if (error || !data) return null;
   return mapRow(data);
 }
 
 // ─── АВТОРИЗАЦИЯ ────────────────────────────────────────────────────────────
+// Логин и сверка пароля выполняются на сервере (edge-функция employee-login,
+// service-role ключ) — браузер никогда не видит password_hash сотрудников.
 
 export async function authenticateEmployee(
   login: string,
@@ -91,31 +96,12 @@ export async function authenticateEmployee(
   const normalizedPassword = password.trim();
   if (!normalizedLogin || !normalizedPassword) return null;
 
-  const { data, error } = await supabase
-    .from('v2_employees')
-    .select('*')
-    .eq('login', normalizedLogin)
-    .eq('status', 'active')
-    .single();
+  const { data, error } = await supabase.functions.invoke('employee-login', {
+    body: { login: normalizedLogin, password: normalizedPassword },
+  });
 
-  if (error || !data) return null;
-  if (data.role === 'driver') return null;
-
-  // Проверяем plain пароль (приоритет) или hash
-  const plainMatch = data.password_plain && data.password_plain === normalizedPassword;
-  const hashMatch = data.password_hash && data.password_hash === await hashPassword(normalizedPassword);
-  const isDefaultAdmin = data.id === 'emp-admin' && !data.password_plain && !data.password_hash && normalizedPassword === 'admin';
-
-  if (!plainMatch && !hashMatch && !isDefaultAdmin) return null;
-
-  return {
-    id: data.id,
-    name: data.full_name,
-    login: data.login,
-    role: data.role as UserRole,
-    schoolKeys: Array.isArray(data.school_keys) ? data.school_keys : ['ALL'],
-    position: data.position ?? undefined,
-  };
+  if (error || !data?.ok) return null;
+  return data.user as AuthenticatedUser;
 }
 
 // ─── СОЗДАНИЕ / ОБНОВЛЕНИЕ ──────────────────────────────────────────────────
@@ -139,7 +125,6 @@ export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
   };
 
   if (draft.password?.trim()) {
-    row.password_plain = draft.password.trim();
     row.password_hash = await hashPassword(draft.password.trim());
   }
 

@@ -83,6 +83,11 @@ export async function uploadBankStatement(
   return { inserted, skipped, matched, conflicts, retriggered };
 }
 
+// Экранируем спецсимволы ilike (% и _), чтобы код чека не трактовался как маска
+function escapeLikePattern(value: string): string {
+  return value.replace(/[%_]/g, ch => `\\${ch}`);
+}
+
 // Сверяет одну строку выписки с платежами CRM
 async function reconcileEntry(
   entryId: string,
@@ -93,12 +98,15 @@ async function reconcileEntry(
   const { data: payments, error } = await supabase
     .from('v2_payments')
     .select('id, amount, status')
-    .ilike('receipt_code', `%${receiptCode}`)
-    .limit(1);
+    .ilike('receipt_code', `%${escapeLikePattern(receiptCode)}`)
+    .order('created_at', { ascending: false })
+    .limit(20);
 
   if (error || !payments?.length) return 'unmatched';
 
-  const payment = payments[0];
+  // Если код совпал с несколькими платежами — предпочитаем тот, у которого
+  // совпадает и сумма, а не первый попавшийся без сортировки
+  const payment = payments.find(p => Math.abs(Number(p.amount) - bankAmount) < 1) ?? payments[0];
   const amountsMatch = Math.abs(Number(payment.amount) - bankAmount) < 1;
 
   if (amountsMatch) {
@@ -133,10 +141,16 @@ async function reconcileAllUnmatched(): Promise<number> {
 
   if (!unmatched?.length) return 0;
 
+  // Сверяем пачками, а не по одной записи последовательно — иначе загрузка
+  // выписки замедляется линейно с ростом числа накопленных unmatched строк
+  const BATCH_SIZE = 8;
   let count = 0;
-  for (const entry of unmatched) {
-    const result = await reconcileEntry(entry.id, entry.receipt_code, entry.amount, entry.statement_date);
-    if (result === 'matched' || result === 'conflict') count++;
+  for (let i = 0; i < unmatched.length; i += BATCH_SIZE) {
+    const batch = unmatched.slice(i, i + BATCH_SIZE);
+    const results = await Promise.all(
+      batch.map(entry => reconcileEntry(entry.id, entry.receipt_code, entry.amount, entry.statement_date)),
+    );
+    count += results.filter(result => result === 'matched' || result === 'conflict').length;
   }
   return count;
 }

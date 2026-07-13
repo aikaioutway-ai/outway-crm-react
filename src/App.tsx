@@ -1,18 +1,45 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useState } from 'react';
 import Sidebar, { canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
-import FamiliesPage from './modules/families/FamiliesPage';
 import ManagerOverview from './modules/families/ManagerOverview';
+import CashierOverview from './modules/families/CashierOverview';
+import CashierSchoolKpiStrip from './modules/families/CashierSchoolKpiStrip';
+import CashierSchoolTransferDashboard from './modules/families/CashierSchoolTransferDashboard';
+import LogisticsOverview from './modules/families/LogisticsOverview';
+import LogisticsSchoolKpiStrip from './modules/families/LogisticsSchoolKpiStrip';
+import LogisticsSchoolTransferDashboard from './modules/families/LogisticsSchoolTransferDashboard';
+import LogisticsMapView from './modules/families/LogisticsMapView';
 import SchoolKpiStrip from './modules/families/SchoolKpiStrip';
-import DriversPage from './modules/drivers/DriversPage';
-import EmployeesPage from './modules/employees/EmployeesPage';
+import SchoolTransferDashboard from './modules/families/SchoolTransferDashboard';
+import DriversOverview from './modules/drivers/DriversOverview';
+import DriversSchoolKpiStrip from './modules/drivers/DriversSchoolKpiStrip';
+import DriversTransferDashboard from './modules/drivers/DriversTransferDashboard';
 import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { fetchV2FamiliesTable } from './services/crmV2Service';
+import { currentCashierPeriodKey } from './modules/families/constants';
+import type { PayrollSchoolTab } from './modules/expenses/timesheetTypes';
 import { UserRole } from './types';
-import TimesheetModule from './modules/expenses/TimesheetModule';
 import './index.css';
 
+// Крупные страницы разделов подгружаются только при первом открытии раздела —
+// сотрудник больше не скачивает код всех модулей CRM при каждом входе.
+const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
+const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
+const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
+const TimesheetModule = lazy(() => import('./modules/expenses/TimesheetModule'));
+const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
+
+function SectionLoading() {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text-2)', fontSize: 15, fontWeight: 600 }}>
+      Загрузка…
+    </div>
+  );
+}
+
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
+  dispatch: 'Диспетчер — в разработке',
+  routes: 'Маршруты — в разработке',
   settings:  'Настройки — в разработке',
 };
 
@@ -42,9 +69,28 @@ export default function App() {
   const [badges, setBadges] = useState<Partial<Record<NavSection, number>>>({});
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierTab, setCashierTab] = useState<'payments' | 'manager_payments' | 'statement'>('payments');
-  const [logisticsTab, setLogisticsTab] = useState<'requests' | 'transfers' | 'drivers' | 'dispatch' | 'routes'>('transfers');
+  const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
+  const [cashierPeriodKey, setCashierPeriodKey] = useState(currentCashierPeriodKey);
+  const [cashierTransferFilter, setCashierTransferFilter] = useState('');
+  const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
+  const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
+  const [logisticsView, setLogisticsView] = useState<'table' | 'map'>('table');
+  const [routesSchoolKey, setRoutesSchoolKey] = useState<string | null>(null);
+  const [routesTransferFilter, setRoutesTransferFilter] = useState('');
+  const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
+  const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [expensesTab, setExpensesTab] = useState<'payroll' | 'advances' | 'expenses'>('payroll');
+  const [payrollSchoolKey, setPayrollSchoolKey] = useState<string | null>(null);
+  const [payrollTransferFilter, setPayrollTransferFilter] = useState('');
+  const [payrollSchoolTab, setPayrollSchoolTab] = useState<PayrollSchoolTab>('timesheet');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
+  const [managerSchoolMode, setManagerSchoolMode] = useState<'directory' | 'charges'>('directory');
+  const [managerTransferFilter, setManagerTransferFilter] = useState('');
+  const [managerOpenFamilyId, setManagerOpenFamilyId] = useState<string | null>(null);
+  const handleManagerOpenFamily = (schoolKey: string, familyId: string) => {
+    setManagerSchoolKey(schoolKey);
+    setManagerOpenFamilyId(familyId);
+  };
   const [adminFiltersOpen, setAdminFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
   const [schoolSidebarReserveWidth, setSchoolSidebarReserveWidth] = useState(78);
@@ -78,7 +124,45 @@ export default function App() {
     setAdminFiltersOpen(false);
     setColumnsOpen(false);
     setSchoolSidebarReserveWidth(78);
-  }, [section, cashierTab, logisticsTab, managerSchoolKey, expensesTab]);
+    setManagerTransferFilter('');
+    setManagerSchoolMode('directory');
+    setCashierSchoolKey(null);
+    setCashierTransferFilter('');
+    setLogisticsSchoolKey(null);
+    setLogisticsTransferFilter('');
+    setLogisticsView('table');
+    setRoutesSchoolKey(null);
+    setRoutesTransferFilter('');
+    setDriversSchoolKey(null);
+    setDriversTransferFilter('');
+    setPayrollSchoolKey(null);
+    setPayrollTransferFilter('');
+  // expensesTab намеренно не в зависимостях — ни одно из состояний здесь не
+  // относится к разделу «Финансы», переключение его вкладок не должно
+  // сбрасывать навигацию по школам в Кассире/Логистике/Менеджере/Водителях.
+  }, [section, cashierTab, managerSchoolKey]);
+
+  useEffect(() => {
+    setCashierTransferFilter('');
+  }, [cashierSchoolKey, cashierPeriodKey]);
+
+  useEffect(() => {
+    setLogisticsTransferFilter('');
+    setLogisticsView('table');
+  }, [logisticsSchoolKey]);
+
+  useEffect(() => {
+    setRoutesTransferFilter('');
+  }, [routesSchoolKey]);
+
+  useEffect(() => {
+    setDriversTransferFilter('');
+  }, [driversSchoolKey]);
+
+  useEffect(() => {
+    setPayrollTransferFilter('');
+    setPayrollSchoolTab('timesheet');
+  }, [payrollSchoolKey]);
 
   // Обновляем сессию если position ещё не загружен (старый localStorage)
   useEffect(() => {
@@ -107,7 +191,7 @@ export default function App() {
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     flex: 1,
     minWidth: 0,
     background: '#FFFFFF',
@@ -136,6 +220,7 @@ export default function App() {
     position: 'relative' as const,
     zIndex: active ? 3 : 1,
     marginBottom: active ? -1 : 0,
+    boxShadow: active ? 'inset 0 4px 0 #31A4A5' : 'none',
   } as React.CSSProperties);
 
   const sectionLabel = (label: string) => (
@@ -204,97 +289,129 @@ export default function App() {
         onClick={() => setSidebarCollapseSignal(value => value + 1)}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: 10, background: 'var(--active-bg)' }}
       >
+        <Suspense fallback={<SectionLoading />}>
         {section === 'cashier' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Кассир')}
-                {([['payments', 'Проверка'], ['manager_payments', 'Платежи']] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setCashierTab(key)} style={tabStyle(cashierTab === key)}>
-                    {label}
+                {cashierSchoolKey && (
+                  <button onClick={() => setCashierSchoolKey(null)} style={tabStyle(false)}>
+                    ← Все школы
                   </button>
-                ))}
+                )}
                 {extraTabs(true)}
               </div>
             </div>
-            {cashierTab === 'payments' ? (
+            {cashierSchoolKey ? (
+              <>
+              <CashierSchoolKpiStrip
+                schoolKey={cashierSchoolKey}
+                periodKey={cashierPeriodKey}
+                rightReserveWidth={schoolSidebarReserveWidth}
+              />
+              <CashierSchoolTransferDashboard
+                schoolKey={cashierSchoolKey}
+                periodKey={cashierPeriodKey}
+                rightReserveWidth={schoolSidebarReserveWidth}
+                selectedKey={cashierTransferFilter}
+                onSelect={setCashierTransferFilter}
+              />
               <FamiliesPage
                 mode="cashier"
                 userRole={currentUserRole}
                 userName={currentUser?.name}
                 allowedSchools={currentUser?.schoolKeys}
+                initialQuickFilter={{ activeTab: cashierSchoolKey }}
+                onSchoolKeyChange={setCashierSchoolKey}
                 adminFiltersOpen={adminFiltersOpen}
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
                 onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                externalPeriodKey={cashierPeriodKey}
+                onPeriodKeyChange={setCashierPeriodKey}
+                hideDashboard
+                hideTransferBars
+                externalQuickTransfer={cashierTransferFilter}
               />
-            ) : cashierTab === 'manager_payments' ? (
-              <FamiliesPage
-                mode="payments"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+              </>
+            ) : (
+              <CashierOverview
+                periodKey={cashierPeriodKey}
+                onPeriodKeyChange={setCashierPeriodKey}
+                onSelectSchool={setCashierSchoolKey}
+                onSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
-            ) : null}
+            )}
           </div>
         ) : section === 'logistics' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Логистика')}
-                {([['requests', 'Заявки'], ['transfers', 'Трансфер'], ['drivers', 'Водители'], ['dispatch', 'Диспетчер'], ['routes', 'Маршруты']] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setLogisticsTab(key)} style={tabStyle(logisticsTab === key)}>
-                    {label}
-                  </button>
-                ))}
-                {extraTabs(logisticsTab !== 'dispatch')}
+                {logisticsSchoolKey && (
+                  <>
+                    <button onClick={() => setLogisticsSchoolKey(null)} style={tabStyle(false)}>
+                      ← Все школы
+                    </button>
+                    <button onClick={() => setLogisticsView('table')} style={tabStyle(logisticsView === 'table')}>
+                      Таблица
+                    </button>
+                    <button onClick={() => setLogisticsView('map')} style={tabStyle(logisticsView === 'map')}>
+                      Карта
+                    </button>
+                  </>
+                )}
+                {extraTabs(true)}
               </div>
             </div>
-            {logisticsTab === 'requests' ? (
-              <FamiliesPage
-                mode="requests"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+            {logisticsSchoolKey ? (
+              <>
+              <LogisticsSchoolKpiStrip
+                schoolKey={logisticsSchoolKey}
+                rightReserveWidth={schoolSidebarReserveWidth}
               />
-            ) : logisticsTab === 'transfers' ? (
-              <FamiliesPage
-                mode="logistics"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+              <LogisticsSchoolTransferDashboard
+                schoolKey={logisticsSchoolKey}
+                rightReserveWidth={schoolSidebarReserveWidth}
+                selectedKey={logisticsTransferFilter}
+                onSelect={setLogisticsTransferFilter}
               />
-            ) : logisticsTab === 'drivers' ? (
-              <DriversPage
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
-            ) : logisticsTab === 'dispatch' ? (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-                Диспетчер — в разработке
-              </div>
+              {logisticsView === 'map' ? (
+                <LogisticsMapView
+                  schoolKey={logisticsSchoolKey}
+                  transferFilter={logisticsTransferFilter}
+                  userRole={currentUserRole}
+                  userName={currentUser?.name}
+                  onSelectSchool={setLogisticsSchoolKey}
+                  onSidebarWidthChange={setSchoolSidebarReserveWidth}
+                />
+              ) : (
+                <FamiliesPage
+                  mode="logistics"
+                  userRole={currentUserRole}
+                  userName={currentUser?.name}
+                  allowedSchools={currentUser?.schoolKeys}
+                  initialQuickFilter={{ activeTab: logisticsSchoolKey }}
+                  onSchoolKeyChange={setLogisticsSchoolKey}
+                  adminFiltersOpen={adminFiltersOpen}
+                  onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+                  columnsOpen={columnsOpen}
+                  onColumnsOpenChange={setColumnsOpen}
+                  onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                  hideDashboard
+                  hideTransferBars
+                  externalQuickTransfer={logisticsTransferFilter === 'rejected' ? '' : logisticsTransferFilter}
+                  externalQuickChildStatus={logisticsTransferFilter === 'rejected' ? 'rejected' : ''}
+                />
+              )}
+              </>
             ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-                Маршруты — в разработке
-              </div>
+              <LogisticsOverview
+                onSelectSchool={setLogisticsSchoolKey}
+                onSidebarWidthChange={setSchoolSidebarReserveWidth}
+              />
             )}
           </div>
         ) : section === 'families' ? (
@@ -307,51 +424,161 @@ export default function App() {
                     ← Все школы
                   </button>
                 )}
+                {managerSchoolKey && ([['directory', 'Справочник'], ['charges', 'Оплаты']] as const).map(([key, label]) => (
+                  <button key={key} onClick={() => setManagerSchoolMode(key)} style={tabStyle(managerSchoolMode === key)}>
+                    {label}
+                  </button>
+                ))}
                 {extraTabs(true)}
               </div>
             </div>
             {managerSchoolKey ? (
               <>
                 <SchoolKpiStrip schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} />
+                <SchoolTransferDashboard
+                  schoolKey={managerSchoolKey}
+                  rightReserveWidth={schoolSidebarReserveWidth}
+                  selectedKey={managerTransferFilter}
+                  onSelect={setManagerTransferFilter}
+                />
                 <FamiliesPage
-                  key={managerSchoolKey}
-                  mode="directory"
+                  mode={managerSchoolMode}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
-                  allowedSchools={[managerSchoolKey]}
+                  allowedSchools={currentUser?.schoolKeys}
+                  initialQuickFilter={{ activeTab: managerSchoolKey }}
+                  onSchoolKeyChange={setManagerSchoolKey}
                   hideDashboard
                   adminFiltersOpen={adminFiltersOpen}
                   onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                   columnsOpen={columnsOpen}
                   onColumnsOpenChange={setColumnsOpen}
                   onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                  hideTransferBars
+                  externalQuickTransfer={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? '' : managerTransferFilter}
+                  externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
+                  initialOpenFamilyId={managerOpenFamilyId}
+                  onInitialFamilyOpened={() => setManagerOpenFamilyId(null)}
                 />
               </>
             ) : (
-              <ManagerOverview onSelectSchool={setManagerSchoolKey} />
+              <ManagerOverview onSelectSchool={setManagerSchoolKey} onSidebarWidthChange={setSchoolSidebarReserveWidth} onOpenFamily={handleManagerOpenFamily} />
             )}
           </div>
         ) : section === 'drivers' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Водители')}
+                {driversSchoolKey && (
+                  <button onClick={() => setDriversSchoolKey(null)} style={tabStyle(false)}>
+                    ← Все школы
+                  </button>
+                )}
                 {extraTabs(true)}
               </div>
             </div>
-            <DriversPage
-              userRole={currentUserRole}
-              userName={currentUser?.name}
-              allowedSchools={currentUser?.schoolKeys}
-              onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-            />
+            {driversSchoolKey ? (
+              <>
+                <DriversSchoolKpiStrip
+                  schoolKey={driversSchoolKey}
+                  rightReserveWidth={schoolSidebarReserveWidth}
+                />
+                <DriversTransferDashboard
+                  schoolKey={driversSchoolKey}
+                  rightReserveWidth={schoolSidebarReserveWidth}
+                  selectedKey={driversTransferFilter}
+                  onSelect={setDriversTransferFilter}
+                />
+                <DriversPage
+                  userRole={currentUserRole}
+                  userName={currentUser?.name}
+                  allowedSchools={currentUser?.schoolKeys}
+                  schoolKey={driversSchoolKey}
+                  externalQuickTransfer={driversTransferFilter}
+                  onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                />
+              </>
+            ) : (
+              <DriversOverview
+                onSelectSchool={setDriversSchoolKey}
+                onSidebarWidthChange={setSchoolSidebarReserveWidth}
+              />
+            )}
+          </div>
+        ) : section === 'dispatch' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
+            <div style={tabRowStyle}>
+              <div style={tabBarStyle}>
+                {sectionLabel('Диспетчер')}
+                {extraTabs(true)}
+              </div>
+            </div>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
+              {PLACEHOLDERS.dispatch}
+            </div>
+          </div>
+        ) : section === 'routes' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
+            <div style={tabRowStyle}>
+              <div style={tabBarStyle}>
+                {sectionLabel('Маршруты')}
+                {routesSchoolKey && (
+                  <button onClick={() => setRoutesSchoolKey(null)} style={tabStyle(false)}>
+                    ← Все школы
+                  </button>
+                )}
+                {extraTabs(true)}
+              </div>
+            </div>
+            {routesSchoolKey ? (
+              <>
+              <LogisticsSchoolKpiStrip
+                schoolKey={routesSchoolKey}
+                rightReserveWidth={schoolSidebarReserveWidth}
+              />
+              <LogisticsSchoolTransferDashboard
+                schoolKey={routesSchoolKey}
+                rightReserveWidth={schoolSidebarReserveWidth}
+                selectedKey={routesTransferFilter}
+                onSelect={setRoutesTransferFilter}
+              />
+              <LogisticsMapView
+                schoolKey={routesSchoolKey}
+                transferFilter={routesTransferFilter}
+                userRole={currentUserRole}
+                userName={currentUser?.name}
+                onSelectSchool={setRoutesSchoolKey}
+                onSidebarWidthChange={setSchoolSidebarReserveWidth}
+              />
+              </>
+            ) : (
+              <LogisticsOverview
+                onSelectSchool={setRoutesSchoolKey}
+                onSidebarWidthChange={setSchoolSidebarReserveWidth}
+              />
+            )}
           </div>
         ) : section === 'expenses' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Финансы')}
-                {([['payroll', 'Зарплата'], ['advances', 'Авансы'], ['expenses', 'Расходы']] as const).map(([key, label]) => (
+                {expensesTab === 'payroll' && payrollSchoolKey && (
+                  <button onClick={() => setPayrollSchoolKey(null)} style={tabStyle(false)}>
+                    ← Все школы
+                  </button>
+                )}
+                {expensesTab === 'payroll' && payrollSchoolKey && ([
+                  ['timesheet', 'Табель'],
+                  ['advance', 'Аванс'],
+                  ['salary', 'Зарплата'],
+                ] as const).map(([key, label]) => (
+                  <button key={key} onClick={() => setPayrollSchoolTab(key)} style={tabStyle(payrollSchoolTab === key)}>
+                    {label}
+                  </button>
+                ))}
+                {expensesTab !== 'payroll' && ([['payroll', 'Зарплата'], ['advances', 'Авансы'], ['expenses', 'Расходы']] as const).map(([key, label]) => (
                   <button key={key} onClick={() => setExpensesTab(key)} style={tabStyle(expensesTab === key)}>
                     {label}
                   </button>
@@ -359,13 +586,30 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-              {expensesTab === 'payroll'
-                ? 'Модуль Зарплата — в разработке'
-                : expensesTab === 'advances'
+            {expensesTab === 'payroll' ? (
+              <PayrollModule
+                userRole={currentUserRole}
+                userName={currentUser?.name}
+                allowedSchools={currentUser?.schoolKeys}
+                adminFiltersOpen={adminFiltersOpen}
+                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+                columnsOpen={columnsOpen}
+                onColumnsOpenChange={setColumnsOpen}
+                rightReserveWidth={schoolSidebarReserveWidth}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                schoolKey={payrollSchoolKey}
+                transferFilter={payrollTransferFilter}
+                schoolTab={payrollSchoolTab}
+                onSelectSchool={setPayrollSchoolKey}
+                onTransferFilterChange={setPayrollTransferFilter}
+              />
+            ) : (
+              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
+                {expensesTab === 'advances'
                   ? 'Модуль Авансы — в разработке'
                   : 'Модуль Расходы — в разработке'}
-            </div>
+              </div>
+            )}
           </div>
         ) : section === 'timesheet' ? (
           <TimesheetModule
@@ -397,6 +641,7 @@ export default function App() {
             {PLACEHOLDERS[section]}
           </div>
         )}
+        </Suspense>
       </main>
     </div>
   );

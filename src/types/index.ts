@@ -1,9 +1,10 @@
 // ─── ШКОЛЫ ───────────────────────────────────────────────────────────────────
 
 export type SchoolCode =
-  | 'KINGS' | 'LIGHT' | 'BILIM'
+  | 'LIGHT' | 'BILIM'
   | 'AES' | 'KAS' | 'EPSILON' | 'GENIUS' | 'GENIUS4' | 'NOVA' | 'INDIGO'
-  | 'ERUDIT' | 'TENSAY' | 'EDISON';
+  | 'ERUDIT' | 'TENSAY' | 'EDISON'
+  | 'KRT' | 'ABL1' | 'ABL2' | 'KLM' | 'TSL';
 
 export interface School {
   short?: string;
@@ -217,8 +218,6 @@ export interface Employee {
   id: string;
   fullName: string;
   login: string;
-  passwordHash?: string;
-  passwordPlain?: string;
   role: EmployeeRole;
   position: string;
   phone1: string;

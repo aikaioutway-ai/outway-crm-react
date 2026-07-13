@@ -16,8 +16,6 @@ language sql
 immutable
 as $$
   select case upper(nullif(trim(p_school_code), ''))
-    when 'KINGS' then 'Kings International School'
-    when 'KNG' then 'Kings International School'
     when 'LIGHT' then 'Light Academy'
     when 'LA' then 'Light Academy'
     when 'BILIM' then 'Билим Бишкек Kg'

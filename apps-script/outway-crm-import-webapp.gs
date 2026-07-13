@@ -19,6 +19,16 @@ const SPREADSHEET_ID = prop_('SPREADSHEET_ID', '1pI1oTTmqgnSEV_Al1dvWs9AXJ7mfDfi
 const FAMILY_COUNTER_KEY = prop_('FAMILY_COUNTER_KEY', 'OUTWAY_FAMILY_COUNTER_V2');
 const SUPABASE_URL = prop_('SUPABASE_URL', 'https://mmcxugtxnfsafgxbpbix.supabase.co');
 const SUPABASE_KEY = prop_('SUPABASE_SERVICE_ROLE_KEY', prop_('SUPABASE_KEY', ''));
+// Общий секрет для doPost/doGet. Пока Script Property WEBHOOK_SECRET не задана,
+// проверка отключена (чтобы не сломать текущую форму на Netlify, которая пока
+// не шлёт секрет) — задайте WEBHOOK_SECRET в Script Properties и добавьте то же
+// значение в поле "secret" запроса формы, чтобы включить проверку.
+const WEBHOOK_SECRET = prop_('WEBHOOK_SECRET', '');
+
+function checkWebhookSecret_(provided) {
+  if (!WEBHOOK_SECRET) return true; // проверка выключена, пока секрет не настроен
+  return provided === WEBHOOK_SECRET;
+}
 
 const FAQ_HEADERS = ['Category', 'Question', 'Answer', 'Active'];
 
@@ -32,7 +42,6 @@ const HEADERS = [
 ];
 
 const SCHOOL_CODE_TO_BRANCH = {
-  KINGS: 'KNG',
   LIGHT: 'LA',
   BILIM: 'BKG',
   BJ: 'BJ',
@@ -57,11 +66,19 @@ const SCHOOL_CODE_TO_BRANCH = {
   GENIUS: 'GEN2',
   GEN2: 'GEN2',
   GENIUS4: 'GEN4',
-  GEN4: 'GEN4'
+  GEN4: 'GEN4',
+  KRT: 'KRT',
+  'КRT': 'KRT',
+  ABL: 'ABL1',
+  ABL1: 'ABL1',
+  'ABL #1': 'ABL1',
+  ABL2: 'ABL2',
+  'ABL #2': 'ABL2',
+  KLM: 'KLM',
+  TSL: 'TSL'
 };
 
 const BRANCH_NAME_TO_CODE = {
-  'Kings International School': 'KNG',
   'Light Academy': 'LA',
   'Билим Бишкек Kg': 'BKG',
   'Билим Бишкек KG': 'BKG',
@@ -88,11 +105,17 @@ const BRANCH_NAME_TO_CODE = {
   'Гениум — Чуйкова': 'GEN2',
   'Гениум Авангард': 'GEN4',
   'Гениум Авангард Сити': 'GEN4',
-  'Гениум — Авангард': 'GEN4'
+  'Гениум — Авангард': 'GEN4',
+  'Креатив-Таалим': 'KRT',
+  'Академия будущих лидеров (Авангард)': 'ABL1',
+  'Академия будущих лидеров(Авангард)': 'ABL1',
+  'Академия будущих лидеров (Мавлянова)': 'ABL2',
+  'Академия будущих лидеров(Мавлянова)': 'ABL2',
+  'Калем Академи Скуул': 'KLM',
+  'Tesla Academy': 'TSL'
 };
 
 const BRANCH_CODE_TO_SCHOOL_CODE = {
-  KNG: 'KNG',
   LA: 'LA',
   BKG: 'BKG',
   BJ: 'BKG',
@@ -108,24 +131,37 @@ const BRANCH_CODE_TO_SCHOOL_CODE = {
   ING_P: 'ING',
   ING_W: 'ING',
   GEN2: 'GENIUS',
-  GEN4: 'GENIUS'
+  GEN4: 'GENIUS',
+  KRT: 'KRT',
+  ABL1: 'ABL',
+  ABL2: 'ABL',
+  KLM: 'KLM',
+  TSL: 'TSL'
 };
 
 function doGet(e) {
   const action = e && e.parameter ? e.parameter.action : '';
   if (action === 'faq') return json_({ ok: true, faq: getFaq_() });
   if (action === 'schools') return json_({ ok: true, schools: getSchools_() });
-  if (action === 'upload-v2-sheet') return json_(uploadSheetToSupabaseV2(text_(e.parameter.sheet)));
-  if (action === 'upload-v2') return json_(uploadAllToSupabaseV2());
+  if (action === 'upload-v2-sheet' || action === 'upload-v2') {
+    if (!checkWebhookSecret_(e.parameter.secret)) {
+      return json_({ ok: false, error: 'Forbidden' });
+    }
+    if (action === 'upload-v2-sheet') return json_(uploadSheetToSupabaseV2(text_(e.parameter.sheet)));
+    return json_(uploadAllToSupabaseV2());
+  }
   return json_({ ok: true, service: 'OutWay Registration Platform v2' });
 }
 
 function doPost(e) {
+  const lock = LockService.getScriptLock();
   try {
     const payload = JSON.parse(e.postData.contents);
+    if (!checkWebhookSecret_(payload.secret)) {
+      return json_({ ok: false, error: 'Forbidden' });
+    }
     validatePayload(payload);
 
-    const lock = LockService.getScriptLock();
     lock.waitLock(10000);
 
     const newChildren = [];
@@ -603,6 +639,7 @@ function resolveSchoolNameForBranch_(schoolCode, payload) {
   if (code === 'BKG') return 'Билим';
   if (code === 'ING') return 'Indigo Schools';
   if (code === 'GENIUS') return 'Genius';
+  if (code === 'ABL') return 'Академия будущих лидеров';
   return text_(payload.schoolName) || text_(payload.branchName) || code;
 }
 
@@ -626,6 +663,9 @@ function getSchoolSheetName_(schoolCode) {
   const code = text_(schoolCode).toUpperCase();
   if (code === 'TENSAY') return 'TENSAI';
   if (code === 'EPSILON') return 'EPS';
+  if (code === 'КRT') return 'KRT';
+  if (code === 'ABL1') return 'ABL #1';
+  if (code === 'ABL2') return 'ABL #2';
   return code || 'UNKNOWN';
 }
 

@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X, Trash2 } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
-import { getFamilyPrice, getPriceByZone, money } from '../../utils/pricing';
+import { getPriceByZone, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
@@ -64,20 +64,26 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
 
+  const activeFamilyIdRef = useRef(family.id);
+
   useEffect(() => {
+    activeFamilyIdRef.current = family.id;
     setSavedFamily(family);
     setTab(initialTab);
     setFinanceLoaded(false);
     setAuditLoaded(false);
     loadChildren();
-    fetchV2Branches().then(setBranches).catch(() => setBranches([]));
+    fetchV2Branches().then(next => { if (activeFamilyIdRef.current === family.id) setBranches(next); }).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
   async function loadChildren(): Promise<Child[]> {
     setLoadingKids(true);
+    const requestedFamilyId = family.id;
     const next = await fetchV2Children(family);
-    setChildren(next);
-    setLoadingKids(false);
+    if (activeFamilyIdRef.current === requestedFamilyId) {
+      setChildren(next);
+      setLoadingKids(false);
+    }
     return next;
   }
   async function loadFinance(kids = children) {
@@ -284,7 +290,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function handleAddChild() {
     if (childActionBusy) return;
     const template = children[children.length - 1];
-    const schoolCode = (template?.schoolCode || savedFamily.schoolCode || 'KINGS') as any;
+    const schoolCode = (template?.schoolCode || savedFamily.schoolCode || 'AES') as any;
     const zone = (template?.zone || savedFamily.zone || 'A') as Zone;
     const vehicleType = (template?.vehicleType || savedFamily.vehicleType || 'microbus') as VehicleType;
     const basePrice = getPriceByZone(schoolCode, zone, vehicleType);
@@ -346,7 +352,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const depositPaid = depositCharge ? depositCharge.debtAmount <= 0 : false;
   const primaryChild = children[0];
   const familyMonthlyPrice = children.length > 0
-    ? getFamilyPrice(children.map(c => ({ schoolCode: c.schoolCode, zone: c.zone, vehicleType: c.vehicleType })))
+    ? children.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
     : savedFamily.monthlyPrice;
   const initials = (savedFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
   const coordinatesText = savedFamily.latitude && savedFamily.longitude
@@ -1087,46 +1093,6 @@ const deleteChildBtnStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   cursor: 'pointer',
-};
-
-const childMatrixLabelHeadStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  background: '#F7FBFB',
-  borderBottom: '1px solid #E8EEF1',
-  fontSize: 10,
-  fontWeight: 850,
-  color: '#667085',
-  textAlign: 'left',
-  width: 100,
-};
-
-const childMatrixChildHeadStyle: React.CSSProperties = {
-  padding: '6px 10px',
-  background: '#F7FBFB',
-  borderBottom: '1px solid #E8EEF1',
-  borderLeft: '1px solid #E8EEF1',
-  fontSize: 11,
-  fontWeight: 750,
-  color: '#374151',
-  textAlign: 'left',
-};
-
-const childMatrixLabelCellStyle: React.CSSProperties = {
-  padding: '0 10px',
-  height: 32,
-  fontSize: 11,
-  fontWeight: 750,
-  color: '#8A94A3',
-  borderBottom: '1px solid #F0F3F5',
-  background: '#F8FAFC',
-  whiteSpace: 'nowrap',
-};
-
-const childMatrixValueCellStyle: React.CSSProperties = {
-  padding: '0 8px',
-  height: 32,
-  borderBottom: '1px solid #F0F3F5',
-  borderLeft: '1px solid #E8EEF1',
 };
 
 const childCardIndexStyle: React.CSSProperties = {

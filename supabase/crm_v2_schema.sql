@@ -791,7 +791,6 @@ $$;
 
 insert into public.v2_schools(code, name)
 values
-  ('KNG', 'Kings International School'),
   ('LA', 'Light Academy'),
   ('BKG', 'Билим Бишкек KG'),
   ('AES', 'American-European School'),
@@ -802,7 +801,11 @@ values
   ('ING', 'Indigo Schools'),
   ('ERU', 'Эрудит-ISIT'),
   ('TIS', 'Тенсай'),
-  ('EDI', 'Edison')
+  ('EDI', 'Edison'),
+  ('KRT', 'Креатив-Таалим'),
+  ('ABL', 'Академия будущих лидеров'),
+  ('KLM', 'Калем Академи Скуул'),
+  ('TSL', 'Tesla Academy')
 on conflict (code) do update set name = excluded.name, active = true;
 
 with school_map as (
@@ -812,7 +815,6 @@ insert into public.v2_school_branches(school_id, code, short_name, name, address
 select s.id, b.code, b.short_name, b.name, b.address, b.lat, b.lng, b.manager_phone
 from (
   values
-    ('KNG', 'KNG', 'KNG', 'Kings International School', 'ул. Барпы Алыкулова, 3А', 42.870399::double precision, 74.508924::double precision, '996999260894'),
     ('LA', 'LA', 'LA', 'Light Academy', 'ул. Дооронбека Садырбаева, 2/14', 42.863693, 74.558794, '996506242924'),
     ('BKG', 'BKG', 'BKG', 'Билим Бишкек KG', 'ул. Жени-Жока, 7', 42.840230, 74.642759, '996550242924'),
     ('AES', 'AES', 'AES', 'American-European School', 'ул. Дордой, 2/2, Кара-Жыгач', 42.856173, 74.655412, '996506242924'),
@@ -827,7 +829,12 @@ from (
     ('ING', 'ING_W', 'ING_W', 'Indigo West', 'Indigo West', null, null, '996555242924'),
     ('ERU', 'ERU', 'ERU', 'Эрудит-ISIT', 'ул. Салиева Каралаева, 21/1', 42.841300, 74.585384, '996550242924'),
     ('TIS', 'TIS', 'TIS', 'Тенсай', 'ул. Малдыбаева, 87', 42.815036, 74.648662, '996506242924'),
-    ('EDI', 'EDI', 'EDI', 'Edison', 'Edison', null, null, null)
+    ('EDI', 'EDI', 'EDI', 'Edison', 'Edison', null, null, null),
+    ('KRT', 'KRT', 'KRT', 'Креатив-Таалим', 'ул. 7 Апреля, 156', 42.858703, 74.634108, '996999260894'),
+    ('ABL', 'ABL1', 'ABL #1', 'Академия будущих лидеров (Авангард)', 'ул. Байтик баатыра, 4а/8', 42.84358275219382, 74.63115331300138, '996550242924'),
+    ('ABL', 'ABL2', 'ABL #2', 'Академия будущих лидеров (Мавлянова)', 'ул. Жуная Мавлянова, 10', 42.8173419841855, 74.60383769639346, '996550242924'),
+    ('KLM', 'KLM', 'KLM', 'Калем Академи Скуул', 'ул. Исы Ахунбаева, 201', 42.84388367480388, 74.57939299999965, '996555242924'),
+    ('TSL', 'TSL', 'TSL', 'Tesla Academy', 'ул. 27-я линия, 13а', 42.842265, 74.558067, '996555242924')
 ) as b(school_code, code, short_name, name, address, lat, lng, manager_phone)
 join school_map s on s.code = b.school_code
 on conflict (code) do update

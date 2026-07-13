@@ -41,7 +41,7 @@ export default function NotionSelect({
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const selected = options.find(option => option.value === value) ?? options[0];
+  const selected = options.find(option => option.value === value);
 
   const close = useCallback(() => {
     setOpen(false);

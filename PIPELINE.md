@@ -24,7 +24,7 @@ Netlify Form  →  Google Apps Script  →  Google Sheet  →  Supabase  →  CR
 ## 3. Google Sheet
 
 - Хранит все заявки в виде таблицы
-- Каждая школа — отдельный лист (KNG, LA, BKG, и т.д.)
+- Каждая школа — отдельный лист (LA, BKG, AES и т.д.)
 - Spreadsheet ID: `1pI1oTTmqgnSEV_Al1dvWs9AXJ7mfDfiu2pRgBTXnmnw`
 
 ## 4. Supabase (БД)
@@ -53,7 +53,7 @@ Netlify Form  →  Google Apps Script  →  Google Sheet  →  Supabase  →  CR
 3. Нажать **▶ Run**
 4. Проверить логи: View → Logs
 
-Или для одного листа: функция **`uploadSheetToSupabaseV2`** (передать имя листа, например `KNG`).
+Или для одного листа: функция **`uploadSheetToSupabaseV2`** (передать имя листа, например `AES`).
 
 ---
 
