@@ -3,6 +3,7 @@ import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
+import { formatName, formatPhone } from '../utils/format';
 
 /** Точечный сброс кэша семей/детей после мутации — вызывается вместо
  * полной перезагрузки CRM. React Query сам решит, кому из подписанных
@@ -677,8 +678,8 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
         isFirstChild: idx === 0,
         childName: child.child_name ?? '',
         childClass: child.class_name ?? '',
-        parentName: child.parent_name ?? '',
-        phone: child.phone ?? '',
+        parentName: formatName(child.parent_name),
+        phone: formatPhone(child.phone),
         secondPhone: child.second_phone ?? '',
         contactName: child.contact_name ?? '',
         contactPhone: child.contact_phone ?? '',
