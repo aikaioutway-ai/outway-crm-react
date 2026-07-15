@@ -3,6 +3,7 @@ import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ReceiptTe
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
+import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
 import { money } from '../../utils/pricing';
 import { computePayrollStats, PAYROLL_COLORS, PayrollMoneySummary, PayrollSchoolStat } from './payrollStats';
 import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
@@ -75,6 +76,8 @@ export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, 
   const { data: rows = null } = useDriversTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
@@ -92,15 +95,23 @@ export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, 
 
   const sortedStats = useMemo(() => {
     const officeStats = stats.filter(stat => stat.key === PAYROLL_OFFICE_KEY);
-    const copy = stats.filter(stat => stat.key !== PAYROLL_OFFICE_KEY);
-    copy.sort((a, b) => {
-      const av = sortValue(a, sortState.key);
-      const bv = sortValue(b, sortState.key);
-      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
-      return sortState.dir === 'asc' ? cmp : -cmp;
-    });
-    return [...copy, ...officeStats];
-  }, [sortState, stats]);
+    const schoolStats = stats.filter(stat => stat.key !== PAYROLL_OFFICE_KEY);
+    const grouped = buildGroupedRows(
+      schoolStats,
+      expandedGroups,
+      ['accruedAmount', 'advanceAmount', 'salaryAmount', 'paidAmount', 'remainingAmount', 'driverCount', 'microbusCount', 'minivanCount', 'transferCount', 'noTransferCount'],
+      (a, b) => {
+        const av = sortValue(a.data, sortState.key);
+        const bv = sortValue(b.data, sortState.key);
+        const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+        return sortState.dir === 'asc' ? cmp : -cmp;
+      },
+    );
+    const officeRows: GroupedRow<PayrollSchoolStat>[] = officeStats.map(stat => ({
+      key: stat.key, label: stat.label, color: stat.color, logo: stat.logo, isGroup: false, isChild: false, data: stat,
+    }));
+    return [...grouped, ...officeRows];
+  }, [sortState, stats, expandedGroups]);
 
   const handleSort = (key: SortKey) => {
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
@@ -124,11 +135,19 @@ export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, 
 
         <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12 }}>
           <ColumnCard sortKey="school" label="Школы" sortState={sortState} onSort={handleSort}>
-            {sortedStats.map((stat, index) => (
-              <div key={stat.key} onClick={() => onSelectSchool(stat.key)} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: '0 16px', cursor: 'pointer', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} />
-                <span style={{ fontSize: 14, fontWeight: 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{stat.label}</span>
-                <ChevronRight size={14} color="var(--text-2)" />
+            {sortedStats.map((row, index) => (
+              <div
+                key={row.key}
+                onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
+                style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}
+              >
+                <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
+                <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                {row.isGroup ? (
+                  row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
+                ) : (
+                  <ChevronRight size={14} color="var(--text-2)" />
+                )}
               </div>
             ))}
           </ColumnCard>
@@ -141,9 +160,9 @@ export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, 
             ['remainingAmount', 'Остаток'],
           ] as const).map(([key, label]) => (
             <ColumnCard key={key} sortKey={key} label={label} sortState={sortState} onSort={handleSort}>
-              {sortedStats.map((stat, index) => (
-                <div key={stat.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: stat[key] > 0 ? PAYROLL_COLORS[key] : undefined }}>{money(stat[key])}</span>
+              {sortedStats.map((row, index) => (
+                <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data[key] > 0 ? PAYROLL_COLORS[key] : undefined }}>{money(row.data[key])}</span>
                 </div>
               ))}
             </ColumnCard>
