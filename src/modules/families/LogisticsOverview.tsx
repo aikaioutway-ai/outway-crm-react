@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, ChevronUp, Inbox, School } from 'lucide-react';
-import { fetchV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
+import { FamilyListRow } from '../../services/crmV2Service';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from './ManagerOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -138,17 +139,11 @@ function ColumnCard({ sortKey, label, sortState, onSort, children }: {
 }
 
 export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange }: LogisticsOverviewProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(null);
+  const { data: rows = null } = useFamiliesTable(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
-
-  useEffect(() => {
-    fetchV2FamiliesTable()
-      .then(setRows)
-      .catch(() => setRows([]));
-  }, []);
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);

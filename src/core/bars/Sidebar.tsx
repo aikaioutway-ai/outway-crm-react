@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Wallet, Route, Receipt, UserCog, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3, ClipboardList, Headphones, Map } from 'lucide-react';
+import { Users, Wallet, Route, Receipt, UserCog, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3, Headphones } from 'lucide-react';
 import { UserRole } from '../../types';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'routes' | 'payroll' | 'expenses' | 'timesheet' | 'settings' | 'bank_statement';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'settings';
 
 interface SidebarProps {
   active: NavSection;
@@ -23,19 +23,17 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'drivers',   label: 'Водители',   icon: <UserCog size={18} /> },
   { key: 'dispatch',  label: 'Диспетчер',  icon: <Headphones size={18} /> },
-  { key: 'routes',    label: 'Маршруты',   icon: <Map size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
-  { key: 'timesheet',  label: 'Табель',    icon: <ClipboardList size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
 ];
 
 export function getAllowedSections(role: UserRole): NavSection[] {
-  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'routes', 'expenses', 'timesheet'];
-  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'routes', 'expenses', 'timesheet'];
-  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'routes', 'timesheet'];
+  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
   if (role === 'manager')      return ['families'];
-  if (role === 'logist')        return ['logistics', 'drivers', 'dispatch', 'routes'];
-  if (role === 'senior_logist') return ['logistics', 'drivers', 'dispatch', 'routes', 'timesheet'];
+  if (role === 'logist')        return ['logistics', 'drivers', 'dispatch'];
+  if (role === 'senior_logist') return ['logistics', 'drivers', 'dispatch', 'expenses'];
   if (role === 'cashier')       return ['cashier', 'expenses'];
   return ['families'];
 }

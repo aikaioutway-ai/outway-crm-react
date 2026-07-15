@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock3, QrCode, ReceiptText } from 'lucide-react';
-import { fetchPaymentsTable, getCachedPaymentsTable, PaymentTableRow } from '../../services/crmV2Service';
+import { PaymentTableRow } from '../../services/crmV2Service';
+import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
 import { CASHIER_PERIODS, currentCashierPeriodKey, SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from './ManagerOverview';
@@ -166,19 +167,11 @@ function PeriodBar({ periodKey, onPeriodKeyChange }: Pick<CashierOverviewProps, 
 }
 
 export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange }: CashierOverviewProps) {
-  const [rows, setRows] = useState<PaymentTableRow[] | null>(() => getCachedPaymentsTable());
+  const { data: rows = null } = usePaymentsTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'paymentsAmount', dir: 'desc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPaymentsTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);

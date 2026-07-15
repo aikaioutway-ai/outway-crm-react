@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { fetchPaymentsTable, getCachedPaymentsTable, PaymentTableRow } from '../../services/crmV2Service';
+import React, { useMemo } from 'react';
+import { PaymentTableRow } from '../../services/crmV2Service';
+import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
 
 interface CashierSchoolTransferDashboardProps {
@@ -39,15 +40,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
 }
 
 export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 78, selectedKey = '', onSelect }: CashierSchoolTransferDashboardProps) {
-  const [rows, setRows] = useState<PaymentTableRow[] | null>(() => getCachedPaymentsTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPaymentsTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: rows = null } = usePaymentsTable();
 
   const schoolRows = useMemo(() => (
     (rows ?? []).filter(row => rowMatchesSchool(row, schoolKey) && matchesPeriod(row, periodKey) && isPending(row))

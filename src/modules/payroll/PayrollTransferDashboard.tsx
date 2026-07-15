@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { fetchV2DriversTable, getCachedV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
+import React, { useMemo } from 'react';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
 import { payrollSchoolRows, payrollTransferNumbers } from './payrollStats';
 
@@ -26,15 +26,7 @@ function vehicleShort(vehicleType?: string): string {
 }
 
 export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: PayrollTransferDashboardProps) {
-  const [rows, setRows] = useState<V2DriverTableRow[] | null>(() => getCachedV2DriversTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2DriversTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: rows = null } = useDriversTable();
 
   const isOffice = schoolKey === PAYROLL_OFFICE_KEY;
   const schoolRows = useMemo(() => isOffice ? [] : payrollSchoolRows(rows ?? [], schoolKey), [isOffice, rows, schoolKey]);

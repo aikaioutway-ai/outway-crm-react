@@ -2,9 +2,10 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
-  SCHOOL_TABS, ZONE_COLOR, VT_LABEL
+  SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
 import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, createV2DriverAdvance, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { useFamiliesPage, useBranchStats } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
@@ -307,6 +308,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
 ];
 
 let familiesRowsCache: ChildRow[] | null = null;
+const EMPTY_CHILD_ROWS: ChildRow[] = [];
 
 const LOGISTICS_CHART_COLORS = [
   '#EF7168', '#C9C9C7', '#DD7FA9', '#C79B7D', '#74BE92',
@@ -1832,8 +1834,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   };
 
   useEffect(() => {
+    // «Заявки»/«Справочник» берут данные из useFamiliesPage (постранично) —
+    // полная загрузка тут не нужна и раньше приводила к двойному фетчу
+    // (полный rows для сводок + отдельная страница для таблицы). Полная
+    // загрузка запускается лениво, если mode позже сменится на режим,
+    // которому всё ещё нужен весь rows (Кассир/Логистика/Начисления/...).
+    if (isRequestsModule || mode === 'directory') return;
     load(!familiesRowsCache);
-  }, []);
+  }, [isRequestsModule, mode]);
 
   useEffect(() => {
     if (!restrictedSchoolKey) return;
@@ -2393,10 +2401,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
   }
 
-  const modeRows = useMemo(() => (
-    mode === 'logistics' || mode === 'directory' ? logisticsWorkRows(rows) : rows
-  ), [mode, rows]);
-
   // Если у сотрудника ограниченный доступ — фильтруем по его школам
   const hasSchoolRestriction = allowedSchools && allowedSchools.length > 0 && !allowedSchools.includes('ALL');
 
@@ -2407,14 +2411,26 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return allowedSchools!.some(k => k.toLowerCase() === tabKey.toLowerCase());
   }, [allowedSchools, hasSchoolRestriction]);
 
-  const rowMatchesSchoolTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
-    if (tabItem.key === 'ALL') return !hasSchoolRestriction || allowedSchools!.some(k => isTabAllowed(k));
-    if (!isTabAllowed(tabItem.key)) return false;
+  const matchesSingleTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
     if (row.branchFilter === tabItem.key) return true;
     if (tabItem.branches.length > 0) return tabItem.branches.includes(row.branchName);
     if (tabItem.codes.length > 0) return tabItem.codes.includes(row.schoolCode);
     return false;
-  }, [allowedSchools, hasSchoolRestriction, isTabAllowed]);
+  }, []);
+
+  const rowMatchesSchoolTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
+    if (tabItem.key === 'ALL') {
+      if (!hasSchoolRestriction) return true;
+      // «Все школы» для ограниченного сотрудника — не «вообще все», а объединение
+      // его собственных разрешённых школ (раньше тут была строка, всегда
+      // возвращавшая true для любого сотрудника с непустым allowedSchools).
+      return SCHOOL_TABS.some(t => (
+        allowedSchools!.some(k => k.toLowerCase() === t.key.toLowerCase()) && matchesSingleTab(row, t)
+      ));
+    }
+    if (!isTabAllowed(tabItem.key)) return false;
+    return matchesSingleTab(row, tabItem);
+  }, [allowedSchools, hasSchoolRestriction, isTabAllowed, matchesSingleTab]);
 
   const dashboardStatsForRows = useCallback((sourceRows: ChildRow[]) => {
     const actualRows = logisticsWorkRows(sourceRows);
@@ -2466,6 +2482,76 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, [dashboardMetric]);
 
   const tab = useMemo(() => SCHOOL_TABS.find(t => t.key === activeTab), [activeTab]);
+
+  // Постраничная загрузка для «Заявки»/«Справочник» — единственных режимов,
+  // переведённых на серверную пагинацию (RPC get_families_page). Остальные
+  // режимы (Кассир/Логистика/Начисления/Платежи) по-прежнему грузят rows
+  // целиком через load() — у них есть свои дашборды, посчитанные по полному
+  // массиву, которые пагинация молча сломала бы, начни они брать данные
+  // отсюда без отдельного агрегирующего запроса под каждый такой дашборд.
+  const isPagedMode = isRequestsModule || isDirectoryMode;
+  const branchStatsForPaging = useBranchStats();
+  const [familiesPageNumber, setFamiliesPageNumber] = useState(0);
+  const FAMILIES_PAGE_SIZE = 100;
+
+  const isUnrestrictedAll = (!tab || tab.key === 'ALL') && !hasSchoolRestriction;
+
+  const activeTabKeys = useMemo(() => {
+    const allTabKeys = SCHOOL_TABS.filter(t => t.key !== 'ALL').map(t => t.key);
+    const base = (!tab || tab.key === 'ALL') ? allTabKeys : [tab.key];
+    if (!hasSchoolRestriction) return base;
+    return base.filter(key => isTabAllowed(key));
+  }, [tab, hasSchoolRestriction, isTabAllowed]);
+
+  // Резолвим выбранную школьную вкладку (+ ограничение allowedSchools) в
+  // конкретные branch_id — RPC ничего не знает про SCHOOL_TABS/BRANCH_TO_FILTER,
+  // эта группировка остаётся клиентской (как и в get_branch_stats).
+  const branchIdsForPage = useMemo(() => {
+    if (isUnrestrictedAll) return null;
+    const branches = branchStatsForPaging.data ?? [];
+    const keySet = new Set(activeTabKeys);
+    return branches
+      .filter(b => keySet.has(getBranchFilter(b.branchName, b.branchCode)))
+      .map(b => b.branchId);
+  }, [isUnrestrictedAll, activeTabKeys, branchStatsForPaging.data]);
+
+  const branchesReadyForPaging = isUnrestrictedAll || branchStatsForPaging.isSuccess;
+
+  // quickChildStatus==='transfered' — синтетический статус (row.transferNumber
+  // непусто), а не значение колонки status в базе; переводим его отдельно в
+  // hasTransfer, не путая с реальными статусами ('new'/'rejected'/...).
+  const pagedChildStatus = (quickChildStatus && quickChildStatus !== 'transfered') ? quickChildStatus : null;
+  const pagedHasTransfer = quickTransfer === 'empty' ? false : (quickChildStatus === 'transfered' ? true : null);
+  const pagedTransferNumber = quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive'
+    ? Number(quickTransfer) : null;
+
+  const familiesPageQuery = useFamiliesPage({
+    branchIds: branchIdsForPage,
+    search: search || undefined,
+    childStatus: pagedChildStatus,
+    hasTransfer: pagedHasTransfer,
+    transferNumber: pagedTransferNumber,
+    excludeRejectedChildren: isDirectoryMode,
+    page: familiesPageNumber,
+    pageSize: FAMILIES_PAGE_SIZE,
+  }, { enabled: isPagedMode && branchesReadyForPaging });
+
+  useEffect(() => {
+    setFamiliesPageNumber(0);
+  }, [mode, activeTab, search, quickChildStatus, quickTransfer]);
+
+  const pagedRows = familiesPageQuery.data?.rows ?? EMPTY_CHILD_ROWS;
+  const pagedTotalFamilies = familiesPageQuery.data?.totalFamilies ?? 0;
+  const pagedTotalChildren = familiesPageQuery.data?.totalChildren ?? 0;
+  const pagedTotalWithTransfer = familiesPageQuery.data?.totalWithTransfer ?? 0;
+  const pagedTotalWithoutTransfer = familiesPageQuery.data?.totalWithoutTransfer ?? 0;
+  const pagedTotalPages = Math.max(1, Math.ceil(pagedTotalFamilies / FAMILIES_PAGE_SIZE));
+
+  const modeRows = useMemo(() => {
+    if (isPagedMode) return pagedRows;
+    return mode === 'logistics' ? logisticsWorkRows(rows) : rows;
+  }, [isPagedMode, pagedRows, mode, rows]);
+
   const matchesSchool = useCallback((r: ChildRow) => {
     if (!tab) return true;
     return rowMatchesSchoolTab(r, tab);
@@ -2884,13 +2970,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     { label: 'Должники', value: String(dashboardSummaryStats.debtorsCount), metric: 'debtorsCount' as LogisticsDashboardMetric },
     { label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum), metric: 'debtSum' as LogisticsDashboardMetric },
   ];
-  const directoryFamilyCount = new Set(dashboardSummaryRows.map(row => row.familyId).filter(Boolean)).size;
+  // «Справочник» переведён на серверную пагинацию (useFamiliesPage) — его
+  // сводка берёт готовые агрегаты из того же RPC-ответа (total_children/
+  // total_families/total_with_transfer/total_without_transfer, посчитанные
+  // по ВСЕЙ отфильтрованной выборке, а не только по текущей странице),
+  // а не считает по dashboardSummaryRows/rows, которые для этого режима
+  // больше не грузятся целиком.
   const directoryDashboardSummaryItems = [
     { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-    { label: 'К-во', value: String(dashboardSummaryStats.studentCount), metric: 'count' as LogisticsDashboardMetric },
-    { label: 'Семьи', value: String(directoryFamilyCount) },
-    { label: 'С трансфером', value: String(dashboardSummaryRows.filter(row => row.transferNumber).length) },
-    { label: 'Без трансфера', value: String(dashboardSummaryRows.filter(row => !row.transferNumber).length) },
+    { label: 'К-во', value: String(pagedTotalChildren), metric: 'count' as LogisticsDashboardMetric },
+    { label: 'Семьи', value: String(pagedTotalFamilies) },
+    { label: 'С трансфером', value: String(pagedTotalWithTransfer) },
+    { label: 'Без трансфера', value: String(pagedTotalWithoutTransfer) },
   ];
   const allowedMetrics = METRICS_BY_ROLE[userRole] ?? METRICS_BY_ROLE.admin;
   const visibleDashboardMetrics = LOGISTICS_DASHBOARD_METRICS.filter(m => allowedMetrics.includes(m.key));
@@ -2907,8 +2998,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     ? 'count' as LogisticsDashboardMetric
     : (allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]);
   const dashboardDisplayMetricOption = dashboardMetricOptions.find(option => option.key === dashboardDisplayMetric);
-  const dashboardPrimaryValue = isRequestsModule
-    ? dashboardSchoolRows.filter(row => row.status === 'new').length
+  const dashboardPrimaryValue = isRequestsModule || isDirectoryMode
+    ? pagedTotalChildren
     : isDriversModule
     ? new Set(logisticsWorkRows(dashboardSummaryRows).map(row => row.driverId).filter(Boolean)).size
     : dashboardMetricValue(dashboardSummaryStats);
@@ -2945,7 +3036,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       ];
     })() : isRequestsModule ? [
       { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-      { label: 'Новые', value: String(dashboardSchoolRows.filter(row => row.status === 'new').length) },
+      { label: 'Новые', value: String(pagedTotalChildren) },
     ] : isDirectoryMode ? directoryDashboardSummaryItems : mode === 'debtors' ? debtorsDashboardSummaryItems : isChargesMode ? chargesDashboardSummaryItems : isCashierMode ? [
       { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
       { label: 'На проверке', value: String(periodCashierDashboardRows.length), neutral: true },
@@ -4194,6 +4285,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }
                 if (quickTransfer === 'empty' && r.transferNumber) return false;
                 if (quickTransfer && quickTransfer !== 'empty' && r.transferNumber !== quickTransfer) return false;
+                if (!paymentRowMatchesPeriod(r, paymentsPeriodKey)) return false;
                 if (dashboardMetric === 'pendingSum' || dashboardMetric === 'pendingAmount') {
                   if (r.status !== 'pending') return false;
                 }
@@ -4241,7 +4333,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               data={filteredSorted}
               rowKey="rowId"
               storageKey={tableStorageKey}
-              loading={loading}
+              loading={isPagedMode ? familiesPageQuery.isPending : loading}
               emptyText="Заявок не найдено"
               canManageProperties={false}
               showProperties={columnsOpen ?? false}
@@ -4262,6 +4354,23 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       style={{ width: '100%', height: 26, padding: '0 10px 0 30px', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, fontWeight: 600, background: '#fff', outline: 'none', color: 'var(--text)' }}
                     />
                   </div>
+                  {isPagedMode && pagedTotalFamilies > 0 && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>
+                      <button
+                        onClick={() => setFamiliesPageNumber(p => Math.max(0, p - 1))}
+                        disabled={familiesPageNumber === 0}
+                        style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber === 0 ? 'default' : 'pointer', opacity: familiesPageNumber === 0 ? 0.4 : 1 }}
+                      >‹</button>
+                      <span>
+                        семьи {familiesPageNumber * FAMILIES_PAGE_SIZE + 1}–{Math.min((familiesPageNumber + 1) * FAMILIES_PAGE_SIZE, pagedTotalFamilies)} из {pagedTotalFamilies}
+                      </span>
+                      <button
+                        onClick={() => setFamiliesPageNumber(p => Math.min(pagedTotalPages - 1, p + 1))}
+                        disabled={familiesPageNumber >= pagedTotalPages - 1}
+                        style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber >= pagedTotalPages - 1 ? 'default' : 'pointer', opacity: familiesPageNumber >= pagedTotalPages - 1 ? 0.4 : 1 }}
+                      >›</button>
+                    </div>
+                  )}
                 </div>
               )}
               toolbarRightExtra={(

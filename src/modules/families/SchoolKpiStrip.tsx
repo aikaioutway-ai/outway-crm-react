@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { CheckCircle2, Inbox, Landmark, Receipt, Users, Wallet } from 'lucide-react';
-import { fetchV2FamiliesTableCached, getCachedV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
-import { computeSchoolStats, KpiChip, KPI_COLORS, SchoolAvatar } from './ManagerOverview';
+import { useBranchStats } from '../../hooks/useCrmQueries';
+import { computeSchoolStatsFromBranches, KpiChip, KPI_COLORS, SchoolAvatar } from './ManagerOverview';
 import { money } from '../../utils/pricing';
 
 interface SchoolKpiStripProps {
@@ -10,21 +10,13 @@ interface SchoolKpiStripProps {
 }
 
 export default function SchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: SchoolKpiStripProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(() => getCachedV2FamiliesTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2FamiliesTableCached()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: branches } = useBranchStats();
 
   const stat = useMemo(() => (
-    rows ? computeSchoolStats(rows).find(s => s.key === schoolKey) : undefined
-  ), [rows, schoolKey]);
+    branches ? computeSchoolStatsFromBranches(branches).find(s => s.key === schoolKey) : undefined
+  ), [branches, schoolKey]);
 
-  if (rows === null || !stat) return null;
+  if (!stat) return null;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>

@@ -15,7 +15,7 @@ import DriversSchoolKpiStrip from './modules/drivers/DriversSchoolKpiStrip';
 import DriversTransferDashboard from './modules/drivers/DriversTransferDashboard';
 import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
-import { fetchV2FamiliesTable } from './services/crmV2Service';
+import { useFamiliesTable } from './hooks/useCrmQueries';
 import { currentCashierPeriodKey } from './modules/families/constants';
 import type { PayrollSchoolTab } from './modules/expenses/timesheetTypes';
 import { UserRole } from './types';
@@ -26,7 +26,6 @@ import './index.css';
 const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
-const TimesheetModule = lazy(() => import('./modules/expenses/TimesheetModule'));
 const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
 
 function SectionLoading() {
@@ -39,7 +38,6 @@ function SectionLoading() {
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
   dispatch: 'Диспетчер — в разработке',
-  routes: 'Маршруты — в разработке',
   settings:  'Настройки — в разработке',
 };
 
@@ -66,7 +64,6 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => getSavedUser());
   const currentUserRole = currentUser?.role ?? getSavedRole();
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole)[0]);
-  const [badges, setBadges] = useState<Partial<Record<NavSection, number>>>({});
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierTab, setCashierTab] = useState<'payments' | 'manager_payments' | 'statement'>('payments');
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
@@ -75,8 +72,6 @@ export default function App() {
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsView, setLogisticsView] = useState<'table' | 'map'>('table');
-  const [routesSchoolKey, setRoutesSchoolKey] = useState<string | null>(null);
-  const [routesTransferFilter, setRoutesTransferFilter] = useState('');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [expensesTab, setExpensesTab] = useState<'payroll' | 'advances' | 'expenses'>('payroll');
@@ -109,7 +104,6 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
-    setBadges({});
   };
 
   useEffect(() => {
@@ -131,8 +125,6 @@ export default function App() {
     setLogisticsSchoolKey(null);
     setLogisticsTransferFilter('');
     setLogisticsView('table');
-    setRoutesSchoolKey(null);
-    setRoutesTransferFilter('');
     setDriversSchoolKey(null);
     setDriversTransferFilter('');
     setPayrollSchoolKey(null);
@@ -150,10 +142,6 @@ export default function App() {
     setLogisticsTransferFilter('');
     setLogisticsView('table');
   }, [logisticsSchoolKey]);
-
-  useEffect(() => {
-    setRoutesTransferFilter('');
-  }, [routesSchoolKey]);
 
   useEffect(() => {
     setDriversTransferFilter('');
@@ -177,17 +165,10 @@ export default function App() {
     });
   }, [currentUser]);
 
-  useEffect(() => {
-    if (!currentUser) return;
-    fetchV2FamiliesTable()
-      .then(rows => {
-        const logisticsChildren = rows.filter(row => row.status !== 'new' && row.status !== 'rejected').length;
-        setBadges({
-          logistics: logisticsChildren,
-        });
-      })
-      .catch(() => setBadges({}));
-  }, [currentUser]);
+  const badgesQuery = useFamiliesTable(true, { enabled: !!currentUser });
+  const badges: Partial<Record<NavSection, number>> = currentUser && badgesQuery.data
+    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length }
+    : {};
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
@@ -518,47 +499,6 @@ export default function App() {
               {PLACEHOLDERS.dispatch}
             </div>
           </div>
-        ) : section === 'routes' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                {sectionLabel('Маршруты')}
-                {routesSchoolKey && (
-                  <button onClick={() => setRoutesSchoolKey(null)} style={tabStyle(false)}>
-                    ← Все школы
-                  </button>
-                )}
-                {extraTabs(true)}
-              </div>
-            </div>
-            {routesSchoolKey ? (
-              <>
-              <LogisticsSchoolKpiStrip
-                schoolKey={routesSchoolKey}
-                rightReserveWidth={schoolSidebarReserveWidth}
-              />
-              <LogisticsSchoolTransferDashboard
-                schoolKey={routesSchoolKey}
-                rightReserveWidth={schoolSidebarReserveWidth}
-                selectedKey={routesTransferFilter}
-                onSelect={setRoutesTransferFilter}
-              />
-              <LogisticsMapView
-                schoolKey={routesSchoolKey}
-                transferFilter={routesTransferFilter}
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                onSelectSchool={setRoutesSchoolKey}
-                onSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
-              </>
-            ) : (
-              <LogisticsOverview
-                onSelectSchool={setRoutesSchoolKey}
-                onSidebarWidthChange={setSchoolSidebarReserveWidth}
-              />
-            )}
-          </div>
         ) : section === 'expenses' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
@@ -611,18 +551,6 @@ export default function App() {
               </div>
             )}
           </div>
-        ) : section === 'timesheet' ? (
-          <TimesheetModule
-            userRole={currentUserRole}
-            userName={currentUser?.name}
-            allowedSchools={currentUser?.schoolKeys}
-            adminFiltersOpen={adminFiltersOpen}
-            onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-            columnsOpen={columnsOpen}
-            onColumnsOpenChange={setColumnsOpen}
-            rightReserveWidth={schoolSidebarReserveWidth}
-            onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-          />
         ) : section === 'employees' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>

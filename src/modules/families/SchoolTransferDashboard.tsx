@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { fetchV2FamiliesTableCached, getCachedV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
+import React from 'react';
+import { FamilyListRow } from '../../services/crmV2Service';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
 
 interface SchoolTransferDashboardProps {
   schoolKey: string;
@@ -38,15 +39,9 @@ function compactMoney(value: number): string {
 }
 
 export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: SchoolTransferDashboardProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(() => getCachedV2FamiliesTable());
+  const { data: rows } = useFamiliesTable(false);
 
-  useEffect(() => {
-    fetchV2FamiliesTableCached()
-      .then(setRows)
-      .catch(() => setRows(prev => prev ?? []));
-  }, []);
-
-  if (rows === null) return null;
+  if (!rows) return null;
 
   const allSchoolRows = rows.filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');

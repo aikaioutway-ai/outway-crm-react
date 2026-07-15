@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Banknote, CheckCircle2, Clock3, QrCode, ReceiptText } from 'lucide-react';
-import { fetchPaymentsTable, getCachedPaymentsTable, PaymentTableRow } from '../../services/crmV2Service';
+import { PaymentTableRow } from '../../services/crmV2Service';
+import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from './ManagerOverview';
@@ -63,15 +64,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
 }
 
 export default function CashierSchoolKpiStrip({ schoolKey, periodKey, rightReserveWidth = 78 }: CashierSchoolKpiStripProps) {
-  const [rows, setRows] = useState<PaymentTableRow[] | null>(() => getCachedPaymentsTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchPaymentsTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: rows = null } = usePaymentsTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const stats = useMemo(() => {

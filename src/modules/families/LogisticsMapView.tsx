@@ -2,12 +2,12 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchV2Branches,
   fetchV2Family,
-  fetchV2FamiliesTableCached,
-  getCachedV2FamiliesTable,
   updateV2ChildRoute,
   FamilyListRow,
   V2BranchOption,
 } from '../../services/crmV2Service';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { queryClient, QK } from '../../services/queryClient';
 import { Family, VehicleType } from '../../types';
 import { loadYandexMaps } from '../../utils/yandexMaps';
 import { VEHICLE_COLOR } from './LogisticsSchoolTransferDashboard';
@@ -65,7 +65,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
 }
 
 export default function LogisticsMapView({ schoolKey, transferFilter, userRole, userName, onSelectSchool, onSidebarWidthChange }: LogisticsMapViewProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(() => getCachedV2FamiliesTable());
+  const { data: rows = null } = useFamiliesTable(false);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -92,9 +92,6 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
   })), [schoolKey]);
 
   useEffect(() => {
-    fetchV2FamiliesTableCached()
-      .then(setRows)
-      .catch(() => setRows(prev => prev ?? []));
     fetchV2Branches()
       .then(setBranches)
       .catch(() => setBranches([]));
@@ -174,7 +171,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
               stopNumber: stopValue ? Number(stopValue) : undefined,
               timeMorning: row.timeMorning ?? undefined,
             });
-            setRows(prev => prev?.map(r => (
+            queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable(false), (prev: FamilyListRow[] | undefined) => prev?.map((r: FamilyListRow) => (
               r.rowId === childId ? { ...r, transferNumber: transferValue || null, stopNumber: stopValue || null } : r
             )) ?? prev);
             if (statusEl) statusEl.textContent = 'Сохранено ✓';
@@ -347,7 +344,6 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
               family={openFamily}
               userRole={userRole}
               userName={userName}
-              onUpdated={() => { fetchV2FamiliesTableCached().then(setRows).catch(() => {}); }}
               onClose={() => setOpenFamily(null)}
             />
           </div>

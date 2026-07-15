@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
 import { safeStorageFileName, uploadToBucket } from './storage';
+import { queryClient, QK } from './queryClient';
 import {
   Charge,
   Child,
@@ -10,6 +11,16 @@ import {
   PaymentStatus,
   PaymentType,
 } from '../types';
+
+/** Платежи/начисления меняют total_paid/debt/pending в v2_families_summary —
+ * сбрасываем те же ключи кэша, что и мутации семей/детей. */
+function invalidateFinanceCache(): void {
+  queryClient.invalidateQueries({ queryKey: QK.branchStats });
+  queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
+  queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
+  queryClient.invalidateQueries({ queryKey: QK.paymentsTable });
+  queryClient.invalidateQueries({ queryKey: QK.cashierPaymentsTable });
+}
 
 function toPaymentStatus(status: string): PaymentStatus {
   if (status === 'paid') return 'Оплачено';
@@ -188,6 +199,7 @@ export async function createChargesForPeriod(
     p_wallet_type: periodMonth === 0 || periodMonth === 5 ? 'deposit' : 'main',
     p_created_by: 'CRM',
   });
+  invalidateFinanceCache();
 }
 
 export async function updateCharge(chargeId: string, updates: Partial<Charge>): Promise<void> {
@@ -199,6 +211,7 @@ export async function updateCharge(chargeId: string, updates: Partial<Charge>): 
       p_adjusted_by: 'CRM',
     });
     if (error) throw new Error(error.message);
+    invalidateFinanceCache();
   }
 
   const row: Record<string, unknown> = {};
@@ -209,11 +222,13 @@ export async function updateCharge(chargeId: string, updates: Partial<Charge>): 
   if (Object.keys(row).length === 0) return;
   const { error } = await supabase.from('v2_charges').update(row).eq('id', chargeId);
   if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }
 
 export async function deleteCharge(chargeId: string): Promise<void> {
   const { error } = await supabase.from('v2_charges').delete().eq('id', chargeId);
   if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }
 
 function fromReviewStatus(status: PaymentReviewStatus): string {
@@ -245,6 +260,7 @@ export async function updateFamilyPayment(paymentId: string, updates: {
   if (Object.keys(row).length === 0) return;
   const { error } = await supabase.from('v2_payments').update(row).eq('id', paymentId);
   if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }
 
 export async function cancelConfirmedPayment(paymentId: string, reason: string, cancelledBy: string): Promise<void> {
@@ -254,6 +270,7 @@ export async function cancelConfirmedPayment(paymentId: string, reason: string, 
     p_cancelled_by: cancelledBy,
   });
   if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }
 
 export async function deleteFamilyPayment(payment: FamilyPayment): Promise<void> {
@@ -262,6 +279,7 @@ export async function deleteFamilyPayment(payment: FamilyPayment): Promise<void>
   }
   const { error } = await supabase.from('v2_payments').delete().eq('id', payment.id);
   if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }
 
 export async function createFamilyPayment(params: {
@@ -298,6 +316,7 @@ export async function createFamilyPayment(params: {
 
   if (error) throw new Error(error.message);
 
+  invalidateFinanceCache();
   return mapPayment(data);
 }
 
@@ -325,6 +344,7 @@ export async function confirmFamilyPayment(params: {
     p_actual_payment_date: params.actualPaymentDate ?? params.payment.actualPaymentDate ?? params.payment.paymentDate,
   });
   if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }
 
 /**
@@ -368,6 +388,7 @@ export async function unconfirmFamilyPayment(payment: FamilyPayment): Promise<vo
     p_wallet_type: 'main',
     p_created_by: 'CRM',
   });
+  invalidateFinanceCache();
 }
 
 // Учебный год: сентябрь(9)–май(5)

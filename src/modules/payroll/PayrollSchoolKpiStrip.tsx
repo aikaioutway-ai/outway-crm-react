@@ -1,6 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Banknote, CheckCircle2, ChevronRight, ReceiptText, WalletCards } from 'lucide-react';
-import { fetchV2DriversTable, getCachedV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
 import { money } from '../../utils/pricing';
 import { computePayrollStats, PAYROLL_COLORS, PayrollMoneySummary } from './payrollStats';
@@ -13,15 +13,7 @@ interface PayrollSchoolKpiStripProps {
 }
 
 export default function PayrollSchoolKpiStrip({ schoolKey, rightReserveWidth = 78, summaryBySchool = {}, leadingContent }: PayrollSchoolKpiStripProps) {
-  const [rows, setRows] = useState<V2DriverTableRow[] | null>(() => getCachedV2DriversTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2DriversTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: rows = null } = useDriversTable();
 
   const stat = useMemo(() => (
     rows ? computePayrollStats(rows, summaryBySchool).find(item => item.key === schoolKey) : undefined

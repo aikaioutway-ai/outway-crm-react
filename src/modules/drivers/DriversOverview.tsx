@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, ChevronUp, FileWarning, School, UserCheck, UserX } from 'lucide-react';
-import { fetchV2DriversTable, getCachedV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
+import { V2DriverTableRow } from '../../services/crmV2Service';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from '../families/constants';
 import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
@@ -144,19 +145,11 @@ function ColumnCard({ sortKey, label, sortState, onSort, children }: {
 }
 
 export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }: DriversOverviewProps) {
-  const [rows, setRows] = useState<V2DriverTableRow[] | null>(() => getCachedV2DriversTable());
+  const { data: rows = null } = useDriversTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2DriversTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);

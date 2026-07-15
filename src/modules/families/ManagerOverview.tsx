@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Inbox, Landmark, Receipt, Search, Users, Wallet, X } from 'lucide-react';
-import { fetchChargesForPeriod, fetchV2FamiliesTable, FamilyListRow, PeriodChargeStats } from '../../services/crmV2Service';
-import { ALL_PERIODS, SCHOOL_TABS } from './constants';
+import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
+import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
+import { ALL_PERIODS, SCHOOL_TABS, getBranchFilter } from './constants';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
@@ -104,6 +105,38 @@ export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
       pendingSum: families.reduce((sum, f) => sum + f.pendingPayment, 0),
       debtSum: families.reduce((sum, f) => sum + Math.max(0, f.debtAmount), 0),
       balance: families.reduce((sum, f) => sum + f.balance, 0),
+    };
+  });
+}
+
+/** То же самое, что computeSchoolStats, но источник — агрегаты по филиалам
+ * из RPC get_branch_stats (BranchStat[], 20-40 строк), а не полная таблица
+ * семей/детей. Считает идентично: складывает branch-агрегаты, попавшие в
+ * одну вкладку школы через ту же группировку getBranchFilter. */
+export function computeSchoolStatsFromBranches(branches: BranchStat[]): SchoolStat[] {
+  const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
+  const byTab = new Map<string, BranchStat[]>();
+  branches.forEach(b => {
+    const tabKey = getBranchFilter(b.branchName, b.branchCode);
+    if (!byTab.has(tabKey)) byTab.set(tabKey, []);
+    byTab.get(tabKey)!.push(b);
+  });
+
+  return schools.map((tab, index) => {
+    const items = byTab.get(tab.key) ?? [];
+    return {
+      key: tab.key,
+      label: tab.label,
+      color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
+      logo: tab.logo,
+      childrenCount: items.reduce((sum, b) => sum + b.childrenCount, 0),
+      newRequests: items.reduce((sum, b) => sum + b.newRequests, 0),
+      charged: items.reduce((sum, b) => sum + b.charged, 0),
+      paid: items.reduce((sum, b) => sum + b.paid, 0),
+      pendingCount: items.reduce((sum, b) => sum + b.pendingCount, 0),
+      pendingSum: items.reduce((sum, b) => sum + b.pendingSum, 0),
+      debtSum: items.reduce((sum, b) => sum + b.debtSum, 0),
+      balance: items.reduce((sum, b) => sum + b.balance, 0),
     };
   });
 }
@@ -308,8 +341,6 @@ function ManagerSearch({ rows, onOpenFamily }: { rows: FamilyListRow[]; onOpenFa
 }
 
 export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, onOpenFamily }: ManagerOverviewProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(null);
-  const [loadError, setLoadError] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [periodKey, setPeriodKey] = useState('ALL');
@@ -317,13 +348,14 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2FamiliesTable()
-      .then(next => { if (!cancelled) { setRows(next); setLoadError(false); } })
-      .catch(() => { if (!cancelled) { setRows(prev => prev ?? []); setLoadError(true); } });
-    return () => { cancelled = true; };
-  }, []);
+  // Стандартный вид («За всё время») — лёгкий RPC-агрегат по филиалам.
+  const branchStatsQuery = useBranchStats();
+  // Полная таблица семей нужна только для разбивки по конкретному периоду
+  // (charged/paid по месяцу привязаны к семье, а не к филиалу) — грузим её
+  // лениво, только когда period выбран, а не всегда при заходе на экран.
+  const familiesQuery = useFamiliesTable(true, { enabled: periodKey !== 'ALL' });
+  const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
+  const loadError = branchStatsQuery.isError;
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
@@ -343,7 +375,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
     return () => { cancelled = true; };
   }, [periodKey]);
 
-  const stats = useMemo(() => computeSchoolStats(rows ?? []), [rows]);
+  const stats = useMemo(() => computeSchoolStatsFromBranches(branchStatsQuery.data ?? []), [branchStatsQuery.data]);
 
   const displayStats = useMemo(() => {
     if (periodKey === 'ALL' || periodStats.length === 0) return stats;
@@ -392,7 +424,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
   };
 
-  if (rows === null) {
+  if (branchStatsQuery.isPending) {
     return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
   }
 

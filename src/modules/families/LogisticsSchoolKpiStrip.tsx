@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Bus, Car, Inbox } from 'lucide-react';
-import { fetchV2FamiliesTableCached, getCachedV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
+import { FamilyListRow } from '../../services/crmV2Service';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from './ManagerOverview';
 
@@ -47,13 +48,7 @@ function transferStats(rows: FamilyListRow[]) {
 }
 
 export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: LogisticsSchoolKpiStripProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(() => getCachedV2FamiliesTable());
-
-  useEffect(() => {
-    fetchV2FamiliesTableCached()
-      .then(setRows)
-      .catch(() => setRows(prev => prev ?? []));
-  }, []);
+  const { data: rows } = useFamiliesTable(false);
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const stats = useMemo(() => {
@@ -64,7 +59,7 @@ export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth =
     };
   }, [rows, schoolKey]);
 
-  if (!school || rows === null) return null;
+  if (!school || !rows) return null;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>

@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { fetchV2FamiliesTableCached, getCachedV2FamiliesTable, FamilyListRow } from '../../services/crmV2Service';
+import React, { useMemo } from 'react';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
 
 interface LogisticsSchoolTransferDashboardProps {
   schoolKey: string;
@@ -24,20 +24,14 @@ function vehicleShort(vehicleType?: string): string {
 }
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
-  const [rows, setRows] = useState<FamilyListRow[] | null>(() => getCachedV2FamiliesTable());
-
-  useEffect(() => {
-    fetchV2FamiliesTableCached()
-      .then(setRows)
-      .catch(() => setRows(prev => prev ?? []));
-  }, []);
+  const { data: rows } = useFamiliesTable(false);
 
   const allSchoolRows = useMemo(() => (
     (rows ?? []).filter(row => row.branchFilter === schoolKey)
   ), [rows, schoolKey]);
   const schoolRows = useMemo(() => allSchoolRows.filter(row => row.status !== 'rejected'), [allSchoolRows]);
 
-  if (rows === null) return null;
+  if (!rows) return null;
 
   const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, i) => {
     const number = String(i + 1);

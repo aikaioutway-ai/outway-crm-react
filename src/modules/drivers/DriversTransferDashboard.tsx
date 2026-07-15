@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { fetchV2DriversTable, getCachedV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
+import React, { useMemo } from 'react';
+import { V2DriverTableRow } from '../../services/crmV2Service';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS, VT_LABEL } from '../families/constants';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from './DriversOverview';
 
@@ -42,15 +43,7 @@ function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string)
 }
 
 export default function DriversTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: DriversTransferDashboardProps) {
-  const [rows, setRows] = useState<V2DriverTableRow[] | null>(() => getCachedV2DriversTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2DriversTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: rows = null } = useDriversTable();
 
   const isReserve = schoolKey === DRIVER_RESERVE_KEY;
   const schoolRows = useMemo(() => (

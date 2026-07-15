@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { Bus, Car, FileWarning, UserCheck, UserX } from 'lucide-react';
-import { fetchV2DriversTable, getCachedV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
+import { V2DriverTableRow } from '../../services/crmV2Service';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from '../families/constants';
 import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from './DriversOverview';
@@ -29,15 +30,7 @@ function driverMatchesSchool(driver: V2DriverTableRow, schoolKey: string): boole
 }
 
 export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: DriversSchoolKpiStripProps) {
-  const [rows, setRows] = useState<V2DriverTableRow[] | null>(() => getCachedV2DriversTable());
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2DriversTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
+  const { data: rows = null } = useDriversTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const isReserve = schoolKey === DRIVER_RESERVE_KEY;

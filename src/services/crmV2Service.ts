@@ -2,6 +2,16 @@ import { supabase } from './supabase';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+import { queryClient, QK } from './queryClient';
+
+/** Точечный сброс кэша семей/детей после мутации — вызывается вместо
+ * полной перезагрузки CRM. React Query сам решит, кому из подписанных
+ * компонентов сейчас нужен повторный запрос. */
+export function invalidateFamiliesCache(): void {
+  queryClient.invalidateQueries({ queryKey: QK.branchStats });
+  queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
+  queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
+}
 
 function derivePaymentStatus(totalCharged: number, totalPaid: number, debtAmount: number): 'no_charges' | 'paid' | 'partial' | 'debt' {
   if (totalCharged === 0) return 'no_charges';
@@ -465,16 +475,8 @@ export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, an
 
 const familiesTableInflight: Partial<Record<'withFinance' | 'base', Promise<FamilyListRow[]>>> = {};
 
-let cachedBaseFamilies: FamilyListRow[] | null = null;
-
-export function getCachedV2FamiliesTable(): FamilyListRow[] | null {
-  return cachedBaseFamilies;
-}
-
 export async function fetchV2FamiliesTableCached(): Promise<FamilyListRow[]> {
-  const rows = await fetchV2FamiliesTable(false);
-  cachedBaseFamilies = rows;
-  return rows;
+  return fetchV2FamiliesTable(false);
 }
 
 export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
@@ -593,6 +595,143 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
   return request;
 }
 
+export interface FamiliesPageParams {
+  branchIds?: string[] | null;
+  search?: string;
+  childStatus?: string | null;
+  hasTransfer?: boolean | null;
+  transferNumber?: number | null;
+  excludeRejectedChildren?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface FamiliesPageResult {
+  rows: FamilyListRow[];
+  totalFamilies: number;
+  totalChildren: number;
+  totalWithTransfer: number;
+  totalWithoutTransfer: number;
+}
+
+const FAMILIES_PAGE_SIZE_DEFAULT = 100;
+
+/** Постраничная загрузка таблицы семей через RPC get_families_page —
+ * замена fetchV2FamiliesTable() для «Справочник»/«Заявки»: браузер получает
+ * одну страницу семей (обычно 100), а не все 3000+. Строит FamilyListRow[]
+ * из тех же сырых полей, что и fetchV2FamiliesTable, чтобы остальной код
+ * (колонки, карточка семьи, экспорт) не заметил разницы в форме данных. */
+export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Promise<FamiliesPageResult> {
+  const pageSize = params.pageSize ?? FAMILIES_PAGE_SIZE_DEFAULT;
+  const page = params.page ?? 0;
+  const { data, error } = await supabase.rpc('get_families_page', {
+    p_branch_ids: params.branchIds && params.branchIds.length > 0 ? params.branchIds : null,
+    p_search: params.search || null,
+    p_child_status: params.childStatus || null,
+    p_has_transfer: params.hasTransfer ?? null,
+    p_transfer_number: params.transferNumber ?? null,
+    p_exclude_rejected_children: params.excludeRejectedChildren ?? false,
+    p_limit: pageSize,
+    p_offset: page * pageSize,
+  });
+  if (error) throw new Error(error.message);
+
+  const branches = await fetchV2Branches();
+  const branchById: Record<string, typeof branches[number]> = {};
+  branches.forEach(b => { branchById[b.id] = b; });
+
+  const rowsByFamily: Record<string, any[]> = {};
+  (data ?? []).forEach((row: any) => {
+    if (!rowsByFamily[row.family_id]) rowsByFamily[row.family_id] = [];
+    rowsByFamily[row.family_id].push(row);
+  });
+
+  const rows: FamilyListRow[] = [];
+  let familyIndex = 0;
+  let totalFamilies = 0;
+  let totalChildren = 0;
+  let totalWithTransfer = 0;
+  let totalWithoutTransfer = 0;
+  Object.values(rowsByFamily).forEach(familyRows => {
+    const first = familyRows[0];
+    totalFamilies = Number(first.total_families ?? 0);
+    totalChildren = Number(first.total_children ?? 0);
+    totalWithTransfer = Number(first.total_with_transfer ?? 0);
+    totalWithoutTransfer = Number(first.total_without_transfer ?? 0);
+    const totalCharged = Number(first.total_charged ?? 0);
+    const totalPaid = Number(first.total_paid ?? 0);
+    const debtAmount = Number(first.debt_amount ?? 0);
+    const paymentStatus = derivePaymentStatus(totalCharged, totalPaid, debtAmount);
+
+    familyRows.forEach((child: any, idx: number) => {
+      const hasChild = child.child_id != null;
+      const branch = child.branch_id ? branchById[String(child.branch_id)] : null;
+      const branchCode = branch?.code ?? child.branch_code ?? '';
+      const schoolCode = normalizeSchoolCode(branchCode);
+      const vt = normalizeVehicle(child.vehicle_type);
+
+      rows.push({
+        rowId: hasChild ? String(child.child_id) : `${child.family_id}_empty`,
+        familyId: String(child.family_id),
+        familyIndex,
+        isFirstChild: idx === 0,
+        childName: child.child_name ?? '',
+        childClass: child.class_name ?? '',
+        parentName: child.parent_name ?? '',
+        phone: child.phone ?? '',
+        secondPhone: child.second_phone ?? '',
+        contactName: child.contact_name ?? '',
+        contactPhone: child.contact_phone ?? '',
+        schoolId: child.school_id ?? null,
+        branchId: child.branch_id ?? null,
+        schoolCode,
+        branchName: branch?.name ?? child.branch_name ?? branchCode,
+        branchShort: branch?.shortName ?? child.branch_short ?? branchCode,
+        branchFilter: getBranchFilter(branch?.name ?? child.branch_name ?? null, branchCode),
+        streetAddress: stripAddress(child.address ?? ''),
+        distanceKm: child.distance_km == null ? null : Number(child.distance_km),
+        zone: normalizeZone(child.zone, 'A'),
+        vehicleType: vt,
+        vehicleLabel: '',
+        monthlyPrice: Number(child.final_price ?? child.base_price ?? 0),
+        status: mapChildStatus(child.child_status),
+        paymentStatus,
+        transferNumber: child.transfer_number ? String(child.transfer_number) : null,
+        driverId: child.driver_id ? String(child.driver_id) : null,
+        stopNumber: child.stop_order ? String(child.stop_order) : null,
+        timeMorning: child.time_morning ?? null,
+        selfExitAllowed: Boolean(child.self_exit_allowed),
+        latitude: child.latitude == null ? null : Number(child.latitude),
+        longitude: child.longitude == null ? null : Number(child.longitude),
+        discountAmount: Math.max(0, Number(child.base_price ?? 0) - Number(child.final_price ?? 0)),
+        totalCharged,
+        totalPaid,
+        paidPaymentCount: Number(first.paid_count ?? 0),
+        paidPaymentAmount: Number(first.confirmed_amount ?? 0),
+        pendingPayment: Number(first.pending_amount ?? 0),
+        pendingPaymentCount: Number(first.pending_count ?? 0),
+        pendingPaymentId: first.pending_payment_id ? String(first.pending_payment_id) : null,
+        pendingPaymentAmount: Number(first.pending_payment_amount ?? first.pending_amount ?? 0),
+        pendingPaymentDate: first.pending_payment_date ?? null,
+        pendingActualPaymentDate: first.pending_actual_payment_date ?? null,
+        pendingPaymentType: first.pending_payment_method ?? null,
+        pendingPaymentReceiptUrl: first.pending_payment_receipt_url ?? null,
+        pendingPaymentComment: first.pending_payment_comment ?? '',
+        rejectedPaymentCount: Number(first.rejected_count ?? 0),
+        rejectedPaymentAmount: Number(first.rejected_amount ?? 0),
+        allPaymentCount: Number(first.paid_count ?? 0) + Number(first.pending_count ?? 0) + Number(first.rejected_count ?? 0),
+        allPaymentAmount: Number(first.confirmed_amount ?? 0) + Number(first.pending_amount ?? 0) + Number(first.rejected_amount ?? 0),
+        childDebtAmount: debtAmount,
+        debtAmount,
+        balance: Number(first.main_balance ?? 0),
+      });
+    });
+    familyIndex++;
+  });
+
+  return { rows, totalFamilies, totalChildren, totalWithTransfer, totalWithoutTransfer };
+}
+
 export async function fetchV2Family(familyId: string): Promise<Family | null> {
   const [familyRes, childRes] = await Promise.all([
     supabase.from('v2_families').select('*').eq('id', familyId).single(),
@@ -634,6 +773,88 @@ export async function fetchV2Branches(): Promise<V2BranchOption[]> {
   return branchesCache;
 }
 
+export interface BranchStat {
+  branchId: string;
+  branchCode: string;
+  branchShort: string;
+  branchName: string;
+  childrenCount: number;
+  newRequests: number;
+  familiesCount: number;
+  withTransferCount: number;
+  withoutTransferCount: number;
+  charged: number;
+  paid: number;
+  pendingCount: number;
+  pendingSum: number;
+  debtSum: number;
+  balance: number;
+}
+
+export async function fetchBranchStats(): Promise<BranchStat[]> {
+  const { data, error } = await supabase.rpc('get_branch_stats');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    branchId: String(row.branch_id),
+    branchCode: row.branch_code ?? '',
+    branchShort: row.branch_short ?? row.branch_code ?? '',
+    branchName: row.branch_name ?? row.branch_short ?? row.branch_code ?? '',
+    childrenCount: Number(row.children_count ?? 0),
+    newRequests: Number(row.new_requests ?? 0),
+    familiesCount: Number(row.families_count ?? 0),
+    withTransferCount: Number(row.with_transfer_count ?? 0),
+    withoutTransferCount: Number(row.without_transfer_count ?? 0),
+    charged: Number(row.charged ?? 0),
+    paid: Number(row.paid ?? 0),
+    pendingCount: Number(row.pending_count ?? 0),
+    pendingSum: Number(row.pending_sum ?? 0),
+    debtSum: Number(row.debt_sum ?? 0),
+    balance: Number(row.balance ?? 0),
+  }));
+}
+
+/** Схлопывает статистику по филиалам (BranchStat[]) в статистику по вкладкам
+ * школ (SCHOOL_TABS), используя ту же группировку getBranchFilter, что и
+ * основная таблица — так карточки KPI остаются в 20-40 строк вместо полной
+ * выборки семей/детей, но дают идентичный результат. */
+export function foldBranchStatsBySchoolTab(branches: BranchStat[]): Record<string, {
+  childrenCount: number;
+  newRequests: number;
+  familiesCount: number;
+  withTransferCount: number;
+  withoutTransferCount: number;
+  charged: number;
+  paid: number;
+  pendingCount: number;
+  pendingSum: number;
+  debtSum: number;
+  balance: number;
+}> {
+  const byTab: Record<string, ReturnType<typeof foldBranchStatsBySchoolTab>[string]> = {};
+  branches.forEach(b => {
+    const tabKey = getBranchFilter(b.branchName, b.branchCode);
+    if (!byTab[tabKey]) {
+      byTab[tabKey] = {
+        childrenCount: 0, newRequests: 0, familiesCount: 0, withTransferCount: 0, withoutTransferCount: 0,
+        charged: 0, paid: 0, pendingCount: 0, pendingSum: 0, debtSum: 0, balance: 0,
+      };
+    }
+    const agg = byTab[tabKey];
+    agg.childrenCount += b.childrenCount;
+    agg.newRequests += b.newRequests;
+    agg.familiesCount += b.familiesCount;
+    agg.withTransferCount += b.withTransferCount;
+    agg.withoutTransferCount += b.withoutTransferCount;
+    agg.charged += b.charged;
+    agg.paid += b.paid;
+    agg.pendingCount += b.pendingCount;
+    agg.pendingSum += b.pendingSum;
+    agg.debtSum += b.debtSum;
+    agg.balance += b.balance;
+  });
+  return byTab;
+}
+
 export async function updateV2Family(familyId: string, updated: Family): Promise<void> {
   const { error } = await supabase.from('v2_families').update({
     parent_name: updated.parentName,
@@ -646,11 +867,13 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
     status: updated.status,
   }).eq('id', familyId);
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
 }
 
 export async function updateV2Child(childId: string, updates: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('v2_children').update(updates).eq('id', childId);
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
 }
 
 export async function createV2Child(family: Family, input: Partial<Child> & { childName: string }): Promise<Child> {
@@ -679,6 +902,7 @@ export async function createV2Child(family: Family, input: Partial<Child> & { ch
     .select(CHILD_SELECT)
     .single();
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
   return mapV2Child(data, family);
 }
 
@@ -765,17 +989,12 @@ export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRo
 }
 
 let driversTableInflight: Promise<V2DriverTableRow[]> | null = null;
-let cachedDriversTable: V2DriverTableRow[] | null = null;
-
-export function getCachedV2DriversTable(): V2DriverTableRow[] | null {
-  return cachedDriversTable;
-}
 
 export async function fetchV2DriversTable(): Promise<V2DriverTableRow[]> {
   if (driversTableInflight) return driversTableInflight;
   const request = fetchV2DriversTableUncached();
   driversTableInflight = request;
-  request.then(rows => { cachedDriversTable = rows; }).finally(() => {
+  request.finally(() => {
     driversTableInflight = null;
   });
   return request;
@@ -1120,6 +1339,7 @@ export async function updateV2TransferVehicleType(params: {
     .neq('status', 'rejected');
   if (childrenError) throw new Error(childrenError.message);
 
+  invalidateFamiliesCache();
   return transferId;
 }
 
@@ -1144,11 +1364,13 @@ export async function clearV2TransferVehicleType(params: {
     .update({ vehicle_type: null })
     .eq('id', transfer.id);
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
 }
 
 export async function deleteV2Child(childId: string): Promise<void> {
   const { error } = await supabase.from('v2_children').delete().eq('id', childId);
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
 }
 
 export async function addV2Audit(params: {
@@ -1175,6 +1397,7 @@ export async function addV2Audit(params: {
 export async function deleteV2Family(familyId: string): Promise<void> {
   const { error } = await supabase.from('v2_families').delete().eq('id', familyId);
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
 }
 
 // crm_page_filters: id uuid pk, mode text, tab_key text, metric text, vehicle_filter text, updated_at timestamptz
@@ -1221,17 +1444,12 @@ export interface CashierPaymentRow {
 }
 
 let cashierPaymentsInflight: Promise<CashierPaymentRow[]> | null = null;
-let cachedCashierPayments: CashierPaymentRow[] | null = null;
-
-export function getCachedCashierPaymentsTable(): CashierPaymentRow[] | null {
-  return cachedCashierPayments;
-}
 
 export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> {
   if (cashierPaymentsInflight) return cashierPaymentsInflight;
   const request = fetchCashierPaymentsTableUncached();
   cashierPaymentsInflight = request;
-  request.then(rows => { cachedCashierPayments = rows; }).finally(() => {
+  request.finally(() => {
     cashierPaymentsInflight = null;
   });
   return request;
@@ -1314,17 +1532,12 @@ export interface PaymentTableRow {
 }
 
 let paymentsTableInflight: Promise<PaymentTableRow[]> | null = null;
-let cachedPaymentsTable: PaymentTableRow[] | null = null;
-
-export function getCachedPaymentsTable(): PaymentTableRow[] | null {
-  return cachedPaymentsTable;
-}
 
 export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
   if (paymentsTableInflight) return paymentsTableInflight;
   const request = fetchPaymentsTableUncached();
   paymentsTableInflight = request;
-  request.then(rows => { cachedPaymentsTable = rows; }).finally(() => {
+  request.finally(() => {
     paymentsTableInflight = null;
   });
   return request;

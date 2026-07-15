@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ReceiptText, School, WalletCards } from 'lucide-react';
-import { fetchV2DriversTable, getCachedV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { money } from '../../utils/pricing';
@@ -72,17 +72,9 @@ function ColumnCard({ sortKey, label, sortState, onSort, children }: {
 }
 
 export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, summaryBySchool = {} }: PayrollOverviewProps) {
-  const [rows, setRows] = useState<V2DriverTableRow[] | null>(() => getCachedV2DriversTable());
+  const { data: rows = null } = useDriversTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
-
-  useEffect(() => {
-    let cancelled = false;
-    fetchV2DriversTable()
-      .then(next => { if (!cancelled) setRows(next); })
-      .catch(() => { if (!cancelled) setRows(prev => prev ?? []); });
-    return () => { cancelled = true; };
-  }, []);
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
