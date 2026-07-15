@@ -8,6 +8,7 @@ export function normalizeRows(rows: ChildRow[]): ChildRow[] {
     ...row,
     parentName: formatName(row.parentName),
     phone: formatPhone(row.phone),
+    childName: formatName(row.childName),
     childClass: formatClassName(row.childClass),
     vehicleLabel: VT_LABEL[row.vehicleType] ?? row.vehicleType,
   }));

@@ -676,7 +676,7 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
         familyId: String(child.family_id),
         familyIndex,
         isFirstChild: idx === 0,
-        childName: child.child_name ?? '',
+        childName: formatName(child.child_name),
         childClass: child.class_name ?? '',
         parentName: formatName(child.parent_name),
         phone: formatPhone(child.phone),
