@@ -15,6 +15,7 @@ import {
   DriverTelegramGroup,
   fetchDriverTelegramGroups,
   linkDriverTelegramGroup,
+  resendDriverTelegramInvite,
 } from '../../services/driverTelegramService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
@@ -1730,6 +1731,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [selectedTelegramChatId, setSelectedTelegramChatId] = useState('');
   const [selectedTelegramTransferId, setSelectedTelegramTransferId] = useState('');
   const [linkingDriverTelegram, setLinkingDriverTelegram] = useState(false);
+  const [resendingDriverTelegramChatId, setResendingDriverTelegramChatId] = useState<number | null>(null);
   const [driverAdvances, setDriverAdvances] = useState<V2DriverAdvance[]>([]);
   const [loadingAdvances, setLoadingAdvances] = useState(false);
   const [advanceAmount, setAdvanceAmount] = useState('');
@@ -3183,6 +3185,24 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       setDriverTelegramError(error instanceof Error ? error.message : 'Не удалось подключить Telegram-группу.');
     } finally {
       setLinkingDriverTelegram(false);
+    }
+  };
+  const resendSelectedDriverTelegramInvite = async (chatId: number) => {
+    if (!selectedDriver || !authToken) return;
+    setResendingDriverTelegramChatId(chatId);
+    setDriverTelegramError('');
+    try {
+      await resendDriverTelegramInvite({ sessionToken: authToken, chatId });
+      setDriverRows(previous => previous.map(row => (
+        row.driverId === selectedDriver.driverId
+          ? { ...row, telegramUserId: null }
+          : row
+      )));
+      await refreshDriverTelegramGroups();
+    } catch (error) {
+      setDriverTelegramError(error instanceof Error ? error.message : 'Не удалось отправить новое приглашение.');
+    } finally {
+      setResendingDriverTelegramChatId(null);
     }
   };
   const pendingDriverTelegramGroups = driverTelegramGroups.filter(group => group.status === 'pending');
@@ -4780,13 +4800,25 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                             <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.title}</div>
                             <div style={{ marginTop: 3, fontSize: 11, fontWeight: 800, color: group.driverConfirmedAt ? '#168451' : '#9A6A12' }}>
                               {group.driverConfirmedAt
-                                ? '✓ Водитель подтверждён · кнопка запуска готова'
-                                : 'Приглашение отправлено · ждём нажатия водителя'}
+                                ? '✓ Номер водителя совпал · кнопка запуска готова'
+                                : 'Приглашение отправлено · ждём подтверждения номера'}
                             </div>
                           </div>
-                          <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: 999, background: group.driverConfirmedAt ? '#D7F6E4' : '#FFEDBD', color: group.driverConfirmedAt ? '#168451' : '#9A6A12', fontSize: 10, fontWeight: 950 }}>
-                            {group.driverConfirmedAt ? 'ГОТОВО' : 'ОЖИДАЕТ'}
-                          </span>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexShrink: 0 }}>
+                            <span style={{ padding: '5px 9px', borderRadius: 999, background: group.driverConfirmedAt ? '#D7F6E4' : '#FFEDBD', color: group.driverConfirmedAt ? '#168451' : '#9A6A12', fontSize: 10, fontWeight: 950 }}>
+                              {group.driverConfirmedAt ? 'ГОТОВО' : 'ОЖИДАЕТ'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => resendSelectedDriverTelegramInvite(group.chatId)}
+                              disabled={resendingDriverTelegramChatId === group.chatId}
+                              style={{ height: 30, padding: '0 10px', border: '1px solid #BBDADD', borderRadius: 9, background: '#fff', color: '#237F81', fontSize: 10, fontWeight: 900, cursor: resendingDriverTelegramChatId === group.chatId ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                            >
+                              {resendingDriverTelegramChatId === group.chatId
+                                ? 'Отправляю…'
+                                : group.driverConfirmedAt ? 'Переподтвердить' : 'Отправить заново'}
+                            </button>
+                          </div>
                         </div>
                       ))}
                     </div>

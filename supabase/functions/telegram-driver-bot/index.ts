@@ -136,6 +136,8 @@ type DriverTelegramGroup = {
   invite_token_hash: string | null;
   invite_expires_at: string | null;
   driver_confirmed_at: string | null;
+  pending_telegram_user_id: number | null;
+  pending_started_at: string | null;
   control_message_id: number | null;
   created_at: string;
   updated_at: string;
@@ -335,11 +337,11 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
     return Response.json({ ok: true, groups: data ?? [] }, { headers: corsHeaders });
   }
 
-  if (action === 'link_group') {
+  if (action === 'link_group' || action === 'resend_invite') {
     const chatId = Number(body.chat_id);
-    const transferId = String(body.transfer_id ?? '').trim();
-    const driverId = String(body.driver_id ?? '').trim();
-    if (!Number.isSafeInteger(chatId) || chatId >= 0 || !transferId || !driverId) {
+    let transferId = String(body.transfer_id ?? '').trim();
+    let driverId = String(body.driver_id ?? '').trim();
+    if (!Number.isSafeInteger(chatId) || chatId >= 0) {
       return Response.json(
         { ok: false, error: 'Не выбраны группа, трансфер или водитель.' },
         { status: 400, headers: corsHeaders },
@@ -356,6 +358,16 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
       return Response.json(
         { ok: false, error: 'Добавьте бота администратором в Telegram-группу и обновите список.' },
         { status: 404, headers: corsHeaders },
+      );
+    }
+    if (action === 'resend_invite') {
+      transferId = String(group.transfer_id ?? '');
+      driverId = String(group.driver_id ?? '');
+    }
+    if (!transferId || !driverId) {
+      return Response.json(
+        { ok: false, error: 'У группы ещё нет назначенного трансфера и водителя.' },
+        { status: 400, headers: corsHeaders },
       );
     }
     if (group.transfer_id && group.transfer_id !== transferId) {
@@ -446,6 +458,8 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
         invite_token_hash: inviteTokenHash,
         invite_expires_at: inviteExpiresAt,
         driver_confirmed_at: null,
+        pending_telegram_user_id: null,
+        pending_started_at: null,
       })
       .eq('chat_id', chatId);
     if (groupUpdateError) throw new Error(`Telegram group link failed: ${groupUpdateError.message}`);
@@ -457,7 +471,8 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
         `<b>Филиал:</b> ${escapeHtml(String(branchName))}\n` +
         `<b>Трансфер:</b> №${transferData.transfer_number}\n` +
         `<b>Водитель:</b> ${escapeHtml(driver.full_name)}\n\n` +
-        'Водителю нужно один раз нажать кнопку ниже. После подтверждения здесь появится кнопка запуска рейса.',
+        'Водителю нужно нажать кнопку ниже, а затем поделиться своим контактом. ' +
+        'Бот сверит номер с карточкой водителя в CRM.',
       undefined,
       {
         inline_keyboard: [[{
@@ -841,25 +856,184 @@ async function confirmDriverInvite(message: TelegramMessage, token: string): Pro
     return;
   }
 
+  const { error: groupUpdateError } = await supabase
+    .from('v2_driver_telegram_groups')
+    .update({
+      pending_telegram_user_id: message.from.id,
+      pending_started_at: new Date().toISOString(),
+    })
+    .eq('chat_id', groupData.chat_id)
+    .eq('invite_token_hash', tokenHash);
+  if (groupUpdateError) throw new Error(`Driver invitation start failed: ${groupUpdateError.message}`);
+
+  await sendMessage(
+    message.chat.id,
+    `Почти готово. Подтвердите, что вы действительно <b>${escapeHtml(driver.full_name)}</b>.\n\n` +
+      'Нажмите кнопку ниже и поделитесь <b>своим</b> номером телефона. ' +
+      'Он должен совпасть с номером в карточке водителя CRM.',
+    undefined,
+    {
+      keyboard: [[{ text: '📱 Подтвердить свой номер', request_contact: true }]],
+      resize_keyboard: true,
+      one_time_keyboard: true,
+      input_field_placeholder: 'Подтвердите номер водителя',
+    },
+  );
+}
+
+async function confirmDriverContact(message: TelegramMessage): Promise<void> {
+  const contact = message.contact;
+  const user = message.from;
+  if (!contact || !user) return;
+  if (message.chat.type !== 'private') {
+    await sendMessage(
+      message.chat.id,
+      'Не отправляйте номер в группу. Откройте личное приглашение от бота.',
+      message.message_id,
+    );
+    return;
+  }
+  if (contact.user_id !== user.id) {
+    await sendMessage(
+      message.chat.id,
+      'Нужно нажать кнопку «Подтвердить свой номер». Пересылать чужой контакт нельзя.',
+      undefined,
+      { remove_keyboard: true },
+    );
+    return;
+  }
+
+  const { data: groupData, error: groupError } = await supabase
+    .from('v2_driver_telegram_groups')
+    .select('chat_id,title,status,transfer_id,driver_id,invite_expires_at,pending_started_at,control_message_id')
+    .eq('pending_telegram_user_id', user.id)
+    .eq('status', 'linked')
+    .order('pending_started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (groupError) throw new Error(`Pending driver confirmation lookup failed: ${groupError.message}`);
+  if (!groupData || !groupData.transfer_id || !groupData.driver_id) {
+    await sendMessage(
+      message.chat.id,
+      'Нет ожидающего подтверждения. Нажмите приглашение водителя в рабочей группе.',
+      undefined,
+      { remove_keyboard: true },
+    );
+    return;
+  }
+  const pendingStartedAt = groupData.pending_started_at
+    ? new Date(groupData.pending_started_at).getTime()
+    : 0;
+  if (
+    !groupData.invite_expires_at
+    || new Date(groupData.invite_expires_at).getTime() <= Date.now()
+    || pendingStartedAt < Date.now() - 15 * 60 * 1000
+  ) {
+    await supabase
+      .from('v2_driver_telegram_groups')
+      .update({ pending_telegram_user_id: null, pending_started_at: null })
+      .eq('chat_id', groupData.chat_id)
+      .eq('pending_telegram_user_id', user.id);
+    await sendMessage(
+      message.chat.id,
+      'Время подтверждения истекло. Снова нажмите приглашение в группе.',
+      undefined,
+      { remove_keyboard: true },
+    );
+    return;
+  }
+
+  const { data: driver, error: driverError } = await supabase
+    .from('v2_drivers')
+    .select('id,full_name,phone,second_phone,status')
+    .eq('id', groupData.driver_id)
+    .maybeSingle();
+  if (driverError) throw new Error(`Confirmation driver lookup failed: ${driverError.message}`);
+  if (!driver || driver.status !== 'active') {
+    await sendMessage(
+      message.chat.id,
+      'Карточка водителя сейчас не активна. Обратитесь к логисту.',
+      undefined,
+      { remove_keyboard: true },
+    );
+    return;
+  }
+
+  const normalizedContact = normalizePhone(contact.phone_number);
+  const driverPhones = [driver.phone, driver.second_phone]
+    .filter((phone): phone is string => Boolean(phone))
+    .map(normalizePhone);
+  if (!driverPhones.includes(normalizedContact)) {
+    await supabase
+      .from('v2_driver_telegram_groups')
+      .update({ pending_telegram_user_id: null, pending_started_at: null })
+      .eq('chat_id', groupData.chat_id)
+      .eq('pending_telegram_user_id', user.id);
+    await sendMessage(
+      message.chat.id,
+      `❌ Номер не совпадает с карточкой водителя <b>${escapeHtml(driver.full_name)}</b>.\n\n` +
+        'Telegram не привязан. Попросите логиста проверить номер в CRM.',
+      undefined,
+      { remove_keyboard: true },
+    );
+    return;
+  }
+
+  const { data: otherDriver, error: otherDriverError } = await supabase
+    .from('v2_drivers')
+    .select('id,full_name')
+    .eq('telegram_user_id', user.id)
+    .neq('id', driver.id)
+    .maybeSingle();
+  if (otherDriverError) throw new Error(`Telegram identity lookup failed: ${otherDriverError.message}`);
+  if (otherDriver) {
+    await sendMessage(
+      message.chat.id,
+      `Этот Telegram уже связан с водителем <b>${escapeHtml(otherDriver.full_name)}</b>. ` +
+        'Перепривязку должен выполнить логист.',
+      undefined,
+      { remove_keyboard: true },
+    );
+    return;
+  }
+
   const { error: driverUpdateError } = await supabase
     .from('v2_drivers')
     .update({
-      telegram_user_id: message.from.id,
+      telegram_user_id: user.id,
       updated_at: new Date().toISOString(),
     })
     .eq('id', driver.id);
   if (driverUpdateError) throw new Error(`Driver confirmation failed: ${driverUpdateError.message}`);
 
+  const confirmedAt = new Date().toISOString();
   const { error: groupUpdateError } = await supabase
     .from('v2_driver_telegram_groups')
     .update({
       invite_token_hash: null,
       invite_expires_at: null,
-      driver_confirmed_at: new Date().toISOString(),
+      pending_telegram_user_id: null,
+      pending_started_at: null,
+      driver_confirmed_at: confirmedAt,
     })
     .eq('chat_id', groupData.chat_id)
-    .eq('invite_token_hash', tokenHash);
-  if (groupUpdateError) throw new Error(`Driver invitation close failed: ${groupUpdateError.message}`);
+    .eq('pending_telegram_user_id', user.id);
+  if (groupUpdateError) throw new Error(`Driver confirmation close failed: ${groupUpdateError.message}`);
+
+  const { data: transferData, error: transferError } = await supabase
+    .from('v2_transfers')
+    .select('id,driver_id,status,transfer_number,telegram_chat_id,v2_school_branches(code)')
+    .eq('id', groupData.transfer_id)
+    .maybeSingle();
+  if (transferError) throw new Error(`Confirmed transfer lookup failed: ${transferError.message}`);
+  if (
+    !transferData
+    || transferData.status !== 'active'
+    || transferData.driver_id !== driver.id
+    || Number(transferData.telegram_chat_id) !== Number(groupData.chat_id)
+  ) {
+    throw new Error('Confirmed transfer assignment changed');
+  }
 
   const branch = Array.isArray(transferData.v2_school_branches)
     ? transferData.v2_school_branches[0]
@@ -878,8 +1052,10 @@ async function confirmDriverInvite(message: TelegramMessage, token: string): Pro
 
   await sendMessage(
     message.chat.id,
-    `✅ Вы подтверждены как водитель <b>${escapeHtml(driver.full_name)}</b>.\n\n` +
-      `Рабочая кнопка уже появилась в группе «${escapeHtml(groupData.title)}».`,
+    `✅ Номер совпал.\n\nВы подтверждены как водитель <b>${escapeHtml(driver.full_name)}</b>. ` +
+      `Рабочая кнопка появилась в группе «${escapeHtml(groupData.title)}».`,
+    undefined,
+    { remove_keyboard: true },
   );
 }
 
@@ -1364,14 +1540,7 @@ async function handleMessage(message: TelegramMessage, isEdited = false): Promis
   }
 
   if (message.contact) {
-    if (!isEdited) {
-      await sendMessage(
-        message.chat.id,
-        'Отправлять номер больше не нужно: водителя подтверждает логист из CRM.',
-        message.message_id,
-        { remove_keyboard: true },
-      );
-    }
+    await confirmDriverContact(message);
     return;
   }
 
@@ -1416,6 +1585,111 @@ async function handleMessage(message: TelegramMessage, isEdited = false): Promis
   }
 }
 
+async function reissueDriverInviteForChat(chatId: number): Promise<Record<string, unknown>> {
+  if (!Number.isSafeInteger(chatId) || chatId >= 0) {
+    throw new Error('Некорректный Telegram chat_id.');
+  }
+
+  const { data: group, error: groupError } = await supabase
+    .from('v2_driver_telegram_groups')
+    .select('chat_id,title,status,transfer_id,driver_id,created_at,updated_at')
+    .eq('chat_id', chatId)
+    .maybeSingle();
+  if (groupError) throw new Error(`Telegram group lookup failed: ${groupError.message}`);
+  if (!group || group.status !== 'linked' || !group.transfer_id || !group.driver_id) {
+    throw new Error('Подключённая Telegram-группа не найдена.');
+  }
+
+  const { data: transfer, error: transferError } = await supabase
+    .from('v2_transfers')
+    .select('id,driver_id,status,transfer_number,telegram_chat_id,v2_school_branches(code,short_name,name)')
+    .eq('id', group.transfer_id)
+    .maybeSingle();
+  if (transferError) throw new Error(`Transfer lookup failed: ${transferError.message}`);
+  if (
+    !transfer
+    || transfer.status !== 'active'
+    || transfer.driver_id !== group.driver_id
+    || Number(transfer.telegram_chat_id) !== chatId
+  ) {
+    throw new Error('Назначение группы или трансфера изменилось.');
+  }
+
+  const { data: driver, error: driverError } = await supabase
+    .from('v2_drivers')
+    .select('id,full_name,status')
+    .eq('id', group.driver_id)
+    .maybeSingle();
+  if (driverError) throw new Error(`Driver lookup failed: ${driverError.message}`);
+  if (!driver || driver.status !== 'active') {
+    throw new Error('Водитель не найден или не активен.');
+  }
+
+  const inviteToken = newInviteToken();
+  const inviteTokenHash = await sha256Hex(inviteToken);
+  const inviteExpiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+  const { error: driverUpdateError } = await supabase
+    .from('v2_drivers')
+    .update({
+      telegram_user_id: null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', driver.id);
+  if (driverUpdateError) throw new Error(`Driver approval reset failed: ${driverUpdateError.message}`);
+
+  const { error: groupUpdateError } = await supabase
+    .from('v2_driver_telegram_groups')
+    .update({
+      invite_token_hash: inviteTokenHash,
+      invite_expires_at: inviteExpiresAt,
+      driver_confirmed_at: null,
+      pending_telegram_user_id: null,
+      pending_started_at: null,
+    })
+    .eq('chat_id', chatId);
+  if (groupUpdateError) throw new Error(`Telegram confirmation reset failed: ${groupUpdateError.message}`);
+
+  const branch = Array.isArray(transfer.v2_school_branches)
+    ? transfer.v2_school_branches[0]
+    : transfer.v2_school_branches;
+  const branchCode = String(branch?.code ?? '');
+  const branchName = branch?.short_name || branch?.name || branchCode;
+  const inviteMessage = await sendMessage(
+    chatId,
+    '♻️ <b>Отправлено новое приглашение водителю</b>\n\n' +
+      `<b>Филиал:</b> ${escapeHtml(String(branchName))}\n` +
+      `<b>Трансфер:</b> №${transfer.transfer_number}\n` +
+      `<b>Водитель:</b> ${escapeHtml(driver.full_name)}\n\n` +
+      'Водителю нужно нажать кнопку ниже, а затем поделиться своим контактом. ' +
+      'Бот сверит номер с карточкой водителя в CRM.',
+    undefined,
+    {
+      inline_keyboard: [[{
+        text: '✅ Я водитель · Подтвердить номер',
+        url: `https://t.me/${BOT_USERNAME}?start=driver_${inviteToken}`,
+        style: 'primary',
+      }]],
+    },
+  );
+
+  await supabase
+    .from('v2_driver_telegram_groups')
+    .update({ control_message_id: inviteMessage.message_id })
+    .eq('chat_id', chatId);
+
+  return {
+    chat_id: chatId,
+    title: group.title,
+    status: 'linked',
+    transfer_id: group.transfer_id,
+    driver_id: group.driver_id,
+    driver_confirmed_at: null,
+    created_at: group.created_at,
+    updated_at: new Date().toISOString(),
+  };
+}
+
 Deno.serve(async (request) => {
   if (request.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -1452,6 +1726,11 @@ Deno.serve(async (request) => {
         allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'],
       });
       return Response.json({ ok: true, result });
+    }
+    if (pathname.endsWith('/admin/reissue-invite')) {
+      const body = await request.json() as Record<string, unknown>;
+      const group = await reissueDriverInviteForChat(Number(body.chat_id));
+      return Response.json({ ok: true, group });
     }
     const update = await request.json() as TelegramUpdate;
     if (update.my_chat_member) await handleMyChatMember(update.my_chat_member);
