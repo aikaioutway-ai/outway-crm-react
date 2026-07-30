@@ -16,7 +16,7 @@ import DriversTransferDashboard from './modules/drivers/DriversTransferDashboard
 import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { useFamiliesTable } from './hooks/useCrmQueries';
-import { currentCashierPeriodKey } from './modules/families/constants';
+import { currentCashierPeriodKey, currentPayrollPeriodKey } from './modules/families/constants';
 import type { PayrollSchoolTab } from './modules/expenses/timesheetTypes';
 import { UserRole } from './types';
 import './index.css';
@@ -78,6 +78,7 @@ export default function App() {
   const [payrollSchoolKey, setPayrollSchoolKey] = useState<string | null>(null);
   const [payrollTransferFilter, setPayrollTransferFilter] = useState('');
   const [payrollSchoolTab, setPayrollSchoolTab] = useState<PayrollSchoolTab>('timesheet');
+  const [payrollPeriodKey, setPayrollPeriodKey] = useState(currentPayrollPeriodKey);
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
   const [managerSchoolMode, setManagerSchoolMode] = useState<'directory' | 'charges'>('directory');
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
@@ -474,6 +475,7 @@ export default function App() {
                 <DriversPage
                   userRole={currentUserRole}
                   userName={currentUser?.name}
+                  authToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
                   schoolKey={driversSchoolKey}
                   externalQuickTransfer={driversTransferFilter}
@@ -540,8 +542,10 @@ export default function App() {
                 schoolKey={payrollSchoolKey}
                 transferFilter={payrollTransferFilter}
                 schoolTab={payrollSchoolTab}
+                periodKey={payrollPeriodKey}
                 onSelectSchool={setPayrollSchoolKey}
                 onTransferFilterChange={setPayrollTransferFilter}
+                onPeriodKeyChange={setPayrollPeriodKey}
               />
             ) : (
               <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>

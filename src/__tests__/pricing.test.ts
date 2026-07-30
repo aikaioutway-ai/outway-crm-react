@@ -24,8 +24,8 @@ describe('getPriceByZone', () => {
     expect(getPriceByZone('LIGHT', 'C', 'microbus')).toBe(6000);
   });
 
-  test('AES зона A = 5500', () => {
-    expect(getPriceByZone('AES', 'A', 'microbus')).toBe(5500);
+  test('AES зона A = 5600', () => {
+    expect(getPriceByZone('AES', 'A', 'microbus')).toBe(5600);
   });
 
   test('EPSILON зона B = 6000', () => {
@@ -120,8 +120,8 @@ describe('getFamilyPrice', () => {
   test('разные школы — у каждого своя цена', () => {
     const kid1 = { schoolCode: 'LIGHT' as const, zone: 'A' as const, vehicleType: 'microbus' as const };
     const kid2 = { schoolCode: 'AES' as const, zone: 'B' as const, vehicleType: 'microbus' as const };
-    // kid1 = 5000 (первый), kid2 = 6000 * 0.95 = 5700 (второй)
-    expect(getFamilyPrice([kid1, kid2])).toBe(10700);
+    // kid1 = 5000 (первый), kid2 = 6100 * 0.95 = 5795 (второй)
+    expect(getFamilyPrice([kid1, kid2])).toBe(10795);
   });
 });
 

@@ -15,13 +15,48 @@ const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
 };
 
 async function sha256Hex(value: string): Promise<string> {
   const bytes = new TextEncoder().encode(value);
   const hash = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(hash)).map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function base64Url(value: Uint8Array | string): string {
+  const bytes = typeof value === 'string' ? new TextEncoder().encode(value) : value;
+  let binary = '';
+  bytes.forEach(byte => {
+    binary += String.fromCharCode(byte);
+  });
+  return btoa(binary).replaceAll('+', '-').replaceAll('/', '_').replace(/=+$/g, '');
+}
+
+async function createEmployeeSessionToken(employee: {
+  id: string;
+  role: string;
+  school_keys: unknown;
+}): Promise<string> {
+  const payload = base64Url(JSON.stringify({
+    sub: employee.id,
+    role: employee.role,
+    schools: Array.isArray(employee.school_keys) ? employee.school_keys : ['ALL'],
+    exp: Math.floor(Date.now() / 1000) + 8 * 60 * 60,
+  }));
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(SUPABASE_SERVICE_KEY),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+  const signature = new Uint8Array(await crypto.subtle.sign(
+    'HMAC',
+    key,
+    new TextEncoder().encode(payload),
+  ));
+  return `${payload}.${base64Url(signature)}`;
 }
 
 Deno.serve(async (req) => {
@@ -58,6 +93,7 @@ Deno.serve(async (req) => {
       return Response.json({ ok: false, error: 'Неверный логин или пароль' }, { headers: corsHeaders, status: 401 });
     }
 
+    const sessionToken = await createEmployeeSessionToken(employee);
     return Response.json({
       ok: true,
       user: {
@@ -67,6 +103,7 @@ Deno.serve(async (req) => {
         role: employee.role,
         schoolKeys: Array.isArray(employee.school_keys) ? employee.school_keys : ['ALL'],
         position: employee.position ?? undefined,
+        sessionToken,
       },
     }, { headers: corsHeaders });
   } catch (err) {

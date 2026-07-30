@@ -24,6 +24,7 @@ export interface AuthenticatedUser {
   role: UserRole;
   schoolKeys: string[];
   position?: string;
+  sessionToken?: string;
 }
 
 // ─── МАППИНГ ────────────────────────────────────────────────────────────────

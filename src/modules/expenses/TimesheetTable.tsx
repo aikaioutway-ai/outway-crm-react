@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { fetchV2DriverAdvancesForPeriod, fetchV2DriversTable, V2DriverTableRow } from '../../services/crmV2Service';
-import { fetchEmployees } from '../../services/employeeService';
-import { Employee } from '../../types';
+import { PayrollSubjectType, upsertV2PayrollEntry, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
+import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
+import { queryClient, QK } from '../../services/queryClient';
 import { SCHOOL_TABS } from '../families/constants';
 import { PAYROLL_OFFICE_KEY, PayrollSchoolTab, TimesheetPayrollSummary } from './timesheetTypes';
 
@@ -59,45 +59,40 @@ function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string)
 }
 
 export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehicleType, transferFilter = '', periodMonth, periodYear, onSummaryChange, payrollView = 'timesheet' }: Props) {
-  const [allDrivers, setAllDrivers] = useState<V2DriverTableRow[]>([]);
-  const [allEmployees, setAllEmployees] = useState<Employee[]>([]);
-  const [loading, setLoading]       = useState(false);
-  const [advanceByDriver, setAdvanceByDriver] = useState<Record<string, number>>({});
-  // Переопределения на конкретного водителя: driverId → { days?, rate?, salaryAmount? }
-  const [overrides, setOverrides]   = useState<Record<string, RowOverride>>({});
   const isOffice = schoolKey === PAYROLL_OFFICE_KEY;
 
-  useEffect(() => {
-    setLoading(true);
-    Promise.all([
-      fetchV2DriversTable().catch(() => []),
-      fetchEmployees().catch(() => []),
-    ]).then(([drivers, employees]) => {
-      setAllDrivers(drivers);
-      setAllEmployees(employees);
-    }).finally(() => setLoading(false));
-  }, []);
+  const { data: allDrivers = [], isLoading: driversLoading } = useDriversTable();
+  const { data: allEmployees = [], isLoading: employeesLoading } = useEmployees();
+  const { data: entries = [] } = usePayrollEntriesForPeriod(periodMonth, periodYear);
+  const { data: rawAdvances = [] } = useDriverAdvancesForPeriod(periodMonth, periodYear);
+  const loading = driversLoading || employeesLoading;
 
-  useEffect(() => {
-    if (isOffice) {
-      setAdvanceByDriver({});
-      return;
-    }
-    let cancelled = false;
-    fetchV2DriverAdvancesForPeriod(periodMonth, periodYear)
-      .then(advances => {
-        if (cancelled) return;
-        const next: Record<string, number> = {};
-        advances.forEach(advance => {
-          next[advance.driverId] = (next[advance.driverId] ?? 0) + advance.amount;
-        });
-        setAdvanceByDriver(next);
-      })
-      .catch(() => {
-        if (!cancelled) setAdvanceByDriver({});
-      });
-    return () => { cancelled = true; };
-  }, [isOffice, periodMonth, periodYear]);
+  const entryBySubject = useMemo(() => {
+    const map: Record<string, V2PayrollEntry> = {};
+    entries.forEach(entry => { map[entry.subjectId] = entry; });
+    return map;
+  }, [entries]);
+
+  const advanceByDriver = useMemo(() => {
+    if (isOffice) return {} as Record<string, number>;
+    const next: Record<string, number> = {};
+    rawAdvances.forEach(advance => {
+      next[advance.driverId] = (next[advance.driverId] ?? 0) + advance.amount;
+    });
+    return next;
+  }, [isOffice, rawAdvances]);
+
+  const handleEntryChange = useCallback((subjectId: string, subjectType: PayrollSubjectType, patch: RowOverride) => {
+    queryClient.setQueryData<V2PayrollEntry[]>(QK.payrollEntries(periodMonth, periodYear), (prev: V2PayrollEntry[] | undefined) => {
+      const list = prev ?? [];
+      const existing = list.find(e => e.subjectId === subjectId);
+      const next: V2PayrollEntry = existing
+        ? { ...existing, ...patch }
+        : { id: subjectId, subjectId, subjectType, periodMonth, periodYear, days: 0, rate: 0, salaryAmount: 0, updatedAt: '', ...patch };
+      return existing ? list.map(e => e.subjectId === subjectId ? next : e) : [...list, next];
+    });
+    upsertV2PayrollEntry({ subjectId, subjectType, periodMonth, periodYear, ...patch }).catch(() => {});
+  }, [periodMonth, periodYear]);
 
   // Фильтрация водителей по школе
   const schoolTab = SCHOOL_TABS.find(t => t.key === schoolKey);
@@ -130,10 +125,10 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
   const rows: DriverRow[] = useMemo(() => {
     if (isOffice) {
       return filteredEmployees.map(employee => {
-        const ov = overrides[employee.id] ?? {};
-        const days = ov.days ?? globalDays;
-        const rate = ov.rate ?? globalRate;
-        const salaryAmount = ov.salaryAmount ?? 0;
+        const entry = entryBySubject[employee.id];
+        const days = entry?.days ?? globalDays;
+        const rate = entry?.rate ?? globalRate;
+        const salaryAmount = entry?.salaryAmount ?? 0;
         const accrued = days * rate;
         return {
           driverId: employee.id,
@@ -150,11 +145,11 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       });
     }
     return filteredDrivers.map(d => {
-      const ov     = overrides[d.driverId] ?? {};
-      const days   = ov.days   ?? globalDays;
-      const rate   = ov.rate   ?? globalRate;
+      const entry  = entryBySubject[d.driverId];
+      const days   = entry?.days ?? globalDays;
+      const rate   = entry?.rate ?? globalRate;
       const advanceAmount = advanceByDriver[d.driverId] ?? 0;
-      const salaryAmount = ov.salaryAmount ?? 0;
+      const salaryAmount = entry?.salaryAmount ?? 0;
       const accrued = days * rate;
       const paidAmount = advanceAmount + salaryAmount;
       return {
@@ -170,11 +165,16 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         remainingAmount: accrued - paidAmount,
       };
     });
-  }, [advanceByDriver, filteredDrivers, filteredEmployees, isOffice, overrides, globalDays, globalRate]);
+  }, [advanceByDriver, filteredDrivers, filteredEmployees, isOffice, entryBySubject, globalDays, globalRate]);
 
   const setOv = useCallback((driverId: string, patch: RowOverride) => {
-    setOverrides(prev => ({ ...prev, [driverId]: { ...prev[driverId], ...patch } }));
-  }, []);
+    handleEntryChange(driverId, isOffice ? 'employee' : 'driver', patch);
+  }, [handleEntryChange, isOffice]);
+
+  const applyToAll = useCallback(() => {
+    const subjectIds = isOffice ? filteredEmployees.map(e => e.id) : filteredDrivers.map(d => d.driverId);
+    subjectIds.forEach(id => handleEntryChange(id, isOffice ? 'employee' : 'driver', { days: globalDays, rate: globalRate }));
+  }, [filteredDrivers, filteredEmployees, globalDays, globalRate, handleEntryChange, isOffice]);
 
   const totalAccrued = rows.reduce((s, r) => s + r.accrued, 0);
   const totalAdvance = rows.reduce((s, r) => s + r.advanceAmount, 0);
@@ -204,6 +204,21 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       {loading && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', zIndex: 1, fontSize: 13, color: '#9AABB0' }}>
           Загрузка...
+        </div>
+      )}
+      {isTimesheetView && rows.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid #F1F5F9' }}>
+          <button
+            onClick={applyToAll}
+            title="Проставить текущие дни и ставку всем в списке"
+            style={{
+              padding: '5px 10px', border: '1px solid #A7F3D0', borderRadius: 8,
+              background: '#F0FDFA', color: '#0C7A74', fontSize: 12, fontWeight: 700,
+              cursor: 'pointer',
+            }}
+          >
+            Применить ко всем
+          </button>
         </div>
       )}
       <table style={{ width: '100%', borderCollapse: 'collapse', tableLayout: 'auto' }}>

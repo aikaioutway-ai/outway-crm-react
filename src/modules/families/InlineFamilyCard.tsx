@@ -234,7 +234,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         const basePrice = ('zone' in patch || 'vehicleType' in patch)
           ? getPriceByZone(nextChild.schoolCode, nextChild.zone as Zone, nextChild.vehicleType as VehicleType)
           : Math.max(0, Number(nextChild.basePrice || 0));
-        const discountPercent = clampToStep(Number(nextChild.manualDiscountPercent || 0), 0, 100, 5);
+        const discountPercent = clampToStep(Number(nextChild.manualDiscountPercent || nextChild.siblingDiscountPercent || 0), 0, 100, 5);
         const percentAmount = Math.round(basePrice * discountPercent / 100);
         const maxManualAmount = Math.max(0, basePrice - percentAmount);
         const manualAmount = clampToStep(Number(nextChild.manualDiscountAmount || 0), 0, maxManualAmount, 100);

@@ -11,10 +11,15 @@ import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
+import {
+  DriverTelegramGroup,
+  fetchDriverTelegramGroups,
+  linkDriverTelegramGroup,
+} from '../../services/driverTelegramService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Search, Plus, X, Save, Paperclip } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Search, Plus, X, Save, Paperclip } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
@@ -88,6 +93,7 @@ interface FamiliesPageProps {
   mode?: FamiliesMode;
   userRole?: UserRole;
   userName?: string;
+  authToken?: string;
   allowedSchools?: string[];
   settingsScope?: string;
   initialQuickFilter?: Partial<ModeFilters>;
@@ -1604,7 +1610,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, hideDashboard = false, compactPeriodBar = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, onInitialFamilyOpened }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, hideDashboard = false, compactPeriodBar = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, onInitialFamilyOpened }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
@@ -1718,6 +1724,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
   const [driverDocumentsDraft, setDriverDocumentsDraft] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
   const [savingDriver, setSavingDriver] = useState(false);
+  const [driverTelegramGroups, setDriverTelegramGroups] = useState<DriverTelegramGroup[]>([]);
+  const [driverTelegramLoading, setDriverTelegramLoading] = useState(false);
+  const [driverTelegramError, setDriverTelegramError] = useState('');
+  const [selectedTelegramChatId, setSelectedTelegramChatId] = useState('');
+  const [selectedTelegramTransferId, setSelectedTelegramTransferId] = useState('');
+  const [linkingDriverTelegram, setLinkingDriverTelegram] = useState(false);
   const [driverAdvances, setDriverAdvances] = useState<V2DriverAdvance[]>([]);
   const [loadingAdvances, setLoadingAdvances] = useState(false);
   const [advanceAmount, setAdvanceAmount] = useState('');
@@ -3108,6 +3120,76 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
+  const canManageDriverTelegram = ['admin', 'manager', 'logist', 'senior_logist'].includes(userRole);
+  const refreshDriverTelegramGroups = useCallback(async () => {
+    if (!selectedDriverId || !canManageDriverTelegram) return;
+    if (!authToken) {
+      setDriverTelegramGroups([]);
+      setDriverTelegramError('Для подключения Telegram выйдите из CRM и войдите заново.');
+      return;
+    }
+    setDriverTelegramLoading(true);
+    setDriverTelegramError('');
+    try {
+      const groups = await fetchDriverTelegramGroups(authToken);
+      setDriverTelegramGroups(groups);
+    } catch (error) {
+      setDriverTelegramError(error instanceof Error ? error.message : 'Не удалось загрузить Telegram-группы.');
+    } finally {
+      setDriverTelegramLoading(false);
+    }
+  }, [authToken, canManageDriverTelegram, selectedDriverId]);
+
+  useEffect(() => {
+    if (!selectedDriver) {
+      setDriverTelegramGroups([]);
+      setSelectedTelegramChatId('');
+      setSelectedTelegramTransferId('');
+      setDriverTelegramError('');
+      return;
+    }
+    setSelectedTelegramTransferId(selectedDriver.transfers[0]?.id ?? '');
+    setSelectedTelegramChatId('');
+    refreshDriverTelegramGroups();
+  }, [refreshDriverTelegramGroups, selectedDriver]);
+
+  const connectSelectedDriverTelegram = async () => {
+    if (!selectedDriver || !authToken || !selectedTelegramChatId || !selectedTelegramTransferId) return;
+    setLinkingDriverTelegram(true);
+    setDriverTelegramError('');
+    try {
+      await linkDriverTelegramGroup({
+        sessionToken: authToken,
+        chatId: Number(selectedTelegramChatId),
+        transferId: selectedTelegramTransferId,
+        driverId: selectedDriver.driverId,
+      });
+      setDriverRows(previous => previous.map(row => (
+        row.driverId !== selectedDriver.driverId
+          ? row
+          : {
+              ...row,
+              telegramUserId: null,
+              transfers: row.transfers.map(transfer => (
+                transfer.id === selectedTelegramTransferId
+                  ? { ...transfer, telegramChatId: Number(selectedTelegramChatId) }
+                  : transfer
+              )),
+            }
+      )));
+      setSelectedTelegramChatId('');
+      await refreshDriverTelegramGroups();
+    } catch (error) {
+      setDriverTelegramError(error instanceof Error ? error.message : 'Не удалось подключить Telegram-группу.');
+    } finally {
+      setLinkingDriverTelegram(false);
+    }
+  };
+  const pendingDriverTelegramGroups = driverTelegramGroups.filter(group => group.status === 'pending');
+  const linkedDriverTelegramGroups = selectedDriver
+    ? driverTelegramGroups.filter(group => group.driverId === selectedDriver.driverId)
+    : [];
+
   useEffect(() => {
     if (!selectedDriver) {
       setDriverDraft(null);
@@ -4664,6 +4746,107 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   </div>
                 </section>
               </div>
+
+              {canManageDriverTelegram && (
+                <section style={{ borderRadius: 14, background: '#fff', border: '1px solid #CFE5E7', padding: 14, marginBottom: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
+                      <span style={{ width: 34, height: 34, borderRadius: 11, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: '#DFF4F4', color: '#237F81' }}>
+                        <MessageCircle size={18} />
+                      </span>
+                      <div>
+                        <div style={{ fontSize: 13, fontWeight: 950, color: '#17222F' }}>Telegram рейса</div>
+                        <div style={{ marginTop: 2, fontSize: 11, fontWeight: 700, color: '#7A859D' }}>
+                          Группу и водителя подключает логист
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={refreshDriverTelegramGroups}
+                      disabled={driverTelegramLoading}
+                      title="Обновить группы"
+                      style={{ width: 34, height: 34, border: '1px solid #D4E3E7', borderRadius: 10, background: '#fff', color: '#31A4A5', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: driverTelegramLoading ? 'default' : 'pointer' }}
+                    >
+                      <RefreshCw size={15} />
+                    </button>
+                  </div>
+
+                  {linkedDriverTelegramGroups.length > 0 ? (
+                    <div style={{ display: 'grid', gap: 8 }}>
+                      {linkedDriverTelegramGroups.map(group => (
+                        <div key={group.chatId} style={{ minHeight: 54, padding: '10px 12px', borderRadius: 12, background: group.driverConfirmedAt ? '#ECFDF5' : '#FFF8E7', border: `1px solid ${group.driverConfirmedAt ? '#A7E2C0' : '#F2D38A'}`, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                          <div style={{ minWidth: 0 }}>
+                            <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.title}</div>
+                            <div style={{ marginTop: 3, fontSize: 11, fontWeight: 800, color: group.driverConfirmedAt ? '#168451' : '#9A6A12' }}>
+                              {group.driverConfirmedAt
+                                ? '✓ Водитель подтверждён · кнопка запуска готова'
+                                : 'Приглашение отправлено · ждём нажатия водителя'}
+                            </div>
+                          </div>
+                          <span style={{ flexShrink: 0, padding: '5px 9px', borderRadius: 999, background: group.driverConfirmedAt ? '#D7F6E4' : '#FFEDBD', color: group.driverConfirmedAt ? '#168451' : '#9A6A12', fontSize: 10, fontWeight: 950 }}>
+                            {group.driverConfirmedAt ? 'ГОТОВО' : 'ОЖИДАЕТ'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr) auto', gap: 9, alignItems: 'end' }}>
+                        <label style={{ display: 'grid', gap: 5, fontSize: 10, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
+                          Новая Telegram-группа
+                          <select
+                            value={selectedTelegramChatId}
+                            onChange={event => setSelectedTelegramChatId(event.target.value)}
+                            style={{ height: 36, border: '1px solid #D4E3E7', borderRadius: 10, padding: '0 10px', background: '#fff', color: '#17222F', fontSize: 12, fontWeight: 800 }}
+                          >
+                            <option value="">{driverTelegramLoading ? 'Загрузка…' : 'Выберите группу'}</option>
+                            {pendingDriverTelegramGroups.map(group => (
+                              <option key={group.chatId} value={String(group.chatId)}>{group.title}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label style={{ display: 'grid', gap: 5, fontSize: 10, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
+                          Трансфер
+                          <select
+                            value={selectedTelegramTransferId}
+                            onChange={event => setSelectedTelegramTransferId(event.target.value)}
+                            style={{ height: 36, border: '1px solid #D4E3E7', borderRadius: 10, padding: '0 10px', background: '#fff', color: '#17222F', fontSize: 12, fontWeight: 800 }}
+                          >
+                            <option value="">Выберите трансфер</option>
+                            {selectedDriver.transfers.map(transfer => (
+                              <option key={transfer.id} value={transfer.id}>
+                                {transfer.branchShort || transfer.branchCode} · №{transfer.transferNumber}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          onClick={connectSelectedDriverTelegram}
+                          disabled={linkingDriverTelegram || !selectedTelegramChatId || !selectedTelegramTransferId}
+                          style={{ height: 36, padding: '0 14px', border: 'none', borderRadius: 11, background: linkingDriverTelegram || !selectedTelegramChatId || !selectedTelegramTransferId ? '#A7CFCF' : '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12, fontWeight: 950, cursor: linkingDriverTelegram || !selectedTelegramChatId || !selectedTelegramTransferId ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                        >
+                          <Link2 size={15} />
+                          {linkingDriverTelegram ? 'Подключаю…' : 'Подключить'}
+                        </button>
+                      </div>
+
+                      {!driverTelegramLoading && pendingDriverTelegramGroups.length === 0 && !driverTelegramError && (
+                        <div style={{ marginTop: 9, padding: '9px 11px', borderRadius: 10, background: '#F5FAFB', color: '#667085', fontSize: 11, fontWeight: 700, lineHeight: 1.45 }}>
+                          Создайте Telegram-группу и добавьте <b>@outway_driver_bot</b> администратором. Она появится здесь автоматически.
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {driverTelegramError && (
+                    <div style={{ marginTop: 9, padding: '9px 11px', borderRadius: 10, background: '#FFF1F0', border: '1px solid #F2C6C3', color: '#B23A32', fontSize: 11, fontWeight: 800 }}>
+                      {driverTelegramError}
+                    </div>
+                  )}
+                </section>
+              )}
 
               <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14, marginBottom: 12 }}>
                 <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 9 }}>Район</div>

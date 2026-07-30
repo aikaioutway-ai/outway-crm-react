@@ -24,6 +24,8 @@ interface Props {
   renderPayrollHeader?: (args: TimesheetPayrollHeaderRenderArgs) => React.ReactNode;
   payrollSchoolTab?: PayrollSchoolTab;
   extraSchoolDockItems?: SchoolDockItem[];
+  periodKey: string;
+  onPeriodKeyChange: (key: string) => void;
 }
 
 interface SchoolSettings {
@@ -159,12 +161,13 @@ export default function TimesheetPage({
   renderPayrollHeader,
   payrollSchoolTab = 'timesheet',
   extraSchoolDockItems,
+  periodKey,
+  onPeriodKeyChange,
   ...props
 }: Props) {
   const now = new Date();
   const [half, setHalf]         = useState<'advance' | 'settlement'>('advance');
   const [calOpen, setCalOpen]   = useState(false);
-  const [periodKey, setPeriodKey] = useState('');
   const [schoolKey, setSchoolKey] = useState(initialSchoolKey);
   // Настройки каждой школы: key → { selectedDays, rate }
   const [schoolSettings, setSchoolSettings] = useState<Record<string, SchoolSettings>>({});
@@ -361,7 +364,8 @@ export default function TimesheetPage({
       customTopContent={renderPayrollHeader?.({ calculator })}
       initialQuickFilter={schoolKey ? { activeTab: schoolKey } : undefined}
       externalQuickTransfer={externalQuickTransfer}
-      onPeriodKeyChange={setPeriodKey}
+      externalPeriodKey={periodKey}
+      onPeriodKeyChange={onPeriodKeyChange}
       onSchoolKeyChange={handleSchoolKeyChange}
       customTableContent={table}
       extraSchoolDockItems={extraSchoolDockItems}

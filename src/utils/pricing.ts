@@ -5,8 +5,8 @@ import { SchoolCode, Zone, VehicleType } from '../types';
 const PRICE_RULES: Record<SchoolCode, { zone1: number; zone2: number; zone3: number | null }> = {
   LIGHT:   { zone1: 5000, zone2: 5500, zone3: 6000 },
   BILIM:   { zone1: 5000, zone2: 5500, zone3: 6500 },
-  AES:     { zone1: 5500, zone2: 6000, zone3: 6500 },
-  KAS:     { zone1: 5500, zone2: 6000, zone3: 6500 },
+  AES:     { zone1: 5600, zone2: 6100, zone3: 6600 },
+  KAS:     { zone1: 5600, zone2: 6100, zone3: 6600 },
   EPSILON: { zone1: 5500, zone2: 6000, zone3: 6500 },
   GENIUS:  { zone1: 5500, zone2: 6000, zone3: 6500 },
   GENIUS4: { zone1: 5500, zone2: 6000, zone3: 6500 },
@@ -15,7 +15,6 @@ const PRICE_RULES: Record<SchoolCode, { zone1: number; zone2: number; zone3: num
   ERUDIT:  { zone1: 6000, zone2: 6500, zone3: null },
   TENSAY:  { zone1: 6400, zone2: 6800, zone3: null },
   EDISON:  { zone1: 6500, zone2: 7000, zone3: null },
-  KRT:     { zone1: 5500, zone2: 6000, zone3: 6500 },
   ABL1:    { zone1: 6000, zone2: 6500, zone3: null },
   ABL2:    { zone1: 6000, zone2: 6500, zone3: null },
   KLM:     { zone1: 6000, zone2: 6500, zone3: null },

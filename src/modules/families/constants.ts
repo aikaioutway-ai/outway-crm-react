@@ -16,7 +16,6 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: [], logo: '/school-logos/LA.png' },
   { key: 'BKG',   label: 'BKG',   codes: ['BILIM'],   branches: ['Билим Бишкек Kg','Билим Бишкек KG','Билим Бишкек kg'], logo: '/school-logos/BKG.png' },
   { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
-  { key: 'KRT',   label: 'KRT',   codes: ['KRT'],  branches: [], logo: '/school-logos/KRT.png' },
   { key: 'ABL1',  label: 'ABL #1',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'ABL2',  label: 'ABL #2',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'KLM',   label: 'KLM',   codes: ['KLM'],  branches: [], logo: '/school-logos/KLM.png' },
@@ -62,7 +61,6 @@ export const BRANCH_SHORT: Record<string, string> = {
   'Nova International School':     'NOVA',
   'Эпсилон':                       'EPS',
   'Light Academy':                 'LA',
-  'Креатив-Таалим':                'KRT',
   'Академия будущих лидеров (Авангард)':  'ABL #1',
   'Академия будущих лидеров(Авангард)':   'ABL #1',
   'Академия будущих лидеров (Мавлянова)': 'ABL #2',
@@ -99,7 +97,6 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Nova International School': 'NOVA',
   'Эпсилон': 'EPS',
   'Light Academy': 'LA',
-  'Креатив-Таалим': 'KRT',
   'Академия будущих лидеров (Авангард)':  'ABL1',
   'Академия будущих лидеров(Авангард)':   'ABL1',
   'Академия будущих лидеров (Мавлянова)': 'ABL2',
@@ -113,7 +110,7 @@ export const SCHOOL_NAME: Record<string, string> = {
   AES: 'AES', KAS: 'KAS', EPSILON: 'Epsilon',
   GENIUS: 'Genius', GENIUS4: 'Genius 4', NOVA: 'Nova',
   INDIGO: 'Indigo', ERUDIT: 'Erudit', TENSAY: 'Tensay', EDISON: 'Edison',
-  KRT: 'Kreativ-Taalim', ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
+  ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
   KLM: 'Kalem Academy', TSL: 'Tesla Academy',
 };
 
@@ -123,7 +120,7 @@ export const SCHOOL_SHORT: Record<string, string> = {
   GENIUS: 'GEN #2', GENIUS4: 'GEN #4', NOVA: 'NOVA',
   INDIGO: 'ING', ERUDIT: 'ERU', TENSAY: 'TIS', EDISON: 'EDI',
   AES_KAS: 'AES',
-  KRT: 'KRT', ABL1: 'ABL #1', ABL2: 'ABL #2', KLM: 'KLM', TSL: 'TSL',
+  ABL1: 'ABL #1', ABL2: 'ABL #2', KLM: 'KLM', TSL: 'TSL',
 };
 
 export const SCHOOL_CODE_ALIASES: Record<string, string> = {
@@ -147,7 +144,6 @@ export const SCHOOL_CODE_ALIASES: Record<string, string> = {
   EDI: 'EDISON',
   EDi: 'EDISON',
   AES_KAS: 'AES_KAS',
-  'КRT': 'KRT',       // код из формы/таблицы записан с кириллической "К" — это опечатка в источнике
   'ABL #1': 'ABL1',
   'ABL_1': 'ABL1',
   'ABL #2': 'ABL2',
@@ -214,6 +210,11 @@ export const CASHIER_PERIODS = [
 export function currentCashierPeriodKey(): string {
   const month = new Date().getMonth() + 1;
   return CASHIER_PERIODS.find(period => period.month === month)?.key ?? '6';
+}
+
+export function currentPayrollPeriodKey(): string {
+  const month = new Date().getMonth() + 1;
+  return ALL_PERIODS.find(period => period.key !== 'deposit' && period.month === month)?.key ?? '9';
 }
 
 export function normalizeZone(z: unknown, fallback = 'A'): string {
