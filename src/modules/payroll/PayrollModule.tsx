@@ -9,11 +9,13 @@ interface PayrollModuleProps extends TimesheetModuleProps {
   schoolKey: string | null;
   transferFilter: string;
   schoolTab: PayrollSchoolTab;
+  periodKey: string;
   onSelectSchool: (key: string) => void;
   onTransferFilterChange: (key: string) => void;
+  onPeriodKeyChange: (key: string) => void;
 }
 
-export default function PayrollModule({ schoolKey, transferFilter, schoolTab, onSelectSchool, onTransferFilterChange, ...props }: PayrollModuleProps) {
+export default function PayrollModule({ schoolKey, transferFilter, schoolTab, periodKey, onSelectSchool, onTransferFilterChange, onPeriodKeyChange, ...props }: PayrollModuleProps) {
   const rightReserveWidth = props.rightReserveWidth ?? 78;
   const [summaryBySchool, setSummaryBySchool] = useState<Record<string, TimesheetPayrollSummary>>({});
 
@@ -38,9 +40,10 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, on
   if (!schoolKey) {
     return (
       <PayrollOverview
+        periodKey={periodKey}
+        onPeriodKeyChange={onPeriodKeyChange}
         onSelectSchool={onSelectSchool}
         onSidebarWidthChange={props.onSchoolsSidebarWidthChange}
-        summaryBySchool={summaryBySchool}
       />
     );
   }
@@ -55,6 +58,8 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, on
           onSchoolKeyChange={onSelectSchool}
           onPayrollSummaryChange={handleSummaryChange}
           payrollSchoolTab={schoolTab}
+          periodKey={periodKey}
+          onPeriodKeyChange={onPeriodKeyChange}
           extraSchoolDockItems={[{
             key: PAYROLL_OFFICE_KEY,
             label: PAYROLL_OFFICE_LABEL,

@@ -4,7 +4,7 @@ export type SchoolCode =
   | 'LIGHT' | 'BILIM'
   | 'AES' | 'KAS' | 'EPSILON' | 'GENIUS' | 'GENIUS4' | 'NOVA' | 'INDIGO'
   | 'ERUDIT' | 'TENSAY' | 'EDISON'
-  | 'KRT' | 'ABL1' | 'ABL2' | 'KLM' | 'TSL';
+  | 'ABL1' | 'ABL2' | 'KLM' | 'TSL';
 
 export interface School {
   short?: string;

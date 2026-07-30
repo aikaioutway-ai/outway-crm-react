@@ -20,6 +20,8 @@ export interface TimesheetModuleProps {
   initialSchoolKey?: string;
   externalQuickTransfer?: string;
   onSchoolKeyChange?: (key: string) => void;
+  periodKey: string;
+  onPeriodKeyChange: (key: string) => void;
   onPayrollSummaryChange?: (summary: TimesheetPayrollSummary) => void;
   renderPayrollHeader?: (args: TimesheetPayrollHeaderRenderArgs) => React.ReactNode;
   payrollSchoolTab?: PayrollSchoolTab;

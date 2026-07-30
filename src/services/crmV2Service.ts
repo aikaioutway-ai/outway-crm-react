@@ -45,6 +45,14 @@ export interface V2TransferDashboardRow {
   updatedAt: string;
 }
 
+export interface V2DriverTransferOption {
+  id: string;
+  transferNumber: number;
+  branchCode: string;
+  branchShort: string;
+  telegramChatId: number | null;
+}
+
 export interface V2DriverTableRow {
   rowId: string;
   driverId: string;
@@ -69,6 +77,8 @@ export interface V2DriverTableRow {
   branchNames: string[];
   missingDocumentCount: number;
   hasIncompleteDocuments: boolean;
+  telegramUserId: number | null;
+  transfers: V2DriverTransferOption[];
 }
 
 export type V2DriverDocumentType =
@@ -158,6 +168,20 @@ export interface V2DriverAdvance {
   date: string;
   comment: string;
   createdAt: string;
+}
+
+export type PayrollSubjectType = 'driver' | 'employee';
+
+export interface V2PayrollEntry {
+  id: string;
+  subjectId: string;
+  subjectType: PayrollSubjectType;
+  periodMonth: number;
+  periodYear: number;
+  days: number;
+  rate: number;
+  salaryAmount: number;
+  updatedAt: string;
 }
 
 function normalizeDriverDocuments(driverId: string, rows: any[]): V2DriverDocumentRow[] {
@@ -760,6 +784,7 @@ export async function fetchV2Branches(): Promise<V2BranchOption[]> {
   const { data, error } = await supabase
     .from('v2_school_branches')
     .select('id, school_id, code, short_name, name, latitude, longitude')
+    .eq('active', true)
     .order('code', { ascending: true });
   if (error) throw new Error(error.message);
   branchesCache = (data ?? []).map((row: any) => ({
@@ -935,7 +960,19 @@ export async function ensureV2Transfer(params: {
     })
     .select('id')
     .single();
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (error.code === '23505') {
+      const { data: raceExisting, error: raceSelectError } = await supabase
+        .from('v2_transfers')
+        .select('id')
+        .eq('branch_id', params.branchId)
+        .eq('transfer_number', params.transferNumber)
+        .maybeSingle();
+      if (raceSelectError) throw new Error(raceSelectError.message);
+      if (raceExisting?.id) return String(raceExisting.id);
+    }
+    throw new Error(error.message);
+  }
   return String(data.id);
 }
 
@@ -1007,7 +1044,7 @@ async function fetchV2DriversTableUncached(): Promise<V2DriverTableRow[]> {
     fetchAllRows<any>((from, to) => supabase.from('v2_vehicles').select('*').order('created_at', { ascending: true }).range(from, to)),
     fetchAllRows<any>((from, to) => supabase
         .from('v2_transfers')
-        .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, v2_school_branches(id, code, short_name, name)')
+        .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, telegram_chat_id, v2_school_branches(id, code, short_name, name)')
         .neq('status', 'archive')
         .order('transfer_number', { ascending: true })
         .range(from, to)),
@@ -1074,6 +1111,17 @@ async function fetchV2DriversTableUncached(): Promise<V2DriverTableRow[]> {
         || !document.expires_at
         || !document.scan_url;
     }).length;
+    const driverTransfers: V2DriverTransferOption[] = transfers.map(transfer => ({
+      id: String(transfer.id),
+      transferNumber: Number(transfer.transfer_number),
+      branchCode: transfer.v2_school_branches?.code ?? '',
+      branchShort: transfer.v2_school_branches?.short_name
+        ?? transfer.v2_school_branches?.code
+        ?? '',
+      telegramChatId: transfer.telegram_chat_id == null
+        ? null
+        : Number(transfer.telegram_chat_id),
+    }));
 
     return {
       rowId: String(driver.id),
@@ -1099,6 +1147,10 @@ async function fetchV2DriversTableUncached(): Promise<V2DriverTableRow[]> {
       branchNames,
       missingDocumentCount,
       hasIncompleteDocuments: missingDocumentCount > 0,
+      telegramUserId: driver.telegram_user_id == null
+        ? null
+        : Number(driver.telegram_user_id),
+      transfers: driverTransfers,
     };
   });
 }
@@ -1310,6 +1362,62 @@ export async function deleteV2DriverAdvance(advanceId: string): Promise<void> {
     .delete()
     .eq('id', advanceId);
   if (error) throw new Error(error.message);
+}
+
+function mapV2PayrollEntry(row: any): V2PayrollEntry {
+  return {
+    id: String(row.id),
+    subjectId: String(row.subject_id),
+    subjectType: row.subject_type,
+    periodMonth: Number(row.period_month),
+    periodYear: Number(row.period_year),
+    days: Number(row.days),
+    rate: Number(row.rate),
+    salaryAmount: Number(row.salary_amount),
+    updatedAt: row.updated_at ?? '',
+  };
+}
+
+export async function fetchV2PayrollEntriesForPeriod(periodMonth: number, periodYear: number): Promise<V2PayrollEntry[]> {
+  if (periodMonth < 1 || periodMonth > 12 || !periodYear) return [];
+  const data = await fetchAllRows<any>((from, to) => supabase
+    .from('v2_payroll_entries')
+    .select('*')
+    .eq('period_month', periodMonth)
+    .eq('period_year', periodYear)
+    .range(from, to));
+  return data.map(mapV2PayrollEntry);
+}
+
+export async function upsertV2PayrollEntry(patch: {
+  subjectId: string;
+  subjectType: PayrollSubjectType;
+  periodMonth: number;
+  periodYear: number;
+  days?: number;
+  rate?: number;
+  salaryAmount?: number;
+}): Promise<V2PayrollEntry> {
+  const { subjectId, subjectType, periodMonth, periodYear, days, rate, salaryAmount } = patch;
+  const payload: Record<string, unknown> = {
+    subject_id: subjectId,
+    subject_type: subjectType,
+    period_month: periodMonth,
+    period_year: periodYear,
+  };
+  if (days !== undefined) payload.days = days;
+  if (rate !== undefined) payload.rate = rate;
+  if (salaryAmount !== undefined) payload.salary_amount = salaryAmount;
+
+  const { data, error } = await supabase
+    .from('v2_payroll_entries')
+    .upsert(payload, { onConflict: 'subject_id,subject_type,period_month,period_year' })
+    .select()
+    .single();
+  if (error) throw new Error(error.message);
+
+  queryClient.invalidateQueries({ queryKey: QK.payrollEntries(periodMonth, periodYear) });
+  return mapV2PayrollEntry(data);
 }
 
 export async function updateV2TransferVehicleType(params: {

@@ -1,19 +1,23 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ReceiptText, School, WalletCards } from 'lucide-react';
-import { useDriversTable } from '../../hooks/useCrmQueries';
+import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
 import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
+import { ALL_PERIODS, currentPayrollPeriodKey } from '../families/constants';
 import { money } from '../../utils/pricing';
-import { computePayrollStats, PAYROLL_COLORS, PayrollMoneySummary, PayrollSchoolStat } from './payrollStats';
+import { buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
 import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
 
 type SortKey = 'school' | 'accruedAmount' | 'advanceAmount' | 'salaryAmount' | 'paidAmount' | 'remainingAmount';
 
+const PAYROLL_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
+
 interface PayrollOverviewProps {
+  periodKey: string;
+  onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
-  summaryBySchool?: Record<string, PayrollMoneySummary>;
 }
 
 const COLUMN_WEIGHTS: Record<SortKey, number> = {
@@ -72,8 +76,41 @@ function ColumnCard({ sortKey, label, sortState, onSort, children }: {
   );
 }
 
-export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, summaryBySchool = {} }: PayrollOverviewProps) {
+function PeriodBar({ periodKey, onPeriodKeyChange }: Pick<PayrollOverviewProps, 'periodKey' | 'onPeriodKeyChange'>) {
+  return (
+    <div style={{
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6,
+      padding: '6px 8px',
+      background: '#F5FAFB',
+      border: '1px solid #D4E3E7',
+      borderRadius: 10,
+      overflowX: 'auto',
+      flexShrink: 0,
+      scrollbarWidth: 'none',
+      width: '100%',
+      boxSizing: 'border-box',
+    }}>
+      {PAYROLL_PERIODS.map(period => {
+        const active = periodKey === period.key;
+        return (
+          <button
+            key={period.key}
+            onClick={() => onPeriodKeyChange(period.key)}
+            style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 800 : 600, background: active ? '#2DD4BF' : '#fff', color: active ? '#fff' : '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+          >
+            {period.label.split(' ')[0]}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange }: PayrollOverviewProps) {
   const { data: rows = null } = useDriversTable();
+  const { data: employees = null } = useEmployees();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -82,6 +119,23 @@ export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
+
+  useEffect(() => {
+    if (PAYROLL_PERIODS.some(period => period.key === periodKey)) return;
+    onPeriodKeyChange(currentPayrollPeriodKey());
+  }, [onPeriodKeyChange, periodKey]);
+
+  const period = PAYROLL_PERIODS.find(item => item.key === periodKey);
+  const periodMonth = period?.month ?? new Date().getMonth() + 1;
+  const periodYear = period?.year ?? new Date().getFullYear();
+
+  const { data: entries = null } = usePayrollEntriesForPeriod(periodMonth, periodYear);
+  const { data: advances = null } = useDriverAdvancesForPeriod(periodMonth, periodYear);
+
+  const summaryBySchool = useMemo(
+    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? []),
+    [entries, advances, rows, employees],
+  );
 
   const stats = useMemo(() => computePayrollStats(rows ?? [], summaryBySchool), [rows, summaryBySchool]);
   const totals = useMemo(() => stats.reduce((acc, stat) => ({
@@ -124,6 +178,8 @@ export default function PayrollOverview({ onSelectSchool, onSidebarWidthChange, 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <PeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} />
+
         <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
           <KpiChip icon={<School size={18} color="#fff" />} label="Школы" value={String(totals.schools)} color={PAYROLL_COLORS.school} />
           <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Начислено" value={money(totals.accruedAmount)} color={PAYROLL_COLORS.accruedAmount} />

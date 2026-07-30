@@ -1,4 +1,5 @@
-import { V2DriverTableRow } from '../../services/crmV2Service';
+import { V2DriverAdvance, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
+import { Employee } from '../../types';
 import { PAYROLL_OFFICE_COLOR, PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, TimesheetPayrollSummary } from '../expenses/timesheetTypes';
 import { SCHOOL_TABS } from '../families/constants';
 
@@ -79,6 +80,55 @@ export function payrollStatFromRows(
     noTransferCount: rows.filter(row => row.transferCount === 0).length,
     ...summary,
   };
+}
+
+/** Строит реальную сводку по школам из данных, сохранённых в v2_payroll_entries —
+ * в отличие от сессионного кэша (заполняется только при заходе в школу), здесь
+ * данные видны сразу по всем школам за выбранный период. */
+export function buildPayrollSummaryBySchool(
+  entries: V2PayrollEntry[],
+  advances: V2DriverAdvance[],
+  drivers: V2DriverTableRow[],
+  employees: Employee[],
+): Record<string, PayrollMoneySummary> {
+  const advanceByDriver: Record<string, number> = {};
+  advances.forEach(advance => {
+    advanceByDriver[advance.driverId] = (advanceByDriver[advance.driverId] ?? 0) + advance.amount;
+  });
+
+  const driverById = new Map(drivers.map(d => [d.driverId, d]));
+  const employeeById = new Map(employees.map(e => [e.id, e]));
+  const schoolTabs = SCHOOL_TABS.filter(tab => tab.key !== 'ALL');
+
+  const summary: Record<string, PayrollMoneySummary> = {};
+  const addTo = (key: string, accrued: number, advance: number, salary: number, paid: number) => {
+    const current = summary[key] ?? EMPTY_PAYROLL_SUMMARY;
+    summary[key] = {
+      accruedAmount: current.accruedAmount + accrued,
+      advanceAmount: current.advanceAmount + advance,
+      salaryAmount: current.salaryAmount + salary,
+      paidAmount: current.paidAmount + paid,
+      remainingAmount: current.remainingAmount + (accrued - paid),
+    };
+  };
+
+  entries.forEach(entry => {
+    const accrued = entry.days * entry.rate;
+    if (entry.subjectType === 'driver') {
+      const driver = driverById.get(entry.subjectId);
+      if (!driver || driver.status !== 'active') return;
+      const tab = schoolTabs.find(t => payrollDriverMatchesSchool(driver, t.key));
+      if (!tab) return;
+      const advanceAmount = advanceByDriver[entry.subjectId] ?? 0;
+      addTo(tab.key, accrued, advanceAmount, entry.salaryAmount, advanceAmount + entry.salaryAmount);
+    } else {
+      const employee = employeeById.get(entry.subjectId);
+      if (!employee || employee.status !== 'active' || employee.role === 'driver') return;
+      addTo(PAYROLL_OFFICE_KEY, accrued, 0, entry.salaryAmount, entry.salaryAmount);
+    }
+  });
+
+  return summary;
 }
 
 export function computePayrollStats(rows: V2DriverTableRow[], summaryBySchool: Record<string, PayrollMoneySummary> = {}): PayrollSchoolStat[] {

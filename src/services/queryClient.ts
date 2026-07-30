@@ -18,4 +18,7 @@ export const QK = {
   driversTable: ['driversTable'] as const,
   paymentsTable: ['paymentsTable'] as const,
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
+  employees: ['employees'] as const,
+  payrollEntries: (periodMonth: number, periodYear: number) => ['payrollEntries', periodMonth, periodYear] as const,
+  driverAdvancesForPeriod: (periodMonth: number, periodYear: number) => ['driverAdvancesForPeriod', periodMonth, periodYear] as const,
 };

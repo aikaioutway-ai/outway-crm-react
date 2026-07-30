@@ -6,6 +6,8 @@ import {
   fetchPaymentsTable,
   fetchCashierPaymentsTable,
   fetchBranchStats,
+  fetchV2PayrollEntriesForPeriod,
+  fetchV2DriverAdvancesForPeriod,
   FamilyListRow,
   FamiliesPageParams,
   FamiliesPageResult,
@@ -13,7 +15,11 @@ import {
   PaymentTableRow,
   CashierPaymentRow,
   BranchStat,
+  V2PayrollEntry,
+  V2DriverAdvance,
 } from '../services/crmV2Service';
+import { fetchEmployees } from '../services/employeeService';
+import { Employee } from '../types';
 import { QK } from '../services/queryClient';
 
 /** Единая точка загрузки таблицы семей — все компоненты с одинаковым
@@ -69,5 +75,26 @@ export function useBranchStats(): UseQueryResult<BranchStat[]> {
   return useQuery({
     queryKey: QK.branchStats,
     queryFn: fetchBranchStats,
+  });
+}
+
+export function useEmployees(): UseQueryResult<Employee[]> {
+  return useQuery({
+    queryKey: QK.employees,
+    queryFn: fetchEmployees,
+  });
+}
+
+export function usePayrollEntriesForPeriod(periodMonth: number, periodYear: number): UseQueryResult<V2PayrollEntry[]> {
+  return useQuery({
+    queryKey: QK.payrollEntries(periodMonth, periodYear),
+    queryFn: () => fetchV2PayrollEntriesForPeriod(periodMonth, periodYear),
+  });
+}
+
+export function useDriverAdvancesForPeriod(periodMonth: number, periodYear: number): UseQueryResult<V2DriverAdvance[]> {
+  return useQuery({
+    queryKey: QK.driverAdvancesForPeriod(periodMonth, periodYear),
+    queryFn: () => fetchV2DriverAdvancesForPeriod(periodMonth, periodYear),
   });
 }
