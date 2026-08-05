@@ -63,7 +63,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierSchoolKpiStrip({ schoolKey, periodKey, rightReserveWidth = 78 }: CashierSchoolKpiStripProps) {
+export default function CashierSchoolKpiStrip({ schoolKey, periodKey, rightReserveWidth = 0 }: CashierSchoolKpiStripProps) {
   const { data: rows = null } = usePaymentsTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);

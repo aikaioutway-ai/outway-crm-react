@@ -57,7 +57,7 @@ export default function TimesheetModule(props: TimesheetModuleProps) {
   const tabs = props.tabs?.length ? props.tabs : TABS;
   const [tab, setTab] = useState<TimesheetTab>(props.initialTab ?? tabs[0].key);
 
-  const rightReserveWidth = props.rightReserveWidth ?? 78;
+  const rightReserveWidth = props.rightReserveWidth ?? 0;
   const moduleLabel = props.moduleLabel ?? 'Табель';
   const activeTab = tabs.some(item => item.key === tab) ? tab : tabs[0].key;
   const activeVehicleType = props.hideHeaderControls

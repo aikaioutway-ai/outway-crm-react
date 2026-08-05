@@ -23,7 +23,7 @@ function vehicleShort(vehicleType?: string): string {
   return '';
 }
 
-export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
+export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
   const { data: rows } = useFamiliesTable(false);
 
   const allSchoolRows = useMemo(() => (

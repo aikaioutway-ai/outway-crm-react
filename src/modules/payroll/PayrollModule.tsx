@@ -16,7 +16,7 @@ interface PayrollModuleProps extends TimesheetModuleProps {
 }
 
 export default function PayrollModule({ schoolKey, transferFilter, schoolTab, periodKey, onSelectSchool, onTransferFilterChange, onPeriodKeyChange, ...props }: PayrollModuleProps) {
-  const rightReserveWidth = props.rightReserveWidth ?? 78;
+  const rightReserveWidth = props.rightReserveWidth ?? 0;
   const [summaryBySchool, setSummaryBySchool] = useState<Record<string, TimesheetPayrollSummary>>({});
 
   const handleSummaryChange = useCallback((summary: TimesheetPayrollSummary) => {

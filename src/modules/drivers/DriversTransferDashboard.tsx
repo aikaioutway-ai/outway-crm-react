@@ -42,7 +42,7 @@ function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string)
     .includes(transferNumber);
 }
 
-export default function DriversTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: DriversTransferDashboardProps) {
+export default function DriversTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: DriversTransferDashboardProps) {
   const { data: rows = null } = useDriversTable();
 
   const isReserve = schoolKey === DRIVER_RESERVE_KEY;

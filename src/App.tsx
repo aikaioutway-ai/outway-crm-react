@@ -89,7 +89,7 @@ export default function App() {
   };
   const [adminFiltersOpen, setAdminFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
-  const [schoolSidebarReserveWidth, setSchoolSidebarReserveWidth] = useState(78);
+  const [schoolSidebarReserveWidth, setSchoolSidebarReserveWidth] = useState(0);
 
   const handleLogin = async (login: string, password: string) => {
     const user = await authenticateEmployee(login, password);
@@ -118,7 +118,7 @@ export default function App() {
   useEffect(() => {
     setAdminFiltersOpen(false);
     setColumnsOpen(false);
-    setSchoolSidebarReserveWidth(78);
+    setSchoolSidebarReserveWidth(0);
     setManagerTransferFilter('');
     setManagerSchoolMode('directory');
     setCashierSchoolKey(null);

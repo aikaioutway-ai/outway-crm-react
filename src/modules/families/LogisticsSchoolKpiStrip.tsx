@@ -47,7 +47,7 @@ function transferStats(rows: FamilyListRow[]) {
   };
 }
 
-export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: LogisticsSchoolKpiStripProps) {
+export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: LogisticsSchoolKpiStripProps) {
   const { data: rows } = useFamiliesTable(false);
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);

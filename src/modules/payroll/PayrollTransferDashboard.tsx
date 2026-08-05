@@ -25,7 +25,7 @@ function vehicleShort(vehicleType?: string): string {
   return '';
 }
 
-export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: PayrollTransferDashboardProps) {
+export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: PayrollTransferDashboardProps) {
   const { data: rows = null } = useDriversTable();
 
   const isOffice = schoolKey === PAYROLL_OFFICE_KEY;

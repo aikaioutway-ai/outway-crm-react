@@ -39,7 +39,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 78, selectedKey = '', onSelect }: CashierSchoolTransferDashboardProps) {
+export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 0, selectedKey = '', onSelect }: CashierSchoolTransferDashboardProps) {
   const { data: rows = null } = usePaymentsTable();
 
   const schoolRows = useMemo(() => (

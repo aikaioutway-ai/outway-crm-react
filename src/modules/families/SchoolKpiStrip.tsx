@@ -9,7 +9,7 @@ interface SchoolKpiStripProps {
   rightReserveWidth?: number;
 }
 
-export default function SchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: SchoolKpiStripProps) {
+export default function SchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: SchoolKpiStripProps) {
   const { data: branches } = useBranchStats();
 
   const stat = useMemo(() => (

@@ -29,7 +29,7 @@ function driverMatchesSchool(driver: V2DriverTableRow, schoolKey: string): boole
     || driver.branchNames.includes(school.label);
 }
 
-export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 78 }: DriversSchoolKpiStripProps) {
+export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: DriversSchoolKpiStripProps) {
   const { data: rows = null } = useDriversTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);

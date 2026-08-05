@@ -12,7 +12,7 @@ interface PayrollSchoolKpiStripProps {
   leadingContent?: React.ReactNode;
 }
 
-export default function PayrollSchoolKpiStrip({ schoolKey, rightReserveWidth = 78, summaryBySchool = {}, leadingContent }: PayrollSchoolKpiStripProps) {
+export default function PayrollSchoolKpiStrip({ schoolKey, rightReserveWidth = 0, summaryBySchool = {}, leadingContent }: PayrollSchoolKpiStripProps) {
   const { data: rows = null } = useDriversTable();
 
   const stat = useMemo(() => (

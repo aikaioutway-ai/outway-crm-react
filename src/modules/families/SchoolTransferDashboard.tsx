@@ -38,7 +38,7 @@ function compactMoney(value: number): string {
   return amount.toLocaleString('ru-RU');
 }
 
-export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 78, selectedKey = '', onSelect }: SchoolTransferDashboardProps) {
+export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: SchoolTransferDashboardProps) {
   const { data: rows } = useFamiliesTable(false);
 
   if (!rows) return null;
