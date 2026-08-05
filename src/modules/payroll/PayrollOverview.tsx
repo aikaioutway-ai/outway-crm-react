@@ -1,13 +1,14 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, ReceiptText, School, WalletCards } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ReceiptText, School, WalletCards } from 'lucide-react';
 import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
-import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
+import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
 import { ALL_PERIODS, currentPayrollPeriodKey } from '../families/constants';
 import { money } from '../../utils/pricing';
 import { buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
 import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
+import ManagerPeriodBar from '../families/ManagerPeriodBar';
 
 type SortKey = 'school' | 'accruedAmount' | 'advanceAmount' | 'salaryAmount' | 'paidAmount' | 'remainingAmount';
 
@@ -18,6 +19,8 @@ interface PayrollOverviewProps {
   onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
+  search?: string;
+  onSearchChange?: (value: string) => void;
 }
 
 const COLUMN_WEIGHTS: Record<SortKey, number> = {
@@ -38,77 +41,7 @@ function sortValue(stat: PayrollSchoolStat, key: SortKey): number | string {
   return stat[key];
 }
 
-function ColumnCard({ sortKey, label, sortState, onSort, children }: {
-  sortKey: SortKey;
-  label: string;
-  sortState: { key: SortKey; dir: 'asc' | 'desc' };
-  onSort: (key: SortKey) => void;
-  children: React.ReactNode;
-}) {
-  const active = sortState.key === sortKey;
-  return (
-    <div style={{ minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button
-        onClick={() => onSort(sortKey)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px solid var(--border)',
-          cursor: 'pointer',
-          padding: '12px 16px',
-          fontSize: 13,
-          fontWeight: 800,
-          color: active ? 'var(--accent)' : 'var(--text)',
-          textTransform: 'uppercase',
-          textAlign: 'left',
-        }}
-      >
-        {label}
-        {active && (sortState.dir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-      </button>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function PeriodBar({ periodKey, onPeriodKeyChange }: Pick<PayrollOverviewProps, 'periodKey' | 'onPeriodKeyChange'>) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '6px 8px',
-      background: '#F5FAFB',
-      border: '1px solid #D4E3E7',
-      borderRadius: 10,
-      overflowX: 'auto',
-      flexShrink: 0,
-      scrollbarWidth: 'none',
-      width: '100%',
-      boxSizing: 'border-box',
-    }}>
-      {PAYROLL_PERIODS.map(period => {
-        const active = periodKey === period.key;
-        return (
-          <button
-            key={period.key}
-            onClick={() => onPeriodKeyChange(period.key)}
-            style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 800 : 600, background: active ? '#2DD4BF' : '#fff', color: active ? '#fff' : '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {period.label.split(' ')[0]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange }: PayrollOverviewProps) {
+export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const { data: employees = null } = useEmployees();
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -164,8 +97,9 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
     const officeRows: GroupedRow<PayrollSchoolStat>[] = officeStats.map(stat => ({
       key: stat.key, label: stat.label, color: stat.color, logo: stat.logo, isGroup: false, isChild: false, data: stat,
     }));
-    return [...grouped, ...officeRows];
-  }, [sortState, stats, expandedGroups]);
+    const query = search.trim().toLowerCase();
+    return [...grouped, ...officeRows].filter(row => !query || row.label.toLowerCase().includes(query));
+  }, [sortState, stats, expandedGroups, search]);
 
   const handleSort = (key: SortKey) => {
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
@@ -177,20 +111,27 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <PeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} />
+      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <DashboardTopPanel>
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+              <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} periods={PAYROLL_PERIODS} showAll={false} />
+            </div>
+            <DashboardSearch value={search} onChange={onSearchChange ?? (() => {})} placeholder="Поиск школы..." />
+          </div>
+        </DashboardTopPanel>
 
-        <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
-          <KpiChip icon={<School size={18} color="#fff" />} label="Школы" value={String(totals.schools)} color={PAYROLL_COLORS.school} />
-          <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Начислено" value={money(totals.accruedAmount)} color={PAYROLL_COLORS.accruedAmount} />
-          <KpiChip icon={<WalletCards size={18} color="#fff" />} label="Авансы" value={money(totals.advanceAmount)} color={PAYROLL_COLORS.advanceAmount} />
-          <KpiChip icon={<Banknote size={18} color="#fff" />} label="Зарплата" value={money(totals.salaryAmount)} color={PAYROLL_COLORS.salaryAmount} />
-          <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Оплачено" value={money(totals.paidAmount)} color={PAYROLL_COLORS.paidAmount} />
-          <KpiChip icon={<ChevronRight size={18} color="#fff" />} label="Остаток" value={money(totals.remainingAmount)} color={PAYROLL_COLORS.remainingAmount} />
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12 }}>
-          <ColumnCard sortKey="school" label="Школы" sortState={sortState} onSort={handleSort}>
+        <DashboardGrid template={GRID_TEMPLATE}>
+          <ColumnCard
+            first
+            sortKey="school"
+            label="Школы"
+            icon={<School size={17} color="#fff" />}
+            value={String(totals.schools)}
+            color={PAYROLL_COLORS.school}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {sortedStats.map((row, index) => (
               <div
                 key={row.key}
@@ -209,13 +150,22 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
           </ColumnCard>
 
           {([
-            ['accruedAmount', 'Начислено'],
-            ['advanceAmount', 'Авансы'],
-            ['salaryAmount', 'Зарплата'],
-            ['paidAmount', 'Оплачено'],
-            ['remainingAmount', 'Остаток'],
-          ] as const).map(([key, label]) => (
-            <ColumnCard key={key} sortKey={key} label={label} sortState={sortState} onSort={handleSort}>
+            ['accruedAmount', 'Начислено', <ReceiptText size={17} color="#fff" />, money(totals.accruedAmount)],
+            ['advanceAmount', 'Авансы', <WalletCards size={17} color="#fff" />, money(totals.advanceAmount)],
+            ['salaryAmount', 'Зарплата', <Banknote size={17} color="#fff" />, money(totals.salaryAmount)],
+            ['paidAmount', 'Оплачено', <CheckCircle2 size={17} color="#fff" />, money(totals.paidAmount)],
+            ['remainingAmount', 'Остаток', <ChevronRight size={17} color="#fff" />, money(totals.remainingAmount)],
+          ] as const).map(([key, label, icon, value]) => (
+            <ColumnCard
+              key={key}
+              sortKey={key}
+              label={label}
+              icon={icon}
+              value={value}
+              color={PAYROLL_COLORS[key]}
+              sortState={sortState}
+              onSort={handleSort}
+            >
               {sortedStats.map((row, index) => (
                 <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: row.data[key] > 0 ? PAYROLL_COLORS[key] : undefined }}>{money(row.data[key])}</span>
@@ -223,7 +173,7 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
               ))}
             </ColumnCard>
           ))}
-        </div>
+        </DashboardGrid>
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Bus, Car, ChevronDown, ChevronRight, ChevronUp, FileWarning, School, UserCheck, UserX } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bus, Car, ChevronDown, ChevronRight, FileWarning, School, UserCheck, UserX } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from '../families/constants';
-import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
+import { DashboardGrid, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
 
@@ -106,44 +106,6 @@ function computeDriverStats(rows: V2DriverTableRow[]): DriverSchoolStat[] {
   ];
 }
 
-function ColumnCard({ sortKey, label, sortState, onSort, children }: {
-  sortKey: SortKey;
-  label: string;
-  sortState: { key: SortKey; dir: 'asc' | 'desc' };
-  onSort: (key: SortKey) => void;
-  children: React.ReactNode;
-}) {
-  const active = sortState.key === sortKey;
-  return (
-    <div style={{ minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button
-        onClick={() => onSort(sortKey)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px solid var(--border)',
-          cursor: 'pointer',
-          padding: '12px 16px',
-          fontSize: 13,
-          fontWeight: 800,
-          color: active ? 'var(--accent)' : 'var(--text)',
-          textTransform: 'uppercase',
-          textAlign: 'left',
-        }}
-      >
-        {label}
-        {active && (sortState.dir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-      </button>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }: DriversOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -198,18 +160,17 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
-          <KpiChip icon={<School size={18} color="#fff" />} label="Школы с водителями" value={String(totals.schools)} color={KPI_COLORS.school} />
-          <KpiChip icon={<UserCheck size={18} color="#fff" />} label="Активные" value={String(totals.activeCount)} color={KPI_COLORS.activeCount} />
-          <KpiChip icon={<UserX size={18} color="#fff" />} label="Неактивные" value={String(totals.inactiveCount)} color={KPI_COLORS.inactiveCount} />
-          <KpiChip icon={<Bus size={18} color="#fff" />} label="Микробусы" value={String(totals.microbusCount)} color={KPI_COLORS.microbusCount} />
-          <KpiChip icon={<Car size={18} color="#fff" />} label="Минивэны" value={String(totals.minivanCount)} color={KPI_COLORS.minivanCount} />
-          <KpiChip icon={<Car size={18} color="#fff" />} label="Седаны" value={String(totals.sedanCount)} color={KPI_COLORS.sedanCount} />
-          <KpiChip icon={<FileWarning size={18} color="#fff" />} label="Документы не полные" value={String(totals.incompleteDocumentsCount)} color={KPI_COLORS.incompleteDocumentsCount} />
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12 }}>
-          <ColumnCard sortKey="school" label="Школы" sortState={sortState} onSort={handleSort}>
+        <DashboardGrid template={GRID_TEMPLATE}>
+          <ColumnCard
+            first
+            sortKey="school"
+            label="Школы с водителями"
+            icon={<School size={17} color="#fff" />}
+            value={String(totals.schools)}
+            color={KPI_COLORS.school}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, index) => (
               <div
                 key={row.key}
@@ -228,14 +189,23 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }
           </ColumnCard>
 
           {([
-            ['activeCount', 'Активные'],
-            ['inactiveCount', 'Неактивные'],
-            ['microbusCount', 'Микробусы'],
-            ['minivanCount', 'Минивэны'],
-            ['sedanCount', 'Седаны'],
-            ['incompleteDocumentsCount', 'Документы'],
-          ] as const).map(([key, label]) => (
-            <ColumnCard key={key} sortKey={key} label={label} sortState={sortState} onSort={handleSort}>
+            ['activeCount', 'Активные', <UserCheck size={17} color="#fff" />, String(totals.activeCount)],
+            ['inactiveCount', 'Неактивные', <UserX size={17} color="#fff" />, String(totals.inactiveCount)],
+            ['microbusCount', 'Микробусы', <Bus size={17} color="#fff" />, String(totals.microbusCount)],
+            ['minivanCount', 'Минивэны', <Car size={17} color="#fff" />, String(totals.minivanCount)],
+            ['sedanCount', 'Седаны', <Car size={17} color="#fff" />, String(totals.sedanCount)],
+            ['incompleteDocumentsCount', 'Документы', <FileWarning size={17} color="#fff" />, String(totals.incompleteDocumentsCount)],
+          ] as const).map(([key, label, icon, value]) => (
+            <ColumnCard
+              key={key}
+              sortKey={key}
+              label={label}
+              icon={icon}
+              value={value}
+              color={KPI_COLORS[key]}
+              sortState={sortState}
+              onSort={handleSort}
+            >
               {displayRows.map((row, index) => {
                 const value = row.data[key];
                 return (
@@ -246,7 +216,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }
               })}
             </ColumnCard>
           ))}
-        </div>
+        </DashboardGrid>
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

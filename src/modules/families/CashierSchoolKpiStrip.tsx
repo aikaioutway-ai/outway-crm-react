@@ -4,7 +4,7 @@ import { PaymentTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
-import { KpiChip, SchoolAvatar } from './ManagerOverview';
+import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface CashierSchoolKpiStripProps {
   schoolKey: string;

@@ -1,11 +1,15 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Inbox, Landmark, Receipt, Search, Users, Wallet, X } from 'lucide-react';
+import { CheckCircle2, ChevronDown, ChevronRight, Inbox, Landmark, Plus, Receipt, Search, Users, Wallet, X } from 'lucide-react';
 import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
 import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
-import { ALL_PERIODS, SCHOOL_TABS, getBranchFilter } from './constants';
+import { ALL_PERIODS, SCHOOL_TABS, getBranchFilter, isSchoolAllowed } from './constants';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
+import ManagerPeriodBar from './ManagerPeriodBar';
+import NewFamilyModal from './NewFamilyModal';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { formatName } from '../../utils/format';
 
 export interface SchoolStat {
   key: string;
@@ -27,7 +31,8 @@ type SortKey = 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' |
 interface ManagerOverviewProps {
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
-  onOpenFamily?: (schoolKey: string, familyId: string) => void;
+  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string) => void;
+  allowedSchools?: string[];
 }
 
 const SCHOOL_COLORS = [
@@ -59,30 +64,6 @@ const COLUMN_WEIGHTS: Record<SortKey, number> = {
 const KPI_GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'debtSum', 'balance']
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
-
-function Ring({ value, max, color, size = 34 }: { value: number; max: number; color: string; size?: number }) {
-  const pct = Math.max(0, Math.min(1, value / max));
-  const strokeWidth = 5;
-  const radius = (size - strokeWidth) / 2;
-  const circumference = 2 * Math.PI * radius;
-  return (
-    <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ flexShrink: 0 }}>
-      <circle cx={size / 2} cy={size / 2} r={radius} fill="none" stroke="var(--border)" strokeWidth={strokeWidth} />
-      <circle
-        cx={size / 2}
-        cy={size / 2}
-        r={radius}
-        fill="none"
-        stroke={color}
-        strokeWidth={strokeWidth}
-        strokeLinecap="round"
-        strokeDasharray={circumference}
-        strokeDashoffset={circumference * (1 - pct)}
-        transform={`rotate(-90 ${size / 2} ${size / 2})`}
-      />
-    </svg>
-  );
-}
 
 export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
@@ -141,108 +122,15 @@ export function computeSchoolStatsFromBranches(branches: BranchStat[]): SchoolSt
   });
 }
 
-export function SchoolAvatar({ logo, label, color, size = 26, radius = 7, fontSize = 11 }: { logo?: string; label: string; color: string; size?: number; radius?: number; fontSize?: number }) {
-  if (logo) {
-    return <img src={logo} alt={label} style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', flexShrink: 0 }} />;
-  }
-  return (
-    <span style={{ width: size, height: size, borderRadius: radius, background: color, color: '#fff', fontSize, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-      {label.slice(0, 2).toUpperCase()}
-    </span>
-  );
-}
-
-export function KpiChip({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: string; color: string }) {
-  return (
-    <div style={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, padding: '12px 14px', overflow: 'hidden' }}>
-      <div style={{ width: 38, height: 38, borderRadius: 11, background: color, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-        {icon}
-      </div>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--text)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{value}</div>
-        <div title={label} style={{ fontSize: 10, lineHeight: '13px', fontWeight: 650, color: 'var(--text-2)', textTransform: 'uppercase', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{label}</div>
-      </div>
-    </div>
-  );
-}
-
-function ColumnCard({ sortKey, label, sortState, onSort, children }: {
-  sortKey: SortKey;
-  label: string;
-  sortState: { key: SortKey; dir: 'asc' | 'desc' };
-  onSort: (key: SortKey) => void;
-  children: React.ReactNode;
+export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact = false }: {
+  rows: FamilyListRow[];
+  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string) => void;
+  collapsible?: boolean;
+  compact?: boolean;
 }) {
-  const active = sortState.key === sortKey;
-  return (
-    <div style={{ minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button
-        onClick={() => onSort(sortKey)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px solid var(--border)',
-          cursor: 'pointer',
-          padding: '12px 16px',
-          fontSize: 13,
-          fontWeight: 800,
-          color: active ? 'var(--accent)' : 'var(--text)',
-          textTransform: 'uppercase',
-          textAlign: 'left',
-        }}
-      >
-        {label}
-        {active && (sortState.dir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-      </button>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
-function ManagerPeriodBar({ periodKey, onPeriodKeyChange }: { periodKey: string; onPeriodKeyChange: (key: string) => void }) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '6px 0',
-      overflowX: 'auto',
-      flex: 1,
-      width: '100%',
-      minWidth: 0,
-      scrollbarWidth: 'none',
-      boxSizing: 'border-box',
-    }}>
-      <button
-        onClick={() => onPeriodKeyChange('ALL')}
-        style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: periodKey === 'ALL' ? 800 : 600, background: periodKey === 'ALL' ? '#2DD4BF' : '#fff', color: periodKey === 'ALL' ? '#fff' : '#374151', whiteSpace: 'nowrap', flexShrink: 0 }}
-      >
-        Все
-      </button>
-      {ALL_PERIODS.map(period => {
-        const active = periodKey === period.key;
-        return (
-          <button
-            key={period.key}
-            onClick={() => onPeriodKeyChange(period.key)}
-            style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 800 : 600, background: active ? '#2DD4BF' : '#fff', color: active ? '#fff' : '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {period.key === 'deposit' ? 'Депозит' : period.label.split(' ')[0]}
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ManagerSearch({ rows, onOpenFamily }: { rows: FamilyListRow[]; onOpenFamily?: (schoolKey: string, familyId: string) => void }) {
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
+  const [expanded, setExpanded] = useState(!collapsible);
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -279,9 +167,18 @@ function ManagerSearch({ rows, onOpenFamily }: { rows: FamilyListRow[]; onOpenFa
   }, []);
 
   const select = (row: FamilyListRow) => {
-    onOpenFamily?.(row.branchFilter, row.familyId);
+    // Подсказки ищут по полному имени из базы, включая отчество. Таблица
+    // отображает и индексирует имя через formatName (фамилия + имя), поэтому
+    // после выбора передаём ту же нормализованную форму и не получаем пустой список.
+    const searchQuery = row.childName
+      ? formatName(row.childName)
+      : row.parentName
+        ? formatName(row.parentName)
+        : row.phone;
+    onOpenFamily?.(row.branchFilter, row.familyId, searchQuery);
     setQuery('');
     setFocused(false);
+    if (collapsible) setExpanded(false);
   };
 
   const handleKeyDown = (event: React.KeyboardEvent) => {
@@ -289,16 +186,38 @@ function ManagerSearch({ rows, onOpenFamily }: { rows: FamilyListRow[]; onOpenFa
     if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex(i => Math.min(i + 1, suggestions.length - 1)); }
     else if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(i => Math.max(i - 1, 0)); }
     else if (event.key === 'Enter') { event.preventDefault(); select(suggestions[activeIndex]); }
-    else if (event.key === 'Escape') { setFocused(false); }
+    else if (event.key === 'Escape') {
+      setFocused(false);
+      if (collapsible) {
+        setQuery('');
+        setExpanded(false);
+      }
+    }
   };
 
   const showDropdown = focused && query.trim().length > 0;
 
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        aria-label="Открыть общий поиск"
+        title="Общий поиск"
+        onClick={() => { setExpanded(true); setFocused(true); }}
+        style={{ width: 34, height: 34, marginBottom: 8, border: 'none', borderRadius: 10, background: '#F5FAFB', color: 'var(--text-2)', display: 'grid', placeItems: 'center', cursor: 'pointer', boxShadow: '0 5px 16px rgba(43, 72, 89, .06)' }}
+      >
+        <Search size={17} />
+      </button>
+    );
+  }
+
+  const fieldHeight = compact ? 34 : 44;
   return (
-    <div ref={containerRef} style={{ position: 'relative', width: 320, flexShrink: 0 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, padding: '8px 12px', height: '100%', boxSizing: 'border-box' }}>
+    <div ref={containerRef} style={{ position: 'relative', width: compact ? 330 : 360, height: fieldHeight, marginBottom: compact ? 8 : 0, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid var(--border)', borderRadius: compact ? 10 : 12, padding: '0 10px', height: fieldHeight, boxSizing: 'border-box', boxShadow: compact ? '0 5px 16px rgba(43, 72, 89, .06)' : undefined }}>
         <Search size={16} color="var(--text-2)" />
         <input
+          autoFocus={collapsible}
           value={query}
           onChange={event => setQuery(event.target.value)}
           onFocus={() => setFocused(true)}
@@ -306,8 +225,19 @@ function ManagerSearch({ rows, onOpenFamily }: { rows: FamilyListRow[]; onOpenFa
           placeholder="Поиск: ребёнок, родитель, телефон"
           style={{ border: 'none', outline: 'none', flex: 1, minWidth: 0, fontSize: 13 }}
         />
-        {query && (
-          <button onClick={() => setQuery('')} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-2)', display: 'flex', flexShrink: 0 }}>
+        {(query || collapsible) && (
+          <button
+            type="button"
+            aria-label={collapsible ? 'Закрыть поиск' : 'Очистить поиск'}
+            onClick={() => {
+              setQuery('');
+              if (collapsible) {
+                setFocused(false);
+                setExpanded(false);
+              }
+            }}
+            style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-2)', display: 'flex', flexShrink: 0 }}
+          >
             <X size={14} />
           </button>
         )}
@@ -340,8 +270,9 @@ function ManagerSearch({ rows, onOpenFamily }: { rows: FamilyListRow[]; onOpenFa
   );
 }
 
-export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, onOpenFamily }: ManagerOverviewProps) {
+export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools }: ManagerOverviewProps) {
   const [sidebarHidden, setSidebarHidden] = useState(false);
+  const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [periodKey, setPeriodKey] = useState('ALL');
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
@@ -355,6 +286,10 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   // лениво, только когда period выбран, а не всегда при заходе на экран.
   const familiesQuery = useFamiliesTable(true, { enabled: periodKey !== 'ALL' });
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
+  const accessibleRows = useMemo(
+    () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
+    [allowedSchools, rows],
+  );
   const loadError = branchStatsQuery.isError;
 
   useEffect(() => {
@@ -375,12 +310,15 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
     return () => { cancelled = true; };
   }, [periodKey]);
 
-  const stats = useMemo(() => computeSchoolStatsFromBranches(branchStatsQuery.data ?? []), [branchStatsQuery.data]);
+  const stats = useMemo(
+    () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? []).filter(stat => isSchoolAllowed(stat.key, allowedSchools)),
+    [allowedSchools, branchStatsQuery.data],
+  );
 
   const displayStats = useMemo(() => {
     if (periodKey === 'ALL' || periodStats.length === 0) return stats;
     const familyToSchool = new Map<string, string>();
-    (rows ?? []).forEach(r => { if (!familyToSchool.has(r.familyId)) familyToSchool.set(r.familyId, r.branchFilter); });
+    (accessibleRows ?? []).forEach(r => { if (!familyToSchool.has(r.familyId)) familyToSchool.set(r.familyId, r.branchFilter); });
     const perSchool = new Map<string, { charged: number; paid: number; debt: number }>();
     periodStats.forEach(s => {
       const school = familyToSchool.get(s.familyId);
@@ -395,7 +333,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
       const period = perSchool.get(s.key);
       return { ...s, charged: period?.charged ?? 0, paid: period?.paid ?? 0, debtSum: period?.debt ?? 0 };
     });
-  }, [stats, periodStats, periodKey, rows]);
+  }, [stats, periodStats, periodKey, accessibleRows]);
 
   const totals = useMemo(() => displayStats.reduce((acc, s) => ({
     childrenCount: acc.childrenCount + s.childrenCount,
@@ -418,8 +356,6 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
     },
   ), [displayStats, expandedGroups, sortState]);
 
-  const maxRequests = Math.max(1, ...displayRows.filter(r => !r.isChild).map(r => r.data.newRequests));
-
   const handleSort = (key: SortKey) => {
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
   };
@@ -436,26 +372,50 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
         </div>
       )}
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, flexShrink: 0 }}>
+        <DashboardTopPanel className="dashboard-control-row">
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />
           </div>
-          <ManagerSearch rows={rows ?? []} onOpenFamily={onOpenFamily} />
-        </div>
+          <ManagerSearch rows={accessibleRows ?? []} onOpenFamily={onOpenFamily} />
+          <button
+            type="button"
+            onClick={() => setShowNewFamily(true)}
+            style={{
+              height: 44,
+              padding: '0 16px',
+              border: 'none',
+              borderRadius: 12,
+              background: 'var(--accent)',
+              color: '#fff',
+              display: 'inline-flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              flexShrink: 0,
+              cursor: 'pointer',
+              fontSize: 13,
+              fontWeight: 800,
+              whiteSpace: 'nowrap',
+            }}
+          >
+            <Plus size={17} strokeWidth={2.4} />
+            Новый заказ
+          </button>
+        </DashboardTopPanel>
 
-        <div style={{ display: 'grid', gridTemplateColumns: KPI_GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
-          <KpiChip icon={<Users size={18} color="#fff" />} label="К-во всех детей" value={String(totals.childrenCount)} color={KPI_COLORS.childrenCount} />
-          <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(totals.newRequests)} color={KPI_COLORS.newRequests} />
-          <KpiChip icon={<Receipt size={18} color="#fff" />} label="Начислено" value={money(totals.charged)} color={KPI_COLORS.charged} />
-          <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Оплачено" value={money(totals.paid)} color={KPI_COLORS.paid} />
-          <KpiChip icon={<Landmark size={18} color="#fff" />} label="Сумма долга" value={money(totals.debtSum)} color={KPI_COLORS.debtSum} />
-          <KpiChip icon={<Wallet size={18} color="#fff" />} label="Баланс" value={totals.balance.toLocaleString('ru-RU')} color={KPI_COLORS.balance} />
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: KPI_GRID_TEMPLATE, gap: 12 }}>
-            <ColumnCard sortKey="school" label="Школы" sortState={sortState} onSort={handleSort}>
+        <DashboardGrid template={KPI_GRID_TEMPLATE}>
+            <ColumnCard
+              first
+              sortKey="school"
+              label="Дети"
+              icon={<Users size={17} color="#fff" />}
+              value={String(totals.childrenCount)}
+              color={KPI_COLORS.childrenCount}
+              sortState={sortState}
+              onSort={handleSort}
+            >
               {displayRows.map((row, i) => (
                 <div
                   key={row.key}
@@ -473,16 +433,31 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               ))}
             </ColumnCard>
 
-            <ColumnCard sortKey="newRequests" label="Новые заявки" sortState={sortState} onSort={handleSort}>
+            <ColumnCard
+              sortKey="newRequests"
+              label="Новые заявки"
+              icon={<Inbox size={17} color="#fff" />}
+              value={String(totals.newRequests)}
+              color={KPI_COLORS.newRequests}
+              sortState={sortState}
+              onSort={handleSort}
+            >
             {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.newRequests}</span>
-                <Ring value={row.data.newRequests} max={maxRequests} color={KPI_COLORS.newRequests} />
               </div>
             ))}
             </ColumnCard>
 
-            <ColumnCard sortKey="charged" label="Начислено" sortState={sortState} onSort={handleSort}>
+            <ColumnCard
+              sortKey="charged"
+              label="Начислено"
+              icon={<Receipt size={17} color="#fff" />}
+              value={money(totals.charged)}
+              color={KPI_COLORS.charged}
+              sortState={sortState}
+              onSort={handleSort}
+            >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.charged > 0 ? money(row.data.charged) : '0'}</span>
@@ -490,7 +465,15 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
             ))}
             </ColumnCard>
 
-            <ColumnCard sortKey="paid" label="Оплачено" sortState={sortState} onSort={handleSort}>
+            <ColumnCard
+              sortKey="paid"
+              label="Оплачено"
+              icon={<CheckCircle2 size={17} color="#fff" />}
+              value={money(totals.paid)}
+              color={KPI_COLORS.paid}
+              sortState={sortState}
+              onSort={handleSort}
+            >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.paid > 0 ? 'var(--success)' : undefined }}>{row.data.paid > 0 ? money(row.data.paid) : '0'}</span>
@@ -498,7 +481,15 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
             ))}
             </ColumnCard>
 
-            <ColumnCard sortKey="debtSum" label="Сумма долга" sortState={sortState} onSort={handleSort}>
+            <ColumnCard
+              sortKey="debtSum"
+              label="Сумма долга"
+              icon={<Landmark size={17} color="#fff" />}
+              value={money(totals.debtSum)}
+              color={KPI_COLORS.debtSum}
+              sortState={sortState}
+              onSort={handleSort}
+            >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.debtSum > 0 ? 'var(--danger)' : undefined }}>{row.data.debtSum > 0 ? money(row.data.debtSum) : '0'}</span>
@@ -506,14 +497,22 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
             ))}
             </ColumnCard>
 
-            <ColumnCard sortKey="balance" label="Баланс" sortState={sortState} onSort={handleSort}>
+            <ColumnCard
+              sortKey="balance"
+              label="Баланс"
+              icon={<Wallet size={17} color="#fff" />}
+              value={totals.balance.toLocaleString('ru-RU')}
+              color={KPI_COLORS.balance}
+              sortState={sortState}
+              onSort={handleSort}
+            >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.balance < 0 ? 'var(--danger)' : row.data.balance > 0 ? 'var(--success)' : undefined }}>{row.data.balance.toLocaleString('ru-RU')}</span>
               </div>
             ))}
             </ColumnCard>
-        </div>
+        </DashboardGrid>
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />
@@ -524,6 +523,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
         onHiddenChange={setSidebarHidden}
         onSelect={onSelectSchool}
       />
+      {showNewFamily && <NewFamilyModal onClose={() => setShowNewFamily(false)} />}
       </div>
     </div>
   );

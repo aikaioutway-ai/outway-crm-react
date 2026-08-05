@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ChevronUp, Clock3, QrCode, ReceiptText } from 'lucide-react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, QrCode, ReceiptText, Search, X } from 'lucide-react';
 import { PaymentTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
-import { CASHIER_PERIODS, currentCashierPeriodKey, SCHOOL_TABS } from './constants';
-import { KpiChip, SchoolAvatar } from './ManagerOverview';
+import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS } from './constants';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
+import ManagerPeriodBar from './ManagerPeriodBar';
 
 type SortKey = 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount';
 
@@ -14,6 +15,8 @@ interface CashierOverviewProps {
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
+  onOpenPaymentFamily?: (schoolKey: string, familyId: string, searchQuery: string, periodKey: string) => void;
+  allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
 }
 
@@ -65,6 +68,9 @@ function paymentDate(row: PaymentTableRow): Date | null {
 }
 
 function matchesPeriod(row: PaymentTableRow, periodKey: string): boolean {
+  if (periodKey === 'ALL') {
+    return CASHIER_PERIODS.some(period => matchesPeriod(row, period.key));
+  }
   const period = CASHIER_PERIODS.find(item => item.key === periodKey);
   const date = paymentDate(row);
   if (!period || !date) return false;
@@ -96,78 +102,94 @@ function rowMatchesSchool(row: PaymentTableRow, tab: typeof SCHOOL_TABS[number])
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-function ColumnCard({ sortKey, label, sortState, onSort, children }: {
-  sortKey: SortKey;
-  label: string;
-  sortState: { key: SortKey; dir: 'asc' | 'desc' };
-  onSort: (key: SortKey) => void;
-  children: React.ReactNode;
+function paymentPeriodKey(row: PaymentTableRow): string {
+  const date = paymentDate(row);
+  if (!date) return currentCashierPeriodKey();
+  return CASHIER_PERIODS.find(period => period.month === date.getMonth() + 1 && period.year === date.getFullYear())?.key
+    ?? currentCashierPeriodKey();
+}
+
+function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
+  rows: PaymentTableRow[];
+  onOpenPaymentFamily?: (schoolKey: string, familyId: string, searchQuery: string, periodKey: string) => void;
 }) {
-  const active = sortState.key === sortKey;
+  const [query, setQuery] = useState('');
+  const [focused, setFocused] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const normalizedQuery = query.trim().toLowerCase();
+  const digitsQuery = query.replace(/\D/g, '');
+
+  const latestPayments = useMemo(() => {
+    const byFamily = new Map<string, PaymentTableRow>();
+    rows.forEach(row => {
+      const current = byFamily.get(row.familyId);
+      const rowTime = paymentDate(row)?.getTime() ?? 0;
+      const currentTime = current ? paymentDate(current)?.getTime() ?? 0 : -1;
+      if (!current || rowTime > currentTime) byFamily.set(row.familyId, row);
+    });
+    return Array.from(byFamily.values()).sort((a, b) => (paymentDate(b)?.getTime() ?? 0) - (paymentDate(a)?.getTime() ?? 0));
+  }, [rows]);
+
+  const suggestions = useMemo(() => {
+    if (normalizedQuery.length < 2 && digitsQuery.length < 3) return [];
+    return latestPayments.filter(row => {
+      const haystack = `${row.childrenNames} ${row.parentName}`.toLowerCase();
+      const phoneDigits = row.phone.replace(/\D/g, '');
+      return (normalizedQuery.length >= 2 && haystack.includes(normalizedQuery))
+        || (digitsQuery.length >= 3 && phoneDigits.includes(digitsQuery));
+    }).slice(0, 8);
+  }, [digitsQuery, latestPayments, normalizedQuery]);
+
+  useEffect(() => { setActiveIndex(0); }, [query]);
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) setFocused(false);
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const select = (row: PaymentTableRow) => {
+    const schoolKey = getBranchFilter(row.branchShort, row.branchShort) || row.branchShort;
+    onOpenPaymentFamily?.(schoolKey, row.familyId, row.childrenNames || row.parentName || row.phone, paymentPeriodKey(row));
+    setQuery('');
+    setFocused(false);
+  };
+  const handleKeyDown = (event: React.KeyboardEvent) => {
+    if (!suggestions.length) return;
+    if (event.key === 'ArrowDown') { event.preventDefault(); setActiveIndex(index => Math.min(index + 1, suggestions.length - 1)); }
+    else if (event.key === 'ArrowUp') { event.preventDefault(); setActiveIndex(index => Math.max(index - 1, 0)); }
+    else if (event.key === 'Enter') { event.preventDefault(); select(suggestions[activeIndex]); }
+    else if (event.key === 'Escape') setFocused(false);
+  };
+
   return (
-    <div style={{ minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button
-        onClick={() => onSort(sortKey)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px solid var(--border)',
-          cursor: 'pointer',
-          padding: '12px 16px',
-          fontSize: 13,
-          fontWeight: 800,
-          color: active ? 'var(--accent)' : 'var(--text)',
-          textTransform: 'uppercase',
-          textAlign: 'left',
-        }}
-      >
-        {label}
-        {active && (sortState.dir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-      </button>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {children}
+    <div ref={containerRef} style={{ position: 'relative', width: 360, height: 44, flexShrink: 0 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, padding: '0 12px', height: 44 }}>
+        <Search size={16} color="var(--text-2)" />
+        <input value={query} onChange={event => setQuery(event.target.value)} onFocus={() => setFocused(true)} onKeyDown={handleKeyDown} placeholder="Поиск по платежам" style={{ border: 'none', outline: 'none', flex: 1, minWidth: 0, fontSize: 13 }} />
+        {query && <button onClick={() => setQuery('')} aria-label="Очистить поиск" style={{ border: 'none', background: 'transparent', color: 'var(--text-2)', display: 'flex' }}><X size={14} /></button>}
       </div>
-    </div>
-  );
-}
-
-function PeriodBar({ periodKey, onPeriodKeyChange }: Pick<CashierOverviewProps, 'periodKey' | 'onPeriodKeyChange'>) {
-  return (
-    <div style={{
-      display: 'flex',
-      alignItems: 'center',
-      gap: 6,
-      padding: '6px 8px',
-      background: '#F5FAFB',
-      border: '1px solid #D4E3E7',
-      borderRadius: 10,
-      overflowX: 'auto',
-      flexShrink: 0,
-      scrollbarWidth: 'none',
-      width: '100%',
-      boxSizing: 'border-box',
-    }}>
-      {CASHIER_PERIODS.map(period => {
-        const active = periodKey === period.key;
-        return (
-          <button
-            key={period.key}
-            onClick={() => onPeriodKeyChange(period.key)}
-            style={{ flex: 1, minWidth: 0, padding: '4px 8px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 800 : 600, background: active ? '#2DD4BF' : '#fff', color: active ? '#fff' : '#374151', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-          >
-            {period.label.split(' ')[0]}
+      {focused && query.trim() && <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 12px 30px rgba(23,34,47,.12)', zIndex: 90, maxHeight: 320, overflowY: 'auto' }}>
+        {suggestions.length === 0 ? <div style={{ padding: '14px 16px', color: 'var(--text-2)', fontSize: 13 }}>Платежи не найдены</div> : suggestions.map((row, index) => (
+          <button key={row.familyId} onMouseDown={event => event.preventDefault()} onClick={() => select(row)} style={{ width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid var(--border)', background: index === activeIndex ? 'var(--surface-2)' : '#fff', textAlign: 'left', display: 'grid', gap: 2 }}>
+            <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>{row.childrenNames || row.parentName}</span>
+            <span style={{ color: 'var(--text-2)', fontSize: 11 }}>{row.parentName} · {row.phone} · {row.branchShort}</span>
+            <span style={{ color: 'var(--accent)', fontSize: 10, fontWeight: 750 }}>Последний платёж: {paymentDate(row)?.toLocaleDateString('ru-RU') ?? '—'}</span>
           </button>
-        );
-      })}
+        ))}
+      </div>}
     </div>
   );
 }
 
-export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange }: CashierOverviewProps) {
+export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
+  const searchablePayments = useMemo(
+    () => (rows ?? []).filter(row => isSchoolAllowed(getBranchFilter(row.branchShort, row.branchShort), allowedSchools)),
+    [allowedSchools, rows],
+  );
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'paymentsAmount', dir: 'desc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -178,7 +200,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   }, [onSidebarWidthChange, sidebarHidden]);
 
   useEffect(() => {
-    if (CASHIER_PERIODS.some(period => period.key === periodKey)) return;
+    if (periodKey === 'ALL' || CASHIER_PERIODS.some(period => period.key === periodKey)) return;
     onPeriodKeyChange(currentCashierPeriodKey());
   }, [onPeriodKeyChange, periodKey]);
 
@@ -233,20 +255,29 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <PeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} />
+      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <DashboardTopPanel className="dashboard-control-row">
+          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+            <ManagerPeriodBar
+              periodKey={periodKey}
+              onPeriodKeyChange={onPeriodKeyChange}
+              periods={CASHIER_PERIODS}
+            />
+          </div>
+          <CashierPaymentSearch rows={searchablePayments} onOpenPaymentFamily={onOpenPaymentFamily} />
+        </DashboardTopPanel>
 
-        <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
-          <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Платежи" value={money(totals.paymentsAmount)} color={KPI_COLORS.paymentsAmount} />
-          <KpiChip icon={<Clock3 size={18} color="#fff" />} label="К-во на проверке" value={String(totals.pendingCount)} color={KPI_COLORS.pendingCount} />
-          <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Сумма на проверке" value={money(totals.pendingAmount)} color={KPI_COLORS.pendingAmount} />
-          <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Подтверждено" value={money(totals.confirmedAmount)} color={KPI_COLORS.confirmedAmount} />
-          <KpiChip icon={<QrCode size={18} color="#fff" />} label="QR" value={money(totals.qrAmount)} color={KPI_COLORS.qrAmount} />
-          <KpiChip icon={<Banknote size={18} color="#fff" />} label="Наличные" value={money(totals.cashAmount)} color={KPI_COLORS.cashAmount} />
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12 }}>
-            <ColumnCard sortKey="paymentsAmount" label="Школы" sortState={sortState} onSort={handleSort}>
+        <DashboardGrid template={GRID_TEMPLATE}>
+            <ColumnCard
+              first
+              sortKey="paymentsAmount"
+              label="Платежи"
+              icon={<ReceiptText size={17} color="#fff" />}
+              value={money(totals.paymentsAmount)}
+              color={KPI_COLORS.paymentsAmount}
+              sortState={sortState}
+              onSort={handleSort}
+            >
               {displayRows.map((row, i) => (
                 <div
                   key={row.key}
@@ -265,13 +296,22 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
             </ColumnCard>
 
             {([
-              ['pendingCount', 'К-во на проверке'],
-              ['pendingAmount', 'Сумма на проверке'],
-              ['confirmedAmount', 'Подтверждено'],
-              ['qrAmount', 'QR'],
-              ['cashAmount', 'Наличные'],
-            ] as const).map(([key, label]) => (
-              <ColumnCard key={key} sortKey={key} label={label} sortState={sortState} onSort={handleSort}>
+              ['pendingCount', 'К-во на проверке', <Clock3 size={17} color="#fff" />, String(totals.pendingCount)],
+              ['pendingAmount', 'Сумма на проверке', <ReceiptText size={17} color="#fff" />, money(totals.pendingAmount)],
+              ['confirmedAmount', 'Подтверждено', <CheckCircle2 size={17} color="#fff" />, money(totals.confirmedAmount)],
+              ['qrAmount', 'QR', <QrCode size={17} color="#fff" />, money(totals.qrAmount)],
+              ['cashAmount', 'Наличные', <Banknote size={17} color="#fff" />, money(totals.cashAmount)],
+            ] as const).map(([key, label, icon, value]) => (
+              <ColumnCard
+                key={key}
+                sortKey={key}
+                label={label}
+                icon={icon}
+                value={value}
+                color={KPI_COLORS[key]}
+                sortState={sortState}
+                onSort={handleSort}
+              >
                 {displayRows.map((row, i) => {
                   const value = row.data[key];
                   const isMoney = key !== 'pendingCount';
@@ -283,7 +323,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
                 })}
               </ColumnCard>
             ))}
-        </div>
+        </DashboardGrid>
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

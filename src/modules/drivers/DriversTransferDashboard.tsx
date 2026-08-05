@@ -97,6 +97,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
             : '#2DD4BF';
         return (
           <button
+            className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
             title={active ? `Водителей: ${cell.count}${cell.vehicleType ? ` · ${VT_LABEL[cell.vehicleType] ?? cell.vehicleType}` : ''}` : undefined}

@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
 import { payrollSchoolRows, payrollTransferNumbers } from './payrollStats';
@@ -72,6 +72,7 @@ export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth 
             : '#2DD4BF';
         return (
           <button
+            className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
             title={active ? `Водителей: ${cell.count}` : undefined}

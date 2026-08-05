@@ -8,6 +8,7 @@ import { PAYROLL_OFFICE_KEY, PayrollSchoolTab, TimesheetPayrollSummary } from '.
 interface DriverRow {
   driverId: string;
   fullName: string;
+  phone: string;
   transfers: string;   // "1, 3, 7"
   days: number;
   rate: number;
@@ -28,6 +29,7 @@ interface Props {
   periodYear: number;
   onSummaryChange?: (summary: TimesheetPayrollSummary) => void;
   payrollView?: PayrollSchoolTab;
+  search?: string;
 }
 
 const COL_STYLE: React.CSSProperties = {
@@ -58,7 +60,7 @@ function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string)
     .includes(transferNumber);
 }
 
-export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehicleType, transferFilter = '', periodMonth, periodYear, onSummaryChange, payrollView = 'timesheet' }: Props) {
+export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehicleType, transferFilter = '', periodMonth, periodYear, onSummaryChange, payrollView = 'timesheet', search = '' }: Props) {
   const isOffice = schoolKey === PAYROLL_OFFICE_KEY;
 
   const { data: allDrivers = [], isLoading: driversLoading } = useDriversTable();
@@ -133,6 +135,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         return {
           driverId: employee.id,
           fullName: employee.fullName,
+          phone: employee.phone1 || '',
           transfers: employee.position || 'Офис',
           days,
           rate,
@@ -155,6 +158,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       return {
         driverId: d.driverId,
         fullName: d.fullName,
+        phone: d.phone || '',
         transfers: d.transferNumbers || '—',
         days,
         rate,
@@ -166,6 +170,13 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       };
     });
   }, [advanceByDriver, filteredDrivers, filteredEmployees, isOffice, entryBySubject, globalDays, globalRate]);
+
+  const visibleRows = useMemo(() => {
+    const query = search.trim().toLowerCase().replace(/\s+/g, '');
+    if (!query) return rows;
+    return rows.filter(row => [row.fullName, row.phone, row.transfers]
+      .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query)));
+  }, [rows, search]);
 
   const setOv = useCallback((driverId: string, patch: RowOverride) => {
     handleEntryChange(driverId, isOffice ? 'employee' : 'driver', patch);
@@ -206,7 +217,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
           Загрузка...
         </div>
       )}
-      {isTimesheetView && rows.length > 0 && (
+      {isTimesheetView && visibleRows.length > 0 && (
         <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid #F1F5F9' }}>
           <button
             onClick={applyToAll}
@@ -237,14 +248,14 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
           </tr>
         </thead>
         <tbody>
-          {rows.length === 0 && (
+          {visibleRows.length === 0 && (
             <tr>
               <td colSpan={visibleColumnCount} style={{ ...CELL_STYLE, textAlign: 'center', color: '#9AABB0', padding: '32px 0' }}>
-                {loading ? '' : !schoolKey ? 'Выберите школу' : isOffice ? 'Нет сотрудников' : 'Нет водителей'}
+                {loading ? '' : search ? 'Ничего не найдено' : !schoolKey ? 'Выберите школу' : isOffice ? 'Нет сотрудников' : 'Нет водителей'}
               </td>
             </tr>
           )}
-          {rows.map((row, idx) => (
+          {visibleRows.map((row, idx) => (
             <tr key={row.driverId} style={{ background: idx % 2 === 0 ? '#fff' : '#FAFBFC' }}>
               <td style={{ ...CELL_STYLE, color: '#9AABB0', width: 36 }}>{idx + 1}</td>
               <td style={{ ...CELL_STYLE, fontWeight: 600 }}>{row.fullName}</td>

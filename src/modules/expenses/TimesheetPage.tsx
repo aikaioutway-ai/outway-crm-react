@@ -25,7 +25,7 @@ interface Props {
   payrollSchoolTab?: PayrollSchoolTab;
   extraSchoolDockItems?: SchoolDockItem[];
   periodKey: string;
-  onPeriodKeyChange: (key: string) => void;
+  search?: string;
 }
 
 interface SchoolSettings {
@@ -162,7 +162,7 @@ export default function TimesheetPage({
   payrollSchoolTab = 'timesheet',
   extraSchoolDockItems,
   periodKey,
-  onPeriodKeyChange,
+  search = '',
   ...props
 }: Props) {
   const now = new Date();
@@ -328,11 +328,12 @@ export default function TimesheetPage({
       height: '100%',
       minHeight: 176,
       background: '#fff',
-      border: '1px solid #EEF2F6',
+      border: 'none',
       borderRadius: 16,
       padding: 12,
       boxSizing: 'border-box',
       display: 'flex',
+      boxShadow: '0 5px 16px rgba(43, 72, 89, .06)',
     }}>
       {leftPanel}
     </div>
@@ -349,6 +350,7 @@ export default function TimesheetPage({
       periodYear={year}
       onSummaryChange={onPayrollSummaryChange}
       payrollView={payrollSchoolTab}
+      search={search}
     />
   );
 
@@ -356,16 +358,11 @@ export default function TimesheetPage({
     <FamiliesPage
       {...props}
       mode="payments"
-      hidePeriodAll
-      hidePeriodDeposit
       hideTransferBars
-      hideDashboard
-      compactPeriodBar
       customTopContent={renderPayrollHeader?.({ calculator })}
       initialQuickFilter={schoolKey ? { activeTab: schoolKey } : undefined}
       externalQuickTransfer={externalQuickTransfer}
       externalPeriodKey={periodKey}
-      onPeriodKeyChange={onPeriodKeyChange}
       onSchoolKeyChange={handleSchoolKeyChange}
       customTableContent={table}
       extraSchoolDockItems={extraSchoolDockItems}

@@ -1,22 +1,25 @@
 import React, { useMemo } from 'react';
 import { CheckCircle2, Inbox, Landmark, Receipt, Users, Wallet } from 'lucide-react';
 import { useBranchStats } from '../../hooks/useCrmQueries';
-import { computeSchoolStatsFromBranches, KpiChip, KPI_COLORS, SchoolAvatar } from './ManagerOverview';
+import { computeSchoolStatsFromBranches, KPI_COLORS } from './ManagerOverview';
+import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { money } from '../../utils/pricing';
+import { isSchoolAllowed } from './constants';
 
 interface SchoolKpiStripProps {
   schoolKey: string;
   rightReserveWidth?: number;
+  allowedSchools?: string[];
 }
 
-export default function SchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: SchoolKpiStripProps) {
+export default function SchoolKpiStrip({ schoolKey, rightReserveWidth = 0, allowedSchools }: SchoolKpiStripProps) {
   const { data: branches } = useBranchStats();
 
   const stat = useMemo(() => (
     branches ? computeSchoolStatsFromBranches(branches).find(s => s.key === schoolKey) : undefined
   ), [branches, schoolKey]);
 
-  if (!stat) return null;
+  if (!isSchoolAllowed(schoolKey, allowedSchools) || !stat) return null;
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>

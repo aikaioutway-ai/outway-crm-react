@@ -303,6 +303,33 @@ async function editMessage(
   });
 }
 
+async function upsertControlMessage(
+  chatId: number,
+  currentControlMessageId: number | null | undefined,
+  text: string,
+  replyMarkup?: Record<string, unknown>,
+): Promise<number> {
+  let messageId = currentControlMessageId ?? null;
+  if (messageId) {
+    try {
+      await editMessage(chatId, messageId, text, replyMarkup);
+    } catch (error) {
+      console.error('control message edit failed, sending new one', error);
+      messageId = null;
+    }
+  }
+  if (!messageId) {
+    const message = await sendMessage(chatId, text, undefined, replyMarkup);
+    messageId = message.message_id;
+  }
+  const { error } = await supabase
+    .from('v2_driver_telegram_groups')
+    .update({ control_message_id: messageId })
+    .eq('chat_id', chatId);
+  if (error) console.error('control message id persist failed', error);
+  return messageId;
+}
+
 async function answerCallback(
   callbackId: string,
   text?: string,
@@ -350,7 +377,7 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
 
     const { data: group, error: groupError } = await supabase
       .from('v2_driver_telegram_groups')
-      .select('chat_id,title,status,transfer_id,driver_id,created_at,updated_at')
+      .select('chat_id,title,status,transfer_id,driver_id,control_message_id,created_at,updated_at')
       .eq('chat_id', chatId)
       .maybeSingle();
     if (groupError) throw new Error(`Telegram group lookup failed: ${groupError.message}`);
@@ -464,32 +491,13 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
       .eq('chat_id', chatId);
     if (groupUpdateError) throw new Error(`Telegram group link failed: ${groupUpdateError.message}`);
 
-    const branchName = branch?.short_name || branch?.name || branchCode;
-    const inviteMessage = await sendMessage(
+    const branchName = String(branch?.short_name || branch?.name || branchCode);
+    await upsertControlMessage(
       chatId,
-      `✅ <b>Группа подключена логистом</b>\n\n` +
-        `<b>Филиал:</b> ${escapeHtml(String(branchName))}\n` +
-        `<b>Трансфер:</b> №${transferData.transfer_number}\n` +
-        `<b>Водитель:</b> ${escapeHtml(driver.full_name)}\n\n` +
-        'Водителю нужно нажать кнопку ниже, а затем поделиться своим контактом. ' +
-        'Бот сверит номер с карточкой водителя в CRM.',
-      undefined,
-      {
-        inline_keyboard: [[{
-          text: '✅ Я водитель · Подтвердить',
-          url: `https://t.me/${BOT_USERNAME}?start=driver_${inviteToken}`,
-          style: 'primary',
-        }]],
-      },
+      group.control_message_id,
+      inviteText({ branchName, transferNumber: transferData.transfer_number, driverName: driver.full_name }),
+      inviteButtonMarkup(inviteToken),
     );
-
-    const { error: messageUpdateError } = await supabase
-      .from('v2_driver_telegram_groups')
-      .update({ control_message_id: inviteMessage.message_id })
-      .eq('chat_id', chatId);
-    if (messageUpdateError) {
-      console.error('control message id update error', messageUpdateError);
-    }
 
     return Response.json({
       ok: true,
@@ -718,65 +726,37 @@ function liveLocationHelpMarkup(): Record<string, unknown> {
   };
 }
 
-async function sendControlPanel(message: TelegramMessage): Promise<void> {
-  const user = message.from;
-  if (!user) return;
-  if (message.chat.type !== 'group' && message.chat.type !== 'supergroup') {
-    await sendMessage(
-      message.chat.id,
-      'Панель трансфера доступна только в зарегистрированной группе.',
-      message.message_id,
-    );
-    return;
-  }
-
-  const { context, error } = await authorizeTransferDriver(message.chat.id, user.id);
-  if (!context) {
-    await sendMessage(message.chat.id, error ?? 'Доступ запрещён.', message.message_id);
-    return;
-  }
-
-  const branchCode = context.transfer.v2_school_branches?.code ?? '—';
-  await sendMessage(
-    message.chat.id,
-      `<b>OutWay · ${escapeHtml(branchCode)} №${context.transfer.transfer_number}</b>\n` +
-      `Водитель: ${escapeHtml(context.driver.full_name)}\n\n` +
-      'Нажмите кнопку перед началом рейса.',
-    message.message_id,
-    startRunButtonMarkup(),
-  );
+function inviteButtonMarkup(token: string): Record<string, unknown> {
+  return {
+    inline_keyboard: [[{
+      text: '✅ Я водитель · Подтвердить',
+      url: `https://t.me/${BOT_USERNAME}?start=driver_${token}`,
+      style: 'primary',
+    }]],
+  };
 }
 
-async function showDriverControlCard(params: {
-  chatId: number;
-  messageId?: number | null;
+function inviteText(params: {
+  branchName: string;
+  transferNumber: number;
+  driverName: string;
+}): string {
+  return '✅ <b>Приглашение отправлено водителю</b>\n\n' +
+    `<b>Филиал:</b> ${escapeHtml(params.branchName)}\n` +
+    `<b>Трансфер:</b> №${params.transferNumber}\n` +
+    `<b>Водитель:</b> ${escapeHtml(params.driverName)}\n\n` +
+    'Нужно нажать кнопку ниже и поделиться контактом. Бот сверит номер с карточкой водителя в CRM.';
+}
+
+function readyToDriveText(params: {
   branchCode: string;
   transferNumber: number;
   driverName: string;
-}): Promise<number> {
-  const text =
-    `🚌 <b>OutWay · ${escapeHtml(params.branchCode)} №${params.transferNumber}</b>\n\n` +
+}): string {
+  return `🚌 <b>OutWay · ${escapeHtml(params.branchCode)} №${params.transferNumber}</b>\n\n` +
     `Водитель: <b>${escapeHtml(params.driverName)}</b>\n` +
     'Статус: <b>готов к рейсу</b>\n\n' +
     'Перед выездом нажмите одну кнопку:';
-
-  if (params.messageId) {
-    await editMessage(
-      params.chatId,
-      params.messageId,
-      text,
-      startRunButtonMarkup(),
-    );
-    return params.messageId;
-  }
-
-  const message = await sendMessage(
-    params.chatId,
-    text,
-    undefined,
-    startRunButtonMarkup(),
-  );
-  return message.message_id;
 }
 
 async function confirmDriverInvite(message: TelegramMessage, token: string): Promise<void> {
@@ -1038,17 +1018,16 @@ async function confirmDriverContact(message: TelegramMessage): Promise<void> {
   const branch = Array.isArray(transferData.v2_school_branches)
     ? transferData.v2_school_branches[0]
     : transferData.v2_school_branches;
-  const controlMessageId = await showDriverControlCard({
-    chatId: Number(groupData.chat_id),
-    messageId: groupData.control_message_id,
-    branchCode: String(branch?.code ?? 'OutWay'),
-    transferNumber: Number(transferData.transfer_number),
-    driverName: driver.full_name,
-  });
-  await supabase
-    .from('v2_driver_telegram_groups')
-    .update({ control_message_id: controlMessageId })
-    .eq('chat_id', groupData.chat_id);
+  await upsertControlMessage(
+    Number(groupData.chat_id),
+    groupData.control_message_id,
+    readyToDriveText({
+      branchCode: String(branch?.code ?? 'OutWay'),
+      transferNumber: Number(transferData.transfer_number),
+      driverName: driver.full_name,
+    }),
+    startRunButtonMarkup(),
+  );
 
   await sendMessage(
     message.chat.id,
@@ -1125,8 +1104,9 @@ async function handleMyChatMember(update: TelegramChatMemberUpdated): Promise<vo
     });
   if (upsertError) throw new Error(`Telegram group registration failed: ${upsertError.message}`);
 
-  await sendMessage(
+  await upsertControlMessage(
     chat.id,
+    null,
     '✅ <b>OutWay Driver подключён</b>\n\n' +
       'Группа появилась в CRM со статусом «Ожидает подключения».\n' +
       'Дальше логист выберет водителя и трансфер — команды в группе вводить не нужно.',
@@ -1218,12 +1198,19 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
       .maybeSingle();
     if (stopError) throw new Error(`Next stop lookup failed: ${stopError.message}`);
 
-    await sendMessage(
+    const { data: group, error: groupError } = await supabase
+      .from('v2_driver_telegram_groups')
+      .select('control_message_id')
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+    if (groupError) console.error('control message lookup failed', groupError);
+
+    await upsertControlMessage(
       message.chat.id,
-      `📍 <b>Live Location подключена.</b>\n\n` +
-        `Координаты машины поступают в CRM.` +
+      group?.control_message_id ?? null,
+      `🟢 <b>В пути</b>\n\n` +
+        `Live Location подключена, координаты поступают в CRM.` +
         (nextStop ? `\nСледующая остановка: <b>${escapeHtml(nextStop.child_name)}</b>.` : ''),
-      message.message_id,
     );
   }
 }
@@ -1241,12 +1228,20 @@ function scheduleLiveLocationReminder(params: {
         .eq('id', params.runId)
         .maybeSingle();
       if (error || !run || run.status !== 'active' || run.last_location_at) return;
-      await sendMessage(
+
+      const { data: group, error: groupError } = await supabase
+        .from('v2_driver_telegram_groups')
+        .select('control_message_id')
+        .eq('chat_id', params.chatId)
+        .maybeSingle();
+      if (groupError) console.error('control message lookup failed', groupError);
+
+      await upsertControlMessage(
         params.chatId,
+        group?.control_message_id ?? null,
         `⏰ <b>${escapeHtml(params.driverName)}, включите Live Location</b>\n\n` +
           'Без неё родители и логист не увидят машину на карте.\n' +
           'Скрепка → «Геопозиция» → «Транслировать геопозицию» → «8 часов».',
-        undefined,
         liveLocationHelpMarkup(),
       );
     })
@@ -1300,7 +1295,7 @@ async function handleRunCallback(callback: TelegramCallbackQuery): Promise<void>
   });
   if (runError) {
     console.error('start transfer run error', runError);
-    await editMessage(
+    await upsertControlMessage(
       message.chat.id,
       message.message_id,
       `<b>Не удалось запустить рейс</b>\n\n${escapeHtml(runError.message)}`,
@@ -1323,7 +1318,7 @@ async function handleRunCallback(callback: TelegramCallbackQuery): Promise<void>
 
   const directionLabel = direction === 'morning' ? 'Утро · дома → школа' : 'Вечер · школа → дома';
   if (!run.created && run.run_status !== 'active') {
-    await editMessage(
+    await upsertControlMessage(
       message.chat.id,
       message.message_id,
       `<b>Рейс уже существует</b>\n\n` +
@@ -1334,7 +1329,7 @@ async function handleRunCallback(callback: TelegramCallbackQuery): Promise<void>
     return;
   }
 
-  await editMessage(
+  await upsertControlMessage(
     message.chat.id,
     message.message_id,
     `${run.created ? '✅ <b>Рейс запущен</b>' : 'ℹ️ <b>Рейс уже активен</b>'}\n\n` +
@@ -1592,7 +1587,7 @@ async function reissueDriverInviteForChat(chatId: number): Promise<Record<string
 
   const { data: group, error: groupError } = await supabase
     .from('v2_driver_telegram_groups')
-    .select('chat_id,title,status,transfer_id,driver_id,created_at,updated_at')
+    .select('chat_id,title,status,transfer_id,driver_id,control_message_id,created_at,updated_at')
     .eq('chat_id', chatId)
     .maybeSingle();
   if (groupError) throw new Error(`Telegram group lookup failed: ${groupError.message}`);
@@ -1654,29 +1649,13 @@ async function reissueDriverInviteForChat(chatId: number): Promise<Record<string
     ? transfer.v2_school_branches[0]
     : transfer.v2_school_branches;
   const branchCode = String(branch?.code ?? '');
-  const branchName = branch?.short_name || branch?.name || branchCode;
-  const inviteMessage = await sendMessage(
+  const branchName = String(branch?.short_name || branch?.name || branchCode);
+  await upsertControlMessage(
     chatId,
-    '♻️ <b>Отправлено новое приглашение водителю</b>\n\n' +
-      `<b>Филиал:</b> ${escapeHtml(String(branchName))}\n` +
-      `<b>Трансфер:</b> №${transfer.transfer_number}\n` +
-      `<b>Водитель:</b> ${escapeHtml(driver.full_name)}\n\n` +
-      'Водителю нужно нажать кнопку ниже, а затем поделиться своим контактом. ' +
-      'Бот сверит номер с карточкой водителя в CRM.',
-    undefined,
-    {
-      inline_keyboard: [[{
-        text: '✅ Я водитель · Подтвердить номер',
-        url: `https://t.me/${BOT_USERNAME}?start=driver_${inviteToken}`,
-        style: 'primary',
-      }]],
-    },
+    group.control_message_id,
+    inviteText({ branchName, transferNumber: transfer.transfer_number, driverName: driver.full_name }),
+    inviteButtonMarkup(inviteToken),
   );
-
-  await supabase
-    .from('v2_driver_telegram_groups')
-    .update({ control_message_id: inviteMessage.message_id })
-    .eq('chat_id', chatId);
 
   return {
     chat_id: chatId,

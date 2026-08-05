@@ -28,3 +28,4 @@ yarn-error.log*
 
 # Local source archive used to prepare optimized public school logos.
 /Логотип школ/
+.vercel

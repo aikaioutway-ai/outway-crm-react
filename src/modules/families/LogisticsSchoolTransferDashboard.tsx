@@ -74,6 +74,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
             : '#2DD4BF';
         return (
           <button
+            className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
             title={active ? `Учеников: ${cell.count}` : undefined}

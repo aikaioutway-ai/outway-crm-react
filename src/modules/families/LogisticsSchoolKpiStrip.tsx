@@ -3,7 +3,7 @@ import { Bus, Car, Inbox } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
-import { KpiChip, SchoolAvatar } from './ManagerOverview';
+import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface LogisticsSchoolKpiStripProps {
   schoolKey: string;

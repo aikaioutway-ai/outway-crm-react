@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import Sidebar, { canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
-import ManagerOverview from './modules/families/ManagerOverview';
+import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
 import CashierSchoolKpiStrip from './modules/families/CashierSchoolKpiStrip';
 import CashierSchoolTransferDashboard from './modules/families/CashierSchoolTransferDashboard';
@@ -10,15 +10,17 @@ import LogisticsSchoolTransferDashboard from './modules/families/LogisticsSchool
 import LogisticsMapView from './modules/families/LogisticsMapView';
 import SchoolKpiStrip from './modules/families/SchoolKpiStrip';
 import SchoolTransferDashboard from './modules/families/SchoolTransferDashboard';
+import ManagerPeriodBar from './modules/families/ManagerPeriodBar';
 import DriversOverview from './modules/drivers/DriversOverview';
 import DriversSchoolKpiStrip from './modules/drivers/DriversSchoolKpiStrip';
 import DriversTransferDashboard from './modules/drivers/DriversTransferDashboard';
 import LoginPage from './modules/auth/LoginPage';
 import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
 import { useFamiliesTable } from './hooks/useCrmQueries';
-import { currentCashierPeriodKey, currentPayrollPeriodKey } from './modules/families/constants';
+import { CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
 import type { PayrollSchoolTab } from './modules/expenses/timesheetTypes';
 import { UserRole } from './types';
+import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
@@ -27,6 +29,7 @@ const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
+const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 
 function SectionLoading() {
   return (
@@ -65,27 +68,55 @@ export default function App() {
   const currentUserRole = currentUser?.role ?? getSavedRole();
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole)[0]);
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
-  const [cashierTab, setCashierTab] = useState<'payments' | 'manager_payments' | 'statement'>('payments');
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
   const [cashierPeriodKey, setCashierPeriodKey] = useState(currentCashierPeriodKey);
   const [cashierTransferFilter, setCashierTransferFilter] = useState('');
+  const [cashierOpenFamilySearch, setCashierOpenFamilySearch] = useState('');
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
+  const [logisticsSearch, setLogisticsSearch] = useState('');
   const [logisticsView, setLogisticsView] = useState<'table' | 'map'>('table');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
-  const [expensesTab, setExpensesTab] = useState<'payroll' | 'advances' | 'expenses'>('payroll');
+  const [driversSearch, setDriversSearch] = useState('');
   const [payrollSchoolKey, setPayrollSchoolKey] = useState<string | null>(null);
   const [payrollTransferFilter, setPayrollTransferFilter] = useState('');
+  const [payrollSearch, setPayrollSearch] = useState('');
   const [payrollSchoolTab, setPayrollSchoolTab] = useState<PayrollSchoolTab>('timesheet');
   const [payrollPeriodKey, setPayrollPeriodKey] = useState(currentPayrollPeriodKey);
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
   const [managerSchoolMode, setManagerSchoolMode] = useState<'directory' | 'charges'>('directory');
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
-  const [managerOpenFamilyId, setManagerOpenFamilyId] = useState<string | null>(null);
-  const handleManagerOpenFamily = (schoolKey: string, familyId: string) => {
+  const [managerOpenFamilySearch, setManagerOpenFamilySearch] = useState('');
+  const [managerPeriodKey, setManagerPeriodKey] = useState('ALL');
+  const canAccessManagerSchool = (schoolKey: string) => isSchoolAllowed(schoolKey, currentUser?.schoolKeys);
+  const handleManagerSelectSchool = (schoolKey: string) => {
+    if (!canAccessManagerSchool(schoolKey)) return;
+    setManagerOpenFamilySearch('');
     setManagerSchoolKey(schoolKey);
-    setManagerOpenFamilyId(familyId);
+  };
+  const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
+    if (!canAccessManagerSchool(schoolKey)) return;
+    setManagerOpenFamilySearch(searchQuery);
+    setManagerSchoolMode('directory');
+    setManagerSchoolKey(schoolKey);
+  };
+  const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
+    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    setLogisticsSearch(searchQuery);
+    setLogisticsView('table');
+    setLogisticsSchoolKey(schoolKey);
+  };
+  const handleCashierSelectSchool = (schoolKey: string) => {
+    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    setCashierOpenFamilySearch('');
+    setCashierSchoolKey(schoolKey);
+  };
+  const handleCashierOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, periodKey: string) => {
+    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    setCashierOpenFamilySearch(searchQuery);
+    setCashierPeriodKey(periodKey);
+    setCashierSchoolKey(schoolKey);
   };
   const [adminFiltersOpen, setAdminFiltersOpen] = useState(false);
   const [columnsOpen, setColumnsOpen] = useState(false);
@@ -116,6 +147,13 @@ export default function App() {
   }, [currentUserRole, section]);
 
   useEffect(() => {
+    if (!managerSchoolKey || isSchoolAllowed(managerSchoolKey, currentUser?.schoolKeys)) return;
+    setManagerSchoolKey(null);
+    setManagerOpenFamilySearch('');
+    setManagerTransferFilter('');
+  }, [currentUser?.schoolKeys, managerSchoolKey]);
+
+  useEffect(() => {
     setAdminFiltersOpen(false);
     setColumnsOpen(false);
     setSchoolSidebarReserveWidth(0);
@@ -123,6 +161,7 @@ export default function App() {
     setManagerSchoolMode('directory');
     setCashierSchoolKey(null);
     setCashierTransferFilter('');
+    setCashierOpenFamilySearch('');
     setLogisticsSchoolKey(null);
     setLogisticsTransferFilter('');
     setLogisticsView('table');
@@ -130,10 +169,7 @@ export default function App() {
     setDriversTransferFilter('');
     setPayrollSchoolKey(null);
     setPayrollTransferFilter('');
-  // expensesTab намеренно не в зависимостях — ни одно из состояний здесь не
-  // относится к разделу «Финансы», переключение его вкладок не должно
-  // сбрасывать навигацию по школам в Кассире/Логистике/Менеджере/Водителях.
-  }, [section, cashierTab, managerSchoolKey]);
+  }, [section, managerSchoolKey]);
 
   useEffect(() => {
     setCashierTransferFilter('');
@@ -179,7 +215,7 @@ export default function App() {
     background: '#FFFFFF',
     borderRadius: '14px 14px 0 0',
     padding: '8px 10px 0',
-    gap: 2,
+    gap: 8,
     marginBottom: 0,
     marginRight: 0,
     flexShrink: 0,
@@ -187,35 +223,33 @@ export default function App() {
     zIndex: 2,
   };
 
-  const tabStyle = (active: boolean) => ({
+  const managerModeTabStyle = (active: boolean): React.CSSProperties => ({
     height: 34,
     padding: '0 16px',
+    marginBottom: 8,
     border: 'none',
-    borderRadius: active ? '10px 10px 0 0' : 10,
-    background: active ? 'var(--active-bg)' : 'transparent',
-    color: active ? '#0C7A74' : '#7A859D',
+    borderRadius: 10,
+    background: active ? '#31A4A5' : '#fff',
+    color: active ? '#fff' : '#354052',
     fontSize: 13,
-    fontWeight: active ? 700 : 500,
+    fontWeight: active ? 800 : 650,
     cursor: 'pointer',
-    whiteSpace: 'nowrap' as const,
-    transition: 'background 0.15s, color 0.15s',
-    position: 'relative' as const,
-    zIndex: active ? 3 : 1,
-    marginBottom: active ? -1 : 0,
-    boxShadow: active ? 'inset 0 4px 0 #31A4A5' : 'none',
-  } as React.CSSProperties);
+    whiteSpace: 'nowrap',
+    transition: 'background .15s, color .15s, border-color .15s',
+    boxShadow: active ? '0 5px 12px rgba(49, 164, 165, .2)' : '0 5px 16px rgba(43, 72, 89, .06)',
+  });
 
   const sectionLabel = (label: string) => (
     <span style={{
-      fontSize: 15,
+      fontSize: 17,
       fontWeight: 800,
       color: '#17222F',
       paddingLeft: 10,
       paddingRight: 14,
       paddingBottom: 10,
       whiteSpace: 'nowrap' as const,
-      borderRight: '1px solid #E2ECEE',
-      marginRight: 6,
+      borderRight: 'none',
+      marginRight: 8,
       letterSpacing: '-0.01em',
     }}>{label}</span>
   );
@@ -278,7 +312,7 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel('Кассир')}
                 {cashierSchoolKey && (
-                  <button onClick={() => setCashierSchoolKey(null)} style={tabStyle(false)}>
+                  <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} style={managerModeTabStyle(false)}>
                     ← Все школы
                   </button>
                 )}
@@ -287,42 +321,51 @@ export default function App() {
             </div>
             {cashierSchoolKey ? (
               <>
-              <CashierSchoolKpiStrip
-                schoolKey={cashierSchoolKey}
-                periodKey={cashierPeriodKey}
-                rightReserveWidth={schoolSidebarReserveWidth}
-              />
-              <CashierSchoolTransferDashboard
-                schoolKey={cashierSchoolKey}
-                periodKey={cashierPeriodKey}
-                rightReserveWidth={schoolSidebarReserveWidth}
-                selectedKey={cashierTransferFilter}
-                onSelect={setCashierTransferFilter}
-              />
+              <DashboardTopPanel>
+                  <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+                      <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />
+                    </div>
+                    <DashboardSearch value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
+                  </div>
+                <CashierSchoolKpiStrip
+                  schoolKey={cashierSchoolKey}
+                  periodKey={cashierPeriodKey}
+                  rightReserveWidth={schoolSidebarReserveWidth}
+                />
+                <CashierSchoolTransferDashboard
+                  schoolKey={cashierSchoolKey}
+                  periodKey={cashierPeriodKey}
+                  rightReserveWidth={schoolSidebarReserveWidth}
+                  selectedKey={cashierTransferFilter}
+                  onSelect={setCashierTransferFilter}
+                />
+              </DashboardTopPanel>
               <FamiliesPage
                 mode="cashier"
                 userRole={currentUserRole}
                 userName={currentUser?.name}
                 allowedSchools={currentUser?.schoolKeys}
                 initialQuickFilter={{ activeTab: cashierSchoolKey }}
-                onSchoolKeyChange={setCashierSchoolKey}
+                onSchoolKeyChange={handleCashierSelectSchool}
                 adminFiltersOpen={adminFiltersOpen}
                 onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                 columnsOpen={columnsOpen}
                 onColumnsOpenChange={setColumnsOpen}
                 onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
                 externalPeriodKey={cashierPeriodKey}
-                onPeriodKeyChange={setCashierPeriodKey}
-                hideDashboard
                 hideTransferBars
                 externalQuickTransfer={cashierTransferFilter}
+                initialSearch={cashierOpenFamilySearch}
               />
               </>
             ) : (
               <CashierOverview
                 periodKey={cashierPeriodKey}
                 onPeriodKeyChange={setCashierPeriodKey}
-                onSelectSchool={setCashierSchoolKey}
+                onSelectSchool={handleCashierSelectSchool}
+                onOpenPaymentFamily={handleCashierOpenFamily}
+                allowedSchools={currentUser?.schoolKeys}
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             )}
@@ -332,15 +375,23 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Логистика')}
+                {!logisticsSchoolKey && (
+                  <ManagerSearch
+                    rows={(badgesQuery.data ?? []).filter(row => isSchoolAllowed(row.branchFilter, currentUser?.schoolKeys))}
+                    onOpenFamily={handleLogisticsOpenFamily}
+                    collapsible
+                    compact
+                  />
+                )}
                 {logisticsSchoolKey && (
                   <>
-                    <button onClick={() => setLogisticsSchoolKey(null)} style={tabStyle(false)}>
+                    <button onClick={() => { setLogisticsSchoolKey(null); setLogisticsSearch(''); }} style={managerModeTabStyle(false)}>
                       ← Все школы
                     </button>
-                    <button onClick={() => setLogisticsView('table')} style={tabStyle(logisticsView === 'table')}>
+                    <button onClick={() => setLogisticsView('table')} style={managerModeTabStyle(logisticsView === 'table')}>
                       Таблица
                     </button>
-                    <button onClick={() => setLogisticsView('map')} style={tabStyle(logisticsView === 'map')}>
+                    <button onClick={() => setLogisticsView('map')} style={managerModeTabStyle(logisticsView === 'map')}>
                       Карта
                     </button>
                   </>
@@ -350,20 +401,23 @@ export default function App() {
             </div>
             {logisticsSchoolKey ? (
               <>
-              <LogisticsSchoolKpiStrip
-                schoolKey={logisticsSchoolKey}
-                rightReserveWidth={schoolSidebarReserveWidth}
-              />
-              <LogisticsSchoolTransferDashboard
-                schoolKey={logisticsSchoolKey}
-                rightReserveWidth={schoolSidebarReserveWidth}
-                selectedKey={logisticsTransferFilter}
-                onSelect={setLogisticsTransferFilter}
-              />
+              <DashboardTopPanel>
+                <LogisticsSchoolKpiStrip
+                  schoolKey={logisticsSchoolKey}
+                  rightReserveWidth={schoolSidebarReserveWidth}
+                />
+                <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <LogisticsSchoolTransferDashboard schoolKey={logisticsSchoolKey} selectedKey={logisticsTransferFilter} onSelect={setLogisticsTransferFilter} />
+                  </div>
+                  <div style={{ paddingTop: 10 }}><DashboardSearch value={logisticsSearch} onChange={setLogisticsSearch} placeholder="Имя, телефон, ребёнок, адрес..." /></div>
+                </div>
+              </DashboardTopPanel>
               {logisticsView === 'map' ? (
                 <LogisticsMapView
                   schoolKey={logisticsSchoolKey}
                   transferFilter={logisticsTransferFilter}
+                  search={logisticsSearch}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
                   onSelectSchool={setLogisticsSchoolKey}
@@ -382,10 +436,10 @@ export default function App() {
                   columnsOpen={columnsOpen}
                   onColumnsOpenChange={setColumnsOpen}
                   onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-                  hideDashboard
                   hideTransferBars
                   externalQuickTransfer={logisticsTransferFilter === 'rejected' ? '' : logisticsTransferFilter}
                   externalQuickChildStatus={logisticsTransferFilter === 'rejected' ? 'rejected' : ''}
+                  initialSearch={logisticsSearch}
                 />
               )}
               </>
@@ -402,12 +456,12 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel('Менеджер')}
                 {managerSchoolKey && (
-                  <button onClick={() => setManagerSchoolKey(null)} style={tabStyle(false)}>
+                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} style={managerModeTabStyle(false)}>
                     ← Все школы
                   </button>
                 )}
                 {managerSchoolKey && ([['directory', 'Справочник'], ['charges', 'Оплаты']] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setManagerSchoolMode(key)} style={tabStyle(managerSchoolMode === key)}>
+                  <button key={key} onClick={() => setManagerSchoolMode(key)} style={managerModeTabStyle(managerSchoolMode === key)}>
                     {label}
                   </button>
                 ))}
@@ -416,21 +470,34 @@ export default function App() {
             </div>
             {managerSchoolKey ? (
               <>
-                <SchoolKpiStrip schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} />
-                <SchoolTransferDashboard
-                  schoolKey={managerSchoolKey}
-                  rightReserveWidth={schoolSidebarReserveWidth}
-                  selectedKey={managerTransferFilter}
-                  onSelect={setManagerTransferFilter}
-                />
+                <DashboardTopPanel>
+                  {managerSchoolMode === 'charges' && (
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+                        <ManagerPeriodBar periodKey={managerPeriodKey} onPeriodKeyChange={setManagerPeriodKey} />
+                      </div>
+                      <div style={{ paddingTop: 10 }}><DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} /></div>
+                    </div>
+                  )}
+                  <SchoolKpiStrip schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} />
+                  {managerSchoolMode === 'charges' ? (
+                    <SchoolTransferDashboard schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <SchoolTransferDashboard schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
+                      </div>
+                      <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
+                    </div>
+                  )}
+                </DashboardTopPanel>
                 <FamiliesPage
                   mode={managerSchoolMode}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
                   allowedSchools={currentUser?.schoolKeys}
                   initialQuickFilter={{ activeTab: managerSchoolKey }}
-                  onSchoolKeyChange={setManagerSchoolKey}
-                  hideDashboard
+                  onSchoolKeyChange={handleManagerSelectSchool}
                   adminFiltersOpen={adminFiltersOpen}
                   onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                   columnsOpen={columnsOpen}
@@ -439,12 +506,17 @@ export default function App() {
                   hideTransferBars
                   externalQuickTransfer={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? '' : managerTransferFilter}
                   externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
-                  initialOpenFamilyId={managerOpenFamilyId}
-                  onInitialFamilyOpened={() => setManagerOpenFamilyId(null)}
+                  externalPeriodKey={managerSchoolMode === 'charges' ? managerPeriodKey : undefined}
+                  initialSearch={managerOpenFamilySearch}
                 />
               </>
             ) : (
-              <ManagerOverview onSelectSchool={setManagerSchoolKey} onSidebarWidthChange={setSchoolSidebarReserveWidth} onOpenFamily={handleManagerOpenFamily} />
+              <ManagerOverview
+                onSelectSchool={handleManagerSelectSchool}
+                onSidebarWidthChange={setSchoolSidebarReserveWidth}
+                onOpenFamily={handleManagerOpenFamily}
+                allowedSchools={currentUser?.schoolKeys}
+              />
             )}
           </div>
         ) : section === 'drivers' ? (
@@ -453,7 +525,7 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel('Водители')}
                 {driversSchoolKey && (
-                  <button onClick={() => setDriversSchoolKey(null)} style={tabStyle(false)}>
+                  <button onClick={() => { setDriversSchoolKey(null); setDriversSearch(''); }} style={managerModeTabStyle(false)}>
                     ← Все школы
                   </button>
                 )}
@@ -462,16 +534,18 @@ export default function App() {
             </div>
             {driversSchoolKey ? (
               <>
-                <DriversSchoolKpiStrip
-                  schoolKey={driversSchoolKey}
-                  rightReserveWidth={schoolSidebarReserveWidth}
-                />
-                <DriversTransferDashboard
-                  schoolKey={driversSchoolKey}
-                  rightReserveWidth={schoolSidebarReserveWidth}
-                  selectedKey={driversTransferFilter}
-                  onSelect={setDriversTransferFilter}
-                />
+                <DashboardTopPanel>
+                  <DriversSchoolKpiStrip
+                    schoolKey={driversSchoolKey}
+                    rightReserveWidth={schoolSidebarReserveWidth}
+                  />
+                  <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <DriversTransferDashboard schoolKey={driversSchoolKey} selectedKey={driversTransferFilter} onSelect={setDriversTransferFilter} />
+                    </div>
+                    <div style={{ paddingTop: 10 }}><DashboardSearch value={driversSearch} onChange={setDriversSearch} placeholder="ФИО, телефон, трансфер, авто..." /></div>
+                  </div>
+                </DashboardTopPanel>
                 <DriversPage
                   userRole={currentUserRole}
                   userName={currentUser?.name}
@@ -479,6 +553,7 @@ export default function App() {
                   allowedSchools={currentUser?.schoolKeys}
                   schoolKey={driversSchoolKey}
                   externalQuickTransfer={driversTransferFilter}
+                  initialSearch={driversSearch}
                   onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
                 />
               </>
@@ -506,54 +581,53 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Финансы')}
-                {expensesTab === 'payroll' && payrollSchoolKey && (
-                  <button onClick={() => setPayrollSchoolKey(null)} style={tabStyle(false)}>
+                {payrollSchoolKey && (
+                  <button onClick={() => { setPayrollSchoolKey(null); setPayrollSearch(''); }} style={managerModeTabStyle(false)}>
                     ← Все школы
                   </button>
                 )}
-                {expensesTab === 'payroll' && payrollSchoolKey && ([
+                {payrollSchoolKey && ([
                   ['timesheet', 'Табель'],
                   ['advance', 'Аванс'],
                   ['salary', 'Зарплата'],
                 ] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setPayrollSchoolTab(key)} style={tabStyle(payrollSchoolTab === key)}>
-                    {label}
-                  </button>
-                ))}
-                {expensesTab !== 'payroll' && ([['payroll', 'Зарплата'], ['advances', 'Авансы'], ['expenses', 'Расходы']] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setExpensesTab(key)} style={tabStyle(expensesTab === key)}>
+                  <button key={key} onClick={() => setPayrollSchoolTab(key)} style={managerModeTabStyle(payrollSchoolTab === key)}>
                     {label}
                   </button>
                 ))}
                 {extraTabs(true)}
               </div>
             </div>
-            {expensesTab === 'payroll' ? (
-              <PayrollModule
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                rightReserveWidth={schoolSidebarReserveWidth}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-                schoolKey={payrollSchoolKey}
-                transferFilter={payrollTransferFilter}
-                schoolTab={payrollSchoolTab}
-                periodKey={payrollPeriodKey}
-                onSelectSchool={setPayrollSchoolKey}
-                onTransferFilterChange={setPayrollTransferFilter}
-                onPeriodKeyChange={setPayrollPeriodKey}
-              />
-            ) : (
-              <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-                {expensesTab === 'advances'
-                  ? 'Модуль Авансы — в разработке'
-                  : 'Модуль Расходы — в разработке'}
+            <PayrollModule
+              userRole={currentUserRole}
+              userName={currentUser?.name}
+              allowedSchools={currentUser?.schoolKeys}
+              adminFiltersOpen={adminFiltersOpen}
+              onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+              columnsOpen={columnsOpen}
+              onColumnsOpenChange={setColumnsOpen}
+              rightReserveWidth={schoolSidebarReserveWidth}
+              onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+              schoolKey={payrollSchoolKey}
+              transferFilter={payrollTransferFilter}
+              schoolTab={payrollSchoolTab}
+              periodKey={payrollPeriodKey}
+              onSelectSchool={setPayrollSchoolKey}
+              onTransferFilterChange={setPayrollTransferFilter}
+              onPeriodKeyChange={setPayrollPeriodKey}
+              search={payrollSearch}
+              onSearchChange={setPayrollSearch}
+            />
+          </div>
+        ) : section === 'costs' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
+            <div style={tabRowStyle}>
+              <div style={tabBarStyle}>
+                {sectionLabel('Расходы')}
+                {extraTabs(true)}
               </div>
-            )}
+            </div>
+            <ExpensesModule userName={currentUser?.name} sessionToken={currentUser?.sessionToken} />
           </div>
         ) : section === 'employees' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>

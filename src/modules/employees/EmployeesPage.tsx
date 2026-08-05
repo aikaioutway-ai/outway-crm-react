@@ -1,8 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Edit3, Eye, EyeOff, Plus, Save, Trash2, UserCog } from 'lucide-react';
 import { Employee, EmployeeRole, EmployeeStatus } from '../../types';
 import { deleteEmployee, EmployeeDraft, fetchEmployees, saveEmployee } from '../../services/employeeService';
 import { SCHOOL_TABS } from '../families/constants';
+import { DashboardSearch, DashboardTopPanel } from '../../core/dashboard/DashboardUI';
+import './EmployeesPage.css';
 
 const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
   { value: 'admin', label: 'Админ' },
@@ -36,7 +39,9 @@ const EMPTY_DRAFT: EmployeeDraft = {
   comment: '',
 };
 
-const SCHOOL_OPTIONS = SCHOOL_TABS.filter(item => item.key !== 'ALL').map(item => ({ key: item.key, label: item.label }));
+const SCHOOL_OPTIONS = SCHOOL_TABS
+  .filter(item => item.key !== 'ALL')
+  .map(item => ({ key: item.key, label: item.label, logo: item.logo }));
 
 export default function EmployeesPage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
@@ -142,35 +147,31 @@ export default function EmployeesPage() {
 
   return (
     <div style={pageStyle}>
-      <header style={headerStyle}>
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 900, color: '#17222F' }}>Сотрудники</div>
-          <div style={{ marginTop: 3, fontSize: 12, fontWeight: 650, color: '#7B8491' }}>
-            должности, доступы, контакты и школы
+      <DashboardTopPanel>
+        <header style={headerStyle}>
+          <div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: '#17222F' }}>Сотрудники</div>
+            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 650, color: '#7B8491' }}>
+              должности, доступы, контакты и школы
+            </div>
           </div>
-        </div>
-        <button onClick={newEmployee} style={primaryButtonStyle}>
-          <Plus size={15} /> Сотрудник
-        </button>
-      </header>
+          <button onClick={newEmployee} style={primaryButtonStyle}>
+            <Plus size={15} /> Сотрудник
+          </button>
+        </header>
 
-      <div style={statsStyle}>
-        <Metric label="Всего" value={stats.total} />
-        <Metric label="Активные" value={stats.active} />
-        <Metric label="Менеджеры" value={stats.managers} />
-      </div>
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+          <div style={{ ...statsStyle, flex: 1 }}>
+            <Metric label="Всего" value={stats.total} />
+            <Metric label="Активные" value={stats.active} />
+            <Metric label="Менеджеры" value={stats.managers} />
+          </div>
+          <DashboardSearch value={query} onChange={setQuery} placeholder="Поиск по сотрудникам..." />
+        </div>
+      </DashboardTopPanel>
 
       <div style={layoutStyle}>
         <section style={listStyle}>
-          <div style={listToolbarStyle}>
-            <input
-              value={query}
-              onChange={event => setQuery(event.target.value)}
-              placeholder="Поиск по сотрудникам..."
-              style={searchStyle}
-            />
-          </div>
-
           <div style={{ overflow: 'auto', minHeight: 0 }}>
             <table style={tableStyle}>
               <thead>
@@ -187,13 +188,13 @@ export default function EmployeesPage() {
                 {filtered.map(employee => {
                   const active = selectedId === employee.id;
                   return (
-                    <tr key={employee.id} onClick={() => selectEmployee(employee)} style={{ cursor: 'pointer', background: active ? '#D7EEEE' : '#fff' }}>
-                      <Td strong>{employee.fullName}</Td>
-                      <Td>{employee.position || '-'}</Td>
-                      <Td>{roleLabel(employee.role)}</Td>
-                      <Td>{schoolsLabel(employee.schoolKeys)}</Td>
-                      <Td>{employee.phone1 || '-'}</Td>
-                      <Td>
+                    <tr key={employee.id} onClick={() => selectEmployee(employee)} className={`employee-table-row${active ? ' is-selected' : ''}`}>
+                      <Td strong selected={active} edge="left">{employee.fullName}</Td>
+                      <Td selected={active}>{employee.position || '-'}</Td>
+                      <Td selected={active}>{roleLabel(employee.role)}</Td>
+                      <Td selected={active}><SchoolAccessLogos schoolKeys={employee.schoolKeys} /></Td>
+                      <Td selected={active}>{employee.phone1 || '-'}</Td>
+                      <Td selected={active} edge="right">
                         <span style={statusBadgeStyle(employee.status)}>{statusLabel(employee.status)}</span>
                       </Td>
                     </tr>
@@ -331,9 +332,83 @@ function schoolsLabel(keys: string[]) {
   return keys.length ? keys.join(', ') : '-';
 }
 
+function SchoolAccessLogos({ schoolKeys }: { schoolKeys: string[] }) {
+  const [popoverPosition, setPopoverPosition] = useState<{ top: number; left: number } | null>(null);
+  const hasAllAccess = schoolKeys.some(key => key.toUpperCase() === 'ALL');
+  const schools = hasAllAccess
+    ? SCHOOL_OPTIONS
+    : schoolKeys
+      .map(key => SCHOOL_OPTIONS.find(option => option.key.toUpperCase() === key.toUpperCase()))
+      .filter((option): option is (typeof SCHOOL_OPTIONS)[number] => Boolean(option));
+  const visible = schools.slice(0, 5);
+  const overflow = schools.length - visible.length;
+  const title = hasAllAccess ? 'Все школы' : (schools.map(school => school.label).join(', ') || 'Нет доступа к школам');
+
+  const openPopover = (event: React.MouseEvent<HTMLDivElement>) => {
+    const rect = event.currentTarget.getBoundingClientRect();
+    const width = 390;
+    const estimatedHeight = 212;
+    const left = Math.max(12, Math.min(rect.left - 10, window.innerWidth - width - 12));
+    const below = rect.bottom + 10;
+    const top = below + estimatedHeight <= window.innerHeight - 12
+      ? below
+      : Math.max(12, rect.top - estimatedHeight - 10);
+    setPopoverPosition({ top, left });
+  };
+
+  if (!schools.length) return <span title={title}>—</span>;
+
+  return (
+    <div
+      title={title}
+      className="employee-school-access"
+      style={schoolAccessStyle}
+      onMouseEnter={openPopover}
+      onMouseLeave={() => setPopoverPosition(null)}
+      onClick={event => {
+        event.stopPropagation();
+        if (popoverPosition) setPopoverPosition(null);
+        else openPopover(event);
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={title}
+    >
+      <div className="employee-school-access__stack">
+      {visible.map((school, index) => school.logo ? (
+        <img
+          key={school.key}
+          src={school.logo}
+          alt={school.label}
+          style={{ ...schoolAccessLogoStyle, marginLeft: index ? -6 : 0, zIndex: visible.length - index }}
+        />
+      ) : (
+        <span key={school.key} style={{ ...schoolAccessFallbackStyle, marginLeft: index ? -6 : 0, zIndex: visible.length - index }}>
+          {school.label.slice(0, 2)}
+        </span>
+      ))}
+      {overflow > 0 && <span style={schoolAccessCountStyle}>+{overflow}</span>}
+      </div>
+      {popoverPosition && createPortal(
+        <div className="employee-school-access-popover" style={popoverPosition} aria-hidden="true">
+          <div className="employee-school-access-popover__title">{hasAllAccess ? 'Доступ ко всем школам' : 'Доступные школы'}</div>
+          <div className="employee-school-access-popover__grid">
+            {schools.map(school => school.logo ? (
+              <img key={school.key} src={school.logo} alt={school.label} title={school.label} />
+            ) : (
+              <span key={school.key} title={school.label}>{school.label.slice(0, 2)}</span>
+            ))}
+          </div>
+        </div>,
+        document.body,
+      )}
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div style={metricStyle}>
+    <div className="dock-hover-card" style={metricStyle}>
       <span>{label}</span>
       <b>{value}</b>
     </div>
@@ -391,14 +466,20 @@ function Th({ children }: { children: React.ReactNode }) {
   return <th style={thStyle}>{children}</th>;
 }
 
-function Td({ children, strong }: { children: React.ReactNode; strong?: boolean }) {
-  return <td style={{ ...tdStyle, fontWeight: strong ? 850 : 650 }}>{children}</td>;
+function Td({ children, strong, selected = false, edge, allowOverflow = false }: {
+  children: React.ReactNode;
+  strong?: boolean;
+  selected?: boolean;
+  edge?: 'left' | 'right';
+  allowOverflow?: boolean;
+}) {
+  return <td style={{ ...tdStyle, ...selectedCellStyle(selected, edge), ...(allowOverflow ? { overflow: 'visible', position: 'relative' } : {}), fontWeight: strong ? 850 : 650 }}>{children}</td>;
 }
 
 const pageStyle: React.CSSProperties = {
   height: '100%',
   overflow: 'hidden',
-  padding: 12,
+  padding: '0 0 10px',
   background: 'transparent',
   display: 'flex',
   flexDirection: 'column',
@@ -410,9 +491,8 @@ const headerStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'space-between',
   background: '#fff',
-  border: '1px solid #D4E3E7',
-  borderRadius: 18,
-  padding: '12px 14px',
+  border: 'none',
+  padding: '4px 0 12px',
 };
 
 const primaryButtonStyle: React.CSSProperties = {
@@ -438,7 +518,7 @@ const statsStyle: React.CSSProperties = {
 
 const metricStyle: React.CSSProperties = {
   height: 40,
-  border: '1px solid #D4E3E7',
+  border: 'none',
   borderRadius: 16,
   background: '#fff',
   display: 'flex',
@@ -462,32 +542,18 @@ const listStyle: React.CSSProperties = {
   minWidth: 0,
   minHeight: 0,
   background: '#fff',
-  border: '1px solid #D4E3E7',
+  border: 'none',
+  boxShadow: '0 5px 16px rgba(43, 72, 89, .06)',
   borderRadius: 18,
   overflow: 'hidden',
   display: 'flex',
   flexDirection: 'column',
 };
 
-const listToolbarStyle: React.CSSProperties = {
-  padding: 10,
-  borderBottom: '1px solid #D4E3E7',
-};
-
-const searchStyle: React.CSSProperties = {
-  width: '100%',
-  height: 30,
-  border: '1px solid #D4E3E7',
-  borderRadius: 14,
-  padding: '0 10px',
-  fontSize: 12,
-  fontWeight: 650,
-  outline: 'none',
-};
-
 const tableStyle: React.CSSProperties = {
   width: '100%',
-  borderCollapse: 'collapse',
+  borderCollapse: 'separate',
+  borderSpacing: 0,
   tableLayout: 'fixed',
 };
 
@@ -513,11 +579,60 @@ const tdStyle: React.CSSProperties = {
   whiteSpace: 'nowrap',
 };
 
+function selectedCellStyle(selected: boolean, edge?: 'left' | 'right'): React.CSSProperties {
+  if (!selected || edge !== 'left') return {};
+  return { boxShadow: 'inset 3px 0 0 #31A4A5' };
+}
+
+const schoolAccessStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  minWidth: 0,
+  height: 30,
+};
+
+const schoolAccessLogoStyle: React.CSSProperties = {
+  width: 27,
+  height: 27,
+  borderRadius: '50%',
+  objectFit: 'cover',
+  border: '2px solid #fff',
+  background: '#fff',
+  boxShadow: '0 2px 6px rgba(43, 72, 89, .12)',
+  flexShrink: 0,
+};
+
+const schoolAccessFallbackStyle: React.CSSProperties = {
+  ...schoolAccessLogoStyle,
+  display: 'grid',
+  placeItems: 'center',
+  background: '#D7EEEE',
+  color: '#237F81',
+  fontSize: 8,
+  fontWeight: 900,
+};
+
+const schoolAccessCountStyle: React.CSSProperties = {
+  minWidth: 27,
+  height: 27,
+  marginLeft: -6,
+  padding: '0 5px',
+  border: '2px solid #fff',
+  borderRadius: 999,
+  background: '#EEF5F6',
+  color: '#52627A',
+  display: 'grid',
+  placeItems: 'center',
+  fontSize: 9,
+  fontWeight: 900,
+};
+
 const editorStyle: React.CSSProperties = {
   minHeight: 0,
   overflowY: 'auto',
   background: '#fff',
-  border: '1px solid #D4E3E7',
+  border: 'none',
+  boxShadow: '0 5px 16px rgba(43, 72, 89, .06)',
   borderRadius: 18,
   padding: 12,
 };

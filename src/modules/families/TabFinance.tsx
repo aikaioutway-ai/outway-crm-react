@@ -20,8 +20,6 @@ interface Props {
   loading: boolean;
   family: Family;
   children: Child[];
-  mainBalance: number;
-  depositBalance: number;
   isAdmin: boolean;
   isCashier: boolean;
   userRole?: UserRole;
@@ -33,6 +31,7 @@ interface Props {
   onUnconfirmPayment?: (payment: FamilyPayment) => Promise<boolean>;
   onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDeletePayment: (payment: FamilyPayment) => Promise<boolean>;
+  readOnly?: boolean;
 }
 
 export default function TabFinance({
@@ -41,8 +40,6 @@ export default function TabFinance({
   paymentItems,
   loading,
   children: _children,
-  mainBalance,
-  depositBalance,
   isAdmin,
   isCashier,
   userRole: _userRole,
@@ -54,6 +51,7 @@ export default function TabFinance({
   onUnconfirmPayment,
   onSavePayment,
   onDeletePayment,
+  readOnly = false,
 }: Props) {
   const [addingPeriod, setAddingPeriod] = useState(false);
   const [newPeriodKey, setNewPeriodKey] = useState('9');
@@ -67,8 +65,8 @@ export default function TabFinance({
   const [msg, setMsg] = useState('');
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
-  const canCreatePayment = !isCashier || isAdmin;
-  const canConfirmPayment = isCashier || isAdmin;
+  const canCreatePayment = !readOnly && (!isCashier || isAdmin);
+  const canConfirmPayment = !readOnly && (isCashier || isAdmin);
 
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));
   const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(`${p.month}:${p.year}`));
@@ -168,7 +166,7 @@ export default function TabFinance({
                   onSave={updates => onSavePayment(payment, updates)}
                   onDelete={() => onDeletePayment(payment)}
                   onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
-                  isAdmin={isAdmin}
+                  isAdmin={!readOnly && isAdmin}
                 />
               ))}
             </div>
@@ -177,7 +175,7 @@ export default function TabFinance({
 
         <Section
           title="Месячная таблица"
-          action={isAdmin && (
+          action={!readOnly && isAdmin && (
             <button onClick={() => setAddingPeriod(p => !p)} style={smallAccentBtn}>
               <Plus size={11} /> Период
             </button>
@@ -485,7 +483,7 @@ function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], paymentIt
 
   return Array.from(grouped.values())
     .sort((a, b) => (a.rawYear - b.rawYear) || (a.rawMonth - b.rawMonth))
-    .map(({ rawMonth, rawYear, dateValue, ...row }) => row);
+    .map(({ rawMonth: _rawMonth, rawYear: _rawYear, dateValue: _dateValue, ...row }) => row);
 }
 
 const inputStyle: React.CSSProperties = {

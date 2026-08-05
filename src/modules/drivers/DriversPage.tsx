@@ -1,4 +1,3 @@
-import React from 'react';
 import { UserRole } from '../../types';
 import FamiliesPage from '../families/FamiliesPage';
 
@@ -9,10 +8,11 @@ interface DriversPageProps {
   allowedSchools?: string[];
   schoolKey?: string;
   externalQuickTransfer?: string;
+  initialSearch?: string;
   onSchoolsSidebarWidthChange?: (width: number) => void;
 }
 
-export default function DriversPage({ userRole, userName, authToken, allowedSchools, schoolKey, externalQuickTransfer, onSchoolsSidebarWidthChange }: DriversPageProps) {
+export default function DriversPage({ userRole, userName, authToken, allowedSchools, schoolKey, externalQuickTransfer, initialSearch, onSchoolsSidebarWidthChange }: DriversPageProps) {
   return (
     <FamiliesPage
       mode="logistics"
@@ -22,9 +22,9 @@ export default function DriversPage({ userRole, userName, authToken, allowedScho
       authToken={authToken}
       allowedSchools={allowedSchools}
       initialQuickFilter={schoolKey ? { activeTab: schoolKey, quickChildStatus: '' } : undefined}
-      hideDashboard={Boolean(schoolKey)}
       hideTransferBars={Boolean(schoolKey)}
       externalQuickTransfer={externalQuickTransfer}
+      initialSearch={initialSearch}
       onSchoolsSidebarWidthChange={onSchoolsSidebarWidthChange}
     />
   );

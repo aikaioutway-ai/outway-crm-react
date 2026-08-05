@@ -3,7 +3,7 @@ import { Bus, Car, FileWarning, UserCheck, UserX } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from '../families/constants';
-import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
+import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from './DriversOverview';
 
 interface DriversSchoolKpiStripProps {

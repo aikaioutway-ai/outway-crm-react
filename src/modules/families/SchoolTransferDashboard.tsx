@@ -1,12 +1,14 @@
 import React from 'react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { isSchoolAllowed } from './constants';
 
 interface SchoolTransferDashboardProps {
   schoolKey: string;
   rightReserveWidth?: number;
   selectedKey?: string;
   onSelect?: (key: string) => void;
+  allowedSchools?: string[];
 }
 
 const TRANSFER_COUNT = 15;
@@ -38,10 +40,10 @@ function compactMoney(value: number): string {
   return amount.toLocaleString('ru-RU');
 }
 
-export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: SchoolTransferDashboardProps) {
+export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools }: SchoolTransferDashboardProps) {
   const { data: rows } = useFamiliesTable(false);
 
-  if (!rows) return null;
+  if (!isSchoolAllowed(schoolKey, allowedSchools) || !rows) return null;
 
   const allSchoolRows = rows.filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');
@@ -79,6 +81,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
         const activeColor = cell.tone ?? '#2DD4BF';
         return (
           <button
+            className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
             title={active ? `Долг: ${cell.debtSum.toLocaleString('ru-RU')} сом` : undefined}

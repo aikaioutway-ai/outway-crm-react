@@ -31,6 +31,19 @@ export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; childre
   { key: 'ABL',    label: 'ABL',    logo: '/school-logos/ABL.png', children: ['ABL1', 'ABL2'] },
 ];
 
+export function isSchoolAllowed(schoolKey: string, allowedSchools?: string[]): boolean {
+  if (!allowedSchools || allowedSchools.length === 0 || allowedSchools.some(key => key.toUpperCase() === 'ALL')) return true;
+  const normalizedKey = schoolKey.toUpperCase();
+  const normalizedAllowed = new Set(allowedSchools.map(key => key.toUpperCase()));
+  if (normalizedAllowed.has(normalizedKey)) return true;
+  return SCHOOL_GROUPS.some(group => {
+    const groupKey = group.key.toUpperCase();
+    const childKeys = group.children.map(key => key.toUpperCase());
+    return (normalizedAllowed.has(groupKey) && childKeys.includes(normalizedKey))
+      || (normalizedKey === groupKey && childKeys.some(key => normalizedAllowed.has(key)));
+  });
+}
+
 // Маппинг branch_name из БД → короткое название в CRM
 export const BRANCH_SHORT: Record<string, string> = {
   // INDIGO

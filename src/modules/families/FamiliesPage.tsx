@@ -4,7 +4,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, createV2DriverAdvance, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
@@ -20,16 +20,23 @@ import {
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Search, Plus, X, Save, Paperclip } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
 import {
-  childDebtAmount, childDebtorRows, compactMoney,
-  downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort, logisticsTransferCountColor,
-  logisticsVehicleTypeLineColor, logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod, transferVehicleSummary,
+  childDebtAmount, compactMoney,
+  downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort,
+  logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod,
   uniqueFamilyRows, vehicleTypeShortLabel, XLSX_BRAND,
 } from './familiesRowHelpers';
+
+function cashierRowMatchesSelectedPeriod(row: CashierPaymentRow | PaymentTableRow, periodKey: string): boolean {
+  if (periodKey === 'ALL') {
+    return CASHIER_PERIODS.some(period => paymentRowMatchesPeriod(row, period.key));
+  }
+  return paymentRowMatchesPeriod(row, periodKey);
+}
 
 export interface ChildRow {
   rowId: string;
@@ -102,15 +109,8 @@ interface FamiliesPageProps {
   onAdminFiltersClose?: () => void;
   columnsOpen?: boolean;
   onColumnsOpenChange?: (v: boolean) => void;
-  hidePeriodAll?: boolean;
-  hidePeriodDeposit?: boolean;
   hideTransferBars?: boolean;
-  hideDashboard?: boolean;
-  compactPeriodBar?: boolean;
-  customLeftPanel?: React.ReactNode;
-  onPeriodKeyChange?: (key: string) => void;
   onSchoolKeyChange?: (key: string) => void;
-  customBarItems?: LogisticsDashboardItem[];
   customTopContent?: React.ReactNode;
   customTableContent?: React.ReactNode;
   extraSchoolDockItems?: SchoolDockItem[];
@@ -119,6 +119,7 @@ interface FamiliesPageProps {
   externalQuickChildStatus?: string;
   externalPeriodKey?: string;
   initialOpenFamilyId?: string | null;
+  initialSearch?: string;
   onInitialFamilyOpened?: () => void;
 }
 
@@ -225,7 +226,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
       { value: 'minivan', label: 'Минивэн' },
       { value: 'sedan', label: 'Седан' },
     ],
-    render: (val, row) => (
+    render: (_val, row) => (
       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
         {(VT_LABEL[row.vehicleType] ?? row.vehicleType)}{row.transferNumber ? ` №${row.transferNumber}` : ''}
       </span>
@@ -322,10 +323,7 @@ const LOGISTICS_CHART_COLORS = [
   '#E49A55', '#5A9FE8', '#B77BDA', '#E1709B', '#88A8D8',
 ];
 
-type LogisticsDashboardItem = { key: string; label: string; value: number; color: string };
-type LogisticsTransferDashboardItem = LogisticsDashboardItem & { group: string; count: number; vehicleType?: string; branchId?: string | null; schoolId?: string | null };
 type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidCount' | 'paidSum' | 'balanceSum' | 'pendingSum' | 'pendingAmount' | 'rejectedCount' | 'rejectedSum' | 'allPaymentsCount' | 'allPaymentsSum';
-type LogisticsSummaryItem = { label: string; value: string; metric?: LogisticsDashboardMetric; neutral?: boolean };
 type LogisticsVehicleFilter = 'all' | VehicleType;
 type TransferCardData = {
   transfer: V2TransferDashboardRow;
@@ -406,14 +404,6 @@ const LOGISTICS_DASHBOARD_METRICS: { key: LogisticsDashboardMetric; label: strin
   { key: 'allPaymentsSum', label: 'Все платежи сумма', money: true },
 ];
 
-const METRICS_BY_ROLE: Record<string, LogisticsDashboardMetric[]> = {
-  admin:        ['average', 'count', 'pendingSum', 'pendingAmount', 'debtSum', 'debtorsCount', 'chargedSum', 'paidCount', 'paidSum', 'balanceSum', 'rejectedCount', 'rejectedSum', 'allPaymentsCount', 'allPaymentsSum'],
-  gen_director: ['average', 'count', 'pendingSum', 'pendingAmount', 'debtSum', 'debtorsCount', 'chargedSum', 'paidCount', 'paidSum', 'balanceSum', 'rejectedCount', 'rejectedSum', 'allPaymentsCount', 'allPaymentsSum'],
-  director:     ['average', 'count', 'pendingSum', 'pendingAmount', 'debtSum', 'debtorsCount', 'chargedSum', 'paidCount', 'paidSum', 'balanceSum', 'rejectedCount', 'rejectedSum', 'allPaymentsCount', 'allPaymentsSum'],
-  manager:  ['count', 'pendingSum', 'pendingAmount', 'debtSum', 'debtorsCount', 'chargedSum', 'paidCount', 'paidSum', 'balanceSum', 'rejectedCount', 'rejectedSum', 'allPaymentsCount', 'allPaymentsSum'],
-  cashier:  ['pendingSum', 'pendingAmount', 'debtSum', 'debtorsCount', 'rejectedCount', 'rejectedSum', 'allPaymentsCount', 'allPaymentsSum'],
-  logist:   ['average', 'count'],
-};
 const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[] = [
   { key: 'all', label: 'Все ТС' },
   { key: 'microbus', label: 'Микроавтобус' },
@@ -421,944 +411,6 @@ const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[
   { key: 'sedan', label: 'Седан' },
 ];
 
-
-const logisticsDashboardBaseStyle: React.CSSProperties = {
-  position: 'relative',
-  display: 'grid',
-  gridTemplateColumns: '308px minmax(0, 1fr)',
-  gap: 8,
-  alignItems: 'start',
-  padding: 0,
-  background: 'transparent',
-  border: 'none',
-  borderRadius: 0,
-  overflow: 'visible',
-  boxSizing: 'border-box',
-};
-
-const logisticsDashboardSideStyle: React.CSSProperties = {
-  position: 'relative',
-  display: 'grid',
-  alignContent: 'start',
-  gap: 10,
-  padding: 12,
-  height: '100%',
-  minWidth: 0,
-  background: '#FFFFFF',
-  border: '1px solid #D4E3E7',
-  borderRadius: 10,
-  boxSizing: 'border-box',
-  boxShadow: '0 10px 28px rgba(43, 72, 89, 0.06)',
-};
-
-const logisticsDashboardMainStyle: React.CSSProperties = {
-  position: 'relative',
-  display: 'grid',
-  gap: 8,
-  minWidth: 0,
-  height: '100%',
-  padding: 0,
-  background: 'transparent',
-  border: 'none',
-  borderRadius: 0,
-  boxSizing: 'border-box',
-};
-
-const logisticsDashboardBlockStyle: React.CSSProperties = {
-  position: 'relative',
-  height: 148,
-  flexShrink: 0,
-  padding: '0 42px 8px 10px',
-  background: '#fff',
-  border: '1px solid #D4E3E7',
-  borderRadius: 10,
-  overflow: 'hidden',
-  boxSizing: 'border-box',
-  boxShadow: '0 10px 28px rgba(43, 72, 89, 0.05)',
-};
-
-const logisticsTransferBlockStyle: React.CSSProperties = {
-  position: 'relative',
-  height: 194,
-  flexShrink: 0,
-  padding: '8px 10px 8px 10px',
-  background: '#fff',
-  border: '1px solid #D4E3E7',
-  borderRadius: 10,
-  overflow: 'hidden',
-  boxSizing: 'border-box',
-  boxShadow: '0 10px 28px rgba(43, 72, 89, 0.05)',
-};
-
-const logisticsCollapsedStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  gap: 12,
-  minHeight: 34,
-  padding: '5px 8px 5px 12px',
-  background: '#fff',
-  border: '1px solid #D4E3E7',
-  borderRadius: 10,
-};
-
-const logisticsCollapsedDotStyle: React.CSSProperties = {
-  width: 8,
-  height: 8,
-  borderRadius: 999,
-  background: '#31A4A5',
-  flexShrink: 0,
-};
-
-const logisticsBarsStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(auto-fit, minmax(58px, 1fr))',
-  alignItems: 'end',
-  gap: 8,
-  minWidth: 0,
-  overflow: 'hidden',
-  padding: '0 0 1px',
-  borderBottom: '2px solid #31A4A5',
-  scrollbarWidth: 'none',
-};
-
-const logisticsBarItemStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateRows: '120px 20px',
-  justifyItems: 'center',
-  alignItems: 'end',
-  minWidth: 0,
-  border: 0,
-  background: 'transparent',
-  padding: 0,
-};
-
-const logisticsBarValueStyle: React.CSSProperties = {
-  fontSize: 13,
-  fontWeight: 850,
-  color: '#41547A',
-  whiteSpace: 'nowrap',
-  textAlign: 'center',
-  lineHeight: 1,
-  pointerEvents: 'none',
-};
-
-const logisticsBarTrackStyle: React.CSSProperties = {
-  height: 100,
-  display: 'flex',
-  alignItems: 'end',
-  justifyContent: 'center',
-  position: 'relative',
-};
-
-const logisticsBarStyle: React.CSSProperties = {
-  width: 18,
-  borderRadius: '5px 5px 0 0',
-};
-
-const logisticsBarLabelStyle: React.CSSProperties = {
-  width: '100%',
-  maxWidth: 72,
-  paddingTop: 6,
-  fontSize: 12,
-  fontWeight: 750,
-  color: '#626C8B',
-  textAlign: 'center',
-  whiteSpace: 'nowrap',
-  overflow: 'hidden',
-  textOverflow: 'ellipsis',
-};
-
-function LogisticsMicrobusDashboard({
-  items,
-  collapsed,
-  onToggle,
-  selectedKey,
-  onSelect,
-  metric,
-  onMetricChange,
-  metricOptions,
-  vehicleFilter,
-  onVehicleFilterChange,
-  customLeftPanel,
-  dashboardHeight,
-  summaryItems,
-  primaryValue,
-  detailItems = [],
-  activeDetailKey,
-  onDetailSelect,
-  onDetailDoubleClick,
-  onDetailContextMenu,
-  isDetailDisabled,
-  detailValueMode = 'count',
-  detailMoney = false,
-  dashboardMainTab,
-  onMainTabChange,
-  showDetailBars = true,
-}: {
-  items: LogisticsDashboardItem[];
-  collapsed: boolean;
-  onToggle: () => void;
-  selectedKey?: string;
-  onSelect?: (key: string) => void;
-  metric: LogisticsDashboardMetric;
-  onMetricChange: (metric: LogisticsDashboardMetric) => void;
-  metricOptions: { key: LogisticsDashboardMetric; label: string; money?: boolean }[];
-  vehicleFilter: LogisticsVehicleFilter;
-  onVehicleFilterChange: (filter: LogisticsVehicleFilter) => void;
-  summaryItems?: LogisticsSummaryItem[];
-  primaryValue?: number;
-  detailItems?: LogisticsTransferDashboardItem[];
-  activeDetailKey?: string;
-  onDetailSelect?: (item: LogisticsTransferDashboardItem) => void;
-  onDetailDoubleClick?: (event: React.MouseEvent, item: LogisticsTransferDashboardItem) => void;
-  onDetailContextMenu?: (event: React.MouseEvent, item: LogisticsTransferDashboardItem) => void;
-  isDetailDisabled?: (item: LogisticsTransferDashboardItem) => boolean;
-  detailValueMode?: 'count' | 'vehicleType';
-  detailMoney?: boolean;
-  dashboardMainTab?: 'payments' | 'statement';
-  onMainTabChange?: (tab: 'payments' | 'statement') => void;
-  showDetailBars?: boolean;
-  customLeftPanel?: React.ReactNode;
-  dashboardHeight?: number;
-}) {
-  const maxValue = Math.max(20, ...items.filter(i => i.key !== 'ALL').map(item => Math.max(0, item.value)));
-  const maxDetailValue = Math.max(1, ...detailItems.map(item => item.count));
-  const compactDetailBars = detailValueMode === 'vehicleType';
-  const selectedMetric = metricOptions.find(item => item.key === metric) ?? metricOptions[0] ?? LOGISTICS_DASHBOARD_METRICS[0];
-  const averageGaugeValue = items.length
-    ? items.reduce((sum, item) => sum + item.value, 0) / items.length
-    : 0;
-  const selectedGaugeItem = selectedKey ? items.find(item => item.key === selectedKey) : undefined;
-  const gaugeValue = primaryValue ?? selectedGaugeItem?.value ?? averageGaugeValue;
-  const schoolSummaryItem = summaryItems?.find(item => item.label === 'Школа');
-  const metricSummaryItems = summaryItems?.filter(item => item.label !== 'Школа') ?? [];
-  const primarySummaryItem = metricSummaryItems.find(item => item.metric === metric) ?? metricSummaryItems[0];
-
-  const getSummaryTone = (item: LogisticsSummaryItem) => {
-    const isDanger = item.label === 'Долг' || item.label === 'Должники' || item.label.startsWith('Долг') || item.label.startsWith('Отклон');
-    const isWarning = !item.neutral && (item.label === 'На проверке' || item.label.startsWith('На проверке'));
-    const isSuccess = item.label.startsWith('Подтверждён') || item.label.startsWith('Оплачено');
-    const isAccent = item.label === 'Начислено' || item.label === 'Средний' || item.label.startsWith('Все платежи');
-    if (isDanger) return { text: '#B42318', bg: '#FEF2F2', border: '#FECACA' };
-    if (isWarning) return { text: '#B45309', bg: '#FFFBEB', border: '#FDE68A' };
-    if (isSuccess) return { text: '#15803D', bg: '#F0FDF4', border: '#BBF7D0' };
-    if (isAccent) return { text: '#237F81', bg: '#EEF8F8', border: '#AAD4D4' };
-    return { text: '#17222F', bg: '#F5FAFB', border: '#D4E3E7' };
-  };
-
-  const renderSummaryItem = (item: LogisticsSummaryItem, compact = false) => {
-    const clickable = Boolean(item.metric);
-    const isSelected = item.metric === metric;
-    const tone = getSummaryTone(item);
-    const baseStyle: React.CSSProperties = {
-      width: '100%',
-      minWidth: 0,
-      display: 'grid',
-      gridTemplateColumns: 'minmax(0, 1fr) auto',
-      alignItems: 'center',
-      gap: 8,
-      padding: compact ? '7px 9px' : '8px 10px',
-      background: isSelected ? '#237F81' : tone.bg,
-      border: isSelected ? '1px solid #237F81' : `1px solid ${tone.border}`,
-      borderRadius: 8,
-      color: isSelected ? '#FFFFFF' : '#17222F',
-      textAlign: 'left',
-      boxShadow: isSelected ? '0 8px 18px rgba(35, 127, 129, 0.18)' : 'none',
-    };
-    const content = (
-      <>
-        <span style={{ minWidth: 0, fontSize: 12, fontWeight: 760, color: isSelected ? 'rgba(255,255,255,.86)' : '#626C8B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {item.label}
-        </span>
-        <span style={{ minWidth: 0, maxWidth: 122, justifySelf: 'end', fontSize: compact ? 13 : 14, fontWeight: 900, color: isSelected ? '#FFFFFF' : tone.text, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {item.value}
-        </span>
-      </>
-    );
-    if (!clickable) return <div key={item.label} style={baseStyle}>{content}</div>;
-    return (
-      <button
-        key={item.label}
-        type="button"
-        onClick={() => item.metric && onMetricChange(item.metric)}
-        style={{ ...baseStyle, cursor: 'pointer' }}
-      >
-        {content}
-      </button>
-    );
-  };
-  const findSummaryItem = (label: string) => metricSummaryItems.find(item => item.label === label);
-  const paymentSummaryGroups = [
-    { label: 'Платежи', sum: findSummaryItem('Все платежи сумма'), count: findSummaryItem('Все платежи к-во') },
-    { label: 'На проверке', sum: findSummaryItem('На проверке сумма'), count: findSummaryItem('На проверке к-во') },
-    { label: 'Подтверждённые', sum: findSummaryItem('Подтверждённые сумма'), count: findSummaryItem('Подтверждённые к-во') },
-    { label: 'Отклонённые', sum: findSummaryItem('Отклонённые сумма'), count: findSummaryItem('Отклонённые к-во') },
-  ];
-  const hasPaymentSummaryGroups = paymentSummaryGroups.every(group => group.sum && group.count);
-  const financeSummaryGroups = [
-    { label: 'Начислено', sum: findSummaryItem('Начислено сумма') },
-    { label: 'Оплачено', sum: findSummaryItem('Оплачено'), count: findSummaryItem('Оплачено к-во') },
-    { label: 'Долг', sum: findSummaryItem('Долг сумма'), count: findSummaryItem('Долг к-во') },
-  ];
-  const balanceSummaryItem = findSummaryItem('Баланс');
-  const hasFinanceSummaryGroups = financeSummaryGroups.every(group => group.sum && (group.label === 'Начислено' || group.count)) && Boolean(balanceSummaryItem);
-  const cashierMethodGroups = [
-    { label: 'Наличные', sum: findSummaryItem('Наличные сумма'), count: findSummaryItem('Наличные к-во') },
-    { label: 'QR', sum: findSummaryItem('QR сумма'), count: findSummaryItem('QR к-во') },
-  ];
-  const cashierReceiptItems = [findSummaryItem('С чеком'), findSummaryItem('Без чека')].filter(Boolean) as LogisticsSummaryItem[];
-  const hasCashierMethodGroups = cashierMethodGroups.every(group => group.sum && group.count);
-
-  const metricGroupGridColumns = 'minmax(88px, 1fr) minmax(0, 78px) minmax(0, 62px)';
-
-  const renderMetricGroupHeader = () => (
-    <div style={{
-      display: 'grid',
-      gridTemplateColumns: metricGroupGridColumns,
-      alignItems: 'center',
-      gap: 6,
-      minWidth: 0,
-      padding: '0 0 1px',
-    }}>
-      <span />
-      <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1, fontWeight: 900, color: '#7A859D', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        Сумма
-      </span>
-      <span style={{ minWidth: 0, fontSize: 10, lineHeight: 1, fontWeight: 900, color: '#7A859D', textAlign: 'center', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        К-во
-      </span>
-    </div>
-  );
-
-  const renderPaymentSummaryButton = (item: LogisticsSummaryItem | undefined) => {
-    if (!item) return null;
-    const clickable = Boolean(item.metric);
-    const isSelected = item.metric === metric;
-    const tone = getSummaryTone(item);
-    return (
-      <button
-        key={item.label}
-        type="button"
-        onClick={() => item.metric && onMetricChange(item.metric)}
-        disabled={!clickable}
-        style={{
-          minWidth: 0,
-          height: 34,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '0 7px',
-          border: isSelected ? '1px solid #237F81' : `1px solid ${tone.border}`,
-          borderRadius: 8,
-          background: isSelected ? '#237F81' : tone.bg,
-          color: isSelected ? '#FFFFFF' : tone.text,
-          cursor: clickable ? 'pointer' : 'default',
-          textAlign: 'left',
-          boxShadow: isSelected ? '0 8px 18px rgba(35, 127, 129, 0.18)' : 'none',
-        }}
-      >
-        <span style={{ minWidth: 0, fontSize: 14, lineHeight: 1, fontWeight: 950, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {item.value}
-        </span>
-      </button>
-    );
-  };
-
-  const renderLargeBalance = (item: LogisticsSummaryItem | undefined) => {
-    if (!item) return null;
-    const clickable = Boolean(item.metric);
-    const isSelected = item.metric === metric;
-    return (
-      <button
-        type="button"
-        onClick={() => item.metric && onMetricChange(item.metric)}
-        disabled={!clickable}
-        style={{
-          width: '100%',
-          minWidth: 0,
-          display: 'grid',
-          gap: 3,
-          padding: '12px 12px 11px',
-          border: isSelected ? '1px solid #237F81' : '1px solid #AAD4D4',
-          borderRadius: 8,
-          background: isSelected ? '#237F81' : '#EEF8F8',
-          color: isSelected ? '#FFFFFF' : '#17222F',
-          textAlign: 'left',
-          cursor: clickable ? 'pointer' : 'default',
-          boxShadow: isSelected ? '0 8px 18px rgba(35, 127, 129, 0.18)' : 'none',
-        }}
-      >
-        <span style={{ minWidth: 0, fontSize: 12, fontWeight: 850, color: isSelected ? 'rgba(255,255,255,.84)' : '#237F81', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          Баланс
-        </span>
-        <span style={{ minWidth: 0, fontSize: 27, lineHeight: 1, fontWeight: 950, color: 'inherit', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {item.value}
-        </span>
-      </button>
-    );
-  };
-  const resolvedDashboardHeight = dashboardHeight ?? (showDetailBars
-    ? (hasPaymentSummaryGroups && hasCashierMethodGroups ? 430 : 350)
-    : 148);
-  const dashboardTopBlockHeight = showDetailBars
-    ? Math.max(148, resolvedDashboardHeight - 202)
-    : resolvedDashboardHeight;
-
-  if (collapsed) {
-    return (
-      <div style={logisticsCollapsedStyle}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-          <span style={logisticsCollapsedDotStyle} />
-          <span style={{ fontSize: 12, fontWeight: 850, color: '#17222F' }}>{selectedMetric.label}</span>
-          <span style={{ fontSize: 12, fontWeight: 900, color: '#31A4A5' }}>
-            {selectedMetric.money ? compactMoney(gaugeValue) : gaugeValue.toFixed(metric === 'average' ? 2 : 0)}
-          </span>
-        </div>
-        <button
-          onClick={onToggle}
-          title="Показать дашборд"
-          style={{
-            width: 28,
-            height: 24,
-            border: 'none',
-            borderRadius: 8,
-            background: 'transparent',
-            color: '#626C8B',
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            cursor: 'pointer',
-            flexShrink: 0,
-          }}
-        >
-          <ChevronDown size={15} />
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{
-      ...logisticsDashboardBaseStyle,
-      ...(customLeftPanel
-        ? { minHeight: resolvedDashboardHeight, flexShrink: 0, alignItems: 'stretch' }
-        : { height: resolvedDashboardHeight, minHeight: resolvedDashboardHeight, flexShrink: 0 }),
-    }}>
-      <div style={logisticsDashboardSideStyle}>
-        {customLeftPanel ? customLeftPanel : summaryItems?.length ? (
-          <>
-            <div style={{ width: '100%', minWidth: 0, display: 'grid', gap: 4 }}>
-              <span style={{ fontSize: 11, fontWeight: 850, color: '#7A859D', textTransform: 'uppercase', letterSpacing: 0 }}>
-                {schoolSummaryItem ? 'Школа' : 'Сводка'}
-              </span>
-              <span style={{ minWidth: 0, fontSize: 18, lineHeight: 1.15, fontWeight: 900, color: '#17222F', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {schoolSummaryItem?.value ?? selectedMetric.label}
-              </span>
-            </div>
-
-            {primarySummaryItem && (
-              <button
-                type="button"
-                onClick={() => primarySummaryItem.metric && onMetricChange(primarySummaryItem.metric)}
-                disabled={!primarySummaryItem.metric}
-                style={{
-                  width: '100%',
-                  minWidth: 0,
-                  display: 'grid',
-                  gap: 3,
-                  padding: '12px 12px 11px',
-                  border: '1px solid #AAD4D4',
-                  borderRadius: 8,
-                  background: '#EEF8F8',
-                  textAlign: 'left',
-                  cursor: primarySummaryItem.metric ? 'pointer' : 'default',
-                }}
-              >
-                <span style={{ minWidth: 0, fontSize: 12, fontWeight: 800, color: '#237F81', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {primarySummaryItem.label}
-                </span>
-                <span style={{ minWidth: 0, fontSize: 27, lineHeight: 1, fontWeight: 950, color: '#17222F', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {primarySummaryItem.value}
-                </span>
-              </button>
-            )}
-
-            {hasPaymentSummaryGroups ? (
-              <div style={{ width: '100%', minWidth: 0, display: 'grid', gap: 6, alignContent: 'start' }}>
-                {renderMetricGroupHeader()}
-                {paymentSummaryGroups.map(group => (
-                  <div
-                    key={group.label}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: metricGroupGridColumns,
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                    }}
-                  >
-                    <span style={{ minWidth: 0, fontSize: 12, fontWeight: 900, color: '#626C8B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {group.label}
-                    </span>
-                    <span style={{ gridColumn: group.count ? undefined : 'span 2', minWidth: 0 }}>
-                      {renderPaymentSummaryButton(group.sum)}
-                    </span>
-                    {group.count ? renderPaymentSummaryButton(group.count) : null}
-                  </div>
-                ))}
-                {hasCashierMethodGroups && cashierMethodGroups.map(group => (
-                  <div
-                    key={group.label}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: metricGroupGridColumns,
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                    }}
-                  >
-                    <span style={{ minWidth: 0, fontSize: 12, fontWeight: 900, color: '#626C8B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {group.label}
-                    </span>
-                    <span style={{ gridColumn: group.count ? undefined : 'span 2', minWidth: 0 }}>
-                      {renderPaymentSummaryButton(group.sum)}
-                    </span>
-                    {group.count ? renderPaymentSummaryButton(group.count) : null}
-                  </div>
-                ))}
-              </div>
-            ) : hasFinanceSummaryGroups ? (
-              <div style={{ width: '100%', minWidth: 0, display: 'grid', gap: 6, alignContent: 'start' }}>
-                {renderMetricGroupHeader()}
-                {financeSummaryGroups.map(group => (
-                  <div
-                    key={group.label}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: metricGroupGridColumns,
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                    }}
-                  >
-                    <span style={{ minWidth: 0, fontSize: 12, fontWeight: 900, color: '#626C8B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {group.label}
-                    </span>
-                    {renderPaymentSummaryButton(group.sum)}
-                    {renderPaymentSummaryButton(group.count)}
-                  </div>
-                ))}
-                {renderLargeBalance(balanceSummaryItem)}
-              </div>
-            ) : hasCashierMethodGroups ? (
-              <div style={{ width: '100%', minWidth: 0, display: 'grid', gap: 6, alignContent: 'start' }}>
-                {renderMetricGroupHeader()}
-                {cashierMethodGroups.map(group => (
-                  <div
-                    key={group.label}
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: metricGroupGridColumns,
-                      alignItems: 'center',
-                      gap: 6,
-                      minWidth: 0,
-                    }}
-                  >
-                    <span style={{ minWidth: 0, fontSize: 12, fontWeight: 900, color: '#626C8B', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {group.label}
-                    </span>
-                    {renderPaymentSummaryButton(group.sum)}
-                    {renderPaymentSummaryButton(group.count)}
-                  </div>
-                ))}
-                {cashierReceiptItems.length > 0 && (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 6, minWidth: 0, paddingTop: 2 }}>
-                    {cashierReceiptItems.map(item => renderSummaryItem(item, true))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div style={{
-                width: '100%',
-                minWidth: 0,
-                display: 'grid',
-                gridTemplateColumns: metricSummaryItems.length > 4 ? 'repeat(2, minmax(0, 1fr))' : '1fr',
-                gap: 6,
-                alignContent: 'start',
-              }}>
-                {metricSummaryItems
-                  .filter(item => item.label !== primarySummaryItem?.label)
-                  .map(item => renderSummaryItem(item, metricSummaryItems.length > 4))}
-              </div>
-            )}
-          </>
-        ) : null}
-      </div>
-
-      <div style={{ ...logisticsDashboardMainStyle, gridTemplateRows: showDetailBars ? `${dashboardTopBlockHeight}px 194px` : customLeftPanel ? '1fr' : `${resolvedDashboardHeight}px` }}>
-        <div style={{ ...logisticsDashboardBlockStyle, height: customLeftPanel ? '100%' : dashboardTopBlockHeight }}>
-          <button
-            onClick={onToggle}
-            title="Скрыть дашборд"
-            style={{
-              position: 'absolute',
-              top: 8,
-              right: 8,
-              width: 31,
-              height: 28,
-              border: 'none',
-              borderRadius: 8,
-              background: 'transparent',
-              color: '#626C8B',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-            }}
-          >
-            <ChevronUp size={15} />
-          </button>
-          <div style={{
-            ...logisticsBarsStyle,
-            gridTemplateColumns: `repeat(${items.length || 1}, minmax(44px, 1fr))`,
-            height: '100%',
-            borderBottom: 0,
-            overflow: 'visible',
-          }}>
-            {items.map(item => {
-              const height = item.value <= 0 ? 0 : Math.min(78, Math.max(8, Math.round((item.value / maxValue) * 78)));
-              const active = selectedKey === item.key;
-              const valueLabel = selectedMetric.money ? compactMoney(item.value) : item.value.toFixed(metric === 'average' ? 1 : 0);
-              return (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => onSelect?.(item.key)}
-                  style={{
-                    ...logisticsBarItemStyle,
-                    cursor: 'pointer',
-                    position: 'relative',
-                    zIndex: active ? 1 : 0,
-                    marginTop: 0,
-                    marginBottom: 0,
-                    padding: 0,
-                    border: 'none',
-                    borderRadius: 0,
-                    background: 'transparent',
-                    boxShadow: 'none',
-                  }}
-                >
-                  {active && (
-                    <>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -108,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          background: 'var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -99,
-                          left: 0,
-                          right: 0,
-                          height: 2,
-                          background: 'var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          bottom: 20,
-                          height: 3,
-                          background: '#31A4A5',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          left: 5,
-                          right: 5,
-                          bottom: 1,
-                          height: 18,
-                          borderRadius: '7px 7px 0 0',
-                          background: 'rgba(255, 255, 255, 0.36)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -90,
-                          left: -18,
-                          width: 18,
-                          height: 18,
-                          borderTopRightRadius: 18,
-                          boxShadow: '9px -9px 0 9px var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -90,
-                          right: -18,
-                          width: 18,
-                          height: 18,
-                          borderTopLeftRadius: 18,
-                          boxShadow: '-9px -9px 0 9px var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                    </>
-                  )}
-                  <div style={{ ...logisticsBarTrackStyle, zIndex: 1 }}>
-                    <span style={{
-                      ...logisticsBarValueStyle,
-                      position: 'absolute',
-                      left: '50%',
-                      bottom: height + 6,
-                      transform: 'translateX(-50%)',
-                      zIndex: 2,
-                    }}>
-                      {valueLabel}
-                    </span>
-                    <div style={{ ...logisticsBarStyle, height, background: item.color }} />
-                  </div>
-                  <div style={{ ...logisticsBarLabelStyle, position: 'relative', zIndex: 1, color: active ? '#17222F' : '#626C8B', fontWeight: active ? 900 : 700 }}>
-                    {item.label}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        {showDetailBars && <div style={{ ...logisticsTransferBlockStyle, display: 'grid', gap: 8, minWidth: 0 }}>
-          <div style={{
-            ...logisticsBarsStyle,
-            gridTemplateColumns: compactDetailBars
-              ? `repeat(${detailItems.length || 1}, minmax(26px, 34px))`
-              : `repeat(${detailItems.length || 1}, minmax(30px, 1fr))`,
-            height: '100%',
-            gap: compactDetailBars ? 8 : 12,
-            justifyContent: compactDetailBars ? 'space-between' : 'stretch',
-            paddingTop: 8,
-            borderBottom: 0,
-            overflow: 'visible',
-          }}>
-	            {detailItems.length ? detailItems.map(item => {
-	              const height = Math.max(8, Math.round((item.count / maxDetailValue) * 42));
-	                const isEmpty = item.count <= 0;
-	                const isStatus = item.key === 'all' || item.key === 'new' || item.key === 'rejected';
-	                const isActive = activeDetailKey === item.key;
-	                const isDisabled = isDetailDisabled?.(item) ?? false;
-	                const vehicleLineColor = logisticsVehicleTypeLineColor(item.vehicleType);
-	                const vehicleLabel = vehicleTypeShortLabel(item.vehicleType);
-	                const detailValueLabel = detailValueMode === 'vehicleType' ? vehicleLabel || '—' : detailMoney ? compactMoney(item.count) : String(item.count);
-	                return (
-	                  <button
-	                    key={item.key}
-	                    type="button"
-	                    aria-disabled={isDisabled}
-	                    tabIndex={isDisabled ? -1 : 0}
-			                    onClick={(event) => {
-			                      if (isDisabled) {
-			                        event.preventDefault();
-			                        event.stopPropagation();
-			                        return;
-			                      }
-			                      if (event.detail >= 2 && item.key.startsWith('transfer-')) {
-			                        event.preventDefault();
-			                        event.stopPropagation();
-			                        onDetailDoubleClick?.(event, item);
-			                        return;
-			                      }
-			                      onDetailSelect?.(item);
-			                    }}
-			                    onDoubleClick={(event) => {
-			                      if (isDisabled || !item.key.startsWith('transfer-')) return;
-			                      event.preventDefault();
-			                      event.stopPropagation();
-			                      onDetailDoubleClick?.(event, item);
-			                    }}
-		                    onContextMenu={(event) => {
-		                      if (!item.key.startsWith('transfer-')) return;
-		                      event.preventDefault();
-		                      event.stopPropagation();
-		                      if (isDisabled) return;
-		                      if (!onDetailContextMenu) return;
-		                      onDetailContextMenu?.(event, item);
-		                    }}
-                    title={item.label}
-                  style={{
-                    ...logisticsBarItemStyle,
-                    gridTemplateRows: '1fr 20px',
-                    alignSelf: 'stretch',
-                    height: '100%',
-	                    opacity: isDisabled ? 0.42 : isActive ? 1 : isEmpty ? 0.66 : 1,
-	                    cursor: isDisabled ? 'default' : 'pointer',
-                    position: 'relative',
-                    zIndex: isActive ? 1 : 0,
-                    marginTop: 0,
-                    marginBottom: 0,
-                    padding: 0,
-                    border: 'none',
-                    borderRadius: 0,
-                    background: 'transparent',
-                    boxShadow: 'none',
-                  }}
-                >
-                  {isActive && (
-                    <>
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -108,
-                          left: -1,
-                          right: -1,
-                          bottom: 0,
-                          borderRadius: '18px 18px 0 0',
-                          background: 'var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          left: 0,
-                          right: 0,
-                          bottom: 20,
-                          height: 3,
-                          background: '#31A4A5',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          left: 5,
-                          right: 5,
-                          bottom: 1,
-                          height: 18,
-                          borderRadius: '7px 7px 0 0',
-                          background: 'rgba(255, 255, 255, 0.36)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -108,
-                          left: -14,
-                          width: 14,
-                          height: 14,
-                          borderTopRightRadius: 14,
-                          boxShadow: '7px -7px 0 7px var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                      <span
-                        aria-hidden="true"
-                        style={{
-                          position: 'absolute',
-                          top: -108,
-                          right: -14,
-                          width: 14,
-                          height: 14,
-                          borderTopLeftRadius: 14,
-                          boxShadow: '-7px -7px 0 7px var(--active-bg)',
-                          pointerEvents: 'none',
-                        }}
-                      />
-                    </>
-                  )}
-                  <div style={{ ...logisticsBarTrackStyle, height: 70 }}>
-                    <span style={{
-                      ...logisticsBarValueStyle,
-                      position: 'absolute',
-                      left: '50%',
-                      bottom: height + 6,
-                      transform: 'translateX(-50%)',
-                      zIndex: 2,
-                      color: isActive ? '#41547A' : isEmpty ? '#9AA7AE' : '#626C8B',
-                    }}>
-                      {detailValueLabel}
-                    </span>
-                    <div
-                      style={{
-                        ...logisticsBarStyle,
-                        height,
-                        background: isEmpty
-                          ? 'repeating-linear-gradient(-45deg, #EDF3F5 0, #EDF3F5 5px, #D9E5E8 5px, #D9E5E8 7px)'
-                          : item.color,
-                        width: 16,
-                      }}
-                    />
-                  </div>
-                  <div style={{
-                    ...logisticsBarLabelStyle,
-                    position: 'relative',
-                    zIndex: 1,
-                    maxWidth: isStatus ? 48 : 34,
-                    fontSize: isStatus ? 10 : 12,
-                    color: isActive ? '#17222F' : isEmpty ? '#9AA7AE' : '#626C8B',
-                    fontWeight: isActive ? 900 : 700,
-                  }}>
-                    <span style={{
-                      display: 'inline-flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 1,
-                      minWidth: 12,
-                      lineHeight: 1,
-                    }}>
-                      <span>{item.label}</span>
-                      {detailValueMode !== 'vehicleType' && vehicleLabel && (
-                        <span style={{
-                          color: vehicleLineColor ?? '#31A4A5',
-                          fontSize: 9,
-                          fontWeight: 900,
-                          lineHeight: 1,
-                        }}>
-                          {vehicleLabel}
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                </button>
-              );
-            }) : (
-              <div style={{ gridColumn: '1 / -1', fontSize: 12, fontWeight: 700, color: '#626C8B', paddingBottom: 16 }}>
-                По этой школе пока нет трансферов
-              </div>
-            )}
-          </div>
-        </div>}
-      </div>
-    </div>
-  );
-}
 
 const TRANSFER_TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   microbus: { bg: '#D7EEEE', border: '#AAD4D4', text: '#237F81', dot: '#31A4A5' },
@@ -1611,7 +663,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hidePeriodAll = false, hidePeriodDeposit = false, hideTransferBars = false, hideDashboard = false, compactPeriodBar = false, customLeftPanel, onPeriodKeyChange, onSchoolKeyChange, customBarItems, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, onInitialFamilyOpened }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
@@ -1644,12 +696,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [showNewDriver, setShowNewDriver]       = useState(false);
   const [driverBranches, setDriverBranches]     = useState<V2BranchOption[]>([]);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
-  const [logisticsDashboardCollapsedByMode, setLogisticsDashboardCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
   const [tableBarsCollapsedByMode, setTableBarsCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
   const [schoolsBarCollapsedByMode, setSchoolsBarCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_SIDEBAR_COLLAPSED });
   const [dashboardSchoolByMode, setDashboardSchoolByMode] = useState<Partial<Record<FamiliesMode, string>>>({});
   const [dashboardMetricByMode, setDashboardMetricByMode] = useState<Partial<Record<FamiliesMode, LogisticsDashboardMetric>>>({});
-  const [dashboardVehicleFilterByMode, setDashboardVehicleFilterByMode] = useState<Partial<Record<FamiliesMode, LogisticsVehicleFilter>>>({});
   const [chargesPeriodKey, setChargesPeriodKey] = useState<string>('ALL');
   const [paymentsPeriodKey, setPaymentsPeriodKey] = useState<string>('ALL');
   const isPaymentsMode = mode === 'payments';
@@ -1734,11 +784,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [resendingDriverTelegramChatId, setResendingDriverTelegramChatId] = useState<number | null>(null);
   const [driverAdvances, setDriverAdvances] = useState<V2DriverAdvance[]>([]);
   const [loadingAdvances, setLoadingAdvances] = useState(false);
-  const [advanceAmount, setAdvanceAmount] = useState('');
-  const [advanceDate, setAdvanceDate] = useState('');
-  const [advanceComment, setAdvanceComment] = useState('');
-  const [savingAdvance, setSavingAdvance] = useState(false);
-  const [dashboardMainTab, setDashboardMainTab] = useState<'payments' | 'statement'>('payments');
   const [tabDefaultFilters, setTabDefaultFilters] = useState<Record<string, { metric: LogisticsDashboardMetric; vehicleFilter: LogisticsVehicleFilter }>>({});
   const [adminFilterOpen, setAdminFilterOpen] = useState<string | null>(null);
   const [adminFilterDraft, setAdminFilterDraft] = useState<{ metric: LogisticsDashboardMetric; vehicleFilter: LogisticsVehicleFilter } | null>(null);
@@ -1758,7 +803,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const isPaymentsDashboardMode = mode === 'payments' || mode === 'debtors' || mode === 'charges';
   const isChargesMode = mode === 'charges';
   const isDirectoryMode = mode === 'directory';
-  const logisticsDashboardCollapsed = logisticsDashboardCollapsedByMode[mode] ?? false;
   const tableBarsCollapsed = tableBarsCollapsedByMode[mode] ?? false;
   const schoolsBarCollapsed = schoolsBarCollapsedByMode[mode] ?? false;
   const schoolsSidebarCollapsed = schoolsBarCollapsed;
@@ -1774,7 +818,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     logistics: 'average',
   };
   const dashboardMetric = dashboardMetricByMode[mode] ?? tabDefaultFilters[`${mode}:${activeTab}`]?.metric ?? tabDefaultFilters[`${mode}:ALL`]?.metric ?? DEFAULT_METRIC_BY_MODE[mode];
-  const dashboardVehicleFilter = dashboardVehicleFilterByMode[mode] ?? tabDefaultFilters[`${mode}:${activeTab}`]?.vehicleFilter ?? tabDefaultFilters[`${mode}:ALL`]?.vehicleFilter ?? 'all';
+  const dashboardVehicleFilter = tabDefaultFilters[`${mode}:${activeTab}`]?.vehicleFilter ?? tabDefaultFilters[`${mode}:ALL`]?.vehicleFilter ?? 'all';
   const tableStorageKey = isRequestsModule
     ? 'families_table_requests_v3'
     : isChargesMode
@@ -1807,20 +851,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   useEffect(() => {
     if (externalPeriodKey === undefined) return;
-    setPaymentsPeriodKey(externalPeriodKey);
-  }, [externalPeriodKey]);
+    if (isChargesMode) setChargesPeriodKey(externalPeriodKey);
+    else setPaymentsPeriodKey(externalPeriodKey);
+  }, [externalPeriodKey, isChargesMode]);
 
   useEffect(() => {
     if (!isCashierMode || externalPeriodKey !== undefined) return;
-    if (CASHIER_PERIODS.some(period => period.key === paymentsPeriodKey)) return;
+    if (paymentsPeriodKey === 'ALL' || CASHIER_PERIODS.some(period => period.key === paymentsPeriodKey)) return;
     setPaymentsPeriodKey(currentCashierPeriodKey());
   }, [externalPeriodKey, isCashierMode, paymentsPeriodKey]);
-  const setLogisticsDashboardCollapsed = (next: boolean | ((current: boolean) => boolean)) => {
-    setLogisticsDashboardCollapsedByMode(prev => ({
-      ...prev,
-      [mode]: typeof next === 'function' ? next(prev[mode] ?? false) : next,
-    }));
-  };
   const setTableBarsCollapsed = (next: boolean | ((current: boolean) => boolean)) => {
     setTableBarsCollapsedByMode(prev => ({
       ...prev,
@@ -1840,12 +879,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const setDashboardMetric = (metric: LogisticsDashboardMetric) => {
     setDashboardMetricByMode(prev => ({ ...prev, [mode]: metric }));
   };
-  const setDashboardVehicleFilter = (filter: LogisticsVehicleFilter) => {
-    setDashboardVehicleFilterByMode(prev => ({
-      ...prev,
-      [mode]: filter,
-    }));
-  };
 
   useEffect(() => {
     // «Заявки»/«Справочник» берут данные из useFamiliesPage (постранично) —
@@ -1855,6 +888,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     // которому всё ещё нужен весь rows (Кассир/Логистика/Начисления/...).
     if (isRequestsModule || mode === 'directory') return;
     load(!familiesRowsCache);
+    // This transition loader deliberately follows the active module only. `load`
+    // reads the latest cache and filters when the effect runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRequestsModule, mode]);
 
   useEffect(() => {
@@ -1901,20 +937,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, [initialQuickFilter?.activeTab, mode]);
 
   useEffect(() => {
-    if (!initialOpenFamilyId) return;
-    const row = rows.find(r => r.familyId === initialOpenFamilyId);
-    if (!row) return;
-    setFiltersByMode(prev => ({
-      ...prev,
-      [mode]: { ...(prev[mode] ?? DEFAULT_MODE_FILTERS), activeTab: row.branchFilter, quickTransfer: '', quickChildStatus: '' },
-    }));
-    setDashboardSchoolByMode(prev => (
-      prev[mode] === row.branchFilter ? prev : { ...prev, [mode]: row.branchFilter }
-    ));
-    toggleExpandedFamily(row.familyId, row, 'overview');
-    onInitialFamilyOpened?.();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialOpenFamilyId, rows]);
+    if (typeof initialSearch === 'string') setSearch(initialSearch);
+  }, [initialSearch]);
 
   useEffect(() => {
     if (mode !== 'payments') return;
@@ -2059,7 +1083,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (showSpinner) setLoading(true);
     setFinanceLoaded(false);
     try {
-      const shouldLoadTransportMeta = !hideDashboard || mode === 'logistics' || isDriversModule;
+      const shouldLoadTransportMeta = mode === 'logistics' || isDriversModule;
       const [families, transfers, drivers] = await Promise.all([
         fetchV2FamiliesTableCached(),
         shouldLoadTransportMeta ? fetchV2TransfersDashboard().catch(() => []) : Promise.resolve([]),
@@ -2446,63 +1470,12 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return matchesSingleTab(row, tabItem);
   }, [allowedSchools, hasSchoolRestriction, isTabAllowed, matchesSingleTab]);
 
-  const dashboardStatsForRows = useCallback((sourceRows: ChildRow[]) => {
-    const actualRows = logisticsWorkRows(sourceRows);
-    const workRows = dashboardVehicleFilter === 'all'
-      ? actualRows
-      : actualRows.filter(row => row.vehicleType === dashboardVehicleFilter);
-    const transferRows = workRows.filter(row => row.transferNumber);
-    const allTransfers = new Set(transferRows.map(row => row.transferNumber));
-    const averageRows = transferRows;
-    const averageTransfers = allTransfers;
-    const familyRows = uniqueFamilyRows(workRows);
-    const debtRows = childDebtorRows(workRows);
-    const pendingFamilyRows = uniqueFamilyRows(workRows.filter(row => row.pendingPayment > 0));
-    const paidFamilyRows = familyRows.filter(row => row.paidPaymentCount > 0 || row.paidPaymentAmount > 0 || row.totalPaid > 0);
-    return {
-      transferCount: allTransfers.size,
-      studentCount: workRows.length,
-      average: averageTransfers.size ? averageRows.length / averageTransfers.size : 0,
-      chargedSum: workRows.reduce((sum, row) => sum + Number(row.totalCharged || 0), 0),
-      paidCount: paidFamilyRows.reduce((sum, row) => sum + Number(row.paidPaymentCount || 0), 0),
-      paidPaymentSum: paidFamilyRows.reduce((sum, row) => sum + Number(row.paidPaymentAmount || row.totalPaid || 0), 0),
-      paidSum: uniqueFamilyRows(workRows).reduce((sum, row) => sum + Number(row.paidPaymentAmount || 0), 0),
-      balanceSum: familyRows.reduce((sum, row) => sum + Number(row.balance || 0), 0),
-      debtorsCount: debtRows.length,
-      debtSum: debtRows.reduce((sum, row) => sum + childDebtAmount(row), 0),
-      pendingSum: pendingFamilyRows.reduce((sum, row) => sum + Number(row.pendingPaymentCount || 0), 0),
-      pendingAmount: pendingFamilyRows.reduce((sum, row) => sum + Number(row.pendingPayment || 0), 0),
-      rejectedCount: uniqueFamilyRows(workRows.filter(r => r.rejectedPaymentCount > 0)).reduce((s, r) => s + r.rejectedPaymentCount, 0),
-      rejectedSum: uniqueFamilyRows(workRows.filter(r => r.rejectedPaymentCount > 0)).reduce((s, r) => s + r.rejectedPaymentAmount, 0),
-      allPaymentsCount: uniqueFamilyRows(workRows.filter(r => r.allPaymentCount > 0)).reduce((s, r) => s + r.allPaymentCount, 0),
-      allPaymentsSum: uniqueFamilyRows(workRows.filter(r => r.allPaymentCount > 0)).reduce((s, r) => s + r.allPaymentAmount, 0),
-    };
-  }, [dashboardVehicleFilter]);
-  const dashboardMetricValue = useCallback((stats: ReturnType<typeof dashboardStatsForRows>) => {
-    if (dashboardMetric === 'count') return stats.studentCount;
-    if (dashboardMetric === 'debtSum') return stats.debtSum;
-    if (dashboardMetric === 'debtorsCount') return stats.debtorsCount;
-    if (dashboardMetric === 'chargedSum') return stats.chargedSum;
-    if (dashboardMetric === 'paidCount') return stats.paidCount;
-    if (dashboardMetric === 'paidSum') return stats.paidSum;
-    if (dashboardMetric === 'balanceSum') return stats.balanceSum;
-    if (dashboardMetric === 'pendingSum') return stats.pendingSum;
-    if (dashboardMetric === 'pendingAmount') return stats.pendingAmount;
-    if (dashboardMetric === 'rejectedCount') return stats.rejectedCount;
-    if (dashboardMetric === 'rejectedSum') return stats.rejectedSum;
-    if (dashboardMetric === 'allPaymentsCount') return stats.allPaymentsCount;
-    if (dashboardMetric === 'allPaymentsSum') return stats.allPaymentsSum;
-    return stats.average;
-  }, [dashboardMetric]);
-
   const tab = useMemo(() => SCHOOL_TABS.find(t => t.key === activeTab), [activeTab]);
 
   // Постраничная загрузка для «Заявки»/«Справочник» — единственных режимов,
   // переведённых на серверную пагинацию (RPC get_families_page). Остальные
-  // режимы (Кассир/Логистика/Начисления/Платежи) по-прежнему грузят rows
-  // целиком через load() — у них есть свои дашборды, посчитанные по полному
-  // массиву, которые пагинация молча сломала бы, начни они брать данные
-  // отсюда без отдельного агрегирующего запроса под каждый такой дашборд.
+  // остальные режимы пока используют полную выборку для своих таблиц и
+  // связанных карточек редактирования.
   const isPagedMode = isRequestsModule || isDirectoryMode;
   const branchStatsForPaging = useBranchStats();
   const [familiesPageNumber, setFamiliesPageNumber] = useState(0);
@@ -2556,15 +1529,28 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   const pagedRows = familiesPageQuery.data?.rows ?? EMPTY_CHILD_ROWS;
   const pagedTotalFamilies = familiesPageQuery.data?.totalFamilies ?? 0;
-  const pagedTotalChildren = familiesPageQuery.data?.totalChildren ?? 0;
-  const pagedTotalWithTransfer = familiesPageQuery.data?.totalWithTransfer ?? 0;
-  const pagedTotalWithoutTransfer = familiesPageQuery.data?.totalWithoutTransfer ?? 0;
   const pagedTotalPages = Math.max(1, Math.ceil(pagedTotalFamilies / FAMILIES_PAGE_SIZE));
 
   const modeRows = useMemo(() => {
     if (isPagedMode) return pagedRows;
     return mode === 'logistics' ? logisticsWorkRows(rows) : rows;
   }, [isPagedMode, pagedRows, mode, rows]);
+
+  useEffect(() => {
+    if (!initialOpenFamilyId) return;
+    const row = modeRows.find(item => item.familyId === initialOpenFamilyId);
+    if (!row) return;
+    setFiltersByMode(prev => ({
+      ...prev,
+      [mode]: { ...(prev[mode] ?? DEFAULT_MODE_FILTERS), activeTab: row.branchFilter, quickTransfer: '', quickChildStatus: '' },
+    }));
+    setDashboardSchoolByMode(prev => (
+      prev[mode] === row.branchFilter ? prev : { ...prev, [mode]: row.branchFilter }
+    ));
+    void toggleExpandedFamily(row.familyId, row, 'overview');
+    onInitialFamilyOpened?.();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialOpenFamilyId, modeRows]);
 
   const matchesSchool = useCallback((r: ChildRow) => {
     if (!tab) return true;
@@ -2630,7 +1616,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, [isChargesMode, chargesPeriodKey, periodStats]);
 
   const filtered = useMemo(() => modeRows.filter(r => {
-    if (!matchesSchool(r)) return false;
+    // В постраничных режимах школа и поиск уже применены серверным RPC.
+    // Повторные клиентские проверки могли скрыть найденную строку из-за
+    // различий в нормализации филиала, имени или телефона.
+    if (!isPagedMode && !matchesSchool(r)) return false;
+    // Keep the visible page responsive to the shared dashboard search even when
+    // server-side pagination is enabled. The server query still narrows the full
+    // result set, while this prevents stale rows from flashing in the table.
     if (!matchesSearch(r)) return false;
     if (mode === 'debtors' && childDebtAmount(r) <= 0) return false;
     if (mode === 'payments') {
@@ -2668,7 +1660,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (quickChildStatus && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [dashboardMetric, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
+  }), [dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
 
   const filteredSorted = useMemo(() => {
     if (!isChargesMode) return filtered;
@@ -2750,328 +1742,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return map;
   }, [periodStats]);
 
-  const logisticsAvgItems = useMemo(() => schoolButtonItems
-    .map((item, index) => {
-      const itemRows = item.key === 'ALL' ? rows : rows.filter(row => rowMatchesSchoolTab(row, item));
-      let value: number;
-      if (isDriversModule) {
-        value = new Set(logisticsWorkRows(itemRows).map(row => row.driverId).filter(Boolean)).size;
-      } else if (isRequestsModule) {
-        value = itemRows.filter(row => row.status === 'new').length;
-      } else if (isDirectoryMode) {
-        value = logisticsWorkRows(itemRows).length;
-      } else if (isChargesMode) {
-        const uniqueFamilyIds = Array.from(new Set(itemRows.map(r => r.familyId)));
-        if (chargesPeriodKey !== 'ALL' && periodStats.length > 0) {
-          const relevant = uniqueFamilyIds.map(id => periodStatsByFamily.get(id)).filter(Boolean) as PeriodChargeStats[];
-          if (dashboardMetric === 'chargedSum') {
-            value = relevant.reduce((s, r) => s + r.charged, 0);
-          } else if (dashboardMetric === 'paidSum') {
-            value = relevant.filter(r => r.debt === 0 && r.paid > 0).reduce((s, r) => s + r.paid, 0);
-          } else if (dashboardMetric === 'paidCount') {
-            value = relevant.filter(r => r.debt === 0 && r.paid > 0).length;
-          } else if (dashboardMetric === 'debtorsCount') {
-            value = relevant.filter(r => r.debt > 0).length;
-          } else if (dashboardMetric === 'debtSum') {
-            value = relevant.filter(r => r.debt > 0).reduce((s, r) => s + r.debt, 0);
-          } else if (dashboardMetric === 'balanceSum') {
-            value = dashboardMetricValue(dashboardStatsForRows(itemRows));
-          } else if (dashboardMetric === 'pendingSum') {
-            value = uniqueFamilyRows(itemRows.filter(r => r.pendingPayment > 0)).reduce((s, r) => s + Number(r.pendingPaymentCount || 0), 0);
-          } else if (dashboardMetric === 'pendingAmount') {
-            value = uniqueFamilyRows(itemRows.filter(r => r.pendingPayment > 0)).reduce((s, r) => s + Number(r.pendingPayment || 0), 0);
-          } else {
-            value = dashboardMetricValue(dashboardStatsForRows(itemRows));
-          }
-        } else if (dashboardMetric === 'count') {
-          value = uniqueFamilyRows(itemRows.filter(r => r.status === 'new')).length;
-        } else if (dashboardMetric === 'paidCount') {
-          value = uniqueFamilyRows(itemRows.filter(r => childDebtAmount(r) === 0 && Number(r.totalPaid || 0) > 0)).length;
-        } else if (dashboardMetric === 'paidSum') {
-          value = uniqueFamilyRows(itemRows.filter(r => childDebtAmount(r) === 0 && Number(r.totalPaid || 0) > 0)).reduce((s, r) => s + Number(r.totalPaid || 0), 0);
-        } else if (dashboardMetric === 'debtorsCount') {
-          value = uniqueFamilyRows(itemRows.filter(r => childDebtAmount(r) > 0)).length;
-        } else if (dashboardMetric === 'debtSum') {
-          value = uniqueFamilyRows(itemRows.filter(r => childDebtAmount(r) > 0)).reduce((s, r) => s + childDebtAmount(r), 0);
-        } else {
-          value = dashboardMetricValue(dashboardStatsForRows(itemRows));
-        }
-      } else {
-        value = dashboardMetricValue(dashboardStatsForRows(itemRows));
-      }
-      return {
-        key: item.key,
-        label: item.key === 'ALL' ? 'Все' : item.label,
-        value,
-        color: LOGISTICS_CHART_COLORS[index % LOGISTICS_CHART_COLORS.length],
-      };
-    }), [chargesPeriodKey, dashboardMetric, dashboardMetricValue, dashboardStatsForRows, isChargesMode, isDirectoryMode, isDriversModule, isRequestsModule, periodStats, periodStatsByFamily, rowMatchesSchoolTab, rows, schoolButtonItems]);
   const driverReserveSchool = { key: DRIVER_RESERVE_KEY, label: 'Резерв', branches: [], codes: [] };
   const selectedDashboardSchool = isDriversModule && (dashboardSchoolKey === DRIVER_RESERVE_KEY || activeTab === DRIVER_RESERVE_KEY)
     ? driverReserveSchool
     : schoolButtonItems.find(item => item.key === dashboardSchoolKey)
       ?? schoolButtonItems.find(item => item.key === activeTab)
       ?? schoolButtonItems[0];
-  const isAllDashboardSchools = selectedDashboardSchool?.key === 'ALL';
   const dashboardSchoolRows = useMemo(() => (
     selectedDashboardSchool
       ? rows.filter(row => rowMatchesSchoolTab(row, selectedDashboardSchool))
       : []
   ), [rowMatchesSchoolTab, rows, selectedDashboardSchool]);
   const dashboardWorkRows = logisticsWorkRows(dashboardSchoolRows);
-  const dashboardVehicleRows = dashboardVehicleFilter === 'all'
-    ? dashboardWorkRows
-    : dashboardWorkRows.filter(row => row.vehicleType === dashboardVehicleFilter);
-  const dashboardTransferItems: LogisticsTransferDashboardItem[] = selectedDashboardSchool && !isRequestsModule
-    ? [
-        ...TRANSFER_BAR_OPTIONS.map(transfer => {
-          const transferRows = dashboardVehicleRows.filter(row => row.transferNumber === transfer);
-          const originalTransferRows = dashboardWorkRows.filter(row => row.transferNumber === transfer);
-          const count = transferRows.length;
-          let metricValue: number;
-          if (isChargesMode && chargesPeriodKey !== 'ALL' && periodStats.length > 0) {
-            const uniqueFamilyIds = Array.from(new Set(transferRows.map(r => r.familyId)));
-            const relevant = uniqueFamilyIds.map(id => periodStatsByFamily.get(id)).filter(Boolean) as PeriodChargeStats[];
-            if (dashboardMetric === 'chargedSum') metricValue = relevant.reduce((s, r) => s + r.charged, 0);
-            else if (dashboardMetric === 'paidSum') metricValue = relevant.filter(r => r.debt === 0 && r.paid > 0).reduce((s, r) => s + r.paid, 0);
-            else if (dashboardMetric === 'paidCount') metricValue = relevant.filter(r => r.debt === 0 && r.paid > 0).length;
-            else metricValue = dashboardMetricValue(dashboardStatsForRows(transferRows));
-          } else {
-            metricValue = isPaymentsDashboardMode
-              ? dashboardMetricValue(dashboardStatsForRows(transferRows))
-              : count;
-          }
-          const savedTransfer = dashboardTransfers.find(item =>
-            item.transferNumber === transfer
-            && selectedDashboardSchool
-            && (
-              selectedDashboardSchool.key === 'ALL'
-              || item.branchId === originalTransferRows.find(row => row.branchId)?.branchId
-              || item.branchCode === selectedDashboardSchool.key
-              || item.branchShort === selectedDashboardSchool.label
-            )
-          );
-          const vehicleType = savedTransfer?.vehicleType
-            ?? originalTransferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
-            ?? originalTransferRows.find(row => row.vehicleType === 'sedan')?.vehicleType
-            ?? originalTransferRows.find(row => row.vehicleType === 'microbus')?.vehicleType;
-          const transferBranchId = originalTransferRows.find(row => row.branchId)?.branchId
-            ?? savedTransfer?.branchId
-            ?? dashboardWorkRows.find(row => row.branchId)?.branchId
-            ?? null;
-          const transferSchoolId = originalTransferRows.find(row => row.schoolId)?.schoolId
-            ?? savedTransfer?.schoolId
-            ?? dashboardWorkRows.find(row => row.schoolId)?.schoolId
-            ?? null;
-          const driverMode = isDriversModule;
-          return {
-            key: `transfer-${transfer}`,
-            label: `#${transfer}`,
-            group: 'Трансферы',
-            value: driverMode && vehicleType ? 1 : metricValue,
-            count: driverMode && vehicleType ? 1 : metricValue,
-            color: driverMode && vehicleType ? (logisticsVehicleTypeLineColor(vehicleType) ?? '#31A4A5') : logisticsTransferCountColor(count),
-            vehicleType,
-            branchId: transferBranchId,
-            schoolId: transferSchoolId,
-          };
-        }),
-        ...(isDriversModule ? [] : [
-          {
-            key: 'new',
-            label: '?',
-            group: 'Статус',
-            value: isPaymentsDashboardMode ? dashboardMetricValue(dashboardStatsForRows(dashboardVehicleRows.filter(row => row.status === 'new'))) : dashboardVehicleRows.filter(row => row.status === 'new').length,
-            count: isPaymentsDashboardMode ? dashboardMetricValue(dashboardStatsForRows(dashboardVehicleRows.filter(row => row.status === 'new'))) : dashboardVehicleRows.filter(row => row.status === 'new').length,
-            color: '#5A9FE8',
-          },
-          ...(isDirectoryMode || isChargesMode ? [] : [{
-            key: 'rejected',
-            label: 'X',
-            group: 'Статус',
-            value: isPaymentsDashboardMode ? dashboardMetricValue(dashboardStatsForRows(dashboardSchoolRows.filter(row => row.status === 'rejected'))) : dashboardSchoolRows.filter(row => row.status === 'rejected').length,
-            count: isPaymentsDashboardMode ? dashboardMetricValue(dashboardStatsForRows(dashboardSchoolRows.filter(row => row.status === 'rejected'))) : dashboardSchoolRows.filter(row => row.status === 'rejected').length,
-            color: '#EF7168',
-          }]),
-        ]),
-      ]
-    : [];
-  const activeDashboardDetailKey = quickChildStatus === 'new' || quickChildStatus === 'rejected'
-    ? quickChildStatus
-    : quickTransfer
-      ? `transfer-${quickTransfer}`
-      : 'all';
-  const dashboardSummaryRows = (() => {
-    if (quickChildStatus === 'new') return dashboardSchoolRows.filter(row => row.status === 'new');
-    if (quickChildStatus === 'rejected') return dashboardSchoolRows.filter(row => row.status === 'rejected');
-    if (quickTransfer === 'empty') return dashboardSchoolRows.filter(row => !row.transferNumber);
-    if (quickTransfer) return dashboardSchoolRows.filter(row => row.transferNumber === quickTransfer);
-    return dashboardSchoolRows;
-  })();
-  const dashboardSummaryStats = dashboardStatsForRows(dashboardSummaryRows);
-  const logisticsTransferSummaryItems = useMemo(() => {
-    const transferSummary = transferVehicleSummary(dashboardWorkRows);
-
-    return [
-      { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-      { label: 'К-во Трансферов', value: String(transferSummary.transferCount) },
-      { label: 'К-во учеников', value: String(transferSummary.studentCount) },
-      { label: 'Микроавтобус - к-во', value: String(transferSummary.microbusCount) },
-      { label: 'Минивэн - к-во', value: String(transferSummary.minivanCount) },
-      { label: 'Седан - к-во', value: String(transferSummary.sedanCount) },
-      { label: 'Средний (микроавтобусы)', value: transferSummary.microbusAverage.toFixed(1) },
-    ];
-  }, [dashboardWorkRows, selectedDashboardSchool]);
-
-  const paymentDashboardRows = selectedDashboardSchool?.key && selectedDashboardSchool.key !== 'ALL'
-    ? paymentRows.filter(row => {
-      const branch = row.branchShort.toLowerCase();
-      return branch === selectedDashboardSchool.key.toLowerCase() || branch === selectedDashboardSchool.label.toLowerCase();
-    })
-    : paymentRows;
-  const paymentCashRows = paymentDashboardRows.filter(row => {
-    const method = String(row.paymentMethod ?? 'cash').toLowerCase();
-    return method === 'cash' || method.includes('нал');
-  });
-  const paymentQrRows = paymentDashboardRows.filter(row => {
-    const method = String(row.paymentMethod ?? '').toLowerCase();
-    return method === 'transfer' || method === 'card' || method.includes('qr');
-  });
-
-  const paymentDashboardSummaryItems = [
-    { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-    { label: 'Все платежи к-во', value: String(dashboardSummaryStats.allPaymentsCount), metric: 'allPaymentsCount' as LogisticsDashboardMetric },
-    { label: 'Все платежи сумма', value: compactMoney(dashboardSummaryStats.allPaymentsSum), metric: 'allPaymentsSum' as LogisticsDashboardMetric },
-    { label: 'На проверке к-во', value: String(dashboardSummaryStats.pendingSum), metric: 'pendingSum' as LogisticsDashboardMetric },
-    { label: 'На проверке сумма', value: compactMoney(dashboardSummaryStats.pendingAmount), metric: 'pendingAmount' as LogisticsDashboardMetric },
-    { label: 'Подтверждённые к-во', value: String(dashboardSummaryStats.paidCount), metric: 'paidCount' as LogisticsDashboardMetric },
-    { label: 'Подтверждённые сумма', value: compactMoney(dashboardSummaryStats.paidPaymentSum), metric: 'paidSum' as LogisticsDashboardMetric },
-    { label: 'Отклонённые к-во', value: String(dashboardSummaryStats.rejectedCount), metric: 'rejectedCount' as LogisticsDashboardMetric },
-    { label: 'Отклонённые сумма', value: compactMoney(dashboardSummaryStats.rejectedSum), metric: 'rejectedSum' as LogisticsDashboardMetric },
-    { label: 'Наличные сумма', value: compactMoney(paymentCashRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-    { label: 'Наличные к-во', value: String(paymentCashRows.length), neutral: true },
-    { label: 'QR сумма', value: compactMoney(paymentQrRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-    { label: 'QR к-во', value: String(paymentQrRows.length), neutral: true },
-  ];
-  const chargesAllPaidCount = useMemo(() => {
-    const uniqueFamilies = new Map<string, { debt: number; paid: number }>();
-    dashboardSummaryRows.forEach(r => {
-      const prev = uniqueFamilies.get(r.familyId);
-      if (!prev) uniqueFamilies.set(r.familyId, { debt: childDebtAmount(r), paid: Number(r.totalPaid || 0) });
-    });
-    return Array.from(uniqueFamilies.values()).filter(f => f.debt === 0 && f.paid > 0).length;
-  }, [dashboardSummaryRows]);
-  const chargesAllPaidSum = useMemo(() => {
-    const uniqueFamilies = new Map<string, { debt: number; paid: number }>();
-    dashboardSummaryRows.forEach(r => {
-      const prev = uniqueFamilies.get(r.familyId);
-      if (!prev) uniqueFamilies.set(r.familyId, { debt: childDebtAmount(r), paid: Number(r.totalPaid || 0) });
-    });
-    return Array.from(uniqueFamilies.values()).filter(f => f.debt === 0 && f.paid > 0).reduce((s, f) => s + f.paid, 0);
-  }, [dashboardSummaryRows]);
-
-  const chargesDashboardSummaryItems = [
-    { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-    { label: 'Начислено сумма', value: compactMoney(periodStatsFiltered?.charged ?? dashboardSummaryStats.chargedSum), metric: 'chargedSum' as LogisticsDashboardMetric },
-    { label: 'Оплачено', value: compactMoney(periodStatsFiltered?.paid ?? chargesAllPaidSum), metric: 'paidSum' as LogisticsDashboardMetric },
-    { label: 'Оплачено к-во', value: String(periodStatsFiltered?.paidCount ?? chargesAllPaidCount), metric: 'paidCount' as LogisticsDashboardMetric },
-    { label: 'Долг к-во', value: String(periodStatsFiltered?.debtorsCount ?? dashboardSummaryStats.debtorsCount), metric: 'debtorsCount' as LogisticsDashboardMetric },
-    { label: 'Долг сумма', value: compactMoney(periodStatsFiltered?.debtSum ?? dashboardSummaryStats.debtSum), metric: 'debtSum' as LogisticsDashboardMetric },
-    { label: 'Баланс', value: compactMoney(dashboardSummaryStats.balanceSum), metric: 'balanceSum' as LogisticsDashboardMetric },
-  ];
-  const debtorsDashboardSummaryItems = [
-    { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-    { label: 'Должники', value: String(dashboardSummaryStats.debtorsCount), metric: 'debtorsCount' as LogisticsDashboardMetric },
-    { label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum), metric: 'debtSum' as LogisticsDashboardMetric },
-  ];
-  // «Справочник» переведён на серверную пагинацию (useFamiliesPage) — его
-  // сводка берёт готовые агрегаты из того же RPC-ответа (total_children/
-  // total_families/total_with_transfer/total_without_transfer, посчитанные
-  // по ВСЕЙ отфильтрованной выборке, а не только по текущей странице),
-  // а не считает по dashboardSummaryRows/rows, которые для этого режима
-  // больше не грузятся целиком.
-  const directoryDashboardSummaryItems = [
-    { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-    { label: 'К-во', value: String(pagedTotalChildren), metric: 'count' as LogisticsDashboardMetric },
-    { label: 'Семьи', value: String(pagedTotalFamilies) },
-    { label: 'С трансфером', value: String(pagedTotalWithTransfer) },
-    { label: 'Без трансфера', value: String(pagedTotalWithoutTransfer) },
-  ];
-  const allowedMetrics = METRICS_BY_ROLE[userRole] ?? METRICS_BY_ROLE.admin;
-  const visibleDashboardMetrics = LOGISTICS_DASHBOARD_METRICS.filter(m => allowedMetrics.includes(m.key));
-  const dashboardMetricOptions = isRequestsModule
-    ? [{ key: 'count' as LogisticsDashboardMetric, label: 'Новые' }]
-    : isDriversModule
-    ? [{ key: 'count' as LogisticsDashboardMetric, label: 'Водители' }]
-    : isDirectoryMode
-    ? [{ key: 'count' as LogisticsDashboardMetric, label: 'К-во' }]
-    : visibleDashboardMetrics;
-  const dashboardDisplayMetric = isRequestsModule
-    ? 'count' as LogisticsDashboardMetric
-    : isDriversModule
-    ? 'count' as LogisticsDashboardMetric
-    : (allowedMetrics.includes(dashboardMetric) ? dashboardMetric : allowedMetrics[0]);
-  const dashboardDisplayMetricOption = dashboardMetricOptions.find(option => option.key === dashboardDisplayMetric);
-  const dashboardPrimaryValue = isRequestsModule || isDirectoryMode
-    ? pagedTotalChildren
-    : isDriversModule
-    ? new Set(logisticsWorkRows(dashboardSummaryRows).map(row => row.driverId).filter(Boolean)).size
-    : dashboardMetricValue(dashboardSummaryStats);
-  const cashierDashboardRows = selectedDashboardSchool?.key && selectedDashboardSchool.key !== 'ALL'
-    ? cashierRows.filter(row => {
-      const branch = row.branchShort.toLowerCase();
-      return branch === selectedDashboardSchool.key.toLowerCase() || branch === selectedDashboardSchool.label.toLowerCase();
-    })
-    : cashierRows;
-  const periodCashierDashboardRows = cashierDashboardRows.filter(row => paymentRowMatchesPeriod(row, paymentsPeriodKey));
-  const periodCashierCashRows = periodCashierDashboardRows.filter(row => {
-    const method = String(row.paymentMethod ?? 'cash').toLowerCase();
-    return method === 'cash' || method.includes('нал');
-  });
-  const periodCashierQrRows = periodCashierDashboardRows.filter(row => {
-    const method = String(row.paymentMethod ?? '').toLowerCase();
-    return method === 'transfer' || method === 'card' || method.includes('qr');
-  });
-  const cashierWithReceiptCount = periodCashierDashboardRows.filter(row => row.receiptUrl).length;
-  const cashierWithoutReceiptCount = periodCashierDashboardRows.length - cashierWithReceiptCount;
-  const dashboardSummaryItems = [
-    ...(isDriversModule ? (() => {
-      const selectedTransfers = dashboardTransfers.filter(item =>
-        selectedDashboardSchool?.key === 'ALL'
-        || item.branchCode === selectedDashboardSchool?.key
-        || item.branchShort === selectedDashboardSchool?.label
-        || dashboardSchoolRows.some(row => row.branchId === item.branchId)
-      );
-      return [
-        { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-        { label: 'Микроавтобус', value: String(selectedTransfers.filter(item => item.vehicleType === 'microbus').length) },
-        { label: 'Минивэн', value: String(selectedTransfers.filter(item => item.vehicleType === 'minivan').length) },
-        { label: 'Седан', value: String(selectedTransfers.filter(item => item.vehicleType === 'sedan').length) },
-      ];
-    })() : isRequestsModule ? [
-      { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-      { label: 'Новые', value: String(pagedTotalChildren) },
-    ] : isDirectoryMode ? directoryDashboardSummaryItems : mode === 'debtors' ? debtorsDashboardSummaryItems : isChargesMode ? chargesDashboardSummaryItems : isCashierMode ? [
-      { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-      { label: 'На проверке', value: String(periodCashierDashboardRows.length), neutral: true },
-      { label: 'Сумма', value: compactMoney(periodCashierDashboardRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-      { label: 'Наличные сумма', value: compactMoney(periodCashierCashRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-      { label: 'Наличные к-во', value: String(periodCashierCashRows.length), neutral: true },
-      { label: 'QR сумма', value: compactMoney(periodCashierQrRows.reduce((s, r) => s + r.amount, 0)), neutral: true },
-      { label: 'QR к-во', value: String(periodCashierQrRows.length), neutral: true },
-      { label: 'С чеком', value: String(cashierWithReceiptCount), neutral: true },
-      { label: 'Без чека', value: String(cashierWithoutReceiptCount), neutral: true },
-    ] : isPaymentsDashboardMode ? paymentDashboardSummaryItems : mode === 'logistics' ? logisticsTransferSummaryItems : [
-      { label: 'Школа', value: selectedDashboardSchool?.label ?? 'Все' },
-      { label: 'К-во трансфер', value: String(dashboardSummaryStats.transferCount) },
-      { label: 'К-во учеников', value: String(dashboardSummaryStats.studentCount) },
-      ...(allowedMetrics.includes('average') ? [{ label: 'Средний', value: dashboardSummaryStats.average.toFixed(1) }] : []),
-      ...(allowedMetrics.includes('pendingSum') ? [{ label: 'На проверке', value: String(dashboardSummaryStats.pendingSum) }] : []),
-      ...(allowedMetrics.includes('chargedSum') ? [{ label: 'Начислено', value: compactMoney(dashboardSummaryStats.chargedSum) }] : []),
-      ...(allowedMetrics.includes('debtorsCount') ? [{ label: 'Должники', value: String(dashboardSummaryStats.debtorsCount) }] : []),
-      ...(allowedMetrics.includes('debtSum') ? [{ label: 'Долг', value: compactMoney(dashboardSummaryStats.debtSum) }] : []),
-    ]),
-  ];
   const filteredDriverRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return driverRows.filter(row => {
@@ -3240,7 +1922,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     let cancelled = false;
     fetchV2DriverDocuments(selectedDriverId)
       .then(documents => {
-        if (!cancelled) setDriverDocumentsDraft(documents.map(({ id, driverId, ...document }) => document));
+        if (!cancelled) setDriverDocumentsDraft(documents.map(({ id: _id, driverId: _driverId, ...document }) => document));
       })
       .catch(error => {
         console.error('Driver documents load failed', error);
@@ -3306,25 +1988,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       alert('Не удалось сохранить водителя');
     } finally {
       setSavingDriver(false);
-    }
-  };
-  const addDriverAdvance = async () => {
-    if (!selectedDriverId) return;
-    const amount = parseFloat(advanceAmount.replace(',', '.'));
-    if (!amount || amount <= 0) { alert('Укажите сумму аванса'); return; }
-    if (!advanceDate) { alert('Укажите дату аванса'); return; }
-    setSavingAdvance(true);
-    try {
-      const advance = await createV2DriverAdvance(selectedDriverId, amount, advanceDate, advanceComment);
-      setDriverAdvances(prev => [advance, ...prev]);
-      setAdvanceAmount('');
-      setAdvanceDate('');
-      setAdvanceComment('');
-    } catch (error) {
-      console.error('Advance save failed', error);
-      alert('Не удалось добавить аванс');
-    } finally {
-      setSavingAdvance(false);
     }
   };
   const removeDriverAdvance = async (advanceId: string) => {
@@ -3891,7 +2554,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          padding: '8px 0',
+          padding: customTopContent ? '0 0 8px' : '8px 0',
           position: 'relative',
           zIndex: 1,
           ...(customTableContent
@@ -3904,121 +2567,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           <div style={{ flexShrink: 0 }}>
             {customTopContent}
           </div>
-        )}
-
-        {/* ── БАР ПЕРИОДОВ ── */}
-        {(isChargesMode || isPaymentsMode || isCashierMode) && (
-          <div style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            padding: compactPeriodBar ? '8px 0 4px' : '6px 8px',
-            background: compactPeriodBar ? 'transparent' : '#F5FAFB',
-            border: compactPeriodBar ? 'none' : '1px solid #D4E3E7',
-            borderRadius: 10,
-            overflowX: 'auto',
-            flexShrink: 0,
-            scrollbarWidth: 'none',
-            width: '100%',
-            boxSizing: 'border-box',
-            gap: compactPeriodBar ? 10 : undefined,
-          }}>
-            {(() => {
-              const periodKey = isChargesMode ? chargesPeriodKey : paymentsPeriodKey;
-              const setPeriodKey = (key: string) => {
-                if (isChargesMode) setChargesPeriodKey(key); else setPaymentsPeriodKey(key);
-                if (!isChargesMode) onPeriodKeyChange?.(key);
-              };
-              return (
-                <>
-                  {(isCashierMode ? CASHIER_PERIODS : ALL_PERIODS.filter(p => !(hidePeriodDeposit && p.key === 'deposit'))).map(period => {
-                    const isActive = periodKey === period.key;
-                    return (
-                      <button
-                        key={period.key}
-                        onClick={() => setPeriodKey(period.key)}
-                        style={{ flex: (isCashierMode || compactPeriodBar) ? 1 : undefined, minWidth: (isCashierMode || compactPeriodBar) ? 0 : undefined, padding: isCashierMode ? '4px 8px' : '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: isActive ? 800 : 600, background: isActive ? '#2DD4BF' : '#fff', color: isActive ? '#fff' : '#374151', whiteSpace: 'nowrap', flexShrink: (isCashierMode || compactPeriodBar) ? 1 : 0, overflow: (isCashierMode || compactPeriodBar) ? 'hidden' : undefined, textOverflow: (isCashierMode || compactPeriodBar) ? 'ellipsis' : undefined, transition: 'background 0.15s' }}
-                      >
-                        {period.label.split(' ')[0]}
-                      </button>
-                    );
-                  })}
-                  {!hidePeriodAll && !isCashierMode && (
-                  <button
-                    onClick={() => setPeriodKey('ALL')}
-                    style={{ padding: '4px 12px', borderRadius: 7, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: periodKey === 'ALL' ? 800 : 600, background: periodKey === 'ALL' ? '#2DD4BF' : '#fff', color: periodKey === 'ALL' ? '#fff' : '#374151', whiteSpace: 'nowrap', flexShrink: 0, transition: 'background 0.15s' }}
-                  >
-                    Все
-                  </button>
-                  )}
-                </>
-              );
-            })()}
-          </div>
-        )}
-
-        {!hideDashboard && (
-        <LogisticsMicrobusDashboard
-          items={customBarItems ?? logisticsAvgItems}
-          collapsed={logisticsDashboardCollapsed}
-          onToggle={() => setLogisticsDashboardCollapsed(value => !value)}
-          selectedKey={selectedDashboardSchool?.key}
-          onSelect={(key) => {
-            const currentMetric = dashboardMetric;
-            setDashboardSchoolKey(key);
-            setModeFilter(getSchoolSwitchFilters(key));
-            setLogisticsDashboardCollapsed(false);
-            setDashboardMetric(currentMetric);
-          }}
-          metric={dashboardDisplayMetric}
-          onMetricChange={setDashboardMetric}
-          metricOptions={dashboardMetricOptions}
-          vehicleFilter={dashboardVehicleFilter}
-          onVehicleFilterChange={setDashboardVehicleFilter}
-          summaryItems={dashboardSummaryItems}
-          primaryValue={dashboardPrimaryValue}
-          detailItems={dashboardTransferItems}
-          detailValueMode={'count'}
-	          detailMoney={Boolean(dashboardDisplayMetricOption?.money)}
-	          activeDetailKey={activeDashboardDetailKey}
-	          isDetailDisabled={(item) => isAllDashboardSchools && item.key.startsWith('transfer-')}
-	          onDetailDoubleClick={(event, item) => {
-	            if (mode !== 'logistics' || !item.key.startsWith('transfer-')) return;
-	            event.preventDefault();
-	            event.stopPropagation();
-	            const transferNumber = item.key.replace('transfer-', '');
-	            setTransferTypeMenu({
-	              x: event.clientX,
-	              y: event.clientY,
-	              transferNumber,
-	              branchId: item.branchId,
-	              schoolId: item.schoolId,
-	            });
-	          }}
-	          onDetailSelect={(item) => {
-	            if (item.key === 'all') {
-              setModeFilter({ quickTransfer: '', quickChildStatus: '' });
-              return;
-            }
-            if (item.key === 'new' || item.key === 'rejected') {
-              setModeFilter({ quickChildStatus: item.key, quickTransfer: '' });
-              return;
-            }
-            if (item.key.startsWith('transfer-')) {
-              const transferNumber = item.key.replace('transfer-', '');
-              if (isDriversModule) {
-                setTransferCardNumber(transferNumber);
-                return;
-              }
-              setModeFilter({ quickTransfer: transferNumber, quickChildStatus: '' });
-            }
-          }}
-	          dashboardMainTab={dashboardMainTab}
-          onMainTabChange={setDashboardMainTab}
-          showDetailBars={!isRequestsModule && !hideTransferBars}
-          customLeftPanel={customLeftPanel}
-          dashboardHeight={isChargesMode ? 390 : undefined}
-        />
         )}
 
         {/* ── ТАБЛИЦА ── */}
@@ -4280,37 +2828,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 setSelectedDriverId(row.driverId);
               }}
               hideToolbar={false}
-              toolbarExtra={(
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
-                    <Search size={14} style={{
-                      position: 'absolute',
-                      left: 10,
-                      top: '50%',
-                      transform: 'translateY(-50%)',
-                      color: 'var(--text-2)',
-                      pointerEvents: 'none',
-                    }} />
-                    <input
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="ФИО, телефон, трансфер, авто..."
-                      style={{
-                        width: '100%',
-                        height: 26,
-                        padding: '0 10px 0 30px',
-                        border: '1px solid var(--border)',
-                        borderRadius: 10,
-                        fontSize: 12,
-                        fontWeight: 600,
-                        background: '#fff',
-                        outline: 'none',
-                        color: 'var(--text)',
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
               toolbarRightExtra={(
                 <button
                   onClick={() => setShowNewDriver(true)}
@@ -4338,7 +2855,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               key="cashier_table"
               columns={cashierColumns}
               data={cashierRows.filter(r => {
-                if (!paymentRowMatchesPeriod(r, paymentsPeriodKey)) return false;
+                if (!cashierRowMatchesSelectedPeriod(r, paymentsPeriodKey)) return false;
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
                   if (bs !== tab.key.toLowerCase() && bs !== tab.label.toLowerCase()) return false;
@@ -4362,19 +2879,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 if (childRow) toggleExpandedFamily(row.familyId, childRow, 'finance');
               }}
               hideToolbar={tableBarsCollapsed}
-              toolbarExtra={(
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-2)', pointerEvents: 'none' }} />
-                    <input
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="Имя, телефон, школа..."
-                      style={{ width: '100%', height: 26, padding: '0 10px 0 30px', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, fontWeight: 600, background: '#fff', outline: 'none', color: 'var(--text)' }}
-                    />
-                  </div>
-                </div>
-              )}
             />
           ) : isPaymentsMode ? (
             <DataTable<PaymentTableRow>
@@ -4414,19 +2918,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               showProperties={columnsOpen ?? false}
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               hideToolbar={tableBarsCollapsed}
-              toolbarExtra={(
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-2)', pointerEvents: 'none' }} />
-                    <input
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="Имя, телефон, ребёнок..."
-                      style={{ width: '100%', height: 26, padding: '0 10px 0 30px', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, fontWeight: 600, background: '#fff', outline: 'none', color: 'var(--text)' }}
-                    />
-                  </div>
-                </div>
-              )}
             />
           ) : (
             <DataTable<ChildRow>
@@ -4447,15 +2938,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               hideToolbar={tableBarsCollapsed}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  <div style={{ position: 'relative', width: 260, flexShrink: 0 }}>
-                    <Search size={14} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-2)', pointerEvents: 'none' }} />
-                    <input
-                      value={search}
-                      onChange={e => setSearch(e.target.value)}
-                      placeholder="Имя, телефон, ребёнок, адрес..."
-                      style={{ width: '100%', height: 26, padding: '0 10px 0 30px', border: '1px solid var(--border)', borderRadius: 10, fontSize: 12, fontWeight: 600, background: '#fff', outline: 'none', color: 'var(--text)' }}
-                    />
-                  </div>
                   {isPagedMode && pagedTotalFamilies > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>
                       <button
@@ -4463,9 +2945,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                         disabled={familiesPageNumber === 0}
                         style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber === 0 ? 'default' : 'pointer', opacity: familiesPageNumber === 0 ? 0.4 : 1 }}
                       >‹</button>
-                      <span>
-                        семьи {familiesPageNumber * FAMILIES_PAGE_SIZE + 1}–{Math.min((familiesPageNumber + 1) * FAMILIES_PAGE_SIZE, pagedTotalFamilies)} из {pagedTotalFamilies}
-                      </span>
                       <button
                         onClick={() => setFamiliesPageNumber(p => Math.min(pagedTotalPages - 1, p + 1))}
                         disabled={familiesPageNumber >= pagedTotalPages - 1}
@@ -4517,9 +2996,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           setModeFilter(getSchoolSwitchFilters(key));
           setDashboardSchoolKey(key);
           setDashboardMetric(currentMetric);
-          if (mode === 'logistics') {
-            setLogisticsDashboardCollapsed(false);
-          }
         }}
       />
 

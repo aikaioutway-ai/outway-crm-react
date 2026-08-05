@@ -230,13 +230,13 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   onRowOpen,
   onRowDelete,
-  onRowEdit,
-  onRowPayment,
+  onRowEdit: _onRowEdit,
+  onRowPayment: _onRowPayment,
   onCellSave,
   storageKey = 'dt_prefs',
   loading = false,
   emptyText = 'Нет данных',
-  groupColorKey,
+  groupColorKey: _groupColorKey,
   toolbarExtra,
   toolbarRightExtra,
   hideToolbar = false,
@@ -892,7 +892,9 @@ export function DataTable<T extends Record<string, any>>({
                             (onRowOpen ?? onRowClick)?.(row);
                           }}
                         >
-                          <span className="dt-row-open-icon" />
+                          <svg className="dt-row-open-icon" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+                            <path d="M7 3H3v4M3.5 3.5 8 8M11 15h4v-4m-.5 3.5L10 10" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" />
+                          </svg>
                         </button>
                       )}
                     </td>

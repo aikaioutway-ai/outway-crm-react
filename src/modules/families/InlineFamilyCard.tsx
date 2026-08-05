@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X, Trash2 } from 'lucide-react';
+import { Check, CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
@@ -49,17 +49,19 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [payments, setPayments] = useState<FamilyPayment[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
   const [mainBalance, setMainBalance] = useState(0);
-  const [depositBalance, setDepositBalance] = useState(0);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [, setLoadingKids] = useState(true);
   const [loadingFinance, setLoadingFinance] = useState(false);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [auditLoaded, setAuditLoaded] = useState(false);
-  const [, setSaving] = useState(false);
   const [savedFamily, setSavedFamily] = useState<Family>(family);
+  const [draftFamily, setDraftFamily] = useState<Family>(family);
+  const [draftChildren, setDraftChildren] = useState<Child[]>([]);
+  const [deletedChildIds, setDeletedChildIds] = useState<Set<string>>(new Set());
+  const [editing, setEditing] = useState(false);
+  const [savingAll, setSavingAll] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
-  const [childActionBusy, setChildActionBusy] = useState(false);
 
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
@@ -69,6 +71,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   useEffect(() => {
     activeFamilyIdRef.current = family.id;
     setSavedFamily(family);
+    setDraftFamily(family);
+    setEditing(false);
+    setDeletedChildIds(new Set());
     setTab(initialTab);
     setFinanceLoaded(false);
     setAuditLoaded(false);
@@ -82,6 +87,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     const next = await fetchV2Children(family);
     if (activeFamilyIdRef.current === requestedFamilyId) {
       setChildren(next);
+      setDraftChildren(next.map(child => ({ ...child })));
       setLoadingKids(false);
     }
     return next;
@@ -93,7 +99,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setPayments(snap.payments);
     setPaymentItems(snap.paymentItems);
     setMainBalance(snap.mainBalance ?? 0);
-    setDepositBalance(snap.depositBalance ?? 0);
     setLoadingFinance(false);
     setFinanceLoaded(true);
   }
@@ -120,8 +125,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     // audit logging failures must not block the save flow
     try { await addV2Audit({ actorName: userName, action, entityType: field, entityId: family.id, oldValue: o, newValue: n }); } catch { /* noop */ }
   }
-  async function handleSaveFamily(updated: Family) {
-    setSaving(true);
+  async function handleSaveFamily(updated: Family): Promise<boolean> {
     try {
       await updateV2Family(family.id, updated);
       setSavedFamily(updated);
@@ -130,10 +134,117 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       await addAudit('Редактирование', 'family', JSON.stringify(family), JSON.stringify(updated));
       await loadAudit();
       onUpdated?.();
+      return true;
     } catch {
       setSaveMsg('Ошибка');
+      return false;
     }
-    setSaving(false);
+  }
+
+  function beginEditing() {
+    setDraftFamily({ ...savedFamily });
+    setDraftChildren(children.map(child => ({ ...child })));
+    setDeletedChildIds(new Set());
+    setEditing(true);
+    setSaveMsg('');
+  }
+
+  function cancelEditing() {
+    setDraftFamily({ ...savedFamily });
+    setDraftChildren(children.map(child => ({ ...child })));
+    setDeletedChildIds(new Set());
+    setEditing(false);
+  }
+
+  function patchDraftChild(child: Child, patch: Partial<Child>): Promise<boolean> {
+    setDraftChildren(current => current.map(item => item.id === child.id ? { ...item, ...patch } : item));
+    return Promise.resolve(true);
+  }
+
+  function addDraftChild() {
+    const template = draftChildren[draftChildren.length - 1];
+    const schoolCode = (template?.schoolCode || draftFamily.schoolCode || 'AES') as Child['schoolCode'];
+    const zone = (template?.zone || draftFamily.zone || 'A') as Zone;
+    const vehicleType = (template?.vehicleType || draftFamily.vehicleType || 'microbus') as VehicleType;
+    const basePrice = getPriceByZone(schoolCode, zone, vehicleType);
+    setDraftChildren(current => [...current, {
+      id: `draft-${Date.now()}`,
+      familyId: family.id,
+      childName: 'Новый ребёнок',
+      class: '',
+      selfExitAllowed: false,
+      schoolCode,
+      schoolId: template?.schoolId,
+      branchId: template?.branchId ?? draftFamily.branchId,
+      branchCode: template?.branchCode ?? draftFamily.branchCode,
+      branchShort: template?.branchShort ?? draftFamily.branchShort,
+      branchName: template?.branchName ?? draftFamily.branchName,
+      zone,
+      vehicleType,
+      basePrice,
+      finalPrice: basePrice,
+      status: 'new',
+    }]);
+  }
+
+  function deleteDraftChild(child: Child) {
+    setDraftChildren(current => current.filter(item => item.id !== child.id));
+    if (!child.id.startsWith('draft-')) {
+      setDeletedChildIds(current => new Set(current).add(child.id));
+    }
+  }
+
+  async function saveAllChanges() {
+    if (savingAll) return;
+    setSavingAll(true);
+    setSaveMsg('');
+    try {
+      if (JSON.stringify(draftFamily) !== JSON.stringify(savedFamily)) {
+        const ok = await handleSaveFamily(draftFamily);
+        if (!ok) throw new Error('family-save-failed');
+      }
+
+      for (const childId of Array.from(deletedChildIds)) await deleteV2Child(childId);
+
+      for (const draft of draftChildren) {
+        if (draft.id.startsWith('draft-')) {
+          await createV2Child(draftFamily, {
+            childName: formatName(draft.childName),
+            class: draft.class,
+            schoolCode: draft.schoolCode,
+            schoolId: draft.schoolId,
+            branchId: draft.branchId,
+            branchCode: draft.branchCode,
+            branchShort: draft.branchShort,
+            branchName: draft.branchName,
+            zone: draft.zone,
+            vehicleType: draft.vehicleType,
+            basePrice: draft.basePrice,
+            finalPrice: draft.finalPrice,
+            status: draft.status,
+          });
+          continue;
+        }
+        const original = children.find(child => child.id === draft.id);
+        if (!original || JSON.stringify(original) === JSON.stringify(draft)) continue;
+        const ok = await handleSaveChild(original, draft);
+        if (!ok) throw new Error('child-save-failed');
+      }
+
+      const nextChildren = await loadChildren();
+      if (financeLoaded) await loadFinance(nextChildren);
+      await addAudit('Сохранение карточки', 'family', 'Черновик', 'Изменения сохранены');
+      await loadAudit();
+      setDeletedChildIds(new Set());
+      setEditing(false);
+      setSaveMsg('Сохранено');
+      setTimeout(() => setSaveMsg(''), 2200);
+      onUpdated?.();
+    } catch {
+      setSaveMsg('Ошибка сохранения');
+    } finally {
+      setSavingAll(false);
+    }
   }
   async function handleSaveCharge(charge: Charge, updates: Partial<Charge>): Promise<boolean> {
     try {
@@ -229,6 +340,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if ('schoolId' in patch) dbPatch.school_id = nextChild.schoolId ?? null;
       if ('zone' in patch) dbPatch.zone = nextChild.zone;
       if ('selfExitAllowed' in patch) dbPatch.self_exit_allowed = Boolean(nextChild.selfExitAllowed);
+      if ('status' in patch) dbPatch.status = nextChild.status ?? 'new';
 
       if (shouldReprice) {
         const basePrice = ('zone' in patch || 'vehicleType' in patch)
@@ -278,104 +390,32 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     }
   }
 
-  function nextChildName() {
-    const base = 'Новый ребёнок';
-    const names = new Set(children.map(child => child.childName.trim().toLowerCase()));
-    if (!names.has(base.toLowerCase())) return base;
-    let index = children.length + 1;
-    while (names.has(`${base} ${index}`.toLowerCase())) index++;
-    return `${base} ${index}`;
-  }
-
-  async function handleAddChild() {
-    if (childActionBusy) return;
-    const template = children[children.length - 1];
-    const schoolCode = (template?.schoolCode || savedFamily.schoolCode || 'AES') as any;
-    const zone = (template?.zone || savedFamily.zone || 'A') as Zone;
-    const vehicleType = (template?.vehicleType || savedFamily.vehicleType || 'microbus') as VehicleType;
-    const basePrice = getPriceByZone(schoolCode, zone, vehicleType);
-    setChildActionBusy(true);
-    try {
-      const created = await createV2Child(savedFamily, {
-        childName: nextChildName(),
-        class: '',
-        schoolCode,
-        schoolId: template?.schoolId,
-        branchId: template?.branchId ?? savedFamily.branchId,
-        branchCode: template?.branchCode ?? savedFamily.branchCode,
-        branchShort: template?.branchShort ?? savedFamily.branchShort,
-        branchName: template?.branchName ?? savedFamily.branchName,
-        address: template?.address ?? savedFamily.fullAddress,
-        zone,
-        vehicleType,
-        basePrice,
-        finalPrice: basePrice,
-        status: 'new',
-      });
-      const next = [...children, created];
-      setChildren(next);
-      await loadFinance(next);
-      await addAudit('Добавлен ребёнок', 'child', '-', created.childName);
-      await loadAudit();
-      onUpdated?.();
-    } catch (error: any) {
-      window.alert('Не удалось добавить ребёнка: ' + (error?.message ?? String(error)));
-    } finally {
-      setChildActionBusy(false);
-    }
-  }
-
-  async function handleDeleteChild(child: Child) {
-    if (childActionBusy) return;
-    if (!window.confirm(`Удалить ребёнка "${child.childName || 'Без имени'}"?`)) return;
-    setChildActionBusy(true);
-    try {
-      await deleteV2Child(String(child.id));
-      const next = children.filter(item => item.id !== child.id);
-      setChildren(next);
-      await loadFinance(next);
-      await addAudit('Удалён ребёнок', 'child', child.childName, '-');
-      await loadAudit();
-      onUpdated?.();
-    } catch (error: any) {
-      window.alert('Не удалось удалить ребёнка: ' + (error?.message ?? String(error)));
-    } finally {
-      setChildActionBusy(false);
-    }
-  }
-
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
   const totalCharged = charges.reduce((s, c) => s + c.amount, 0);
   const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
   const depositCharge = charges.find(c => c.chargeType === 'deposit');
   const depositPaid = depositCharge ? depositCharge.debtAmount <= 0 : false;
-  const primaryChild = children[0];
-  const familyMonthlyPrice = children.length > 0
-    ? children.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
-    : savedFamily.monthlyPrice;
-  const initials = (savedFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
-  const coordinatesText = savedFamily.latitude && savedFamily.longitude
-    ? `${savedFamily.latitude.toFixed(6)}, ${savedFamily.longitude.toFixed(6)}`
+  const cardFamily = editing ? draftFamily : savedFamily;
+  const cardChildren = editing ? draftChildren : children;
+  const primaryChild = cardChildren[0];
+  const familyMonthlyPrice = cardChildren.length > 0
+    ? cardChildren.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
+    : cardFamily.monthlyPrice;
+  const initials = (cardFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+  const coordinatesText = cardFamily.latitude && cardFamily.longitude
+    ? `${cardFamily.latitude.toFixed(6)}, ${cardFamily.longitude.toFixed(6)}`
     : primaryChild?.latitude && primaryChild?.longitude
       ? `${primaryChild.latitude.toFixed(6)}, ${primaryChild.longitude.toFixed(6)}`
       : '-';
-  const mapUrl = savedFamily.latitude && savedFamily.longitude
-    ? `https://yandex.com/maps/?ll=${savedFamily.longitude},${savedFamily.latitude}&z=16&pt=${savedFamily.longitude},${savedFamily.latitude},pm2rdm`
+  const mapUrl = cardFamily.latitude && cardFamily.longitude
+    ? `https://yandex.com/maps/?ll=${cardFamily.longitude},${cardFamily.latitude}&z=16&pt=${cardFamily.longitude},${cardFamily.latitude},pm2rdm`
     : primaryChild?.latitude && primaryChild?.longitude
       ? `https://yandex.com/maps/?ll=${primaryChild.longitude},${primaryChild.latitude}&z=16&pt=${primaryChild.longitude},${primaryChild.latitude},pm2rdm`
       : '';
 
   return (
     <div style={modalStyle()}>
-      <style>{`
-        .family-detail-rows > .family-detail-row:nth-child(odd) { background: #F7FBFB; }
-        .family-detail-rows > .family-detail-row:nth-child(even) { background: #FFFFFF; }
-        .family-detail-rows > .family-detail-row:hover { background: #EAF6F6; }
-        .family-child-table tbody tr:nth-child(odd) td { background: #F7FBFB; }
-        .family-child-table tbody tr:nth-child(even) td { background: #FFFFFF; }
-        .family-child-table tbody tr:hover td { background: #EAF6F6; }
-      `}</style>
       <aside style={sidebarRailStyle}>
           <nav style={railNavStyle}>
             {TABS.filter(item => {
@@ -404,11 +444,11 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <div style={avatarStyle}>{initials}</div>
             <div style={{ minWidth: 160 }}>
               <div style={{ fontSize: 14, fontWeight: 900, color: '#111827', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {formatName(savedFamily.parentName)}
+                {formatName(cardFamily.parentName)}
               </div>
               <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, color: '#374151', fontSize: 11, fontWeight: 750 }}>
                 <Phone size={11} color="#7B8491" />
-                <span>{savedFamily.phone ? formatPhone(savedFamily.phone) : 'телефон не указан'}</span>
+                <span>{cardFamily.phone ? formatPhone(cardFamily.phone) : 'телефон не указан'}</span>
               </div>
               <div style={{ marginTop: 2, fontSize: 10, color: '#9CA3AF', fontWeight: 600, userSelect: 'all', cursor: 'text' }}>
                 ID: {family.id}
@@ -433,9 +473,23 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             </div>
             {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
           </div>
-          <button onClick={onClose} style={closeButtonStyle}>
-            <X size={16} />
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {editing ? (
+              <>
+                <button type="button" onClick={cancelEditing} disabled={savingAll} style={secondaryHeaderButtonStyle}>
+                  <RotateCcw size={14} /> Отмена
+                </button>
+                <button type="button" onClick={saveAllChanges} disabled={savingAll} style={editHeaderButtonStyle}>
+                  <Check size={15} /> {savingAll ? 'Сохранение…' : 'Сохранить'}
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={beginEditing} style={editHeaderButtonStyle}>
+                <Pencil size={14} /> Редактировать
+              </button>
+            )}
+            <button type="button" aria-label="Закрыть карточку" onClick={onClose} style={closeButtonStyle}><X size={16} /></button>
+          </div>
         </header>
 
         <div style={contentBodyStyle}>
@@ -443,25 +497,25 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                 <DetailPanel title="Контакт">
-                  <DetailInput label="Родитель" tone="soft" value={savedFamily.parentName} onCommit={value => handleSaveFamily({ ...savedFamily, parentName: formatName(value) })} />
-                  <DetailInput label="Телефон 1" tone="soft" value={savedFamily.phone} onCommit={value => handleSaveFamily({ ...savedFamily, phone: formatPhone(value) })} />
-                  <DetailInput label="Телефон 2" tone="soft" value={savedFamily.secondPhone ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, secondPhone: formatPhone(value) })} />
-                  <DetailInput label="Telegram" tone="soft" value={savedFamily.phoneTelegram ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, phoneTelegram: value })} />
+                  <DetailInput editing={editing} label="Родитель" tone="soft" value={cardFamily.parentName} onCommit={value => setDraftFamily(current => ({ ...current, parentName: formatName(value) }))} />
+                  <DetailInput editing={editing} label="Телефон 1" tone="soft" value={cardFamily.phone} onCommit={value => setDraftFamily(current => ({ ...current, phone: formatPhone(value) }))} />
+                  <DetailInput editing={editing} label="Телефон 2" tone="soft" value={cardFamily.secondPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, secondPhone: formatPhone(value) }))} />
+                  <DetailInput editing={editing} label="Telegram" tone="soft" value={cardFamily.phoneTelegram ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, phoneTelegram: value }))} />
                 </DetailPanel>
                 <DetailPanel title="Доп. контакт">
-                  <DetailInput label="Имя" tone="soft" value={savedFamily.contactName ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, contactName: formatName(value) })} />
-                  <DetailInput label="Телефон" tone="soft" value={savedFamily.contactPhone ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, contactPhone: formatPhone(value) })} />
+                  <DetailInput editing={editing} label="Имя" tone="soft" value={cardFamily.contactName ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactName: formatName(value) }))} />
+                  <DetailInput editing={editing} label="Телефон" tone="soft" value={cardFamily.contactPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactPhone: formatPhone(value) }))} />
                 </DetailPanel>
                 <DetailPanel title="Адрес">
-                  <DetailInput label="Адрес" tone="clear" value={savedFamily.fullAddress} onCommit={value => handleSaveFamily({ ...savedFamily, fullAddress: value })} />
+                  <DetailInput editing={editing} label="Адрес" tone="clear" value={cardFamily.fullAddress} onCommit={value => setDraftFamily(current => ({ ...current, fullAddress: value }))} />
                   <DetailValue label="Координаты" value={coordinatesText} />
                   <DetailMapLink label="Яндекс" url={mapUrl} />
-                  <DetailInput label="Комментарий" tone="clear" value={savedFamily.comment ?? ''} placeholder="-" onCommit={value => handleSaveFamily({ ...savedFamily, comment: value })} />
+                  <DetailInput editing={editing} label="Комментарий" tone="clear" value={cardFamily.comment ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, comment: value }))} />
                 </DetailPanel>
               </div>
 
-              <DetailPanel title={`Дети (${children.length})`}>
-                <ChildrenOverviewTable children={children} branches={branches} onSaveChild={handleSaveChild} onAddChild={handleAddChild} onDeleteChild={handleDeleteChild} busy={childActionBusy} />
+              <DetailPanel title={`Дети (${cardChildren.length})`}>
+                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
             </div>
           )}
@@ -472,12 +526,12 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               onLoad={() => loadFinance()}
               charges={charges} payments={payments} paymentItems={paymentItems}
               loading={loadingFinance} family={savedFamily} children={children}
-              mainBalance={mainBalance} depositBalance={depositBalance}
               isAdmin={isAdmin} isCashier={isCashier} userRole={userRole as any}
               onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
               onAddCharges={handleAddCharges} onCreatePayment={handleCreatePayment}
               onConfirmPayment={handleConfirmPayment} onUnconfirmPayment={handleUnconfirmPayment} onSavePayment={handleSavePayment}
               onDeletePayment={handleDeletePayment}
+              readOnly={!editing}
             />
           )}
           {tab === 'history' && (
@@ -521,7 +575,7 @@ function TabHistoryLazy({ loaded, onLoad, audit }: { loaded: boolean; onLoad: ()
 
 function DetailPanel({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section style={{ background: '#fff', border: '1px solid #E8EEF1', borderRadius: 12, padding: 12 }}>
+    <section style={{ background: '#fff', border: 'none', borderRadius: 14, padding: 14, boxShadow: '0 5px 18px rgba(43, 72, 89, .055)' }}>
       <div style={{ fontSize: 13, fontWeight: 900, color: '#111827', marginBottom: 8 }}>{title}</div>
       <div className="family-detail-rows">
         {children}
@@ -530,30 +584,39 @@ function DetailPanel({ title, children }: { title: string; children: React.React
   );
 }
 
-function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft' }: {
+function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false }: {
   label: string;
   value: string;
   onCommit: (value: string) => void;
   placeholder?: string;
   type?: string;
   tone?: 'soft' | 'clear';
+  editing?: boolean;
 }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
   return (
     <label className="family-detail-row" style={detailFieldStyle(tone)}>
       <span style={detailLabelStyle}>{label}</span>
-      <input
-        className="family-card-control"
-        type={type}
-        value={local}
-        placeholder={placeholder}
-        onChange={event => setLocal(event.target.value)}
-        onBlur={event => onCommit(event.currentTarget.value)}
-        style={detailControlStyle}
-      />
+      {editing ? (
+        <input
+          className="family-card-control"
+          type={type}
+          value={local}
+          placeholder={placeholder}
+          onChange={event => setLocal(event.target.value)}
+          onBlur={event => onCommit(event.currentTarget.value)}
+          style={{ ...detailControlStyle, background: '#F8FAFC', borderColor: '#DDE7EB' }}
+        />
+      ) : (
+        <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', paddingLeft: 0 }}>{value || placeholder}</span>
+      )}
     </label>
   );
+}
+
+function ReadOnlyValue({ value }: { value?: string }) {
+  return <span style={{ color: '#17222F', fontSize: 12, fontWeight: 750 }}>{value || '-'}</span>;
 }
 
 function DetailValue({ label, value }: { label: string; value: string }) {
@@ -618,6 +681,7 @@ function ChildCard({
   onSaveChild,
   onDeleteChild,
   busy,
+  editing,
 }: {
   child: Child;
   index: number;
@@ -625,6 +689,7 @@ function ChildCard({
   onSaveChild: (child: Child, patch: Partial<Child>) => Promise<boolean>;
   onDeleteChild: (child: Child) => void;
   busy?: boolean;
+  editing?: boolean;
 }) {
   const [showMore, setShowMore] = React.useState(false);
   const s = child.status ?? 'new';
@@ -634,25 +699,19 @@ function ChildCard({
   const hasDiscount = basePrice > finalPrice;
 
   return (
-    <article style={{ background: '#fff', border: '1px solid #EDF0F3', borderRadius: 12, padding: '12px 14px', boxShadow: '0 2px 8px rgba(8,11,30,0.06)' }}>
+    <article style={{ background: '#fff', border: '1px solid #EEF3F4', borderRadius: 13, padding: '12px 14px', boxShadow: '0 3px 12px rgba(43, 72, 89, .045)' }}>
       {/* Заголовок */}
-      <div style={{ display: 'grid', gridTemplateColumns: '22px minmax(0,1fr) auto 26px', gap: 8, alignItems: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #F1F5F9' }}>
+      <div style={{ display: 'grid', gridTemplateColumns: editing ? '22px minmax(0,1fr) auto 26px' : '22px minmax(0,1fr) auto', gap: 8, alignItems: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #F1F5F9' }}>
         <span style={childCardIndexStyle}>{index + 1}</span>
         <div style={{ fontSize: 14, fontWeight: 800 }}>
-          <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong />
+          {editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : formatName(child.childName)}
         </div>
         <div style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-          <EditableSelect
-            value={s}
-            options={CHILD_STATUS_OPTIONS_INLINE}
-            onCommit={value => onSaveChild(child, { status: value as Child['status'] })}
-            width={88}
-            panelWidth={140}
-          />
+          {editing ? <EditableSelect value={s} options={CHILD_STATUS_OPTIONS_INLINE} onCommit={value => onSaveChild(child, { status: value as Child['status'] })} width={88} panelWidth={140} /> : <span style={{ display: 'inline-flex', padding: '6px 10px' }}>{CHILD_STATUS_OPTIONS_INLINE.find(item => item.value === s)?.label ?? s}</span>}
         </div>
-        <button type="button" onClick={() => onDeleteChild(child)} disabled={busy} title="Удалить" style={deleteChildBtnStyle}>
+        {editing && <button type="button" onClick={() => onDeleteChild(child)} disabled={busy} title="Удалить" style={deleteChildBtnStyle}>
           <Trash2 size={13} />
-        </button>
+        </button>}
       </div>
 
       {/* Основные поля 3×2 */}
@@ -661,7 +720,7 @@ function ChildCard({
           {
             label: 'Школа',
             content: (
-              <EditableSelect
+              editing ? <EditableSelect
                 value={child.branchId ?? ''}
                 options={branches.map(b => ({ value: b.id, label: b.shortName || b.code }))}
                 onCommit={value => {
@@ -669,34 +728,34 @@ function ChildCard({
                   if (!branch) return Promise.resolve(false);
                   return onSaveChild(child, { branchId: branch.id, schoolId: branch.schoolId, branchCode: branch.code, branchShort: branch.shortName, branchName: branch.name, schoolCode: branch.code as Child['schoolCode'] });
                 }}
-              />
+              /> : <ReadOnlyValue value={child.branchShort || child.schoolCode} />
             ),
           },
           {
             label: 'Класс',
-            content: <EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} />,
+            content: editing ? <EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /> : <ReadOnlyValue value={child.class} />,
           },
           {
             label: 'Зона / ТС',
             content: (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+              editing ? <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                 <EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={40} panelWidth={120} />
                 <span style={{ color: '#C4C9D4', fontSize: 10 }}>·</span>
                 <EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={90} panelWidth={190} />
-              </div>
+              </div> : <ReadOnlyValue value={`${child.zone} · ${VEHICLE_TYPE_OPTIONS.find(item => item.value === child.vehicleType)?.label ?? child.vehicleType}`} />
             ),
           },
           {
             label: 'Трансфер',
-            content: <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} />,
+            content: editing ? <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} /> : <ReadOnlyValue value={child.transferNumber ? `№ ${child.transferNumber}` : '-'} />,
           },
           {
             label: 'Остановка',
-            content: <EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={58} panelWidth={120} />,
+            content: editing ? <EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={58} panelWidth={120} /> : <ReadOnlyValue value={child.stopNumber ? String(child.stopNumber) : '-'} />,
           },
           {
             label: 'Утро',
-            content: <EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} />,
+            content: editing ? <EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /> : <ReadOnlyValue value={child.timeMorning || '-'} />,
           },
         ].map(({ label, content }) => (
           <div key={label} style={{ background: '#F8FAFC', borderRadius: 7, padding: '5px 8px' }}>
@@ -731,18 +790,18 @@ function ChildCard({
               label: 'Самовыход',
               content: (
                 <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650, color: 'var(--text)', cursor: 'pointer' }}>
-                  <input type="checkbox" checked={child.selfExitAllowed} onChange={e => void onSaveChild(child, { selfExitAllowed: e.currentTarget.checked })} />
+                  {editing && <input type="checkbox" checked={child.selfExitAllowed} onChange={e => void onSaveChild(child, { selfExitAllowed: e.currentTarget.checked })} />}
                   {child.selfExitAllowed ? 'Да' : 'Нет'}
                 </label>
               ),
             },
             {
               label: 'Скидка %',
-              content: <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} />,
+              content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
             },
             {
               label: 'Скидка сом',
-              content: <EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, basePrice)} />,
+              content: editing ? <EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, basePrice)} /> : <ReadOnlyValue value={money(child.manualDiscountAmount || 0)} />,
             },
           ].map(({ label, content }) => (
             <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 26, padding: '0 4px', borderRadius: 6 }}>
@@ -763,6 +822,7 @@ function ChildrenOverviewTable({
   onAddChild,
   onDeleteChild,
   busy,
+  editing,
 }: {
   children: Child[];
   branches: V2BranchOption[];
@@ -770,14 +830,15 @@ function ChildrenOverviewTable({
   onAddChild: () => void;
   onDeleteChild: (child: Child) => void;
   busy?: boolean;
+  editing?: boolean;
 }) {
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingBottom: 10, borderBottom: '1px solid #E8EEF1' }}>
         <span style={{ fontSize: 12, color: '#7B8491', fontWeight: 750 }}>{children.length ? `${children.length} детей` : 'Детей нет'}</span>
-        <button type="button" onClick={onAddChild} disabled={busy} style={smallAddChildBtnStyle}>
+        {editing && <button type="button" onClick={onAddChild} disabled={busy} style={smallAddChildBtnStyle}>
           {busy ? '...' : '+ Добавить ребёнка'}
-        </button>
+        </button>}
       </div>
       {children.length === 0 ? (
         <div style={{ fontSize: 12, color: '#7B8491', padding: '12px 0' }}>Добавьте первого ребёнка</div>
@@ -792,6 +853,7 @@ function ChildrenOverviewTable({
               onSaveChild={onSaveChild}
               onDeleteChild={onDeleteChild}
               busy={busy}
+              editing={editing}
             />
           ))}
         </div>
@@ -913,10 +975,10 @@ function clampToStep(value: number, min: number, max: number, step: number): num
 function modalStyle(): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '76px minmax(0, 1fr)',
+    gridTemplateColumns: '64px minmax(0, 1fr)',
     background: '#fff',
-    border: '1px solid #DDE7EB',
-    borderRadius: 18,
+    border: 'none',
+    borderRadius: 20,
     boxShadow: '0 28px 70px rgba(8,11,11,0.18)',
     height: 'min(720px, calc(100vh - 48px))',
     minHeight: 560,
@@ -928,8 +990,8 @@ function modalStyle(): React.CSSProperties {
 }
 
 const sidebarRailStyle: React.CSSProperties = {
-  borderRight: 'none',
-  padding: '96px 0 12px 10px',
+  borderRight: '1px solid #EEF2F3',
+  padding: '82px 0 12px 8px',
   display: 'flex',
   flexDirection: 'column',
   alignItems: 'stretch',
@@ -1063,11 +1125,34 @@ const closeButtonStyle: React.CSSProperties = {
   placeItems: 'center',
 };
 
+const editHeaderButtonStyle: React.CSSProperties = {
+  height: 32,
+  padding: '0 13px',
+  border: 'none',
+  borderRadius: 10,
+  background: '#31A4A5',
+  color: '#fff',
+  display: 'inline-flex',
+  alignItems: 'center',
+  gap: 7,
+  fontSize: 11,
+  fontWeight: 850,
+  cursor: 'pointer',
+  boxShadow: '0 5px 14px rgba(49, 164, 165, .2)',
+};
+
+const secondaryHeaderButtonStyle: React.CSSProperties = {
+  ...editHeaderButtonStyle,
+  background: '#F4F7F8',
+  color: '#667085',
+  boxShadow: 'none',
+};
+
 const contentBodyStyle: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
   padding: '14px 22px',
-  background: 'var(--active-bg)',
+  background: '#F6F9FA',
 };
 
 const smallAddChildBtnStyle: React.CSSProperties = {

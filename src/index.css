@@ -40,6 +40,29 @@ input, select, textarea { font-family: var(--font); }
 button, input, select, textarea { letter-spacing: 0; }
 a { color: var(--accent); text-decoration: none; }
 
+/* Мягкое приближение карточек — визуальная навигация в духе macOS Dock. */
+.dock-hover-card {
+  position: relative;
+  transform: translateZ(0);
+  transform-origin: center bottom;
+  transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s ease, border-color .2s ease;
+  will-change: transform;
+}
+.dock-hover-card:hover {
+  z-index: 8;
+  transform: translateY(-4px) scale(1.045);
+  box-shadow: 0 15px 30px rgba(43, 72, 89, .16) !important;
+}
+.dock-hover-card--compact:hover {
+  transform: translateY(-3px) scale(1.1);
+  box-shadow: 0 11px 22px rgba(43, 72, 89, .18) !important;
+}
+.dock-hover-card:active { transform: translateY(-1px) scale(1.015); }
+@media (hover: none), (prefers-reduced-motion: reduce) {
+  .dock-hover-card { transition: none; }
+  .dock-hover-card:hover, .dock-hover-card--compact:hover { transform: none; }
+}
+
 .login-page {
   min-height: 100%;
   display: flex;

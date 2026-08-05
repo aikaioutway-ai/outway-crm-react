@@ -81,6 +81,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
         const activeColor = '#2DD4BF';
         return (
           <button
+            className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
             title={active ? `На проверке: ${cell.count}` : undefined}

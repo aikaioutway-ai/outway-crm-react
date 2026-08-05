@@ -1,9 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Bus, Car, ChevronDown, ChevronRight, ChevronUp, Inbox, School } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { Bus, Car, ChevronDown, ChevronRight, Inbox, School } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS } from './constants';
-import { KpiChip, SchoolAvatar } from './ManagerOverview';
+import { DashboardGrid, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 
@@ -100,44 +100,6 @@ function computeLogisticsStats(rows: FamilyListRow[]): LogisticsSchoolStat[] {
   });
 }
 
-function ColumnCard({ sortKey, label, sortState, onSort, children }: {
-  sortKey: SortKey;
-  label: string;
-  sortState: { key: SortKey; dir: 'asc' | 'desc' };
-  onSort: (key: SortKey) => void;
-  children: React.ReactNode;
-}) {
-  const active = sortState.key === sortKey;
-  return (
-    <div style={{ minWidth: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 16, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-      <button
-        onClick={() => onSort(sortKey)}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'transparent',
-          border: 'none',
-          borderBottom: '1px solid var(--border)',
-          cursor: 'pointer',
-          padding: '12px 16px',
-          fontSize: 13,
-          fontWeight: 800,
-          color: active ? 'var(--accent)' : 'var(--text)',
-          textTransform: 'uppercase',
-          textAlign: 'left',
-        }}
-      >
-        {label}
-        {active && (sortState.dir === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />)}
-      </button>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column' }}>
-        {children}
-      </div>
-    </div>
-  );
-}
-
 export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange }: LogisticsOverviewProps) {
   const { data: rows = null } = useFamiliesTable(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -198,17 +160,17 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12, flexShrink: 0 }}>
-          <KpiChip icon={<School size={18} color="#fff" />} label="Школы" value={String(totals.schools)} color={KPI_COLORS.school} />
-          <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(totals.newRequests)} color={KPI_COLORS.newRequests} />
-          <KpiChip icon={<Bus size={18} color="#fff" />} label="Средний по МКР" value={totals.microbusAverage.toFixed(1)} color={KPI_COLORS.microbusAverage} />
-          <KpiChip icon={<Bus size={18} color="#fff" />} label="К-во трансферов" value={String(totals.transferCount)} color={KPI_COLORS.transferCount} />
-          <KpiChip icon={<Bus size={18} color="#fff" />} label="Микробусы" value={String(totals.microbusCount)} color={KPI_COLORS.microbusCount} />
-          <KpiChip icon={<Car size={18} color="#fff" />} label="Легковые" value={String(totals.lightVehicleCount)} color={KPI_COLORS.lightVehicleCount} />
-        </div>
-
-        <div style={{ flex: 1, minHeight: 0, display: 'grid', gridTemplateColumns: GRID_TEMPLATE, gap: 12 }}>
-          <ColumnCard sortKey="school" label="Школы" sortState={sortState} onSort={handleSort}>
+        <DashboardGrid template={GRID_TEMPLATE}>
+          <ColumnCard
+            first
+            sortKey="school"
+            label="Школы"
+            icon={<School size={17} color="#fff" />}
+            value={String(totals.schools)}
+            color={KPI_COLORS.school}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, i) => (
               <div
                 key={row.key}
@@ -226,7 +188,15 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="newRequests" label="Новые заявки" sortState={sortState} onSort={handleSort}>
+          <ColumnCard
+            sortKey="newRequests"
+            label="Новые заявки"
+            icon={<Inbox size={17} color="#fff" />}
+            value={String(totals.newRequests)}
+            color={KPI_COLORS.newRequests}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.newRequests > 0 ? KPI_COLORS.newRequests : undefined }}>{row.data.newRequests}</span>
@@ -234,7 +204,15 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="microbusAverage" label="Средний по МКР" sortState={sortState} onSort={handleSort}>
+          <ColumnCard
+            sortKey="microbusAverage"
+            label="Средний по МКР"
+            icon={<Bus size={17} color="#fff" />}
+            value={totals.microbusAverage.toFixed(1)}
+            color={KPI_COLORS.microbusAverage}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.microbusAverage > 0 ? KPI_COLORS.microbusAverage : undefined }}>{row.data.microbusAverage.toFixed(1)}</span>
@@ -242,7 +220,15 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="transferCount" label="К-во трансферов" sortState={sortState} onSort={handleSort}>
+          <ColumnCard
+            sortKey="transferCount"
+            label="К-во трансферов"
+            icon={<Bus size={17} color="#fff" />}
+            value={String(totals.transferCount)}
+            color={KPI_COLORS.transferCount}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.transferCount > 0 ? KPI_COLORS.transferCount : undefined }}>{row.data.transferCount}</span>
@@ -250,7 +236,15 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="microbusCount" label="Микробусы" sortState={sortState} onSort={handleSort}>
+          <ColumnCard
+            sortKey="microbusCount"
+            label="Микробусы"
+            icon={<Bus size={17} color="#fff" />}
+            value={String(totals.microbusCount)}
+            color={KPI_COLORS.microbusCount}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.microbusCount > 0 ? KPI_COLORS.microbusCount : undefined }}>{row.data.microbusCount}</span>
@@ -258,14 +252,22 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
             ))}
           </ColumnCard>
 
-          <ColumnCard sortKey="lightVehicleCount" label="Легковые" sortState={sortState} onSort={handleSort}>
+          <ColumnCard
+            sortKey="lightVehicleCount"
+            label="Легковые"
+            icon={<Car size={17} color="#fff" />}
+            value={String(totals.lightVehicleCount)}
+            color={KPI_COLORS.lightVehicleCount}
+            sortState={sortState}
+            onSort={handleSort}
+          >
             {displayRows.map((row, i) => (
               <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                 <span style={{ fontSize: 14, fontWeight: 700, color: row.data.lightVehicleCount > 0 ? KPI_COLORS.lightVehicleCount : undefined }}>{row.data.lightVehicleCount}</span>
               </div>
             ))}
           </ColumnCard>
-        </div>
+        </DashboardGrid>
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

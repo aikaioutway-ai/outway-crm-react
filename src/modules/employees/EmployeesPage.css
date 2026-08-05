@@ -1,0 +1,110 @@
+.employee-school-access {
+  position: relative;
+  width: max-content;
+  max-width: 100%;
+  z-index: 1;
+}
+
+.employee-school-access__stack {
+  display: flex;
+  align-items: center;
+  transform-origin: left center;
+  transition: transform .18s cubic-bezier(.2, .8, .2, 1);
+}
+
+.employee-school-access:hover {
+  z-index: 90;
+}
+
+.employee-school-access:focus {
+  outline: none;
+}
+
+.employee-school-access:focus-visible .employee-school-access__stack {
+  border-radius: 999px;
+  box-shadow: 0 0 0 3px rgba(49, 164, 165, .16);
+}
+
+.employee-school-access:hover .employee-school-access__stack {
+  transform: scale(1.16);
+}
+
+.employee-school-access-popover {
+  position: fixed;
+  width: 390px;
+  padding: 14px;
+  border: 1px solid #D8E6E9;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, .98);
+  box-shadow: 0 20px 44px rgba(43, 72, 89, .22);
+  pointer-events: none;
+  z-index: 10000;
+  animation: employee-school-popover-in .16s cubic-bezier(.2, .8, .2, 1);
+}
+
+.employee-school-access-popover__title {
+  margin-bottom: 11px;
+  color: #626C8B;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.employee-school-access-popover__grid {
+  display: grid;
+  grid-template-columns: repeat(7, 44px);
+  gap: 8px;
+}
+
+.employee-school-access-popover__grid img,
+.employee-school-access-popover__grid span {
+  width: 44px;
+  height: 44px;
+  border: 1px solid #E2ECEF;
+  border-radius: 50%;
+  background: #fff;
+  box-shadow: 0 4px 10px rgba(43, 72, 89, .13);
+  object-fit: cover;
+}
+
+.employee-school-access-popover__grid span {
+  display: grid;
+  place-items: center;
+  background: #D7EEEE;
+  color: #237F81;
+  font-size: 10px;
+  font-weight: 900;
+}
+
+.employee-table-row {
+  width: 100%;
+  cursor: pointer;
+}
+
+.employee-table-row:nth-child(odd) td {
+  background: #FFFFFF;
+}
+
+.employee-table-row:nth-child(even) td {
+  background: #F5FAFB;
+}
+
+.employee-table-row:hover td {
+  background: #EEF7F7;
+}
+
+.employee-table-row.is-selected td:first-child {
+  color: #17222F;
+}
+
+@keyframes employee-school-popover-in {
+  from { opacity: 0; transform: translateY(-6px) scale(.97); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .employee-school-access__stack,
+  .employee-school-access-popover {
+    transition: none;
+  }
+}

@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Banknote, CheckCircle2, ChevronRight, ReceiptText, WalletCards } from 'lucide-react';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { KpiChip, SchoolAvatar } from '../families/ManagerOverview';
+import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { money } from '../../utils/pricing';
 import { computePayrollStats, PAYROLL_COLORS, PayrollMoneySummary } from './payrollStats';
 

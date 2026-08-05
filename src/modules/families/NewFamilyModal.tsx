@@ -1,21 +1,21 @@
 import React, { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
-const SCHOOL_LINKS: { name: string; code: string; url: string }[] = [
-  { name: 'Edison',                     code: 'EDISON',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1001' },
-  { name: 'Эрудит-ISIT',               code: 'ERUDIT',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
-  { name: 'Тенсай',                    code: 'TENSAY',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
-  { name: 'American-European School',  code: 'AES',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
-  { name: 'Kyrgyz-American School',    code: 'KAS',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
-  { name: 'Билим Бишкек KG',           code: 'BILIM',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
-  { name: 'Индиго Kids',               code: 'INDIGO',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
-  { name: 'Nova International School', code: 'NOVA', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1007' },
-  { name: 'Эпсилон',                   code: 'EPSILON',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
-  { name: 'Гениум Чуйкова',            code: 'GENIUS', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
-  { name: 'Light Academy',             code: 'LIGHT',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
-  { name: 'Академия будущих лидеров',  code: 'ABL',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1014' },
-  { name: 'Калем Академи Скуул',       code: 'KLM',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1015' },
-  { name: 'Tesla Academy',             code: 'TSL',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1016' },
+const SCHOOL_LINKS: { name: string; code: string; url: string; logo: string }[] = [
+  { name: 'Edison',                     code: 'EDISON',  logo: '/school-logos/EDI.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1001' },
+  { name: 'Эрудит-ISIT',                code: 'ERUDIT',  logo: '/school-logos/ERU.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
+  { name: 'Тенсай',                     code: 'TENSAY',  logo: '/school-logos/TIS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
+  { name: 'American-European School',   code: 'AES',     logo: '/school-logos/AES.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
+  { name: 'Kyrgyz-American School',     code: 'KAS',     logo: '/school-logos/KAS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
+  { name: 'Билим Бишкек KG',            code: 'BILIM',   logo: '/school-logos/BKG.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
+  { name: 'Индиго Kids',                code: 'INDIGO',  logo: '/school-logos/ING.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
+  { name: 'Nova International School',  code: 'NOVA',    logo: '/school-logos/NOVA.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1007' },
+  { name: 'Эпсилон',                    code: 'EPSILON', logo: '/school-logos/EPS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
+  { name: 'Гениум Чуйкова',             code: 'GENIUS',  logo: '/school-logos/GEN.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
+  { name: 'Light Academy',              code: 'LIGHT',   logo: '/school-logos/LA.png',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
+  { name: 'Академия будущих лидеров',   code: 'ABL',     logo: '/school-logos/ABL.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1014' },
+  { name: 'Калем Академи Скуул',        code: 'KLM',     logo: '/school-logos/KLM.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1015' },
+  { name: 'Tesla Academy',              code: 'TSL',     logo: '/school-logos/TSL.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1016' },
 ];
 
 interface Props { onClose: () => void; }
@@ -70,9 +70,7 @@ export default function NewFamilyModal({ onClose }: Props) {
             >
               {school ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ width: 32, height: 32, borderRadius: 7, background: 'var(--accent)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700 }}>
-                    {school.code}
-                  </div>
+                  <img src={school.logo} alt="" style={{ width: 32, height: 32, borderRadius: 7, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', flexShrink: 0 }} />
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)' }}>{school.name}</span>
                 </div>
               ) : (
@@ -106,9 +104,7 @@ export default function NewFamilyModal({ onClose }: Props) {
                       onMouseEnter={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = '#F0F4FF'; }}
                       onMouseLeave={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = i % 2 === 0 ? '#fff' : '#F8F9FF'; }}
                     >
-                      <div style={{ width: 34, height: 34, borderRadius: 8, background: selected === s.code ? 'var(--accent)' : '#EEF2FF', color: selected === s.code ? '#fff' : 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 700, flexShrink: 0 }}>
-                        {s.code}
-                      </div>
+                      <img src={s.logo} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', flexShrink: 0 }} />
                       <span style={{ fontSize: 13, fontWeight: selected === s.code ? 700 : 500, color: 'var(--text)' }}>{s.name}</span>
                       {selected === s.code && <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontSize: 14 }}>✓</span>}
                     </div>

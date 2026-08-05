@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   fetchV2Branches,
   fetchV2Family,
@@ -19,6 +19,7 @@ import InlineFamilyCard from './InlineFamilyCard';
 interface LogisticsMapViewProps {
   schoolKey: string;
   transferFilter: string;
+  search?: string;
   userRole?: string;
   userName?: string;
   onSelectSchool: (key: string) => void;
@@ -64,7 +65,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
   return `${escapeHtml(address)}${childBlocks}`;
 }
 
-export default function LogisticsMapView({ schoolKey, transferFilter, userRole, userName, onSelectSchool, onSidebarWidthChange }: LogisticsMapViewProps) {
+export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, onSelectSchool, onSidebarWidthChange }: LogisticsMapViewProps) {
   const { data: rows = null } = useFamiliesTable(false);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -109,6 +110,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
 
   useEffect(() => {
     let cancelled = false;
+    const placemarks = placemarksRef.current;
     loadYandexMaps()
       .then(ymaps => {
         if (cancelled || !containerRef.current) return;
@@ -175,7 +177,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
               r.rowId === childId ? { ...r, transferNumber: transferValue || null, stopNumber: stopValue || null } : r
             )) ?? prev);
             if (statusEl) statusEl.textContent = 'Сохранено ✓';
-          } catch (err) {
+          } catch {
             if (statusEl) statusEl.textContent = 'Ошибка сохранения';
           } finally {
             button.removeAttribute('disabled');
@@ -189,7 +191,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
       cancelled = true;
       mapRef.current?.destroy();
       mapRef.current = null;
-      placemarksRef.current.clear();
+      placemarks.clear();
       schoolPlacemarkRef.current = null;
     };
   }, []);
@@ -202,7 +204,9 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
   }, [mapReady]);
 
   const filteredRows = useMemo(() => {
-    const baseRows = (rows ?? []).filter(row => row.branchFilter === schoolKey);
+    const query = search.trim().toLowerCase().replace(/\s+/g, '');
+    const baseRows = (rows ?? []).filter(row => row.branchFilter === schoolKey && (!query || [row.parentName, row.childName, row.phone, row.streetAddress]
+      .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query))));
     if (transferFilter === 'rejected') {
       return baseRows.filter(row => row.status === 'rejected');
     }
@@ -210,7 +214,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, userRole, 
     if (!transferFilter) return activeRows;
     if (transferFilter === 'empty') return activeRows.filter(row => !row.transferNumber);
     return activeRows.filter(row => row.transferNumber === transferFilter);
-  }, [rows, schoolKey, transferFilter]);
+  }, [rows, schoolKey, search, transferFilter]);
 
   const pointRows = useMemo<PointRow[]>(
     () => filteredRows.filter((row): row is PointRow => row.latitude != null && row.longitude != null),

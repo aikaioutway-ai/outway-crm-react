@@ -1,9 +1,14 @@
-import React, { useCallback, useState } from 'react';
+import { useCallback, useState } from 'react';
 import TimesheetModule, { TimesheetModuleProps } from '../expenses/TimesheetModule';
 import { PAYROLL_OFFICE_COLOR, PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, PayrollSchoolTab, TimesheetPayrollSummary } from '../expenses/timesheetTypes';
 import PayrollOverview from './PayrollOverview';
 import PayrollSchoolKpiStrip from './PayrollSchoolKpiStrip';
 import PayrollTransferDashboard from './PayrollTransferDashboard';
+import { DashboardSearch, DashboardTopPanel } from '../../core/dashboard/DashboardUI';
+import ManagerPeriodBar from '../families/ManagerPeriodBar';
+import { ALL_PERIODS } from '../families/constants';
+
+const PAYROLL_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 
 interface PayrollModuleProps extends TimesheetModuleProps {
   schoolKey: string | null;
@@ -13,9 +18,11 @@ interface PayrollModuleProps extends TimesheetModuleProps {
   onSelectSchool: (key: string) => void;
   onTransferFilterChange: (key: string) => void;
   onPeriodKeyChange: (key: string) => void;
+  search: string;
+  onSearchChange: (value: string) => void;
 }
 
-export default function PayrollModule({ schoolKey, transferFilter, schoolTab, periodKey, onSelectSchool, onTransferFilterChange, onPeriodKeyChange, ...props }: PayrollModuleProps) {
+export default function PayrollModule({ schoolKey, transferFilter, schoolTab, periodKey, onSelectSchool, onTransferFilterChange, onPeriodKeyChange, search, onSearchChange, ...props }: PayrollModuleProps) {
   const rightReserveWidth = props.rightReserveWidth ?? 0;
   const [summaryBySchool, setSummaryBySchool] = useState<Record<string, TimesheetPayrollSummary>>({});
 
@@ -44,6 +51,8 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
         onPeriodKeyChange={onPeriodKeyChange}
         onSelectSchool={onSelectSchool}
         onSidebarWidthChange={props.onSchoolsSidebarWidthChange}
+        search={search}
+        onSearchChange={onSearchChange}
       />
     );
   }
@@ -59,7 +68,7 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
           onPayrollSummaryChange={handleSummaryChange}
           payrollSchoolTab={schoolTab}
           periodKey={periodKey}
-          onPeriodKeyChange={onPeriodKeyChange}
+          search={search}
           extraSchoolDockItems={[{
             key: PAYROLL_OFFICE_KEY,
             label: PAYROLL_OFFICE_LABEL,
@@ -67,7 +76,13 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
             active: schoolKey === PAYROLL_OFFICE_KEY,
           }]}
           renderPayrollHeader={({ calculator }) => (
-            <>
+            <DashboardTopPanel>
+              <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+                  <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} periods={PAYROLL_PERIODS} showAll={false} />
+                </div>
+                <DashboardSearch value={search} onChange={onSearchChange} placeholder="Водитель, трансфер, телефон..." />
+              </div>
               <PayrollSchoolKpiStrip
                 schoolKey={schoolKey}
                 rightReserveWidth={rightReserveWidth}
@@ -80,9 +95,8 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
                 selectedKey={transferFilter}
                 onSelect={onTransferFilterChange}
               />
-            </>
+            </DashboardTopPanel>
           )}
-          hideHeaderControls
         />
       </div>
     </div>
