@@ -65,6 +65,8 @@ const KPI_GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'debtSum'
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
 
+const ROW_HEIGHT = 56;
+
 export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
   return schools.map((tab, index) => {
@@ -416,21 +418,23 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-              {displayRows.map((row, i) => (
-                <div
-                  key={row.key}
-                  onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}
-                >
-                  <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
-                  <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
-                  {row.isGroup ? (
-                    row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
-                  ) : (
-                    <ChevronRight size={14} color="var(--text-2)" />
-                  )}
-                </div>
-              ))}
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {displayRows.map((row, i) => (
+                  <div
+                    key={row.key}
+                    onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
+                    style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}
+                  >
+                    <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
+                    <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                    {row.isGroup ? (
+                      row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
+                    ) : (
+                      <ChevronRight size={14} color="var(--text-2)" />
+                    )}
+                  </div>
+                ))}
+              </div>
             </ColumnCard>
 
             <ColumnCard
@@ -442,11 +446,13 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.newRequests}</span>
-              </div>
-            ))}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {displayRows.map((row, i) => (
+                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.newRequests}</span>
+                </div>
+              ))}
+            </div>
             </ColumnCard>
 
             <ColumnCard
@@ -458,11 +464,13 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.charged > 0 ? money(row.data.charged) : '0'}</span>
-              </div>
-            ))}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {displayRows.map((row, i) => (
+                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                  <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.charged > 0 ? money(row.data.charged) : '0'}</span>
+                </div>
+              ))}
+            </div>
             </ColumnCard>
 
             <ColumnCard
@@ -474,11 +482,13 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.paid > 0 ? 'var(--success)' : undefined }}>{row.data.paid > 0 ? money(row.data.paid) : '0'}</span>
-              </div>
-            ))}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {displayRows.map((row, i) => (
+                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data.paid > 0 ? 'var(--success)' : undefined }}>{row.data.paid > 0 ? money(row.data.paid) : '0'}</span>
+                </div>
+              ))}
+            </div>
             </ColumnCard>
 
             <ColumnCard
@@ -490,11 +500,13 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.debtSum > 0 ? 'var(--danger)' : undefined }}>{row.data.debtSum > 0 ? money(row.data.debtSum) : '0'}</span>
-              </div>
-            ))}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {displayRows.map((row, i) => (
+                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data.debtSum > 0 ? 'var(--danger)' : undefined }}>{row.data.debtSum > 0 ? money(row.data.debtSum) : '0'}</span>
+                </div>
+              ))}
+            </div>
             </ColumnCard>
 
             <ColumnCard
@@ -506,11 +518,13 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.balance < 0 ? 'var(--danger)' : row.data.balance > 0 ? 'var(--success)' : undefined }}>{row.data.balance.toLocaleString('ru-RU')}</span>
-              </div>
-            ))}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {displayRows.map((row, i) => (
+                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data.balance < 0 ? 'var(--danger)' : row.data.balance > 0 ? 'var(--success)' : undefined }}>{row.data.balance.toLocaleString('ru-RU')}</span>
+                </div>
+              ))}
+            </div>
             </ColumnCard>
         </DashboardGrid>
       </div>

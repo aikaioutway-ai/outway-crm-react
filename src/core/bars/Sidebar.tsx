@@ -32,7 +32,7 @@ export function getAllowedSections(role: UserRole): NavSection[] {
   if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'costs'];
   if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'costs'];
   if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
-  if (role === 'manager')      return ['families', 'drivers'];
+  if (role === 'manager')      return ['families'];
   if (role === 'logist')        return ['logistics', 'drivers', 'dispatch'];
   if (role === 'senior_logist') return ['logistics', 'drivers', 'dispatch', 'expenses'];
   if (role === 'cashier')       return ['cashier', 'expenses'];

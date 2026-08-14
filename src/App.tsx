@@ -561,6 +561,7 @@ export default function App() {
               <DriversOverview
                 onSelectSchool={setDriversSchoolKey}
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
+                allowedSchools={currentUser?.schoolKeys}
               />
             )}
           </div>

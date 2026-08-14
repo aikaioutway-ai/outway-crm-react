@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, FileWarning, School, UserCheck, UserX } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { SCHOOL_TABS } from '../families/constants';
+import { isSchoolAllowed, SCHOOL_TABS } from '../families/constants';
 import { DashboardGrid, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
@@ -23,6 +23,7 @@ type SortKey = 'school' | 'activeCount' | 'inactiveCount' | 'microbusCount' | 'm
 interface DriversOverviewProps {
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
+  allowedSchools?: string[];
 }
 
 interface DriverSchoolStat {
@@ -67,6 +68,8 @@ const GRID_TEMPLATE = ['school', 'activeCount', 'inactiveCount', 'microbusCount'
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
 
+const ROW_HEIGHT = 56;
+
 function driverMatchesSchool(driver: V2DriverTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
   return driver.branchCodes.includes(tab.key)
     || driver.branchShorts.includes(tab.label)
@@ -94,11 +97,13 @@ function statFromRows(
   };
 }
 
-function computeDriverStats(rows: V2DriverTableRow[]): DriverSchoolStat[] {
-  const schoolStats = SCHOOL_TABS.filter(tab => tab.key !== 'ALL').map((tab, index) => {
-    const schoolRows = rows.filter(row => !isReserveDriver(row) && driverMatchesSchool(row, tab));
-    return statFromRows(tab.key, tab.label, SCHOOL_COLORS[index % SCHOOL_COLORS.length], schoolRows, tab.logo);
-  });
+function computeDriverStats(rows: V2DriverTableRow[], allowedSchools?: string[]): DriverSchoolStat[] {
+  const schoolStats = SCHOOL_TABS
+    .filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools))
+    .map((tab, index) => {
+      const schoolRows = rows.filter(row => !isReserveDriver(row) && driverMatchesSchool(row, tab));
+      return statFromRows(tab.key, tab.label, SCHOOL_COLORS[index % SCHOOL_COLORS.length], schoolRows, tab.logo);
+    });
   const reserveRows = rows.filter(isReserveDriver);
   return [
     ...schoolStats,
@@ -106,7 +111,7 @@ function computeDriverStats(rows: V2DriverTableRow[]): DriverSchoolStat[] {
   ];
 }
 
-export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }: DriversOverviewProps) {
+export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools }: DriversOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
@@ -117,7 +122,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const stats = useMemo(() => computeDriverStats(rows ?? []), [rows]);
+  const stats = useMemo(() => computeDriverStats(rows ?? [], allowedSchools), [rows, allowedSchools]);
   const totals = useMemo(() => {
     const allRows = rows ?? [];
     return {
@@ -171,21 +176,23 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }
             sortState={sortState}
             onSort={handleSort}
           >
-            {displayRows.map((row, index) => (
-              <div
-                key={row.key}
-                onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}
-              >
-                <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
-                <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
-                {row.isGroup ? (
-                  row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
-                ) : (
-                  <ChevronRight size={14} color="var(--text-2)" />
-                )}
-              </div>
-            ))}
+            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              {displayRows.map((row, index) => (
+                <div
+                  key={row.key}
+                  onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
+                  style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}
+                >
+                  <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
+                  <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                  {row.isGroup ? (
+                    row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
+                  ) : (
+                    <ChevronRight size={14} color="var(--text-2)" />
+                  )}
+                </div>
+              ))}
+            </div>
           </ColumnCard>
 
           {([
@@ -206,14 +213,16 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange }
               sortState={sortState}
               onSort={handleSort}
             >
-              {displayRows.map((row, index) => {
-                const value = row.data[key];
-                return (
-                  <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: Number(value) > 0 ? KPI_COLORS[key] : undefined }}>{value}</span>
-                  </div>
-                );
-              })}
+              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+                {displayRows.map((row, index) => {
+                  const value = row.data[key];
+                  return (
+                    <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                      <span style={{ fontSize: 14, fontWeight: 700, color: Number(value) > 0 ? KPI_COLORS[key] : undefined }}>{value}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </ColumnCard>
           ))}
         </DashboardGrid>
