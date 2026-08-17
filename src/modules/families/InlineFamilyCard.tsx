@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, CreditCard, ExternalLink, LayoutDashboard, MapPin, Phone, Clock, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
+import { Check, ChevronDown, CreditCard, ExternalLink, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
-import { formatName, formatPhone } from '../../utils/format';
+import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
@@ -403,6 +403,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     ? cardChildren.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
     : cardFamily.monthlyPrice;
   const initials = (cardFamily.parentName ?? '?').trim().split(' ').map((w: string) => w[0]).slice(0, 2).join('').toUpperCase();
+  const headerWaLink = whatsAppLink(cardFamily.phone);
   const coordinatesText = cardFamily.latitude && cardFamily.longitude
     ? `${cardFamily.latitude.toFixed(6)}, ${cardFamily.longitude.toFixed(6)}`
     : primaryChild?.latitude && primaryChild?.longitude
@@ -448,7 +449,18 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
               <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, color: '#374151', fontSize: 11, fontWeight: 750 }}>
                 <Phone size={11} color="#7B8491" />
-                <span>{cardFamily.phone ? formatPhone(cardFamily.phone) : 'телефон не указан'}</span>
+                {headerWaLink ? (
+                  <a href={headerWaLink} target="_blank" rel="noreferrer" title="Написать в WhatsApp"
+                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#374151', textDecoration: 'none' }}
+                    onMouseEnter={e => (e.currentTarget.style.color = '#159A6A')}
+                    onMouseLeave={e => (e.currentTarget.style.color = '#374151')}
+                  >
+                    <span>{formatPhone(cardFamily.phone)}</span>
+                    <MessageCircle size={11} color="#25D366" />
+                  </a>
+                ) : (
+                  <span>{cardFamily.phone ? formatPhone(cardFamily.phone) : 'телефон не указан'}</span>
+                )}
               </div>
               <div style={{ marginTop: 2, fontSize: 10, color: '#9CA3AF', fontWeight: 600, userSelect: 'all', cursor: 'text' }}>
                 ID: {family.id}
@@ -496,17 +508,17 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           {tab === 'overview' && (
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-                <DetailPanel title="Контакт">
+                <DetailPanel title="Контакт" accent="var(--accent)">
                   <DetailInput editing={editing} label="Родитель" tone="soft" value={cardFamily.parentName} onCommit={value => setDraftFamily(current => ({ ...current, parentName: formatName(value) }))} />
-                  <DetailInput editing={editing} label="Телефон 1" tone="soft" value={cardFamily.phone} onCommit={value => setDraftFamily(current => ({ ...current, phone: formatPhone(value) }))} />
-                  <DetailInput editing={editing} label="Телефон 2" tone="soft" value={cardFamily.secondPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, secondPhone: formatPhone(value) }))} />
+                  <DetailInput editing={editing} label="Телефон 1" tone="soft" whatsapp value={cardFamily.phone} onCommit={value => setDraftFamily(current => ({ ...current, phone: formatPhone(value) }))} />
+                  <DetailInput editing={editing} label="Телефон 2" tone="soft" whatsapp value={cardFamily.secondPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, secondPhone: formatPhone(value) }))} />
                   <DetailInput editing={editing} label="Telegram" tone="soft" value={cardFamily.phoneTelegram ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, phoneTelegram: value }))} />
                 </DetailPanel>
-                <DetailPanel title="Доп. контакт">
+                <DetailPanel title="Доп. контакт" accent="var(--warning)">
                   <DetailInput editing={editing} label="Имя" tone="soft" value={cardFamily.contactName ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactName: formatName(value) }))} />
-                  <DetailInput editing={editing} label="Телефон" tone="soft" value={cardFamily.contactPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactPhone: formatPhone(value) }))} />
+                  <DetailInput editing={editing} label="Телефон" tone="soft" whatsapp value={cardFamily.contactPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactPhone: formatPhone(value) }))} />
                 </DetailPanel>
-                <DetailPanel title="Адрес">
+                <DetailPanel title="Адрес" accent="var(--success)">
                   <DetailInput editing={editing} label="Адрес" tone="clear" value={cardFamily.fullAddress} onCommit={value => setDraftFamily(current => ({ ...current, fullAddress: value }))} />
                   <DetailValue label="Координаты" value={coordinatesText} />
                   <DetailMapLink label="Яндекс" url={mapUrl} />
@@ -546,17 +558,13 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 function SideMetric({ label, value, alert, pending }: { label: string; value: string; alert?: boolean; pending?: boolean }) {
   return (
     <div style={{
-      background: pending ? '#FFFBEB' : '#FFFFFF',
+      background: pending ? '#FFFBEB' : '#F5FAFB',
       borderRadius: 8,
-      padding: '6px 9px',
-      border: alert ? '1px solid #FECACA' : pending ? '1px solid #FDE68A' : '1px solid #E8EEF1',
-      display: 'grid',
-      gridTemplateColumns: '1fr auto',
-      alignItems: 'center',
-      gap: 7,
+      padding: '5px 9px',
+      border: alert ? '1px solid #FECACA' : pending ? '1px solid #FDE68A' : '1px solid transparent',
     }}>
-      <div style={{ fontSize: 9, color: pending ? '#92400E' : '#8A94A3', textTransform: 'uppercase', fontWeight: 800 }}>{label}</div>
-      <div style={{ fontSize: 11, fontWeight: 850, color: alert ? '#B91C1C' : pending ? '#92400E' : '#111827' }}>{value}</div>
+      <div style={{ fontSize: 9, color: pending ? '#92400E' : '#8A94A3', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.02em' }}>{label}</div>
+      <div style={{ fontSize: 11.5, fontWeight: 900, color: alert ? '#B91C1C' : pending ? '#92400E' : '#111827', marginTop: 1 }}>{value}</div>
     </div>
   );
 }
@@ -573,9 +581,16 @@ function TabHistoryLazy({ loaded, onLoad, audit }: { loaded: boolean; onLoad: ()
   return <TabHistory audit={audit} />;
 }
 
-function DetailPanel({ title, children }: { title: string; children: React.ReactNode }) {
+function DetailPanel({ title, children, accent }: { title: string; children: React.ReactNode; accent?: string }) {
   return (
-    <section style={{ background: '#fff', border: 'none', borderRadius: 14, padding: 14, boxShadow: '0 5px 18px rgba(43, 72, 89, .055)' }}>
+    <section style={{
+      background: '#fff',
+      border: 'none',
+      borderTop: accent ? `3px solid ${accent}` : 'none',
+      borderRadius: 14,
+      padding: 14,
+      boxShadow: '0 5px 18px rgba(43, 72, 89, .055)',
+    }}>
       <div style={{ fontSize: 13, fontWeight: 900, color: '#111827', marginBottom: 8 }}>{title}</div>
       <div className="family-detail-rows">
         {children}
@@ -584,7 +599,7 @@ function DetailPanel({ title, children }: { title: string; children: React.React
   );
 }
 
-function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false }: {
+function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false, whatsapp = false }: {
   label: string;
   value: string;
   onCommit: (value: string) => void;
@@ -592,9 +607,11 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   type?: string;
   tone?: 'soft' | 'clear';
   editing?: boolean;
+  whatsapp?: boolean;
 }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
+  const waHref = whatsapp ? whatsAppLink(value) : null;
   return (
     <label className="family-detail-row" style={detailFieldStyle(tone)}>
       <span style={detailLabelStyle}>{label}</span>
@@ -608,6 +625,18 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
           onBlur={event => onCommit(event.currentTarget.value)}
           style={{ ...detailControlStyle, background: '#F8FAFC', borderColor: '#DDE7EB' }}
         />
+      ) : waHref ? (
+        <a
+          href={waHref}
+          target="_blank"
+          rel="noreferrer"
+          title="Написать в WhatsApp"
+          onClick={event => event.stopPropagation()}
+          style={{ ...detailControlStyle, display: 'inline-flex', alignItems: 'center', gap: 5, paddingLeft: 0, color: '#159A6A', textDecoration: 'none' }}
+        >
+          <span>{value || placeholder}</span>
+          <MessageCircle size={12} color="#25D366" />
+        </a>
       ) : (
         <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', paddingLeft: 0 }}>{value || placeholder}</span>
       )}
@@ -691,124 +720,128 @@ function ChildCard({
   busy?: boolean;
   editing?: boolean;
 }) {
-  const [showMore, setShowMore] = React.useState(false);
+  // новый ребёнок (ещё не сохранён) сразу открыт — его нужно заполнить
+  const [manuallyExpanded, setManuallyExpanded] = React.useState(() => child.id.startsWith('draft-'));
+  const expanded = manuallyExpanded;
   const s = child.status ?? 'new';
   const col = CHILD_STATUS_COLORS[s] ?? CHILD_STATUS_COLORS.new;
   const basePrice = Number(child.basePrice || child.finalPrice || 0);
   const finalPrice = Number(child.finalPrice || 0);
   const hasDiscount = basePrice > finalPrice;
+  const vehicleLabel = VEHICLE_TYPE_OPTIONS.find(item => item.value === child.vehicleType)?.label ?? child.vehicleType;
+  const summary = `${child.branchShort || child.schoolCode || '—'} · ${child.class || '—'} · ${child.zone} · ${vehicleLabel}`;
 
   return (
-    <article style={{ background: '#fff', border: '1px solid #EEF3F4', borderRadius: 13, padding: '12px 14px', boxShadow: '0 3px 12px rgba(43, 72, 89, .045)' }}>
-      {/* Заголовок */}
-      <div style={{ display: 'grid', gridTemplateColumns: editing ? '22px minmax(0,1fr) auto 26px' : '22px minmax(0,1fr) auto', gap: 8, alignItems: 'center', marginBottom: 12, paddingBottom: 10, borderBottom: '1px solid #F1F5F9' }}>
+    <article style={{ background: '#fff', border: '1px solid #EEF3F4', borderRadius: 13, boxShadow: '0 3px 12px rgba(43, 72, 89, .045)', overflow: 'hidden' }}>
+      {/* Свёрнутая строка — всегда видна, клик разворачивает карточку */}
+      <div
+        onClick={() => setManuallyExpanded(v => !v)}
+        role="button"
+        tabIndex={0}
+        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setManuallyExpanded(v => !v); } }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', cursor: 'pointer' }}
+      >
         <span style={childCardIndexStyle}>{index + 1}</span>
-        <div style={{ fontSize: 14, fontWeight: 800 }}>
-          {editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : formatName(child.childName)}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13.5, fontWeight: 850, color: '#111827' }}>{formatName(child.childName) || 'Без имени'}</span>
+          <span style={{ fontSize: 11, color: '#8A94A3', fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
         </div>
-        <div style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap' }}>
-          {editing ? <EditableSelect value={s} options={CHILD_STATUS_OPTIONS_INLINE} onCommit={value => onSaveChild(child, { status: value as Child['status'] })} width={88} panelWidth={140} /> : <span style={{ display: 'inline-flex', padding: '6px 10px' }}>{CHILD_STATUS_OPTIONS_INLINE.find(item => item.value === s)?.label ?? s}</span>}
+        <span style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 10.5, fontWeight: 750, padding: '4px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+          {CHILD_STATUS_OPTIONS_INLINE.find(item => item.value === s)?.label ?? s}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexShrink: 0 }}>
+          {hasDiscount && <span style={{ fontSize: 10.5, color: '#9CA3AF', textDecoration: 'line-through' }}>{money(basePrice)}</span>}
+          <span style={{ fontSize: 13.5, fontWeight: 900, color: '#111827' }}>{money(finalPrice)}</span>
         </div>
-        {editing && <button type="button" onClick={() => onDeleteChild(child)} disabled={busy} title="Удалить" style={deleteChildBtnStyle}>
-          <Trash2 size={13} />
-        </button>}
+        {editing && (
+          <button
+            type="button"
+            onClick={event => { event.stopPropagation(); onDeleteChild(child); }}
+            disabled={busy}
+            title="Удалить"
+            style={{ ...deleteChildBtnStyle, width: 24, height: 24, flexShrink: 0 }}
+          >
+            <Trash2 size={12} />
+          </button>
+        )}
+        <ChevronDown size={16} color="#8A94A3" style={{ flexShrink: 0, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </div>
 
-      {/* Основные поля 3×2 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, marginBottom: 10 }}>
-        {[
-          {
-            label: 'Школа',
-            content: (
-              editing ? <EditableSelect
-                value={child.branchId ?? ''}
-                options={branches.map(b => ({ value: b.id, label: b.shortName || b.code }))}
-                onCommit={value => {
-                  const branch = branches.find(b => b.id === value);
-                  if (!branch) return Promise.resolve(false);
-                  return onSaveChild(child, { branchId: branch.id, schoolId: branch.schoolId, branchCode: branch.code, branchShort: branch.shortName, branchName: branch.name, schoolCode: branch.code as Child['schoolCode'] });
-                }}
-              /> : <ReadOnlyValue value={child.branchShort || child.schoolCode} />
-            ),
-          },
-          {
-            label: 'Класс',
-            content: editing ? <EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /> : <ReadOnlyValue value={child.class} />,
-          },
-          {
-            label: 'Зона / ТС',
-            content: (
-              editing ? <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
-                <EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={40} panelWidth={120} />
-                <span style={{ color: '#C4C9D4', fontSize: 10 }}>·</span>
-                <EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={90} panelWidth={190} />
-              </div> : <ReadOnlyValue value={`${child.zone} · ${VEHICLE_TYPE_OPTIONS.find(item => item.value === child.vehicleType)?.label ?? child.vehicleType}`} />
-            ),
-          },
-          {
-            label: 'Трансфер',
-            content: editing ? <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} /> : <ReadOnlyValue value={child.transferNumber ? `№ ${child.transferNumber}` : '-'} />,
-          },
-          {
-            label: 'Остановка',
-            content: editing ? <EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={58} panelWidth={120} /> : <ReadOnlyValue value={child.stopNumber ? String(child.stopNumber) : '-'} />,
-          },
-          {
-            label: 'Утро',
-            content: editing ? <EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /> : <ReadOnlyValue value={child.timeMorning || '-'} />,
-          },
-        ].map(({ label, content }) => (
-          <div key={label} style={{ background: '#F8FAFC', borderRadius: 7, padding: '5px 8px' }}>
-            <div style={{ fontSize: 10, color: '#8A94A3', fontWeight: 750, marginBottom: 2 }}>{label}</div>
-            <div style={{ fontSize: 12 }}>{content}</div>
-          </div>
-        ))}
-      </div>
-
-      {/* Нижняя строка: раскрыть + цена */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #F0F3F5', paddingTop: 8 }}>
-        <button
-          type="button"
-          onClick={() => setShowMore(v => !v)}
-          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#8A94A3', fontWeight: 700, padding: 0, display: 'flex', alignItems: 'center', gap: 3 }}
-        >
-          {showMore ? '▲ Скрыть' : '··· Самовыход, Скидки'}
-        </button>
-        <div style={{ display: 'flex', alignItems: 'baseline', gap: 6 }}>
-          {hasDiscount && (
-            <span style={{ fontSize: 11, color: '#9CA3AF', textDecoration: 'line-through' }}>{money(basePrice)}</span>
-          )}
-          <span style={{ fontSize: 14, fontWeight: 900, color: '#111827' }}>{money(finalPrice)}</span>
-        </div>
-      </div>
-
-      {/* Дополнительные поля */}
-      {showMore && (
-        <div style={{ marginTop: 8, paddingTop: 8, borderTop: '1px solid #F0F3F5', display: 'grid', gap: 4 }}>
-          {[
-            {
-              label: 'Самовыход',
-              content: (
-                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650, color: 'var(--text)', cursor: 'pointer' }}>
-                  {editing && <input type="checkbox" checked={child.selfExitAllowed} onChange={e => void onSaveChild(child, { selfExitAllowed: e.currentTarget.checked })} />}
-                  {child.selfExitAllowed ? 'Да' : 'Нет'}
-                </label>
-              ),
-            },
-            {
-              label: 'Скидка %',
-              content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
-            },
-            {
-              label: 'Скидка сом',
-              content: editing ? <EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, basePrice)} /> : <ReadOnlyValue value={money(child.manualDiscountAmount || 0)} />,
-            },
-          ].map(({ label, content }) => (
-            <div key={label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', minHeight: 26, padding: '0 4px', borderRadius: 6 }}>
-              <span style={{ fontSize: 11, color: '#8A94A3', fontWeight: 750 }}>{label}</span>
-              <div style={{ fontSize: 12 }}>{content}</div>
+      {/* Развёрнутая часть — все поля, только когда карточка раскрыта */}
+      {expanded && (
+        <div style={{ padding: '2px 14px 14px', borderTop: '1px solid #F1F5F9' }}>
+          {editing && (
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center', padding: '10px 0' }} onClick={event => event.stopPropagation()}>
+              <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong />
+              <EditableSelect value={s} options={CHILD_STATUS_OPTIONS_INLINE} onCommit={value => onSaveChild(child, { status: value as Child['status'] })} width={110} panelWidth={140} />
             </div>
-          ))}
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, paddingTop: 10 }} onClick={event => event.stopPropagation()}>
+            {[
+              {
+                label: 'Школа',
+                content: (
+                  editing ? <EditableSelect
+                    value={child.branchId ?? ''}
+                    options={branches.map(b => ({ value: b.id, label: b.shortName || b.code }))}
+                    onCommit={value => {
+                      const branch = branches.find(b => b.id === value);
+                      if (!branch) return Promise.resolve(false);
+                      return onSaveChild(child, { branchId: branch.id, schoolId: branch.schoolId, branchCode: branch.code, branchShort: branch.shortName, branchName: branch.name, schoolCode: branch.code as Child['schoolCode'] });
+                    }}
+                  /> : <ReadOnlyValue value={child.branchShort || child.schoolCode} />
+                ),
+              },
+              {
+                label: 'Класс',
+                content: editing ? <EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /> : <ReadOnlyValue value={child.class} />,
+              },
+              {
+                label: 'Зона / ТС',
+                content: (
+                  editing ? <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                    <EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={40} panelWidth={120} />
+                    <span style={{ color: '#C4C9D4', fontSize: 10 }}>·</span>
+                    <EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={90} panelWidth={190} />
+                  </div> : <ReadOnlyValue value={`${child.zone} · ${vehicleLabel}`} />
+                ),
+              },
+              {
+                label: 'Трансфер',
+                content: editing ? <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} /> : <ReadOnlyValue value={child.transferNumber ? `№ ${child.transferNumber}` : '-'} />,
+              },
+              {
+                label: 'Остановка',
+                content: editing ? <EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={58} panelWidth={120} /> : <ReadOnlyValue value={child.stopNumber ? String(child.stopNumber) : '-'} />,
+              },
+              {
+                label: 'Утро',
+                content: editing ? <EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /> : <ReadOnlyValue value={child.timeMorning || '-'} />,
+              },
+              {
+                label: 'Самовыход',
+                content: editing ? (
+                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={child.selfExitAllowed} onChange={e => void onSaveChild(child, { selfExitAllowed: e.currentTarget.checked })} />
+                    {child.selfExitAllowed ? 'Да' : 'Нет'}
+                  </label>
+                ) : <ReadOnlyValue value={child.selfExitAllowed ? 'Да' : 'Нет'} />,
+              },
+              {
+                label: 'Скидка %',
+                content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
+              },
+              {
+                label: 'Скидка сом',
+                content: editing ? <EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, basePrice)} /> : <ReadOnlyValue value={money(child.manualDiscountAmount || 0)} />,
+              },
+            ].map(({ label, content }) => (
+              <div key={label} style={{ background: '#F8FAFC', borderRadius: 7, padding: '5px 8px' }}>
+                <div style={{ fontSize: 10, color: '#8A94A3', fontWeight: 750, marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 12 }}>{content}</div>
+              </div>
+            ))}
+          </div>
         </div>
       )}
     </article>
@@ -843,7 +876,7 @@ function ChildrenOverviewTable({
       {children.length === 0 ? (
         <div style={{ fontSize: 12, color: '#7B8491', padding: '12px 0' }}>Добавьте первого ребёнка</div>
       ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 12, paddingTop: 4 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, paddingTop: 4 }}>
           {children.map((child, index) => (
             <ChildCard
               key={child.id}

@@ -34,6 +34,17 @@ export function formatPhone(phone: string | null | undefined): string {
   return phone.trim();
 }
 
+/**
+ * Ссылка на чат в WhatsApp по номеру телефона.
+ * Возвращает null, если цифр слишком мало для реального номера.
+ */
+export function whatsAppLink(phone: string | null | undefined): string | null {
+  if (!phone) return null;
+  const digits = phone.replace(/\D/g, '');
+  if (digits.length < 9) return null;
+  return `https://wa.me/${digits}`;
+}
+
 export function formatClassName(value: string | number | null | undefined): string {
   if (value === null || value === undefined) return '';
   const match = String(value).match(/\d+/);
