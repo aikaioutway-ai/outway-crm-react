@@ -65,7 +65,7 @@ export default function TabFinance({
   const [msg, setMsg] = useState('');
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
-  const canCreatePayment = !readOnly && (!isCashier || isAdmin);
+  const canCreatePayment = !isCashier || isAdmin;
   const canConfirmPayment = !readOnly && (isCashier || isAdmin);
 
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));

@@ -281,6 +281,24 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
+  // Каждая колонка KPI — отдельный скролл-контейнер (своя высота заголовка не
+  // влияет на body), поэтому синхронизируем scrollTop между ними вручную —
+  // иначе при скролле одной колонки школы «съезжают» относительно остальных.
+  const columnScrollRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const isSyncingScroll = useRef(false);
+  const registerColumnScroll = (index: number) => (el: HTMLDivElement | null) => {
+    columnScrollRefs.current[index] = el;
+  };
+  const handleColumnScroll = (index: number) => (event: React.UIEvent<HTMLDivElement>) => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    const top = event.currentTarget.scrollTop;
+    columnScrollRefs.current.forEach((el, i) => {
+      if (el && i !== index) el.scrollTop = top;
+    });
+    isSyncingScroll.current = false;
+  };
+
   // Стандартный вид («За всё время») — лёгкий RPC-агрегат по филиалам.
   const branchStatsQuery = useBranchStats();
   // Полная таблица семей нужна только для разбивки по конкретному периоду
@@ -418,7 +436,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <div ref={registerColumnScroll(0)} onScroll={handleColumnScroll(0)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {displayRows.map((row, i) => (
                   <div
                     key={row.key}
@@ -446,7 +464,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div ref={registerColumnScroll(1)} onScroll={handleColumnScroll(1)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {displayRows.map((row, i) => (
                 <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.newRequests}</span>
@@ -464,7 +482,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div ref={registerColumnScroll(2)} onScroll={handleColumnScroll(2)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {displayRows.map((row, i) => (
                 <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.charged > 0 ? money(row.data.charged) : '0'}</span>
@@ -482,7 +500,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div ref={registerColumnScroll(3)} onScroll={handleColumnScroll(3)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {displayRows.map((row, i) => (
                 <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: row.data.paid > 0 ? 'var(--success)' : undefined }}>{row.data.paid > 0 ? money(row.data.paid) : '0'}</span>
@@ -500,7 +518,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div ref={registerColumnScroll(4)} onScroll={handleColumnScroll(4)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {displayRows.map((row, i) => (
                 <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: row.data.debtSum > 0 ? 'var(--danger)' : undefined }}>{row.data.debtSum > 0 ? money(row.data.debtSum) : '0'}</span>
@@ -518,7 +536,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div ref={registerColumnScroll(5)} onScroll={handleColumnScroll(5)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {displayRows.map((row, i) => (
                 <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: row.data.balance < 0 ? 'var(--danger)' : row.data.balance > 0 ? 'var(--success)' : undefined }}>{row.data.balance.toLocaleString('ru-RU')}</span>

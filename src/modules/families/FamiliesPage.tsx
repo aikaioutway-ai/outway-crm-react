@@ -1711,7 +1711,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const schoolSidebarFullLabel: Record<string, string> = {
     TIS: 'Тенсай',
     ERU: 'Эрудит-ISIT',
-    EDi: 'Edison',
+    EDI: 'Edison',
     EPS: 'Эпсилон',
     AES: 'American-European School',
     KAS: 'Kyrgyz-American School',

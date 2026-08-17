@@ -3,7 +3,7 @@
 export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branches: string[]; logo?: string }[] = [
   { key: 'TIS',   label: 'TIS',   codes: ['TENSAY'],  branches: [], logo: '/school-logos/TIS.png' },
   { key: 'ERU',   label: 'ERU',   codes: ['ERUDIT'],  branches: [], logo: '/school-logos/ERU.png' },
-  { key: 'EDi',   label: 'EDI',   codes: ['EDISON'],  branches: [], logo: '/school-logos/EDI.png' },
+  { key: 'EDI',   label: 'EDI',   codes: ['EDISON'],  branches: [], logo: '/school-logos/EDI.png' },
   { key: 'EPS',   label: 'EPS',   codes: ['EPSILON'], branches: [], logo: '/school-logos/EPS.png' },
   { key: 'AES',   label: 'AES',   codes: ['AES'],     branches: [], logo: '/school-logos/AES.png' },
   { key: 'KAS',   label: 'KAS',   codes: ['KAS'],     branches: [], logo: '/school-logos/KAS.png' },
@@ -13,13 +13,16 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'ING',   label: 'ING',   codes: ['INDIGO'], branches: ['Индиго Kids','Asylkech Girls School'], logo: '/school-logos/ING.png' },
   { key: 'ING_P', label: 'ING_P', codes: ['INDIGO'], branches: ['Indigo Prime Academy'], logo: '/school-logos/ING.png' },
   { key: 'ING_W', label: 'ING_W', codes: ['INDIGO'], branches: ['Indigo West'], logo: '/school-logos/ING.png' },
-  { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: [], logo: '/school-logos/LA.png' },
+  { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: ['Light Academy'], logo: '/school-logos/LA.png' },
+  { key: 'LA_P',  label: 'LA Primary', codes: ['LIGHT'], branches: ['Light Academy Primary'], logo: '/school-logos/LA.png' },
   { key: 'BKG',   label: 'BKG',   codes: ['BILIM'],   branches: ['Билим Бишкек Kg','Билим Бишкек KG','Билим Бишкек kg'], logo: '/school-logos/BKG.png' },
   { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
   { key: 'ABL1',  label: 'ABL #1',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'ABL2',  label: 'ABL #2',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'KLM',   label: 'KLM',   codes: ['KLM'],  branches: [], logo: '/school-logos/KLM.png' },
   { key: 'TSL',   label: 'TSL',   codes: ['TSL'],  branches: [], logo: '/school-logos/TSL.png' },
+  { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
+  { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
@@ -28,6 +31,7 @@ export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; childre
   { key: 'GENIUS', label: 'Genius', logo: '/school-logos/GEN.png', children: ['GEN2', 'GEN4'] },
   { key: 'INDIGO', label: 'Indigo', logo: '/school-logos/ING.png', children: ['ING', 'ING_P', 'ING_W'] },
   { key: 'BILIM',  label: 'Bilim',  logo: '/school-logos/BKG.png', children: ['BKG', 'BJ'] },
+  { key: 'LIGHT',  label: 'Light',  logo: '/school-logos/LA.png',  children: ['LA', 'LA_P'] },
   { key: 'ABL',    label: 'ABL',    logo: '/school-logos/ABL.png', children: ['ABL1', 'ABL2'] },
 ];
 
@@ -80,6 +84,9 @@ export const BRANCH_SHORT: Record<string, string> = {
   'Академия будущих лидеров(Мавлянова)':  'ABL #2',
   'Калем Академи Скуул':           'KLM',
   'Tesla Academy':                 'TSL',
+  'Light Academy Primary':         'LA_P',
+  'Международная школа Сан Арип':  'SNP',
+  'Ellipse International School':  'ELS',
 };
 
 // Группировка branch_name по school_code для фильтра филиалов
@@ -116,6 +123,9 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Академия будущих лидеров(Мавлянова)':  'ABL2',
   'Калем Академи Скуул': 'KLM',
   'Tesla Academy': 'TSL',
+  'Light Academy Primary': 'LA_P',
+  'Международная школа Сан Арип': 'SNP',
+  'Ellipse International School': 'ELS',
 };
 
 export const SCHOOL_NAME: Record<string, string> = {
@@ -125,6 +135,7 @@ export const SCHOOL_NAME: Record<string, string> = {
   INDIGO: 'Indigo', ERUDIT: 'Erudit', TENSAY: 'Tensay', EDISON: 'Edison',
   ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
   KLM: 'Kalem Academy', TSL: 'Tesla Academy',
+  SANARIP: 'Sanarip', ELLIPSE: 'Ellipse',
 };
 
 export const SCHOOL_SHORT: Record<string, string> = {
@@ -134,6 +145,7 @@ export const SCHOOL_SHORT: Record<string, string> = {
   INDIGO: 'ING', ERUDIT: 'ERU', TENSAY: 'TIS', EDISON: 'EDI',
   AES_KAS: 'AES',
   ABL1: 'ABL #1', ABL2: 'ABL #2', KLM: 'KLM', TSL: 'TSL',
+  SANARIP: 'SNP', ELLIPSE: 'ELS',
 };
 
 export const SCHOOL_CODE_ALIASES: Record<string, string> = {

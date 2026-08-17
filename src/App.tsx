@@ -30,6 +30,7 @@ const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
+const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 
 function SectionLoading() {
   return (
@@ -629,6 +630,16 @@ export default function App() {
               </div>
             </div>
             <ExpensesModule userName={currentUser?.name} sessionToken={currentUser?.sessionToken} />
+          </div>
+        ) : section === 'market' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
+            <div style={tabRowStyle}>
+              <div style={tabBarStyle}>
+                {sectionLabel('Маркет')}
+                {extraTabs(true)}
+              </div>
+            </div>
+            <MarketModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
           </div>
         ) : section === 'employees' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
