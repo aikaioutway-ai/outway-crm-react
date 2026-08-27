@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, FileWarning, School, UserCheck, UserX } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
@@ -118,6 +118,24 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
+  // Каждая колонка KPI — отдельный скролл-контейнер, поэтому синхронизируем
+  // scrollTop между ними вручную — иначе при скролле одной колонки школы
+  // «съезжают» относительно остальных.
+  const columnScrollRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const isSyncingScroll = useRef(false);
+  const registerColumnScroll = (index: number) => (el: HTMLDivElement | null) => {
+    columnScrollRefs.current[index] = el;
+  };
+  const handleColumnScroll = (index: number) => (event: React.UIEvent<HTMLDivElement>) => {
+    if (isSyncingScroll.current) return;
+    isSyncingScroll.current = true;
+    const top = event.currentTarget.scrollTop;
+    columnScrollRefs.current.forEach((el, i) => {
+      if (el && i !== index) el.scrollTop = top;
+    });
+    isSyncingScroll.current = false;
+  };
+
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
@@ -176,7 +194,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
             sortState={sortState}
             onSort={handleSort}
           >
-            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <div ref={registerColumnScroll(0)} onScroll={handleColumnScroll(0)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
               {displayRows.map((row, index) => (
                 <div
                   key={row.key}
@@ -202,7 +220,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
             ['minivanCount', 'Минивэны', <Car size={17} color="#fff" />, String(totals.minivanCount)],
             ['sedanCount', 'Седаны', <Car size={17} color="#fff" />, String(totals.sedanCount)],
             ['incompleteDocumentsCount', 'Документы', <FileWarning size={17} color="#fff" />, String(totals.incompleteDocumentsCount)],
-          ] as const).map(([key, label, icon, value]) => (
+          ] as const).map(([key, label, icon, value], columnIndex) => (
             <ColumnCard
               key={key}
               sortKey={key}
@@ -213,7 +231,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
               sortState={sortState}
               onSort={handleSort}
             >
-              <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+              <div ref={registerColumnScroll(columnIndex + 1)} onScroll={handleColumnScroll(columnIndex + 1)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
                 {displayRows.map((row, index) => {
                   const value = row.data[key];
                   return (
