@@ -18,13 +18,26 @@ function mapExpense(row: any): ExpenseRecord {
   };
 }
 
+async function extractFunctionErrorMessage(error: unknown): Promise<string> {
+  const context = (error as { context?: unknown } | null)?.context;
+  if (context && typeof (context as Response).json === 'function') {
+    try {
+      const body = await (context as Response).json();
+      if (body?.error) return String(body.error);
+    } catch {
+      // тело ответа не JSON — используем сообщение supabase-js ниже
+    }
+  }
+  return error instanceof Error ? error.message : 'Ошибка сервера расходов';
+}
+
 async function callExpenseApi(sessionToken: string | undefined, body: Record<string, unknown>): Promise<any> {
   if (!sessionToken) throw new Error('Сессия устарела. Выйдите и войдите в CRM снова.');
   const { data, error } = await supabase.functions.invoke('expense-api', {
     body,
     headers: { 'x-employee-session': sessionToken },
   });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(await extractFunctionErrorMessage(error));
   if (!data?.ok) throw new Error(data?.error || 'Ошибка сервера расходов');
   return data;
 }
