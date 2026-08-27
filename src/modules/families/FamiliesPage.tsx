@@ -5,7 +5,7 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
 import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
-import { useFamiliesPage, useBranchStats } from '../../hooks/useCrmQueries';
+import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
@@ -20,7 +20,7 @@ import {
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
@@ -36,6 +36,15 @@ function cashierRowMatchesSelectedPeriod(row: CashierPaymentRow | PaymentTableRo
     return CASHIER_PERIODS.some(period => paymentRowMatchesPeriod(row, period.key));
   }
   return paymentRowMatchesPeriod(row, periodKey);
+}
+
+function isConfirmedPaymentStatus(status: string): boolean {
+  const lower = String(status ?? '').toLowerCase();
+  return lower === 'paid' || lower === 'confirmed' || lower.includes('оплач') || lower.includes('подтверж');
+}
+
+function toCashierPaymentRow(row: PaymentTableRow): CashierPaymentRow {
+  return { ...row, comment: '' };
 }
 
 export interface ChildRow {
@@ -121,6 +130,7 @@ interface FamiliesPageProps {
   initialOpenFamilyId?: string | null;
   initialSearch?: string;
   onInitialFamilyOpened?: () => void;
+  cashierView?: 'pending' | 'confirmed';
 }
 
 interface ModeFilters {
@@ -663,7 +673,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
@@ -672,6 +682,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
   const [loadingCashier, setLoadingCashier] = useState(false);
   const [cashierConfirmingId, setCashierConfirmingId] = useState<string | null>(null);
+  const [cashierEditingId, setCashierEditingId] = useState<string | null>(null);
   const [cashierDates, setCashierDates] = useState<Record<string, string>>({});
   const [dashboardTransfers, setDashboardTransfers] = useState<V2TransferDashboardRow[]>([]);
   const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
@@ -705,6 +716,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const isPaymentsMode = mode === 'payments';
   const isCashierMode = mode === 'cashier';
 
+  const { data: cashierConfirmedSource = null, isLoading: loadingCashierConfirmed } = usePaymentsTable({
+    enabled: isCashierMode && cashierView === 'confirmed',
+  });
+  const cashierConfirmedRows = useMemo(
+    () => (cashierConfirmedSource ?? []).filter(row => isConfirmedPaymentStatus(row.status)).map(toCashierPaymentRow),
+    [cashierConfirmedSource],
+  );
+
   const cashierColumns = useMemo((): ColumnDef<CashierPaymentRow>[] => [
     { key: 'id', label: 'ID платежа', type: 'text', category: 'Платёж', width: 140, sortable: false, filterable: false, render: (val) => <span style={{ fontSize: 11, color: 'var(--text-2)', fontFamily: 'monospace', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.4 }}>{String(val)}</span> },
     { key: 'parentName', label: 'Родитель', type: 'text', category: 'Клиент', width: 160, render: (val) => <span style={{ fontWeight: 700, fontSize: 13 }}>{val || '—'}</span> },
@@ -715,38 +734,66 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }},
     { key: 'amount', label: 'Сумма', type: 'currency', category: 'Платёж', width: 110, render: (val) => <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(Number(val ?? 0))}</span> },
     {
-      key: 'createdAt', label: 'Дата поступления', type: 'text', category: 'Платёж', width: 160, sortable: false, filterable: false,
-      render: (_val, row) => (
-        <input
-          type="date"
-          value={cashierDates[row.id] ?? ''}
-          onChange={e => { e.stopPropagation(); setCashierDates(prev => ({ ...prev, [row.id]: e.target.value })); }}
-          onClick={e => e.stopPropagation()}
-          style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '3px 7px', fontSize: 12, color: 'var(--text)', background: '#fff', width: 140 }}
-        />
-      ),
+      key: 'createdAt', label: 'Дата поступления', type: 'text', category: 'Платёж', width: 130, sortable: false, filterable: false,
+      render: (_val, row) => {
+        const date = cashierView === 'confirmed' ? row.actualPaymentDate : cashierDates[row.id];
+        return <span style={{ fontSize: 12, color: date ? 'var(--text)' : '#9AA7AE' }}>{date ? new Date(date).toLocaleDateString('ru-RU') : '—'}</span>;
+      },
     },
     {
-      key: 'status', label: 'Подтверждение', type: 'text', category: 'Платёж', width: 160, sortable: false, filterable: false,
+      key: 'status', label: 'Подтверждение', type: 'text', category: 'Платёж', width: 230, sortable: false, filterable: false,
       render: (_val, row) => {
+        if (cashierView === 'confirmed') {
+          return (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 700, color: 'var(--success)', background: 'rgba(16,185,129,.1)' }}>
+              ✓ Подтверждено
+            </span>
+          );
+        }
         const busy = cashierConfirmingId === row.id;
+        if (cashierEditingId !== row.id) {
+          return (
+            <button
+              onClick={e => {
+                e.stopPropagation();
+                setCashierDates(prev => ({ ...prev, [row.id]: prev[row.id] || new Date().toISOString().slice(0, 10) }));
+                setCashierEditingId(row.id);
+              }}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', cursor: 'pointer' }}
+            >
+              <Pencil size={12} /> На проверке
+            </button>
+          );
+        }
         return (
-          <select
-            disabled={busy}
-            value=""
-            onClick={e => e.stopPropagation()}
-            onChange={e => {
-              e.stopPropagation();
-              if (e.target.value === 'confirm') cashierConfirm(row, cashierDates[row.id] ?? '');
-              if (e.target.value === 'reject') cashierReject(row);
-              e.target.value = '';
-            }}
-            style={{ border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', cursor: busy ? 'not-allowed' : 'pointer', width: '100%', opacity: busy ? 0.6 : 1 }}
-          >
-            <option value="" disabled>На проверке</option>
-            <option value="confirm">✓ Подтвердить</option>
-            <option value="reject">✕ Отклонить</option>
-          </select>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
+            <input
+              type="date"
+              autoFocus
+              disabled={busy}
+              value={cashierDates[row.id] ?? ''}
+              onChange={e => setCashierDates(prev => ({ ...prev, [row.id]: e.target.value }))}
+              style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '3px 6px', fontSize: 12, color: 'var(--text)', background: '#fff', width: 118 }}
+            />
+            <button
+              title="Подтвердить"
+              disabled={busy || !cashierDates[row.id]}
+              onClick={() => cashierConfirm(row, cashierDates[row.id] ?? '')}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 800, color: '#fff', background: busy || !cashierDates[row.id] ? '#A7E4D3' : 'var(--success)', cursor: busy || !cashierDates[row.id] ? 'not-allowed' : 'pointer' }}
+            >✓</button>
+            <button
+              title="Отклонить"
+              disabled={busy}
+              onClick={() => cashierReject(row)}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 800, color: '#991B1B', background: '#FEE2E2', cursor: busy ? 'not-allowed' : 'pointer' }}
+            >✕</button>
+            <button
+              title="Отмена"
+              disabled={busy}
+              onClick={() => setCashierEditingId(null)}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 12, fontWeight: 700, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: busy ? 'not-allowed' : 'pointer' }}
+            >×</button>
+          </div>
         );
       },
     },
@@ -766,7 +813,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       render: (val) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} />,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [cashierDates, cashierConfirmingId, userRole]);
+  ], [cashierDates, cashierConfirmingId, cashierEditingId, userRole, cashierView]);
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
@@ -1004,6 +1051,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         confirmedBy: userName,
         actualPaymentDate: actualDate,
       });
+      setCashierEditingId(null);
       loadCashierRows();
     } catch (e: any) { alert('Не удалось подтвердить: ' + (e?.message ?? '')); }
     finally { setCashierConfirmingId(null); }
@@ -1012,6 +1060,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   async function cashierReject(row: CashierPaymentRow) {
     try {
       await updateFamilyPayment(row.id, { status: 'Отклонено' });
+      setCashierEditingId(null);
       loadCashierRows();
     } catch (e: any) { alert('Не удалось отклонить: ' + (e?.message ?? '')); }
   }
@@ -2852,9 +2901,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             />
           ) : isCashierMode ? (
             <DataTable<CashierPaymentRow>
-              key="cashier_table"
+              key={`cashier_table_${cashierView}`}
               columns={cashierColumns}
-              data={cashierRows.filter(r => {
+              data={(cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows).filter(r => {
                 if (!cashierRowMatchesSelectedPeriod(r, paymentsPeriodKey)) return false;
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
@@ -2868,8 +2917,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               })}
               rowKey="id"
               storageKey="cashier_table_v1"
-              loading={loadingCashier}
-              emptyText="Платежей на проверке нет"
+              loading={cashierView === 'confirmed' ? loadingCashierConfirmed : loadingCashier}
+              emptyText={cashierView === 'confirmed' ? 'Подтвержденных платежей нет' : 'Платежей на проверке нет'}
               canManageProperties={false}
               onCellSave={userRole === 'admin' ? handlePaymentMethodCellSave : undefined}
               showProperties={columnsOpen ?? false}

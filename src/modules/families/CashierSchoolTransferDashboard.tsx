@@ -9,6 +9,7 @@ interface CashierSchoolTransferDashboardProps {
   rightReserveWidth?: number;
   selectedKey?: string;
   onSelect?: (key: string) => void;
+  statusFilter?: 'pending' | 'confirmed';
 }
 
 const TRANSFER_COUNT = 15;
@@ -32,6 +33,11 @@ function isPending(row: PaymentTableRow): boolean {
   return status === 'pending' || status.includes('провер');
 }
 
+function isConfirmed(row: PaymentTableRow): boolean {
+  const status = String(row.status ?? '').toLowerCase();
+  return status === 'paid' || status === 'confirmed' || status.includes('оплач') || status.includes('подтверж');
+}
+
 function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
   const tab = SCHOOL_TABS.find(item => item.key === schoolKey);
   if (!tab) return false;
@@ -39,12 +45,13 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 0, selectedKey = '', onSelect }: CashierSchoolTransferDashboardProps) {
+export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 0, selectedKey = '', onSelect, statusFilter = 'pending' }: CashierSchoolTransferDashboardProps) {
   const { data: rows = null } = usePaymentsTable();
+  const statusPredicate = statusFilter === 'confirmed' ? isConfirmed : isPending;
 
   const schoolRows = useMemo(() => (
-    (rows ?? []).filter(row => rowMatchesSchool(row, schoolKey) && matchesPeriod(row, periodKey) && isPending(row))
-  ), [periodKey, rows, schoolKey]);
+    (rows ?? []).filter(row => rowMatchesSchool(row, schoolKey) && matchesPeriod(row, periodKey) && statusPredicate(row))
+  ), [periodKey, rows, schoolKey, statusPredicate]);
 
   if (rows === null) return null;
 
@@ -84,7 +91,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
             className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            title={active ? `На проверке: ${cell.count}` : undefined}
+            title={active ? `${statusFilter === 'confirmed' ? 'Подтверждено' : 'На проверке'}: ${cell.count}` : undefined}
             style={{
               flex: 1,
               minWidth: 0,

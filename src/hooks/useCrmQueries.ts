@@ -53,10 +53,11 @@ export function useDriversTable(): UseQueryResult<V2DriverTableRow[]> {
   });
 }
 
-export function usePaymentsTable(): UseQueryResult<PaymentTableRow[]> {
+export function usePaymentsTable(options?: { enabled?: boolean }): UseQueryResult<PaymentTableRow[]> {
   return useQuery({
     queryKey: QK.paymentsTable,
     queryFn: fetchPaymentsTable,
+    enabled: options?.enabled ?? true,
   });
 }
 

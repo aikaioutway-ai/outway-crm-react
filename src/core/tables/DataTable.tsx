@@ -192,6 +192,21 @@ function buildColumns<T>(initialColumns: ColumnDef<T>[], saved: { key: string; v
   return initialColumns.map(c => ({ ...c, visible: c.visible ?? true }));
 }
 
+/** Обновляет render/editable/editOptions и т.п. из свежего initialColumns,
+ * сохраняя уже применённые пользователем order/visible/width — без похода
+ * в Supabase. Нужен, потому что columnConfigSignature не видит изменений
+ * в замыканиях render (например, cashierColumns пересобирается при вводе
+ * даты), и без этого мерджа ячейки годами рендерились бы старыми функциями. */
+function mergeFreshColumns<T>(initialColumns: ColumnDef<T>[], prevCols: ColumnDef<T>[]): ColumnDef<T>[] {
+  const layout = new Map(prevCols.map((c, i) => [c.key, { visible: c.visible, width: c.width, order: i }]));
+  return initialColumns
+    .map(c => {
+      const meta = layout.get(c.key);
+      return { ...c, visible: meta?.visible ?? c.visible ?? true, width: meta?.width ?? c.width };
+    })
+    .sort((a, b) => (layout.get(a.key)?.order ?? 999) - (layout.get(b.key)?.order ?? 999));
+}
+
 function columnConfigSignature<T>(columns: ColumnDef<T>[]): string {
   return columns.map(column => [
     column.key,
@@ -266,17 +281,21 @@ export function DataTable<T extends Record<string, any>>({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
-  // Пересчитываем если изменилась структура колонок в коде
+  // Пересчитываем если изменилась структура колонок в коде (ходим в Supabase
+  // за сохранённым layout), иначе просто подмешиваем свежие render-функции
+  // в уже применённый layout — без похода в БД.
   useEffect(() => {
     const currentKeys = columnConfigSignature(initialColumns);
-    if (currentKeys === prevColKeysRef.current) return;
-    prevColKeysRef.current = currentKeys;
-    let cancelled = false;
-    loadColumnSettings(storageKey).then(saved => {
-      if (cancelled) return;
-      setCols(buildColumns(initialColumns, saved));
-    });
-    return () => { cancelled = true; };
+    if (currentKeys !== prevColKeysRef.current) {
+      prevColKeysRef.current = currentKeys;
+      let cancelled = false;
+      loadColumnSettings(storageKey).then(saved => {
+        if (cancelled) return;
+        setCols(buildColumns(initialColumns, saved));
+      });
+      return () => { cancelled = true; };
+    }
+    setCols(prevCols => mergeFreshColumns(initialColumns, prevCols));
   }, [initialColumns, storageKey]);
 
   const persistCols = useCallback((next: ColumnDef<T>[]) => {

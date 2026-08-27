@@ -73,6 +73,7 @@ export default function App() {
   const [cashierPeriodKey, setCashierPeriodKey] = useState(currentCashierPeriodKey);
   const [cashierTransferFilter, setCashierTransferFilter] = useState('');
   const [cashierOpenFamilySearch, setCashierOpenFamilySearch] = useState('');
+  const [cashierView, setCashierView] = useState<'pending' | 'confirmed'>('pending');
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
@@ -111,12 +112,14 @@ export default function App() {
   const handleCashierSelectSchool = (schoolKey: string) => {
     if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     setCashierOpenFamilySearch('');
+    setCashierView('pending');
     setCashierSchoolKey(schoolKey);
   };
   const handleCashierOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, periodKey: string) => {
     if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     setCashierOpenFamilySearch(searchQuery);
     setCashierPeriodKey(periodKey);
+    setCashierView('pending');
     setCashierSchoolKey(schoolKey);
   };
   const [adminFiltersOpen, setAdminFiltersOpen] = useState(false);
@@ -313,9 +316,17 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel('Кассир')}
                 {cashierSchoolKey && (
-                  <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} style={managerModeTabStyle(false)}>
-                    ← Все школы
-                  </button>
+                  <>
+                    <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} style={managerModeTabStyle(false)}>
+                      ← Все школы
+                    </button>
+                    <button onClick={() => setCashierView('pending')} style={managerModeTabStyle(cashierView === 'pending')}>
+                      На проверке
+                    </button>
+                    <button onClick={() => setCashierView('confirmed')} style={managerModeTabStyle(cashierView === 'confirmed')}>
+                      Подтвержденные
+                    </button>
+                  </>
                 )}
                 {extraTabs(true)}
               </div>
@@ -340,6 +351,7 @@ export default function App() {
                   rightReserveWidth={schoolSidebarReserveWidth}
                   selectedKey={cashierTransferFilter}
                   onSelect={setCashierTransferFilter}
+                  statusFilter={cashierView}
                 />
               </DashboardTopPanel>
               <FamiliesPage
@@ -358,6 +370,7 @@ export default function App() {
                 hideTransferBars
                 externalQuickTransfer={cashierTransferFilter}
                 initialSearch={cashierOpenFamilySearch}
+                cashierView={cashierView}
               />
               </>
             ) : (
