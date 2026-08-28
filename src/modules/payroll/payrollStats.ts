@@ -4,6 +4,7 @@ import { PAYROLL_OFFICE_COLOR, PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, Timeshe
 import { SCHOOL_TABS } from '../families/constants';
 
 export type PayrollMoneySummary = TimesheetPayrollSummary;
+export type PayrollApprovalMoneySummary = { pendingAmount: number; approvedAmount: number };
 
 export interface PayrollSchoolStat extends PayrollMoneySummary {
   key: string;
@@ -113,7 +114,7 @@ export function buildPayrollSummaryBySchool(
   };
 
   entries.forEach(entry => {
-    const accrued = entry.days * entry.rate;
+    const accrued = entry.accruedAmount ?? entry.days * entry.rate;
     if (entry.subjectType === 'driver') {
       const driver = driverById.get(entry.subjectId);
       if (!driver || driver.status !== 'active') return;
@@ -128,6 +129,37 @@ export function buildPayrollSummaryBySchool(
     }
   });
 
+  return summary;
+}
+
+export function buildPayrollApprovalSummaryBySchool(
+  entries: V2PayrollEntry[],
+  drivers: V2DriverTableRow[],
+  employees: Employee[],
+): Record<string, PayrollApprovalMoneySummary> {
+  const driverById = new Map(drivers.map(driver => [driver.driverId, driver]));
+  const employeeById = new Map(employees.map(employee => [employee.id, employee]));
+  const schoolTabs = SCHOOL_TABS.filter(tab => tab.key !== 'ALL');
+  const summary: Record<string, PayrollApprovalMoneySummary> = {};
+
+  entries.forEach(entry => {
+    let schoolKey = '';
+    if (entry.subjectType === 'driver') {
+      const driver = driverById.get(entry.subjectId);
+      if (!driver || driver.status !== 'active') return;
+      schoolKey = schoolTabs.find(tab => payrollDriverMatchesSchool(driver, tab.key))?.key ?? '';
+    } else {
+      const employee = employeeById.get(entry.subjectId);
+      if (!employee || employee.status !== 'active' || employee.role === 'driver') return;
+      schoolKey = PAYROLL_OFFICE_KEY;
+    }
+    if (!schoolKey) return;
+    const amount = entry.accruedAmount ?? entry.days * entry.rate;
+    const current = summary[schoolKey] ?? { pendingAmount: 0, approvedAmount: 0 };
+    if (entry.approvalStatus === 'pending') current.pendingAmount += amount;
+    if (entry.approvalStatus === 'approved') current.approvedAmount += amount;
+    summary[schoolKey] = current;
+  });
   return summary;
 }
 

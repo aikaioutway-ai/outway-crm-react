@@ -3,6 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const ALLOWED_ROLES = new Set(['admin', 'gen_director']);
+const PERSONAL_DETAILS_ROLES = new Set(['admin', 'gen_director']);
 const ALLOWED_CATEGORIES = new Set(['school', 'office', 'logistics', 'extra_trip', 'personal']);
 const ALLOWED_METHODS = new Set(['cash', 'cashless']);
 const corsHeaders = {
@@ -35,6 +36,32 @@ function validDate(value: unknown): value is string {
   return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(Date.parse(`${value}T00:00:00Z`));
 }
 
+function expensePayload(rawExpense: unknown, createdBy?: string) {
+  const expense = (rawExpense && typeof rawExpense === 'object' ? rawExpense : {}) as Record<string, unknown>;
+  const name = String(expense.name ?? '').trim();
+  const category = String(expense.category ?? '');
+  const subcategory = String(expense.subcategory ?? '').trim();
+  const unitPrice = Number(expense.unitPrice);
+  const quantity = Number(expense.quantity);
+  const expenseDate = expense.expenseDate;
+  const paymentMethod = String(expense.paymentMethod ?? '');
+  if (!name || !subcategory || !ALLOWED_CATEGORIES.has(category) || !ALLOWED_METHODS.has(paymentMethod) || !validDate(expenseDate) || !Number.isFinite(unitPrice) || unitPrice < 0 || !Number.isFinite(quantity) || quantity <= 0) {
+    return null;
+  }
+  return {
+    name,
+    category,
+    subcategory,
+    unit_price: unitPrice,
+    quantity,
+    amount: Math.round(unitPrice * quantity * 100) / 100,
+    expense_date: expenseDate,
+    payment_method: paymentMethod,
+    comment: String(expense.comment ?? '').trim() || null,
+    ...(createdBy ? { created_by: createdBy } : {}),
+  };
+}
+
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return response({ ok: false, error: 'Method not allowed' }, 405);
@@ -51,29 +78,63 @@ Deno.serve(async req => {
         .gte('expense_date', body.periodStart).lte('expense_date', body.periodEnd)
         .order('expense_date', { ascending: false }).order('created_at', { ascending: false });
       if (error) throw error;
-      return response({ ok: true, rows: data ?? [] });
+      const rows = data ?? [];
+      if (PERSONAL_DETAILS_ROLES.has(session.role)) return response({ ok: true, rows });
+      const publicRows = rows.filter(row => row.category !== 'personal');
+      const personalTotal = rows
+        .filter(row => row.category === 'personal')
+        .reduce((sum, row) => sum + Number(row.amount ?? 0), 0);
+      if (personalTotal > 0) publicRows.push({
+        id: 'personal-summary',
+        name: 'Личный расход',
+        category: 'personal',
+        subcategory: '',
+        unit_price: personalTotal,
+        quantity: 1,
+        amount: personalTotal,
+        expense_date: body.periodEnd,
+        payment_method: 'cashless',
+        comment: null,
+        created_by: null,
+        created_at: '',
+      });
+      return response({ ok: true, rows: publicRows });
     }
     if (body.action === 'create') {
-      const expense = body.expense ?? {};
-      const name = String(expense.name ?? '').trim();
-      const category = String(expense.category ?? '');
-      const subcategory = String(expense.subcategory ?? '').trim();
-      const unitPrice = Number(expense.unitPrice);
-      const quantity = Number(expense.quantity);
-      const expenseDate = expense.expenseDate;
-      const paymentMethod = String(expense.paymentMethod ?? '');
-      if (!name || !subcategory || !ALLOWED_CATEGORIES.has(category) || !ALLOWED_METHODS.has(paymentMethod) || !validDate(expenseDate) || !Number.isFinite(unitPrice) || unitPrice < 0 || !Number.isFinite(quantity) || quantity <= 0) {
+      const expense = expensePayload(body.expense, session.sub);
+      if (!expense) {
         return response({ ok: false, error: 'Проверьте обязательные поля расхода' }, 400);
       }
-      const amount = Math.round(unitPrice * quantity * 100) / 100;
-      const { data, error } = await supabase.from('v2_expenses').insert({
-        name, category, subcategory, unit_price: unitPrice, quantity, amount,
-        expense_date: expenseDate, payment_method: paymentMethod,
-        comment: String(expense.comment ?? '').trim() || null,
-        created_by: session.sub,
-      }).select('*').single();
+      if (expense.category === 'personal' && !PERSONAL_DETAILS_ROLES.has(session.role)) {
+        return response({ ok: false, error: 'Нет доступа к личным расходам' }, 403);
+      }
+      const { data, error } = await supabase.from('v2_expenses').insert(expense).select('*').single();
       if (error) throw error;
       return response({ ok: true, row: data });
+    }
+    if (body.action === 'update') {
+      const expenseId = String(body.expenseId ?? '');
+      const expense = expensePayload(body.expense);
+      if (!expenseId || !expense) return response({ ok: false, error: 'Проверьте обязательные поля расхода' }, 400);
+      if (expense.category === 'personal' && !PERSONAL_DETAILS_ROLES.has(session.role)) {
+        return response({ ok: false, error: 'Нет доступа к личным расходам' }, 403);
+      }
+      let updateQuery = supabase.from('v2_expenses').update(expense).eq('id', expenseId);
+      if (!PERSONAL_DETAILS_ROLES.has(session.role)) updateQuery = updateQuery.neq('category', 'personal');
+      const { data, error } = await updateQuery.select('*').maybeSingle();
+      if (error) throw error;
+      if (!data) return response({ ok: false, error: 'Расход не найден' }, 404);
+      return response({ ok: true, row: data });
+    }
+    if (body.action === 'delete') {
+      const expenseId = String(body.expenseId ?? '');
+      if (!expenseId) return response({ ok: false, error: 'Не указан расход' }, 400);
+      let deleteQuery = supabase.from('v2_expenses').delete().eq('id', expenseId);
+      if (!PERSONAL_DETAILS_ROLES.has(session.role)) deleteQuery = deleteQuery.neq('category', 'personal');
+      const { data, error } = await deleteQuery.select('id').maybeSingle();
+      if (error) throw error;
+      if (!data) return response({ ok: false, error: 'Расход не найден' }, 404);
+      return response({ ok: true });
     }
     return response({ ok: false, error: 'Неизвестное действие' }, 400);
   } catch (error) {

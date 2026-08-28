@@ -27,6 +27,37 @@ export interface AuthenticatedUser {
   sessionToken?: string;
 }
 
+export type EmployeeDocumentType = 'passport' | 'contract';
+
+export interface EmployeeDocument {
+  id?: string;
+  employeeId?: string;
+  type: EmployeeDocumentType;
+  title: string;
+  number: string;
+  issuedAt: string;
+  expiresAt: string;
+  required: boolean;
+  scanUrl: string;
+  scanFile?: File | null;
+}
+
+export interface EmployeeAdvance {
+  id: string;
+  employeeId: string;
+  amount: number;
+  date: string;
+  comment: string;
+  createdAt: string;
+}
+
+export function createDefaultEmployeeDocuments(): EmployeeDocument[] {
+  return [
+    { type: 'passport', title: 'Паспорт', number: '', issuedAt: '', expiresAt: '', required: true, scanUrl: '', scanFile: null },
+    { type: 'contract', title: 'Договор', number: '', issuedAt: '', expiresAt: '', required: true, scanUrl: '', scanFile: null },
+  ];
+}
+
 // ─── МАППИНГ ────────────────────────────────────────────────────────────────
 
 const EMPLOYEE_COLUMNS = 'id, full_name, login, role, position, phone1, phone2, address, school_keys, status, start_date, comment, created_at, updated_at';
@@ -148,4 +179,86 @@ export async function deleteEmployee(id: string): Promise<Employee[]> {
   const { error } = await supabase.from('v2_employees').delete().eq('id', id);
   if (error) throw new Error(error.message);
   return fetchEmployees();
+}
+
+function mapEmployeeDocument(row: any): EmployeeDocument {
+  return {
+    id: String(row.id),
+    employeeId: String(row.employee_id),
+    type: row.document_type as EmployeeDocumentType,
+    title: String(row.title ?? ''),
+    number: String(row.document_number ?? ''),
+    issuedAt: String(row.issued_at ?? ''),
+    expiresAt: String(row.expires_at ?? ''),
+    required: Boolean(row.required),
+    scanUrl: String(row.scan_url ?? ''),
+    scanFile: null,
+  };
+}
+
+export async function fetchEmployeeDocuments(employeeId: string): Promise<EmployeeDocument[]> {
+  const { data, error } = await supabase.from('v2_employee_documents').select('*').eq('employee_id', employeeId);
+  if (error) throw new Error(error.message);
+  const byType = new Map((data ?? []).map(row => [row.document_type, mapEmployeeDocument(row)]));
+  return createDefaultEmployeeDocuments().map(document => byType.get(document.type) ?? document);
+}
+
+function safeFileName(name: string): string {
+  return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'scan';
+}
+
+async function uploadEmployeeDocument(employeeId: string, document: EmployeeDocument): Promise<string> {
+  if (!document.scanFile) return document.scanUrl;
+  const path = `${employeeId}/${document.type}/${Date.now()}_${safeFileName(document.scanFile.name)}`;
+  const { error } = await supabase.storage.from('employee-documents').upload(path, document.scanFile, { upsert: false });
+  if (error) throw new Error(error.message);
+  return supabase.storage.from('employee-documents').getPublicUrl(path).data.publicUrl;
+}
+
+export async function saveEmployeeDocuments(employeeId: string, documents: EmployeeDocument[]): Promise<void> {
+  const rows = await Promise.all(documents.map(async document => ({
+    employee_id: employeeId,
+    document_type: document.type,
+    title: document.title.trim() || (document.type === 'passport' ? 'Паспорт' : 'Договор'),
+    document_number: document.number.trim() || null,
+    issued_at: document.issuedAt || null,
+    expires_at: document.expiresAt || null,
+    required: document.required,
+    scan_url: (await uploadEmployeeDocument(employeeId, document)) || null,
+  })));
+  const { error } = await supabase.from('v2_employee_documents').upsert(rows, { onConflict: 'employee_id,document_type' });
+  if (error) throw new Error(error.message);
+}
+
+function mapEmployeeAdvance(row: any): EmployeeAdvance {
+  return {
+    id: String(row.id),
+    employeeId: String(row.employee_id),
+    amount: Number(row.amount ?? 0),
+    date: String(row.date ?? ''),
+    comment: String(row.comment ?? ''),
+    createdAt: String(row.created_at ?? ''),
+  };
+}
+
+export async function fetchEmployeeAdvances(employeeId: string): Promise<EmployeeAdvance[]> {
+  const { data, error } = await supabase.from('v2_employee_advances').select('*').eq('employee_id', employeeId).order('date', { ascending: false });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(mapEmployeeAdvance);
+}
+
+export async function createEmployeeAdvance(employeeId: string, amount: number, date: string, comment: string): Promise<EmployeeAdvance> {
+  const { data, error } = await supabase.from('v2_employee_advances').insert({
+    employee_id: employeeId,
+    amount,
+    date,
+    comment: comment.trim() || null,
+  }).select('*').single();
+  if (error) throw new Error(error.message);
+  return mapEmployeeAdvance(data);
+}
+
+export async function deleteEmployeeAdvance(advanceId: string): Promise<void> {
+  const { error } = await supabase.from('v2_employee_advances').delete().eq('id', advanceId);
+  if (error) throw new Error(error.message);
 }

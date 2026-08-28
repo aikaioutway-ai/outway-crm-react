@@ -1,20 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, ReceiptText, School, WalletCards } from 'lucide-react';
-import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
+import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, ReceiptText, School, ShieldCheck, WalletCards } from 'lucide-react';
+import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApprovalsForPeriod, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
 import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
 import { ALL_PERIODS, currentPayrollPeriodKey } from '../families/constants';
 import { money } from '../../utils/pricing';
-import { buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
-import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
+import { buildPayrollApprovalSummaryBySchool, buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
+import { PAYROLL_OFFICE_KEY, PayrollSchoolTab } from '../expenses/timesheetTypes';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 
-type SortKey = 'school' | 'accruedAmount' | 'advanceAmount' | 'salaryAmount' | 'paidAmount' | 'remainingAmount';
+type SortKey = 'school' | 'accruedAmount' | 'pendingAmount' | 'approvedAmount' | 'advanceAmount' | 'salaryAmount' | 'paidAmount' | 'remainingAmount';
+type PayrollOverviewStat = PayrollSchoolStat & { pendingAmount: number; approvedAmount: number };
 
 const PAYROLL_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 
 interface PayrollOverviewProps {
+  view: PayrollSchoolTab;
+  sessionToken?: string;
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
@@ -26,22 +29,20 @@ interface PayrollOverviewProps {
 const COLUMN_WEIGHTS: Record<SortKey, number> = {
   school: 1.4,
   accruedAmount: 1,
+  pendingAmount: 1,
+  approvedAmount: 1,
   advanceAmount: 1,
   salaryAmount: 1,
   paidAmount: 1,
   remainingAmount: 1,
 };
 
-const GRID_TEMPLATE = ['school', 'accruedAmount', 'advanceAmount', 'salaryAmount', 'paidAmount', 'remainingAmount']
-  .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
-  .join(' ');
-
-function sortValue(stat: PayrollSchoolStat, key: SortKey): number | string {
+function sortValue(stat: PayrollOverviewStat, key: SortKey): number | string {
   if (key === 'school') return stat.label;
   return stat[key];
 }
 
-export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
+export default function PayrollOverview({ view, sessionToken, periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const { data: employees = null } = useEmployees();
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -64,21 +65,51 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
 
   const { data: entries = null } = usePayrollEntriesForPeriod(periodMonth, periodYear);
   const { data: advances = null } = useDriverAdvancesForPeriod(periodMonth, periodYear);
+  const { data: approvals = [] } = usePayrollApprovalsForPeriod(periodMonth, periodYear, sessionToken);
 
   const summaryBySchool = useMemo(
     () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? []),
     [entries, advances, rows, employees],
   );
 
-  const stats = useMemo(() => computePayrollStats(rows ?? [], summaryBySchool), [rows, summaryBySchool]);
+  const approvalBySchool = useMemo(() => new Map(approvals.map(approval => [approval.schoolKey, approval.status])), [approvals]);
+  const entryApprovalBySchool = useMemo(
+    () => buildPayrollApprovalSummaryBySchool(entries ?? [], rows ?? [], employees ?? []),
+    [employees, entries, rows],
+  );
+  const stats = useMemo<PayrollOverviewStat[]>(() => computePayrollStats(rows ?? [], summaryBySchool).map(stat => {
+    const approvalStatus = approvalBySchool.get(stat.key);
+    const approved = approvalStatus === 'approved';
+    const staged = {
+      ...stat,
+      pendingAmount: entryApprovalBySchool[stat.key]?.pendingAmount ?? 0,
+      approvedAmount: entryApprovalBySchool[stat.key]?.approvedAmount ?? 0,
+    };
+    if (view !== 'salary' || approved) return staged;
+    return {
+      ...staged,
+      accruedAmount: 0,
+      advanceAmount: 0,
+      salaryAmount: 0,
+      paidAmount: 0,
+      remainingAmount: 0,
+    };
+  }), [approvalBySchool, entryApprovalBySchool, rows, summaryBySchool, view]);
   const totals = useMemo(() => stats.reduce((acc, stat) => ({
     schools: acc.schools + (stat.driverCount > 0 ? 1 : 0),
     accruedAmount: acc.accruedAmount + stat.accruedAmount,
+    pendingAmount: acc.pendingAmount + stat.pendingAmount,
+    approvedAmount: acc.approvedAmount + stat.approvedAmount,
     advanceAmount: acc.advanceAmount + stat.advanceAmount,
     salaryAmount: acc.salaryAmount + stat.salaryAmount,
     paidAmount: acc.paidAmount + stat.paidAmount,
     remainingAmount: acc.remainingAmount + stat.remainingAmount,
-  }), { schools: 0, accruedAmount: 0, advanceAmount: 0, salaryAmount: 0, paidAmount: 0, remainingAmount: 0 }), [stats]);
+  }), { schools: 0, accruedAmount: 0, pendingAmount: 0, approvedAmount: 0, advanceAmount: 0, salaryAmount: 0, paidAmount: 0, remainingAmount: 0 }), [stats]);
+
+  const columnKeys: SortKey[] = view === 'timesheet'
+    ? ['school', 'accruedAmount', 'pendingAmount', 'approvedAmount']
+    : ['school', 'accruedAmount', 'advanceAmount', 'salaryAmount', 'paidAmount', 'remainingAmount'];
+  const gridTemplate = columnKeys.map(key => `minmax(0, ${COLUMN_WEIGHTS[key]}fr)`).join(' ');
 
   const sortedStats = useMemo(() => {
     const officeStats = stats.filter(stat => stat.key === PAYROLL_OFFICE_KEY);
@@ -86,7 +117,7 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
     const grouped = buildGroupedRows(
       schoolStats,
       expandedGroups,
-      ['accruedAmount', 'advanceAmount', 'salaryAmount', 'paidAmount', 'remainingAmount', 'driverCount', 'microbusCount', 'minivanCount', 'transferCount', 'noTransferCount'],
+      ['accruedAmount', 'pendingAmount', 'approvedAmount', 'advanceAmount', 'salaryAmount', 'paidAmount', 'remainingAmount', 'driverCount', 'microbusCount', 'minivanCount', 'transferCount', 'noTransferCount'],
       (a, b) => {
         const av = sortValue(a.data, sortState.key);
         const bv = sortValue(b.data, sortState.key);
@@ -121,11 +152,11 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
           </div>
         </DashboardTopPanel>
 
-        <DashboardGrid template={GRID_TEMPLATE}>
+        <DashboardGrid template={gridTemplate}>
           <ColumnCard
             first
             sortKey="school"
-            label="Школы"
+            label="Школа"
             icon={<School size={17} color="#fff" />}
             value={String(totals.schools)}
             color={PAYROLL_COLORS.school}
@@ -149,26 +180,30 @@ export default function PayrollOverview({ periodKey, onPeriodKeyChange, onSelect
             ))}
           </ColumnCard>
 
-          {([
-            ['accruedAmount', 'Начислено', <ReceiptText size={17} color="#fff" />, money(totals.accruedAmount)],
-            ['advanceAmount', 'Авансы', <WalletCards size={17} color="#fff" />, money(totals.advanceAmount)],
-            ['salaryAmount', 'Зарплата', <Banknote size={17} color="#fff" />, money(totals.salaryAmount)],
-            ['paidAmount', 'Оплачено', <CheckCircle2 size={17} color="#fff" />, money(totals.paidAmount)],
-            ['remainingAmount', 'Остаток', <ChevronRight size={17} color="#fff" />, money(totals.remainingAmount)],
-          ] as const).map(([key, label, icon, value]) => (
+          {(view === 'timesheet' ? [
+            ['accruedAmount', 'Начислено', <ReceiptText size={17} color="#fff" />, money(totals.accruedAmount), PAYROLL_COLORS.accruedAmount],
+            ['pendingAmount', 'На согласовании', <Clock3 size={17} color="#fff" />, money(totals.pendingAmount), '#B45309'],
+            ['approvedAmount', 'Утверждено', <ShieldCheck size={17} color="#fff" />, money(totals.approvedAmount), '#15803D'],
+          ] as const : [
+            ['accruedAmount', 'Начислено', <ReceiptText size={17} color="#fff" />, money(totals.accruedAmount), PAYROLL_COLORS.accruedAmount],
+            ['advanceAmount', 'Авансы', <WalletCards size={17} color="#fff" />, money(totals.advanceAmount), PAYROLL_COLORS.advanceAmount],
+            ['salaryAmount', 'Зарплата', <Banknote size={17} color="#fff" />, money(totals.salaryAmount), PAYROLL_COLORS.salaryAmount],
+            ['paidAmount', 'Оплачено', <CheckCircle2 size={17} color="#fff" />, money(totals.paidAmount), PAYROLL_COLORS.paidAmount],
+            ['remainingAmount', 'Остаток', <ChevronRight size={17} color="#fff" />, money(totals.remainingAmount), PAYROLL_COLORS.remainingAmount],
+          ] as const).map(([key, label, icon, value, color]) => (
             <ColumnCard
               key={key}
               sortKey={key}
               label={label}
               icon={icon}
               value={value}
-              color={PAYROLL_COLORS[key]}
+              color={color}
               sortState={sortState}
               onSort={handleSort}
             >
               {sortedStats.map((row, index) => (
                 <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data[key] > 0 ? PAYROLL_COLORS[key] : undefined }}>{money(row.data[key])}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data[key] > 0 ? color : undefined }}>{money(row.data[key])}</span>
                 </div>
               ))}
             </ColumnCard>

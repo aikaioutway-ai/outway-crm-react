@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import Sidebar, { canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
+import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
 import CashierSchoolKpiStrip from './modules/families/CashierSchoolKpiStrip';
@@ -15,10 +15,17 @@ import DriversOverview from './modules/drivers/DriversOverview';
 import DriversSchoolKpiStrip from './modules/drivers/DriversSchoolKpiStrip';
 import DriversTransferDashboard from './modules/drivers/DriversTransferDashboard';
 import LoginPage from './modules/auth/LoginPage';
-import { AuthenticatedUser, authenticateEmployee } from './services/employeeService';
+import {
+  AuthenticatedUser,
+  authenticateEmployee,
+} from './services/employeeService';
+import {
+  EMPLOYEE_SESSION_EXPIRED_EVENT,
+  getEmployeeSessionExpiresAt,
+  isEmployeeSessionActive,
+} from './services/employeeSession';
 import { useFamiliesTable } from './hooks/useCrmQueries';
 import { CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
-import type { PayrollSchoolTab } from './modules/expenses/timesheetTypes';
 import { UserRole } from './types';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import './index.css';
@@ -58,7 +65,11 @@ function getSavedUser(): AuthenticatedUser | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as AuthenticatedUser;
-    return parsed?.role && ROLES.includes(parsed.role) ? parsed : null;
+    if (!parsed?.role || !ROLES.includes(parsed.role) || !isEmployeeSessionActive(parsed.sessionToken)) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
@@ -84,8 +95,14 @@ export default function App() {
   const [payrollSchoolKey, setPayrollSchoolKey] = useState<string | null>(null);
   const [payrollTransferFilter, setPayrollTransferFilter] = useState('');
   const [payrollSearch, setPayrollSearch] = useState('');
-  const [payrollSchoolTab, setPayrollSchoolTab] = useState<PayrollSchoolTab>('timesheet');
   const [payrollPeriodKey, setPayrollPeriodKey] = useState(currentPayrollPeriodKey);
+  const [salarySchoolKey, setSalarySchoolKey] = useState<string | null>(null);
+  const [salaryTransferFilter, setSalaryTransferFilter] = useState('');
+  const [salarySearch, setSalarySearch] = useState('');
+  const [salaryPeriodKey, setSalaryPeriodKey] = useState(currentPayrollPeriodKey);
+  const [financeTab, setFinanceTab] = useState<'expenses' | 'timesheet' | 'salary'>(() => (
+    canAccessFinanceExpenses(currentUserRole) ? 'expenses' : 'timesheet'
+  ));
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
   const [managerSchoolMode, setManagerSchoolMode] = useState<'directory' | 'charges'>('directory');
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
@@ -134,6 +151,7 @@ export default function App() {
     localStorage.setItem('outway_user_role', user.role);
     setCurrentUser(user);
     setSection(getAllowedSections(user.role)[0]);
+    setFinanceTab(canAccessFinanceExpenses(user.role) ? 'expenses' : 'timesheet');
     return true;
   };
 
@@ -141,6 +159,26 @@ export default function App() {
     localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
   };
+
+  useEffect(() => {
+    const expireSession = () => {
+      localStorage.removeItem(SESSION_KEY);
+      setCurrentUser(null);
+    };
+    window.addEventListener(EMPLOYEE_SESSION_EXPIRED_EVENT, expireSession);
+
+    const expiresAt = getEmployeeSessionExpiresAt(currentUser?.sessionToken);
+    const remaining = expiresAt === null ? 0 : expiresAt - Date.now();
+    if (currentUser && remaining <= 0) expireSession();
+    const timer = remaining > 0
+      ? window.setTimeout(expireSession, Math.min(remaining, 2_147_483_647))
+      : undefined;
+
+    return () => {
+      window.removeEventListener(EMPLOYEE_SESSION_EXPIRED_EVENT, expireSession);
+      if (timer !== undefined) window.clearTimeout(timer);
+    };
+  }, [currentUser]);
 
   useEffect(() => {
     if (!canAccessSection(currentUserRole, section)) {
@@ -171,8 +209,6 @@ export default function App() {
     setLogisticsView('table');
     setDriversSchoolKey(null);
     setDriversTransferFilter('');
-    setPayrollSchoolKey(null);
-    setPayrollTransferFilter('');
   }, [section, managerSchoolKey]);
 
   useEffect(() => {
@@ -190,8 +226,18 @@ export default function App() {
 
   useEffect(() => {
     setPayrollTransferFilter('');
-    setPayrollSchoolTab('timesheet');
   }, [payrollSchoolKey]);
+
+  useEffect(() => {
+    setSalaryTransferFilter('');
+  }, [salarySchoolKey]);
+
+  useEffect(() => {
+    if (financeTab === 'expenses' && !canAccessFinanceExpenses(currentUserRole)) {
+      setFinanceTab('timesheet');
+    }
+    if (financeTab === 'expenses') setSchoolSidebarReserveWidth(0);
+  }, [currentUserRole, financeTab]);
 
   // Обновляем сессию если position ещё не загружен (старый localStorage)
   useEffect(() => {
@@ -285,6 +331,11 @@ export default function App() {
     paddingRight: schoolSidebarReserveWidth,
     transition: 'padding-right .18s ease',
   };
+
+  const activePayrollSchoolKey = financeTab === 'salary' ? salarySchoolKey : payrollSchoolKey;
+  const activePayrollTransferFilter = financeTab === 'salary' ? salaryTransferFilter : payrollTransferFilter;
+  const activePayrollSearch = financeTab === 'salary' ? salarySearch : payrollSearch;
+  const activePayrollPeriodKey = financeTab === 'salary' ? salaryPeriodKey : payrollPeriodKey;
 
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
@@ -596,53 +647,61 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Финансы')}
-                {payrollSchoolKey && (
-                  <button onClick={() => { setPayrollSchoolKey(null); setPayrollSearch(''); }} style={managerModeTabStyle(false)}>
+                {canAccessFinanceExpenses(currentUserRole) && (
+                  <button onClick={() => setFinanceTab('expenses')} style={managerModeTabStyle(financeTab === 'expenses')}>
+                    Расходы
+                  </button>
+                )}
+                <button onClick={() => setFinanceTab('timesheet')} style={managerModeTabStyle(financeTab === 'timesheet')}>
+                  Табель
+                </button>
+                <button onClick={() => setFinanceTab('salary')} style={managerModeTabStyle(financeTab === 'salary')}>
+                  Зарплата
+                </button>
+                {financeTab !== 'expenses' && activePayrollSchoolKey && (
+                  <button onClick={() => {
+                    if (financeTab === 'salary') {
+                      setSalarySchoolKey(null);
+                      setSalarySearch('');
+                    } else {
+                      setPayrollSchoolKey(null);
+                      setPayrollSearch('');
+                    }
+                  }} style={managerModeTabStyle(false)}>
                     ← Все школы
                   </button>
                 )}
-                {payrollSchoolKey && ([
-                  ['timesheet', 'Табель'],
-                  ['advance', 'Аванс'],
-                  ['salary', 'Зарплата'],
-                ] as const).map(([key, label]) => (
-                  <button key={key} onClick={() => setPayrollSchoolTab(key)} style={managerModeTabStyle(payrollSchoolTab === key)}>
-                    {label}
-                  </button>
-                ))}
                 {extraTabs(true)}
               </div>
             </div>
-            <PayrollModule
-              userRole={currentUserRole}
-              userName={currentUser?.name}
-              allowedSchools={currentUser?.schoolKeys}
-              adminFiltersOpen={adminFiltersOpen}
-              onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-              columnsOpen={columnsOpen}
-              onColumnsOpenChange={setColumnsOpen}
-              rightReserveWidth={schoolSidebarReserveWidth}
-              onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-              schoolKey={payrollSchoolKey}
-              transferFilter={payrollTransferFilter}
-              schoolTab={payrollSchoolTab}
-              periodKey={payrollPeriodKey}
-              onSelectSchool={setPayrollSchoolKey}
-              onTransferFilterChange={setPayrollTransferFilter}
-              onPeriodKeyChange={setPayrollPeriodKey}
-              search={payrollSearch}
-              onSearchChange={setPayrollSearch}
-            />
-          </div>
-        ) : section === 'costs' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                {sectionLabel('Расходы')}
-                {extraTabs(true)}
+            {canAccessFinanceExpenses(currentUserRole) && (
+              <div style={{ flex: 1, minHeight: 0, display: financeTab === 'expenses' ? 'flex' : 'none' }}>
+                <ExpensesModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
               </div>
-            </div>
-            <ExpensesModule userName={currentUser?.name} sessionToken={currentUser?.sessionToken} />
+            )}
+            {financeTab !== 'expenses' && (
+              <PayrollModule
+                userRole={currentUserRole}
+                userName={currentUser?.name}
+                sessionToken={currentUser?.sessionToken}
+                allowedSchools={currentUser?.schoolKeys}
+                adminFiltersOpen={adminFiltersOpen}
+                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+                columnsOpen={columnsOpen}
+                onColumnsOpenChange={setColumnsOpen}
+                rightReserveWidth={schoolSidebarReserveWidth}
+                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                schoolKey={activePayrollSchoolKey}
+                transferFilter={activePayrollTransferFilter}
+                schoolTab={financeTab}
+                periodKey={activePayrollPeriodKey}
+                onSelectSchool={financeTab === 'salary' ? setSalarySchoolKey : setPayrollSchoolKey}
+                onTransferFilterChange={financeTab === 'salary' ? setSalaryTransferFilter : setPayrollTransferFilter}
+                onPeriodKeyChange={financeTab === 'salary' ? setSalaryPeriodKey : setPayrollPeriodKey}
+                search={activePayrollSearch}
+                onSearchChange={financeTab === 'salary' ? setSalarySearch : setPayrollSearch}
+              />
+            )}
           </div>
         ) : section === 'market' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>

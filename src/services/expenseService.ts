@@ -1,5 +1,9 @@
 import { supabase } from './supabase';
 import { ExpenseCategory, ExpensePaymentMethod, ExpenseRecord, NewExpenseRecord } from '../modules/costs/expenseTypes';
+import {
+  EMPLOYEE_SESSION_EXPIRED_EVENT,
+  isEmployeeSessionExpiredMessage,
+} from './employeeSession';
 
 function mapExpense(row: any): ExpenseRecord {
   return {
@@ -37,8 +41,15 @@ async function callExpenseApi(sessionToken: string | undefined, body: Record<str
     body,
     headers: { 'x-employee-session': sessionToken },
   });
-  if (error) throw new Error(await extractFunctionErrorMessage(error));
-  if (!data?.ok) throw new Error(data?.error || 'Ошибка сервера расходов');
+  const errorMessage = error
+    ? await extractFunctionErrorMessage(error)
+    : (!data?.ok ? String(data?.error || 'Ошибка сервера расходов') : '');
+  if (errorMessage) {
+    if (isEmployeeSessionExpiredMessage(errorMessage) && typeof window !== 'undefined') {
+      window.dispatchEvent(new Event(EMPLOYEE_SESSION_EXPIRED_EVENT));
+    }
+    throw new Error(errorMessage);
+  }
   return data;
 }
 
@@ -50,4 +61,13 @@ export async function fetchExpenses(periodStart: string, periodEnd: string, sess
 export async function createExpense(expense: NewExpenseRecord, sessionToken?: string): Promise<ExpenseRecord> {
   const data = await callExpenseApi(sessionToken, { action: 'create', expense });
   return mapExpense(data.row);
+}
+
+export async function updateExpense(expenseId: string, expense: NewExpenseRecord, sessionToken?: string): Promise<ExpenseRecord> {
+  const data = await callExpenseApi(sessionToken, { action: 'update', expenseId, expense });
+  return mapExpense(data.row);
+}
+
+export async function deleteExpense(expenseId: string, sessionToken?: string): Promise<void> {
+  await callExpenseApi(sessionToken, { action: 'delete', expenseId });
 }

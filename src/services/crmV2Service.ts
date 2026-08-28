@@ -180,7 +180,49 @@ export interface V2PayrollEntry {
   periodYear: number;
   days: number;
   rate: number;
+  accruedAmount: number | null;
+  bonusAmount: number;
+  penaltyAmount: number;
   salaryAmount: number;
+  approvalStatus: PayrollApprovalStatus;
+  approvedByName: string;
+  approvedAt: string;
+  rejectionComment: string;
+  updatedAt: string;
+}
+
+export type PayrollPaymentMethod = 'cash' | 'cashless';
+
+export interface V2PayrollPayment {
+  id: string;
+  batchId: string;
+  subjectId: string;
+  subjectType: PayrollSubjectType;
+  periodMonth: number;
+  periodYear: number;
+  amount: number;
+  paymentDate: string;
+  paymentMethod: PayrollPaymentMethod;
+  recipientId: string;
+  recipientName: string;
+  paidByName: string;
+  comment: string;
+  createdAt: string;
+}
+
+export type PayrollApprovalStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+
+export interface V2PayrollApproval {
+  id: string;
+  schoolKey: string;
+  periodMonth: number;
+  periodYear: number;
+  status: PayrollApprovalStatus;
+  submittedByName: string;
+  submittedAt: string;
+  approvedByName: string;
+  approvedAt: string;
+  rejectionComment: string;
   updatedAt: string;
 }
 
@@ -1166,7 +1208,9 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
       phone: input.phone.trim(),
       second_phone: input.secondPhone?.trim() || null,
       address: input.address?.trim() || null,
-      status: input.transferNumber ? 'active' : 'vacation',
+      // Резерв — это активный водитель без назначенного трансфера, а не
+      // неактивный статус. Принадлежность к резерву вычисляется по transferCount.
+      status: 'active',
       comment: comment || null,
     })
     .select('id')
@@ -1175,54 +1219,63 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
 
   const driverId = String(driver.id);
   let vehicleId: string | null = null;
+  try {
+    // Документы сохраняем первыми: если схема не готова, водитель не должен
+    // остаться в базе частично созданной записью.
+    const documents = input.documents ?? createDefaultV2DriverDocuments();
+    if (documents.length) {
+      const preparedDocuments = await prepareV2DriverDocumentsForSave(driverId, documents);
+      const { error: documentsError } = await supabase
+        .from('v2_driver_documents')
+        .upsert(preparedDocuments, { onConflict: 'driver_id,document_type' });
+      if (documentsError) throw new Error(documentsError.message);
+    }
 
-  if (input.vehicleType || input.plateNumber || input.brand || input.model || input.seats) {
-    const { data: vehicle, error: vehicleError } = await supabase
-      .from('v2_vehicles')
-      .insert({
-        driver_id: driverId,
-        vehicle_type: input.vehicleType ?? null,
-        plate_number: input.plateNumber?.trim() || null,
-        brand: input.brand?.trim() || null,
-        model: input.model?.trim() || null,
-        seats: input.seats ?? null,
-        status: 'active',
-      })
-      .select('id')
-      .single();
-    if (vehicleError) throw new Error(vehicleError.message);
-    vehicleId = String(vehicle.id);
+    if (input.vehicleType || input.plateNumber || input.brand || input.model || input.seats) {
+      if (!input.vehicleType) throw new Error('Укажите тип транспорта');
+      const { data: vehicle, error: vehicleError } = await supabase
+        .from('v2_vehicles')
+        .insert({
+          driver_id: driverId,
+          vehicle_type: input.vehicleType,
+          plate_number: input.plateNumber?.trim() || null,
+          brand: input.brand?.trim() || null,
+          model: input.model?.trim() || null,
+          seats: input.seats ?? null,
+          status: 'active',
+        })
+        .select('id')
+        .single();
+      if (vehicleError) throw new Error(vehicleError.message);
+      vehicleId = String(vehicle.id);
+    }
+
+    if (input.branchId && input.transferNumber && input.vehicleType) {
+      const transferId = await ensureV2Transfer({
+        schoolId: input.schoolId,
+        branchId: input.branchId,
+        transferNumber: input.transferNumber,
+        vehicleType: input.vehicleType,
+      });
+      const { error: transferError } = await supabase
+        .from('v2_transfers')
+        .update({
+          driver_id: driverId,
+          vehicle_id: vehicleId,
+          vehicle_type: input.vehicleType,
+          status: 'active',
+        })
+        .eq('id', transferId);
+      if (transferError) throw new Error(transferError.message);
+    }
+
+    return driverId;
+  } catch (error) {
+    // Компенсирующий откат для многошагового сохранения из браузера.
+    if (vehicleId) await supabase.from('v2_vehicles').delete().eq('id', vehicleId);
+    await supabase.from('v2_drivers').delete().eq('id', driverId);
+    throw error;
   }
-
-  if (input.branchId && input.transferNumber && input.vehicleType) {
-    const transferId = await ensureV2Transfer({
-      schoolId: input.schoolId,
-      branchId: input.branchId,
-      transferNumber: input.transferNumber,
-      vehicleType: input.vehicleType,
-    });
-    const { error: transferError } = await supabase
-      .from('v2_transfers')
-      .update({
-        driver_id: driverId,
-        vehicle_id: vehicleId,
-        vehicle_type: input.vehicleType,
-        status: 'active',
-      })
-      .eq('id', transferId);
-    if (transferError) throw new Error(transferError.message);
-  }
-
-  const documents = input.documents ?? createDefaultV2DriverDocuments();
-  if (documents.length) {
-    const preparedDocuments = await prepareV2DriverDocumentsForSave(driverId, documents);
-    const { error: documentsError } = await supabase
-      .from('v2_driver_documents')
-      .upsert(preparedDocuments, { onConflict: 'driver_id,document_type' });
-    if (documentsError) throw new Error(documentsError.message);
-  }
-
-  return driverId;
 }
 
 export async function fetchV2DriverDocuments(driverId: string): Promise<V2DriverDocumentRow[]> {
@@ -1299,6 +1352,17 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
   }
 }
 
+export async function deleteV2Driver(driverId: string): Promise<void> {
+  const { data, error } = await supabase
+    .from('v2_drivers')
+    .delete()
+    .eq('id', driverId)
+    .select('id')
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Водитель не найден или нет прав на удаление');
+}
+
 export async function fetchV2DriverAdvances(driverId: string): Promise<V2DriverAdvance[]> {
   const { data, error } = await supabase
     .from('v2_driver_advances')
@@ -1373,9 +1437,78 @@ function mapV2PayrollEntry(row: any): V2PayrollEntry {
     periodYear: Number(row.period_year),
     days: Number(row.days),
     rate: Number(row.rate),
+    accruedAmount: row.accrued_amount == null ? null : Number(row.accrued_amount),
+    bonusAmount: Number(row.bonus_amount ?? 0),
+    penaltyAmount: Number(row.penalty_amount ?? 0),
     salaryAmount: Number(row.salary_amount),
+    approvalStatus: (row.approval_status ?? 'draft') as PayrollApprovalStatus,
+    approvedByName: row.approved_by_name ?? '',
+    approvedAt: row.approved_at ?? '',
+    rejectionComment: row.rejection_comment ?? '',
     updatedAt: row.updated_at ?? '',
   };
+}
+
+function mapV2PayrollPayment(row: any): V2PayrollPayment {
+  return {
+    id: String(row.id),
+    batchId: String(row.batch_id),
+    subjectId: String(row.subject_id),
+    subjectType: row.subject_type,
+    periodMonth: Number(row.period_month),
+    periodYear: Number(row.period_year),
+    amount: Number(row.amount),
+    paymentDate: row.payment_date ?? '',
+    paymentMethod: row.payment_method as PayrollPaymentMethod,
+    recipientId: row.recipient_id ? String(row.recipient_id) : '',
+    recipientName: row.recipient_name ?? '',
+    paidByName: row.paid_by_name ?? '',
+    comment: row.comment ?? '',
+    createdAt: row.created_at ?? '',
+  };
+}
+
+export async function fetchV2PayrollPaymentsForPeriod(periodMonth: number, periodYear: number): Promise<V2PayrollPayment[]> {
+  if (periodMonth < 1 || periodMonth > 12 || !periodYear) return [];
+  const data = await fetchAllRows<any>((from, to) => supabase
+    .from('v2_payroll_payments')
+    .select('*')
+    .eq('period_month', periodMonth)
+    .eq('period_year', periodYear)
+    .order('payment_date', { ascending: false })
+    .order('created_at', { ascending: false })
+    .range(from, to));
+  return data.map(mapV2PayrollPayment);
+}
+
+export async function recordV2PayrollPayments(input: {
+  periodMonth: number;
+  periodYear: number;
+  paymentDate: string;
+  paymentMethod: PayrollPaymentMethod;
+  recipientId?: string;
+  recipientName: string;
+  paidByName?: string;
+  comment?: string;
+  payments: Array<{ subjectId: string; subjectType: PayrollSubjectType; amount: number }>;
+}): Promise<V2PayrollPayment[]> {
+  const batchId = crypto.randomUUID();
+  const { data, error } = await supabase.rpc('v2_record_payroll_payments', {
+    p_batch_id: batchId,
+    p_period_month: input.periodMonth,
+    p_period_year: input.periodYear,
+    p_payment_date: input.paymentDate,
+    p_payment_method: input.paymentMethod,
+    p_recipient_id: input.recipientId ?? '',
+    p_recipient_name: input.recipientName.trim(),
+    p_paid_by_name: input.paidByName?.trim() ?? '',
+    p_comment: input.comment?.trim() ?? '',
+    p_payments: input.payments,
+  });
+  if (error) throw new Error(error.message);
+  queryClient.invalidateQueries({ queryKey: QK.payrollEntries(input.periodMonth, input.periodYear) });
+  queryClient.invalidateQueries({ queryKey: QK.payrollPayments(input.periodMonth, input.periodYear) });
+  return (data ?? []).map(mapV2PayrollPayment);
 }
 
 export async function fetchV2PayrollEntriesForPeriod(periodMonth: number, periodYear: number): Promise<V2PayrollEntry[]> {
@@ -1396,9 +1529,12 @@ export async function upsertV2PayrollEntry(patch: {
   periodYear: number;
   days?: number;
   rate?: number;
+  accruedAmount?: number;
+  bonusAmount?: number;
+  penaltyAmount?: number;
   salaryAmount?: number;
 }): Promise<V2PayrollEntry> {
-  const { subjectId, subjectType, periodMonth, periodYear, days, rate, salaryAmount } = patch;
+  const { subjectId, subjectType, periodMonth, periodYear, days, rate, accruedAmount, bonusAmount, penaltyAmount, salaryAmount } = patch;
   const payload: Record<string, unknown> = {
     subject_id: subjectId,
     subject_type: subjectType,
@@ -1407,6 +1543,9 @@ export async function upsertV2PayrollEntry(patch: {
   };
   if (days !== undefined) payload.days = days;
   if (rate !== undefined) payload.rate = rate;
+  if (accruedAmount !== undefined) payload.accrued_amount = accruedAmount;
+  if (bonusAmount !== undefined) payload.bonus_amount = bonusAmount;
+  if (penaltyAmount !== undefined) payload.penalty_amount = penaltyAmount;
   if (salaryAmount !== undefined) payload.salary_amount = salaryAmount;
 
   const { data, error } = await supabase
@@ -1418,6 +1557,136 @@ export async function upsertV2PayrollEntry(patch: {
 
   queryClient.invalidateQueries({ queryKey: QK.payrollEntries(periodMonth, periodYear) });
   return mapV2PayrollEntry(data);
+}
+
+export async function upsertV2PayrollEntries(patches: Array<{
+  subjectId: string;
+  subjectType: PayrollSubjectType;
+  periodMonth: number;
+  periodYear: number;
+  days: number;
+  rate: number;
+  accruedAmount: number;
+  bonusAmount: number;
+  penaltyAmount: number;
+  salaryAmount: number;
+}>): Promise<V2PayrollEntry[]> {
+  if (patches.length === 0) return [];
+  const payload = patches.map(patch => ({
+    subject_id: patch.subjectId,
+    subject_type: patch.subjectType,
+    period_month: patch.periodMonth,
+    period_year: patch.periodYear,
+    days: patch.days,
+    rate: patch.rate,
+    accrued_amount: patch.accruedAmount,
+    bonus_amount: patch.bonusAmount,
+    penalty_amount: patch.penaltyAmount,
+    salary_amount: patch.salaryAmount,
+  }));
+  const { data, error } = await supabase
+    .from('v2_payroll_entries')
+    .upsert(payload, { onConflict: 'subject_id,subject_type,period_month,period_year' })
+    .select();
+  if (error) throw new Error(error.message);
+
+  const saved = (data ?? []).map(mapV2PayrollEntry);
+  const periodMonth = patches[0].periodMonth;
+  const periodYear = patches[0].periodYear;
+  queryClient.setQueryData<V2PayrollEntry[]>(QK.payrollEntries(periodMonth, periodYear), current => {
+    const next = [...(current ?? [])];
+    saved.forEach(entry => {
+      const index = next.findIndex(item => item.subjectId === entry.subjectId && item.subjectType === entry.subjectType);
+      if (index >= 0) next[index] = entry;
+      else next.push(entry);
+    });
+    return next;
+  });
+  return saved;
+}
+
+function mapV2PayrollApproval(row: any): V2PayrollApproval {
+  return {
+    id: String(row.id),
+    schoolKey: String(row.school_key),
+    periodMonth: Number(row.period_month),
+    periodYear: Number(row.period_year),
+    status: row.status as PayrollApprovalStatus,
+    submittedByName: row.submitted_by_name ?? '',
+    submittedAt: row.submitted_at ?? '',
+    approvedByName: row.approved_by_name ?? '',
+    approvedAt: row.approved_at ?? '',
+    rejectionComment: row.rejection_comment ?? '',
+    updatedAt: row.updated_at ?? '',
+  };
+}
+
+async function callPayrollApprovalApi(sessionToken: string | undefined, body: Record<string, unknown>): Promise<any> {
+  if (!sessionToken) throw new Error('Сессия недействительна или истекла');
+  const { data, error } = await supabase.functions.invoke('payroll-approval-api', {
+    body,
+    headers: { 'x-employee-session': sessionToken },
+  });
+  if (error) {
+    let message = error.message;
+    const context = (error as { context?: Response }).context;
+    if (context) {
+      try {
+        const payload = await context.clone().json();
+        message = payload?.error || message;
+      } catch {
+        // Ответ функции может не содержать JSON — тогда показываем исходную ошибку.
+      }
+    }
+    throw new Error(message);
+  }
+  if (!data?.ok) throw new Error(data?.error || 'Ошибка согласования табеля');
+  return data;
+}
+
+export async function fetchV2PayrollApproval(schoolKey: string, periodMonth: number, periodYear: number, sessionToken?: string): Promise<V2PayrollApproval | null> {
+  const data = await callPayrollApprovalApi(sessionToken, { action: 'get', schoolKey, periodMonth, periodYear });
+  return data.row ? mapV2PayrollApproval(data.row) : null;
+}
+
+export async function fetchV2PayrollApprovalsForPeriod(periodMonth: number, periodYear: number, sessionToken?: string): Promise<V2PayrollApproval[]> {
+  const data = await callPayrollApprovalApi(sessionToken, { action: 'list', periodMonth, periodYear });
+  return (data.rows ?? []).map(mapV2PayrollApproval);
+}
+
+export async function setV2PayrollApprovalStatus(input: {
+  schoolKey: string;
+  periodMonth: number;
+  periodYear: number;
+  status: PayrollApprovalStatus;
+  rejectionComment?: string;
+  subjects?: Array<{ subjectId: string; subjectType: PayrollSubjectType }>;
+}, sessionToken?: string): Promise<V2PayrollApproval> {
+  const data = await callPayrollApprovalApi(sessionToken, { action: 'setStatus', ...input });
+  queryClient.invalidateQueries({ queryKey: QK.payrollEntries(input.periodMonth, input.periodYear) });
+  queryClient.invalidateQueries({ queryKey: QK.payrollApproval(input.schoolKey, input.periodMonth, input.periodYear) });
+  queryClient.invalidateQueries({ queryKey: QK.payrollApprovals(input.periodMonth, input.periodYear) });
+  return mapV2PayrollApproval(data.row);
+}
+
+export async function setV2PayrollEntryApprovalStatus(input: {
+  schoolKey: string;
+  periodMonth: number;
+  periodYear: number;
+  subjectId?: string;
+  subjectType?: PayrollSubjectType;
+  status: 'draft' | 'approved' | 'rejected';
+  allSubjects: Array<{ subjectId: string; subjectType: PayrollSubjectType }>;
+  rejectionComment?: string;
+}, sessionToken?: string): Promise<{ approval: V2PayrollApproval; entries: V2PayrollEntry[] }> {
+  const data = await callPayrollApprovalApi(sessionToken, { action: 'setEntryStatus', ...input });
+  queryClient.invalidateQueries({ queryKey: QK.payrollEntries(input.periodMonth, input.periodYear) });
+  queryClient.invalidateQueries({ queryKey: QK.payrollApproval(input.schoolKey, input.periodMonth, input.periodYear) });
+  queryClient.invalidateQueries({ queryKey: QK.payrollApprovals(input.periodMonth, input.periodYear) });
+  return {
+    approval: mapV2PayrollApproval(data.approval),
+    entries: (data.entries ?? []).map(mapV2PayrollEntry),
+  };
 }
 
 export async function updateV2TransferVehicleType(params: {

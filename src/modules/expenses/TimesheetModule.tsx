@@ -7,6 +7,7 @@ import { PayrollSchoolTab, TimesheetPayrollHeaderRenderArgs, TimesheetPayrollSum
 export interface TimesheetModuleProps {
   userRole?: UserRole;
   userName?: string;
+  sessionToken?: string;
   allowedSchools?: string[];
   adminFiltersOpen?: boolean;
   onAdminFiltersClose?: () => void;

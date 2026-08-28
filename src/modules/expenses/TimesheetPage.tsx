@@ -10,6 +10,7 @@ import { PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, PayrollSchoolTab, TimesheetPa
 interface Props {
   userRole?: UserRole;
   userName?: string;
+  sessionToken?: string;
   allowedSchools?: string[];
   adminFiltersOpen?: boolean;
   onAdminFiltersClose?: () => void;
@@ -33,7 +34,7 @@ interface SchoolSettings {
   rate: number;
 }
 
-const DEFAULT_RATE = 3700;
+const DEFAULT_RATE = 4000;
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
@@ -153,6 +154,9 @@ function CalendarPopup({
 // ── Main ──────────────────────────────────────────────────────────────────────
 
 export default function TimesheetPage({
+  userRole,
+  userName,
+  sessionToken,
   vehicleType,
   initialSchoolKey = '',
   externalQuickTransfer = '',
@@ -351,12 +355,17 @@ export default function TimesheetPage({
       onSummaryChange={onPayrollSummaryChange}
       payrollView={payrollSchoolTab}
       search={search}
+      userRole={userRole}
+      userName={userName}
+      sessionToken={sessionToken}
     />
   );
 
   return (
     <FamiliesPage
       {...props}
+      userRole={userRole}
+      userName={userName}
       mode="payments"
       hideTransferBars
       customTopContent={renderPayrollHeader?.({ calculator })}

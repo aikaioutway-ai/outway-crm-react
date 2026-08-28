@@ -20,5 +20,8 @@ export const QK = {
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
   employees: ['employees'] as const,
   payrollEntries: (periodMonth: number, periodYear: number) => ['payrollEntries', periodMonth, periodYear] as const,
+  payrollApproval: (schoolKey: string, periodMonth: number, periodYear: number) => ['payrollApproval', schoolKey, periodMonth, periodYear] as const,
+  payrollApprovals: (periodMonth: number, periodYear: number) => ['payrollApprovals', periodMonth, periodYear] as const,
+  payrollPayments: (periodMonth: number, periodYear: number) => ['payrollPayments', periodMonth, periodYear] as const,
   driverAdvancesForPeriod: (periodMonth: number, periodYear: number) => ['driverAdvancesForPeriod', periodMonth, periodYear] as const,
 };

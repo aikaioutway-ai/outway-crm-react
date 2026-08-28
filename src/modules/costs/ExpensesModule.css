@@ -14,6 +14,9 @@
 .expense-category-name { font-size: 14px; font-weight: 850; color: #17222f; }
 .expense-category-amount { margin-top: 4px; font-size: 18px; font-weight: 850; color: #17222f; }
 .expense-category-count { color: #8b96a9; font-size: 11px; font-weight: 650; margin-top: 2px; }
+.expense-category-count svg { vertical-align: -2px; margin-right: 3px; }
+.expense-category-card.locked { cursor: default; }
+.expense-category-card.locked:hover { transform: none; box-shadow: none; border-color: #dbe7ea; }
 .expense-subcategory-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; }
 .expense-subcategory-card { min-width: 0; padding: 12px 13px; border: 1px solid #dbe7ea; border-radius: 14px; background: #f9fcfc; color: #17222f; display: flex; flex-direction: column; align-items: flex-start; text-align: left; transition: border-color .14s, background .14s, box-shadow .14s; }
 .expense-subcategory-card:hover { transform: translateY(-4px) scale(1.045); border-color: #9bcfd0; background: #fff; z-index: 8; }
@@ -30,6 +33,14 @@
 .expenses-table td { padding: 11px 12px; border-top: 1px solid #edf2f3; color: #354052; font-size: 12px; vertical-align: middle; }
 .expenses-table td.number, .expenses-table th.number { text-align: right; }
 .expenses-table .expense-name { color: #17222f; font-weight: 750; }
+.expense-actions-column { width: 86px; text-align: center !important; }
+.expense-row-actions { white-space: nowrap; text-align: center; }
+.expense-row-actions button { width: 29px; height: 29px; display: inline-grid; place-items: center; margin: 0 2px; border: 1px solid #d4e3e7; border-radius: 9px; background: #fff; color: #477279; cursor: pointer; }
+.expense-row-actions button:hover { background: #eef6f7; border-color: #9bcfd0; }
+.expense-row-actions button.danger { color: #b42318; border-color: #f1caca; background: #fff8f8; }
+.expense-row-actions button.danger:hover { background: #fff0f0; }
+.expense-row-actions button:disabled { opacity: .45; cursor: default; }
+.expense-system-lock { display: inline-grid; place-items: center; color: #a4adb9; }
 .expense-badge { display: inline-flex; align-items: center; padding: 4px 8px; border-radius: 999px; background: #eef6f7; color: #477279; font-size: 10px; font-weight: 800; white-space: nowrap; }
 .expenses-empty { padding: 42px 20px; text-align: center; color: #8b96a9; font-size: 13px; font-weight: 650; }
 .expenses-back { border: 0; background: transparent; color: #258b8c; font-weight: 800; font-size: 12px; margin-bottom: 5px; }

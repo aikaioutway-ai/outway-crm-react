@@ -33,6 +33,8 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
       if (
         current
         && current.accruedAmount === summary.accruedAmount
+        && current.pendingAmount === summary.pendingAmount
+        && current.approvedAmount === summary.approvedAmount
         && current.advanceAmount === summary.advanceAmount
         && current.salaryAmount === summary.salaryAmount
         && current.paidAmount === summary.paidAmount
@@ -47,6 +49,8 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
   if (!schoolKey) {
     return (
       <PayrollOverview
+        view={schoolTab}
+        sessionToken={props.sessionToken}
         periodKey={periodKey}
         onPeriodKeyChange={onPeriodKeyChange}
         onSelectSchool={onSelectSchool}
@@ -85,6 +89,7 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
               </div>
               <PayrollSchoolKpiStrip
                 schoolKey={schoolKey}
+                view={schoolTab}
                 rightReserveWidth={rightReserveWidth}
                 summaryBySchool={summaryBySchool}
                 leadingContent={schoolTab === 'timesheet' ? calculator : undefined}

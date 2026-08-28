@@ -14,6 +14,7 @@ export interface ExpenseRecord {
   comment: string;
   createdBy?: string;
   createdAt: string;
+  source?: 'manual' | 'salary' | 'advance';
 }
 
 export interface NewExpenseRecord {
@@ -31,11 +32,11 @@ export interface NewExpenseRecord {
 export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; color: string; soft: string; subcategories: string[] }> = {
   school: {
     label: 'Школа', color: '#258B8C', soft: '#E2F5F3',
-    subcategories: ['Зарплата (+авансы)', 'Промоматериалы', 'Премия', 'Подарки', 'Фонд Школы', 'Возврат', 'Прочее'],
+    subcategories: ['Промоматериалы', 'Премия', 'Подарки', 'Фонд Школы', 'Возврат', 'Прочее'],
   },
   office: {
     label: 'Офис', color: '#5267A8', soft: '#EDF0FA',
-    subcategories: ['Аренда', 'Коммунальные услуги', 'Канцтовары', 'Зарплата', 'Премия', 'Подарки', 'Налог', 'Соцфонд', 'Связь и интернет', 'Прочее'],
+    subcategories: ['Аренда', 'Коммунальные услуги', 'Канцтовары', 'Премия', 'Подарки', 'Налог', 'Соцфонд', 'Связь и интернет', 'Прочее'],
   },
   logistics: {
     label: 'Логистика', color: '#D17B2C', soft: '#FFF1E4',

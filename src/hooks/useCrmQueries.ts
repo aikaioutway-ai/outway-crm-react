@@ -7,6 +7,9 @@ import {
   fetchCashierPaymentsTable,
   fetchBranchStats,
   fetchV2PayrollEntriesForPeriod,
+  fetchV2PayrollApproval,
+  fetchV2PayrollApprovalsForPeriod,
+  fetchV2PayrollPaymentsForPeriod,
   fetchV2DriverAdvancesForPeriod,
   FamilyListRow,
   FamiliesPageParams,
@@ -16,6 +19,8 @@ import {
   CashierPaymentRow,
   BranchStat,
   V2PayrollEntry,
+  V2PayrollApproval,
+  V2PayrollPayment,
   V2DriverAdvance,
 } from '../services/crmV2Service';
 import { fetchEmployees } from '../services/employeeService';
@@ -90,6 +95,31 @@ export function usePayrollEntriesForPeriod(periodMonth: number, periodYear: numb
   return useQuery({
     queryKey: QK.payrollEntries(periodMonth, periodYear),
     queryFn: () => fetchV2PayrollEntriesForPeriod(periodMonth, periodYear),
+  });
+}
+
+export function usePayrollApproval(schoolKey: string, periodMonth: number, periodYear: number, sessionToken?: string): UseQueryResult<V2PayrollApproval | null> {
+  return useQuery({
+    queryKey: QK.payrollApproval(schoolKey, periodMonth, periodYear),
+    queryFn: () => fetchV2PayrollApproval(schoolKey, periodMonth, periodYear, sessionToken),
+    enabled: Boolean(schoolKey && sessionToken),
+    retry: false,
+  });
+}
+
+export function usePayrollApprovalsForPeriod(periodMonth: number, periodYear: number, sessionToken?: string): UseQueryResult<V2PayrollApproval[]> {
+  return useQuery({
+    queryKey: QK.payrollApprovals(periodMonth, periodYear),
+    queryFn: () => fetchV2PayrollApprovalsForPeriod(periodMonth, periodYear, sessionToken),
+    enabled: Boolean(sessionToken),
+    retry: false,
+  });
+}
+
+export function usePayrollPaymentsForPeriod(periodMonth: number, periodYear: number): UseQueryResult<V2PayrollPayment[]> {
+  return useQuery({
+    queryKey: QK.payrollPayments(periodMonth, periodYear),
+    queryFn: () => fetchV2PayrollPaymentsForPeriod(periodMonth, periodYear),
   });
 }
 

@@ -4,6 +4,7 @@ import React, {
 import ReactDOM from 'react-dom';
 import NotionSelect from '../selects/NotionSelect';
 import { supabase } from '../../services/supabase';
+import './DataTable.css';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 

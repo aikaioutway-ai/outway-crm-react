@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3, Headphones, HandCoins, ShoppingBag } from 'lucide-react';
+import { Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3, Headphones, ShoppingBag } from 'lucide-react';
 import { UserRole } from '../../types';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'costs' | 'market' | 'settings';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'settings';
 
 interface SidebarProps {
   active: NavSection;
@@ -24,20 +24,23 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'drivers',   label: 'Водители',   icon: <Car size={18} /> },
   { key: 'dispatch',  label: 'Диспетчер',  icon: <Headphones size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
-  { key: 'costs',      label: 'Расходы',   icon: <HandCoins size={18} /> },
   { key: 'market',     label: 'Маркет',    icon: <ShoppingBag size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
 ];
 
 export function getAllowedSections(role: UserRole): NavSection[] {
-  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'costs', 'market'];
-  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'costs', 'market'];
+  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'market'];
+  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'market'];
   if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'market'];
   if (role === 'manager')      return ['families', 'market'];
   if (role === 'logist')        return ['logistics', 'drivers', 'dispatch'];
   if (role === 'senior_logist') return ['logistics', 'drivers', 'dispatch', 'expenses'];
   if (role === 'cashier')       return ['cashier', 'expenses', 'market'];
   return ['families'];
+}
+
+export function canAccessFinanceExpenses(role: UserRole): boolean {
+  return role === 'admin' || role === 'gen_director';
 }
 
 export function canAccessSection(role: UserRole, section: NavSection): boolean {

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { VehicleType } from '../../types';
 import { createDefaultV2DriverDocuments, createV2Driver, V2BranchOption, V2DriverDocumentInput } from '../../services/crmV2Service';
 import { VT_LABEL } from '../families/constants';
+import { DRIVER_RESERVE_KEY } from './DriversOverview';
 
 const DISTRICTS = [
   'Микрорайоны',
@@ -64,14 +65,15 @@ const labelStyle: React.CSSProperties = {
 
 export default function NewDriverModal({ branches, initialBranchKey, onClose, onCreated }: Props) {
   const initialBranch = useMemo(() => (
-    branches.find(branch => branch.code === initialBranchKey || branch.shortName === initialBranchKey)
-    ?? branches[0]
+    initialBranchKey === DRIVER_RESERVE_KEY
+      ? undefined
+      : branches.find(branch => branch.code === initialBranchKey || branch.shortName === initialBranchKey)
   ), [branches, initialBranchKey]);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [secondPhone, setSecondPhone] = useState('');
   const [address, setAddress] = useState('');
-  const [branchId, setBranchId] = useState(initialBranch?.id ?? '');
+  const [branchId, setBranchId] = useState(initialBranch?.id ?? DRIVER_RESERVE_KEY);
   const [transferNumber, setTransferNumber] = useState('');
   const [vehicleType, setVehicleType] = useState<VehicleType>('microbus');
   const [plateNumber, setPlateNumber] = useState('');
@@ -85,6 +87,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
   const [saving, setSaving] = useState(false);
 
   const selectedBranch = branches.find(branch => branch.id === branchId);
+  const isReserve = branchId === DRIVER_RESERVE_KEY;
 
   function toggleDistrict(name: string) {
     setDistricts(prev => (
@@ -109,6 +112,10 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
       alert('Укажите номер водителя');
       return;
     }
+    if (!isReserve && !transferNumber) {
+      alert('Выберите трансфер или укажите школу «Резерв»');
+      return;
+    }
 
     setSaving(true);
     try {
@@ -118,10 +125,10 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
         secondPhone,
         address,
         districts,
-        branchId: transferNumber ? branchId : undefined,
-        schoolId: transferNumber ? selectedBranch?.schoolId : undefined,
-        transferNumber: transferNumber ? Number(transferNumber) : undefined,
-        vehicleType: transferNumber ? vehicleType : undefined,
+        branchId: isReserve ? undefined : branchId,
+        schoolId: isReserve ? undefined : selectedBranch?.schoolId,
+        transferNumber: isReserve ? undefined : Number(transferNumber),
+        vehicleType,
         plateNumber,
         brand,
         model,
@@ -132,7 +139,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
       onCreated(driverId);
     } catch (error) {
       console.error('Driver create failed', error);
-      alert('Не удалось добавить водителя');
+      alert(error instanceof Error ? `Не удалось добавить водителя: ${error.message}` : 'Не удалось добавить водителя');
     } finally {
       setSaving(false);
     }
@@ -144,7 +151,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
         <header style={{ minHeight: 64, padding: '14px 18px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
           <div>
             <div style={{ fontSize: 18, fontWeight: 900, color: '#17222F' }}>Новый водитель</div>
-            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 700, color: '#7A859D' }}>Если трансфер не выбран, водитель уйдет в ожидание</div>
+            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 700, color: '#7A859D' }}>Для водителя без трансфера выберите школу «Резерв»</div>
           </div>
           <button onClick={onClose} style={{ width: 36, height: 36, border: '1px solid #D4E3E7', borderRadius: 12, background: '#fff', color: '#626C8B', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <X size={18} />
@@ -189,13 +196,18 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
             <label style={labelStyle}>Школа
-              <select style={inputStyle} value={branchId} onChange={event => setBranchId(event.target.value)}>
+              <select style={inputStyle} value={branchId} onChange={event => {
+                const nextBranchId = event.target.value;
+                setBranchId(nextBranchId);
+                if (nextBranchId === DRIVER_RESERVE_KEY) setTransferNumber('');
+              }}>
+                <option value={DRIVER_RESERVE_KEY}>Резерв</option>
                 {branches.map(branch => <option key={branch.id} value={branch.id}>{branch.shortName || branch.code}</option>)}
               </select>
             </label>
             <label style={labelStyle}>Трансфер
-              <select style={inputStyle} value={transferNumber} onChange={event => setTransferNumber(event.target.value)}>
-                <option value="">Ожидание</option>
+              <select style={{ ...inputStyle, background: isReserve ? '#F2F6F7' : '#fff' }} value={transferNumber} disabled={isReserve} onChange={event => setTransferNumber(event.target.value)}>
+                <option value="">{isReserve ? 'Без трансфера' : 'Выберите трансфер'}</option>
                 {TRANSFER_NUMBERS.map(number => <option key={number} value={number}>№{number}</option>)}
               </select>
             </label>

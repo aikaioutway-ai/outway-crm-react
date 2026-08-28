@@ -4,7 +4,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
@@ -20,7 +20,7 @@ import {
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2 } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
@@ -375,6 +375,10 @@ type DriverDraft = {
 };
 
 const DRIVER_FINANCE_MONTHS = [
+  'Сентябрь',
+  'Октябрь',
+  'Ноябрь',
+  'Декабрь',
   'Январь',
   'Февраль',
   'Март',
@@ -383,16 +387,12 @@ const DRIVER_FINANCE_MONTHS = [
   'Июнь',
   'Июль',
   'Август',
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
 ];
 
 const DRIVER_STATUS_OPTIONS = [
   { value: 'active', label: 'Активен' },
   { value: 'inactive', label: 'Неактивен' },
-  { value: 'vacation', label: 'Ожидание' },
+  { value: 'vacation', label: 'Отпуск' },
   { value: 'dismissed', label: 'Уволен' },
   { value: 'archive', label: 'Архив' },
 ];
@@ -822,6 +822,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
   const [driverDocumentsDraft, setDriverDocumentsDraft] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
   const [savingDriver, setSavingDriver] = useState(false);
+  const [deletingDriver, setDeletingDriver] = useState(false);
   const [driverTelegramGroups, setDriverTelegramGroups] = useState<DriverTelegramGroup[]>([]);
   const [driverTelegramLoading, setDriverTelegramLoading] = useState(false);
   const [driverTelegramError, setDriverTelegramError] = useState('');
@@ -2039,6 +2040,24 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       setSavingDriver(false);
     }
   };
+  const removeSelectedDriver = async () => {
+    if (!selectedDriver) return;
+    const message = selectedDriver.transferCount > 0
+      ? `Удалить водителя «${selectedDriver.fullName}»? Он будет снят с ${selectedDriver.transferCount} трансфер(ов), связанные документы и авансы будут удалены.`
+      : `Удалить водителя «${selectedDriver.fullName}»? Связанные документы и авансы будут удалены.`;
+    if (!window.confirm(message)) return;
+    setDeletingDriver(true);
+    try {
+      await deleteV2Driver(selectedDriver.driverId);
+      setSelectedDriverId(null);
+      await load(false);
+    } catch (error) {
+      console.error('Driver delete failed', error);
+      alert(error instanceof Error ? `Не удалось удалить водителя: ${error.message}` : 'Не удалось удалить водителя');
+    } finally {
+      setDeletingDriver(false);
+    }
+  };
   const removeDriverAdvance = async (advanceId: string) => {
     if (!window.confirm('Удалить этот аванс?')) return;
     try {
@@ -3115,6 +3134,30 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
                 <button
+                  onClick={removeSelectedDriver}
+                  disabled={savingDriver || deletingDriver}
+                  title="Удалить водителя"
+                  style={{
+                    height: 36,
+                    padding: '0 12px',
+                    border: '1px solid #F1CACA',
+                    borderRadius: 12,
+                    background: '#FFF5F5',
+                    color: '#B42318',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 7,
+                    cursor: savingDriver || deletingDriver ? 'default' : 'pointer',
+                    opacity: savingDriver || deletingDriver ? 0.6 : 1,
+                    fontSize: 12,
+                    fontWeight: 900,
+                  }}
+                >
+                  <Trash2 size={15} />
+                  {deletingDriver ? 'Удаление...' : 'Удалить'}
+                </button>
+                <button
                   onClick={saveSelectedDriver}
                   disabled={savingDriver || !driverDraft}
                   title="Сохранить"
@@ -3998,7 +4041,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       {showNewDriver && (
         <NewDriverModal
           branches={driverBranches}
-          initialBranchKey={selectedDashboardSchool?.key === DRIVER_RESERVE_KEY ? undefined : selectedDashboardSchool?.key}
+          initialBranchKey={selectedDashboardSchool?.key}
           onClose={() => setShowNewDriver(false)}
           onCreated={(driverId) => {
             setShowNewDriver(false);

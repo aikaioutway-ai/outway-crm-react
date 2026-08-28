@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CreditCard, ExternalLink, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
+import { Check, ChevronDown, CreditCard, ExternalLink, FileText, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
@@ -13,6 +13,7 @@ import {
 import TabFinance from './TabFinance';
 import TabHistory from './TabHistory';
 import NotionSelect from '../../core/selects/NotionSelect';
+import { createCustomFamilyDocument, createDefaultFamilyDocuments, FamilyDocument, fetchFamilyDocuments, saveFamilyDocuments } from '../../services/familyDocumentService';
 
 interface AuditEntry {
   id: string; familyId: string; userName: string;
@@ -21,10 +22,11 @@ interface AuditEntry {
 interface Props {
   family: Family; onClose: () => void; userRole?: string; userName?: string; initialTab?: Tab; onUpdated?: () => void;
 }
-type Tab = 'overview' | 'finance' | 'history';
+type Tab = 'overview' | 'documents' | 'finance' | 'history';
 
 const TABS: { key: Tab; label: string; desc: string; icon: React.ReactNode }[] = [
   { key: 'overview', label: 'Основная', desc: 'контакт, адрес, дети', icon: <LayoutDashboard size={15} /> },
+  { key: 'documents', label: 'Документы', desc: 'договоры и файлы', icon: <FileText size={15} /> },
   { key: 'finance', label: 'Финансы', desc: 'платежи и начисления', icon: <CreditCard size={15} /> },
   { key: 'history', label: 'История', desc: 'изменения и события', icon: <Clock size={15} /> },
 ];
@@ -62,6 +64,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [editing, setEditing] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
+  const [savedDocuments, setSavedDocuments] = useState<FamilyDocument[]>(createDefaultFamilyDocuments());
+  const [draftDocuments, setDraftDocuments] = useState<FamilyDocument[]>(createDefaultFamilyDocuments());
+  const [loadingDocuments, setLoadingDocuments] = useState(true);
 
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
@@ -78,6 +83,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setFinanceLoaded(false);
     setAuditLoaded(false);
     loadChildren();
+    loadDocuments();
     fetchV2Branches().then(next => { if (activeFamilyIdRef.current === family.id) setBranches(next); }).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
@@ -91,6 +97,20 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       setLoadingKids(false);
     }
     return next;
+  }
+  async function loadDocuments(): Promise<FamilyDocument[]> {
+    const requestedFamilyId = family.id;
+    setLoadingDocuments(true);
+    try {
+      const next = await fetchFamilyDocuments(requestedFamilyId);
+      if (activeFamilyIdRef.current === requestedFamilyId) {
+        setSavedDocuments(next);
+        setDraftDocuments(next.map(document => ({ ...document, scanFile: null })));
+      }
+      return next;
+    } finally {
+      if (activeFamilyIdRef.current === requestedFamilyId) setLoadingDocuments(false);
+    }
   }
   async function loadFinance(kids = children) {
     setLoadingFinance(true);
@@ -145,6 +165,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setDraftFamily({ ...savedFamily });
     setDraftChildren(children.map(child => ({ ...child })));
     setDeletedChildIds(new Set());
+    setDraftDocuments(savedDocuments.map(document => ({ ...document, scanFile: null })));
     setEditing(true);
     setSaveMsg('');
   }
@@ -153,6 +174,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setDraftFamily({ ...savedFamily });
     setDraftChildren(children.map(child => ({ ...child })));
     setDeletedChildIds(new Set());
+    setDraftDocuments(savedDocuments.map(document => ({ ...document, scanFile: null })));
     setEditing(false);
   }
 
@@ -194,6 +216,18 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     }
   }
 
+  function patchDraftDocument(index: number, patch: Partial<FamilyDocument>) {
+    setDraftDocuments(current => current.map((document, itemIndex) => itemIndex === index ? { ...document, ...patch } : document));
+  }
+
+  function addDraftDocument() {
+    setDraftDocuments(current => [...current, createCustomFamilyDocument(current.length)]);
+  }
+
+  function deleteDraftDocument(index: number) {
+    setDraftDocuments(current => current.filter((document, itemIndex) => document.isDefault || itemIndex !== index));
+  }
+
   async function saveAllChanges() {
     if (savingAll) return;
     setSavingAll(true);
@@ -230,6 +264,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         const ok = await handleSaveChild(original, draft);
         if (!ok) throw new Error('child-save-failed');
       }
+
+      const nextDocuments = await saveFamilyDocuments(family.id, draftDocuments);
+      setSavedDocuments(nextDocuments);
+      setDraftDocuments(nextDocuments.map(document => ({ ...document, scanFile: null })));
 
       const nextChildren = await loadChildren();
       if (financeLoaded) await loadFinance(nextChildren);
@@ -398,6 +436,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const depositPaid = depositCharge ? depositCharge.debtAmount <= 0 : false;
   const cardFamily = editing ? draftFamily : savedFamily;
   const cardChildren = editing ? draftChildren : children;
+  const cardDocuments = editing ? draftDocuments : savedDocuments;
   const primaryChild = cardChildren[0];
   const familyMonthlyPrice = cardChildren.length > 0
     ? cardChildren.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
@@ -532,6 +571,17 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             </div>
           )}
 
+          {tab === 'documents' && (
+            <FamilyDocumentsTab
+              documents={cardDocuments}
+              editing={editing}
+              loading={loadingDocuments}
+              onPatch={patchDraftDocument}
+              onAdd={addDraftDocument}
+              onDelete={deleteDraftDocument}
+            />
+          )}
+
           {tab === 'finance' && (
             <TabFinanceLazy
               loaded={financeLoaded}
@@ -554,6 +604,67 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     </div>
   );
 }
+
+function FamilyDocumentsTab({ documents, editing, loading, onPatch, onAdd, onDelete }: {
+  documents: FamilyDocument[];
+  editing: boolean;
+  loading: boolean;
+  onPatch: (index: number, patch: Partial<FamilyDocument>) => void;
+  onAdd: () => void;
+  onDelete: (index: number) => void;
+}) {
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#8A94A3', fontSize: 13 }}>Загрузка документов...</div>;
+  const readyCount = documents.filter(document => Boolean(document.scanUrl || document.scanFile)).length;
+  return (
+    <div style={{ display: 'grid', gap: 12 }}>
+      <section style={{ background: '#fff', borderRadius: 14, padding: '13px 15px', boxShadow: '0 5px 18px rgba(43, 72, 89, .055)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+        <div>
+          <div style={{ color: '#111827', fontSize: 14, fontWeight: 900 }}>Документы клиента</div>
+          <div style={{ marginTop: 3, color: '#8A94A3', fontSize: 11, fontWeight: 650 }}>{readyCount} из {documents.length} файлов добавлено</div>
+        </div>
+        {editing && <button type="button" onClick={onAdd} style={{ height: 34, padding: '0 12px', border: '1px solid #A9D7D8', borderRadius: 10, background: '#F1FAFA', color: '#237F81', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 850, cursor: 'pointer' }}><Plus size={14} /> Добавить документ</button>}
+      </section>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+        {documents.map((document, index) => {
+          const hasFile = Boolean(document.scanFile || document.scanUrl);
+          return (
+            <article key={document.documentKey} style={{ position: 'relative', background: '#fff', border: '1px solid #E4ECEF', borderRadius: 14, padding: 14, boxShadow: '0 4px 14px rgba(43, 72, 89, .045)', display: 'grid', gap: 11 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: document.isDefault || !editing ? 0 : 34 }}>
+                <span style={{ width: 32, height: 32, borderRadius: 10, background: hasFile ? '#E4F6F3' : '#FFF4E8', color: hasFile ? '#237F81' : '#B45309', display: 'grid', placeItems: 'center', flexShrink: 0 }}><FileText size={16} /></span>
+                {editing ? (
+                  <input value={document.title} onChange={event => onPatch(index, { title: event.currentTarget.value })} aria-label="Название документа" style={{ width: '100%', minWidth: 0, height: 32, border: '1px solid #DDE7EB', borderRadius: 8, padding: '0 9px', color: '#111827', fontSize: 12.5, fontWeight: 850, outline: 'none' }} />
+                ) : (
+                  <div style={{ color: '#111827', fontSize: 13, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{document.title}</div>
+                )}
+                {!document.isDefault && editing && <button type="button" onClick={() => onDelete(index)} title="Удалить документ" style={{ position: 'absolute', right: 12, top: 16, width: 28, height: 28, border: '1px solid #F1CACA', borderRadius: 8, background: '#FFF7F7', color: '#B42318', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Trash2 size={13} /></button>}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <label style={{ display: 'grid', gap: 4 }}><span style={{ color: '#8A94A3', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Номер</span>{editing ? <input value={document.number} onChange={event => onPatch(index, { number: event.currentTarget.value })} placeholder="Не указан" style={familyDocumentControlStyle} /> : <span style={familyDocumentValueStyle}>{document.number || '—'}</span>}</label>
+                <label style={{ display: 'grid', gap: 4 }}><span style={{ color: '#8A94A3', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Дата</span>{editing ? <input type="date" value={document.issuedAt} onChange={event => onPatch(index, { issuedAt: event.currentTarget.value })} style={familyDocumentControlStyle} /> : <span style={familyDocumentValueStyle}>{document.issuedAt ? new Date(`${document.issuedAt}T00:00:00`).toLocaleDateString('ru-RU') : '—'}</span>}</label>
+              </div>
+
+              {editing ? (
+                <label style={{ height: 36, border: `1px dashed ${hasFile ? '#8EC9C4' : '#D4E0E4'}`, borderRadius: 10, background: hasFile ? '#F3FBFA' : '#FAFCFC', color: hasFile ? '#237F81' : '#667085', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {document.scanFile ? document.scanFile.name : document.scanUrl ? 'Заменить файл' : 'Добавить файл'}
+                  <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={event => onPatch(index, { scanFile: event.currentTarget.files?.[0] ?? null })} style={{ display: 'none' }} />
+                </label>
+              ) : document.scanUrl ? (
+                <a href={document.scanUrl} target="_blank" rel="noreferrer" style={{ height: 34, borderRadius: 9, background: '#F1FAFA', color: '#237F81', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none', fontSize: 11, fontWeight: 850 }}><ExternalLink size={13} /> Открыть документ</a>
+              ) : (
+                <div style={{ height: 34, borderRadius: 9, background: '#FAF6F1', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>Файл не добавлен</div>
+              )}
+            </article>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+const familyDocumentControlStyle: React.CSSProperties = { width: '100%', height: 32, border: '1px solid #DDE7EB', borderRadius: 8, background: '#F8FAFC', padding: '0 8px', color: '#111827', fontSize: 11.5, fontWeight: 700, outline: 'none' };
+const familyDocumentValueStyle: React.CSSProperties = { height: 32, borderRadius: 8, background: '#F8FAFC', padding: '0 9px', color: '#344054', display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 750 };
 
 function SideMetric({ label, value, alert, pending }: { label: string; value: string; alert?: boolean; pending?: boolean }) {
   return (

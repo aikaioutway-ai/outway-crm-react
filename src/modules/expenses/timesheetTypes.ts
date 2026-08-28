@@ -8,6 +8,8 @@ export const PAYROLL_OFFICE_COLOR = '#687C54';
 
 export interface TimesheetPayrollSummary {
   accruedAmount: number;
+  pendingAmount?: number;
+  approvedAmount?: number;
   advanceAmount: number;
   salaryAmount: number;
   paidAmount: number;
