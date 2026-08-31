@@ -151,15 +151,17 @@ function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
   );
 }
 
-function ExpenseModal({ initialCategory, expense, userName, sessionToken, onClose, onSaved }: {
+function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowPersonalCategory, onClose, onSaved }: {
   initialCategory: ExpenseCategory | null;
   expense?: ExpenseRecord | null;
   userName?: string;
   sessionToken?: string;
+  allowPersonalCategory: boolean;
   onClose: () => void;
   onSaved: (expense: ExpenseRecord) => void;
 }) {
-  const defaultCategory = expense?.category ?? initialCategory ?? 'school';
+  const requestedCategory = expense?.category ?? initialCategory ?? 'school';
+  const defaultCategory = requestedCategory === 'personal' && !allowPersonalCategory ? 'school' : requestedCategory;
   const [category, setCategory] = useState<ExpenseCategory>(defaultCategory);
   const [subcategory, setSubcategory] = useState(expense?.subcategory ?? EXPENSE_CATEGORIES[defaultCategory].subcategories[0]);
   const [name, setName] = useState(expense?.name ?? '');
@@ -208,7 +210,7 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, onClos
         <div className="expense-modal-head"><h2>{expense ? 'Редактировать расход' : 'Новый расход'}</h2><button className="expense-modal-close" onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div>
         <form className="expense-form" onSubmit={submit}>
           <div className="expense-field full"><label>Наименование расхода</label><input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="Например, аренда офиса" /></div>
-          <div className="expense-field"><label>Главная категория</label><select value={category} onChange={event => changeCategory(event.target.value as ExpenseCategory)}>{EXPENSE_CATEGORY_KEYS.map(key => <option key={key} value={key}>{EXPENSE_CATEGORIES[key].label}</option>)}</select></div>
+          <div className="expense-field"><label>Главная категория</label><select value={category} onChange={event => changeCategory(event.target.value as ExpenseCategory)}>{EXPENSE_CATEGORY_KEYS.filter(key => allowPersonalCategory || key !== 'personal').map(key => <option key={key} value={key}>{EXPENSE_CATEGORIES[key].label}</option>)}</select></div>
           <div className="expense-field"><label>Подкатегория</label><select value={subcategory} onChange={event => setSubcategory(event.target.value)}>{EXPENSE_CATEGORIES[category].subcategories.map(item => <option key={item}>{item}</option>)}</select></div>
           <div className="expense-field"><label>Цена, сом</label><input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder="0" /></div>
           <div className="expense-field"><label>Количество</label><input type="number" min="0.01" step="0.01" value={quantity} onChange={event => setQuantity(event.target.value)} /></div>
@@ -380,7 +382,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken }: Exp
         </div>
         {loading ? <div className="expenses-empty">Загрузка…</div> : <ExpensesTable rows={canViewPersonalDetails ? visibleRows : visibleRows.filter(row => row.category !== 'personal')} showCategory={!selectedCategory} onEdit={expense => { setEditingExpense(expense); setModalOpen(true); }} onDelete={handleDelete} deletingId={deletingId} />}
       </div>
-      {modalOpen && <ExpenseModal initialCategory={selectedCategory} expense={editingExpense} userName={userName} sessionToken={sessionToken} onClose={() => { setModalOpen(false); setEditingExpense(null); }} onSaved={handleSaved} />}
+      {modalOpen && <ExpenseModal initialCategory={selectedCategory} expense={editingExpense} userName={userName} sessionToken={sessionToken} allowPersonalCategory={canViewPersonalDetails} onClose={() => { setModalOpen(false); setEditingExpense(null); }} onSaved={handleSaved} />}
     </div>
   );
 }

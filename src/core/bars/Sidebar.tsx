@@ -9,6 +9,7 @@ interface SidebarProps {
   onChange: (s: NavSection) => void;
   badges?: Partial<Record<NavSection, number>>;
   userRole: UserRole;
+  userId?: string;
   onLogout?: () => void;
   collapseSignal?: number;
   onFiltersClick?: () => void;
@@ -28,26 +29,30 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
 ];
 
-export function getAllowedSections(role: UserRole): NavSection[] {
-  if (role === 'admin')        return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'market'];
-  if (role === 'gen_director') return ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'market'];
-  if (role === 'director')     return ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'market'];
-  if (role === 'manager')      return ['families', 'market'];
-  if (role === 'logist')        return ['logistics', 'drivers', 'dispatch'];
-  if (role === 'senior_logist') return ['logistics', 'drivers', 'dispatch', 'expenses'];
-  if (role === 'cashier')       return ['cashier', 'expenses', 'market'];
-  return ['families'];
+export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
+
+export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
+  let sections: NavSection[];
+  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  else if (role === 'director')     sections = ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  else if (role === 'manager')      sections = ['families'];
+  else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
+  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses'];
+  else if (role === 'cashier')       sections = ['cashier', 'expenses'];
+  else sections = ['families'];
+  return userId === MARKET_OWNER_EMPLOYEE_ID ? [...sections, 'market'] : sections;
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
-  return role === 'admin' || role === 'gen_director';
+  return role === 'admin' || role === 'gen_director' || role === 'cashier';
 }
 
-export function canAccessSection(role: UserRole, section: NavSection): boolean {
-  return getAllowedSections(role).includes(section);
+export function canAccessSection(role: UserRole, section: NavSection, userId?: string): boolean {
+  return getAllowedSections(role, userId).includes(section);
 }
 
-export default function Sidebar({ active, onChange, badges = {}, userRole, onLogout, collapseSignal = 0, onFiltersClick, onColumnsClick, filtersActive, columnsActive }: SidebarProps) {
+export default function Sidebar({ active, onChange, badges = {}, userRole, userId, onLogout, collapseSignal = 0, onFiltersClick, onColumnsClick, filtersActive, columnsActive }: SidebarProps) {
   const [collapsedBySection, setCollapsedBySection] = useState<Partial<Record<NavSection, boolean>>>({});
   const collapsed = collapsedBySection[active] ?? true;
   const setCollapsed = (next: boolean) => {
@@ -60,7 +65,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, onLog
     }
   }, [active, collapseSignal]);
   const w = collapsed ? 72 : 224;
-  const navItems = NAV.filter(item => canAccessSection(userRole, item.key));
+  const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId));
 
   return (
     <aside style={{

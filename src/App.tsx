@@ -78,7 +78,7 @@ function getSavedUser(): AuthenticatedUser | null {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => getSavedUser());
   const currentUserRole = currentUser?.role ?? getSavedRole();
-  const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole)[0]);
+  const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole, currentUser?.id)[0]);
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
   const [cashierPeriodKey, setCashierPeriodKey] = useState(currentCashierPeriodKey);
@@ -150,7 +150,7 @@ export default function App() {
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     localStorage.setItem('outway_user_role', user.role);
     setCurrentUser(user);
-    setSection(getAllowedSections(user.role)[0]);
+    setSection(getAllowedSections(user.role, user.id)[0]);
     setFinanceTab(canAccessFinanceExpenses(user.role) ? 'expenses' : 'timesheet');
     return true;
   };
@@ -181,12 +181,12 @@ export default function App() {
   }, [currentUser]);
 
   useEffect(() => {
-    if (!canAccessSection(currentUserRole, section)) {
-      setSection(getAllowedSections(currentUserRole)[0]);
+    if (!canAccessSection(currentUserRole, section, currentUser?.id)) {
+      setSection(getAllowedSections(currentUserRole, currentUser?.id)[0]);
     }
     setAdminFiltersOpen(false);
     setColumnsOpen(false);
-  }, [currentUserRole, section]);
+  }, [currentUser?.id, currentUserRole, section]);
 
   useEffect(() => {
     if (!managerSchoolKey || isSchoolAllowed(managerSchoolKey, currentUser?.schoolKeys)) return;
@@ -348,6 +348,7 @@ export default function App() {
         onChange={setSection}
         badges={badges}
         userRole={currentUserRole}
+        userId={currentUser.id}
         onLogout={handleLogout}
         collapseSignal={sidebarCollapseSignal}
         onFiltersClick={() => setAdminFiltersOpen(v => !v)}

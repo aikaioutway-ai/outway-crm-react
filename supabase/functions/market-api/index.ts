@@ -12,6 +12,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
 
 const CATALOG_ROLES = new Set(['admin', 'gen_director', 'director', 'manager']);
 const PAYMENT_ROLES = new Set(['admin', 'gen_director', 'director', 'manager', 'cashier']);
@@ -67,6 +68,7 @@ Deno.serve(async req => {
   try {
     const session = await verifySession(req.headers.get('x-employee-session') ?? '');
     if (!session) return response({ ok: false, error: 'Сессия недействительна или истекла' }, 401);
+    if (session.sub !== MARKET_OWNER_EMPLOYEE_ID) return response({ ok: false, error: 'Нет доступа к Маркету' }, 403);
 
     const body = await req.json();
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);

@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ALLOWED_ROLES = new Set(['admin', 'gen_director']);
+const ALLOWED_ROLES = new Set(['admin', 'gen_director', 'cashier']);
 const PERSONAL_DETAILS_ROLES = new Set(['admin', 'gen_director']);
 const ALLOWED_CATEGORIES = new Set(['school', 'office', 'logistics', 'extra_trip', 'personal']);
 const ALLOWED_METHODS = new Set(['cash', 'cashless']);
