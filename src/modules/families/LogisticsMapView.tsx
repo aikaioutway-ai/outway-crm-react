@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   fetchV2Branches,
   fetchV2Family,
@@ -122,6 +123,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
   const [zoneError, setZoneError] = useState<string | null>(null);
   const [zoneBusy, setZoneBusy] = useState(false);
   const [zoneRenderVersion, setZoneRenderVersion] = useState(0);
+  const [zoneOverlayRoot, setZoneOverlayRoot] = useState<HTMLDivElement | null>(null);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const ymapsRef = useRef<any>(null);
@@ -186,6 +188,17 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
           zoom: 11,
           controls: ['zoomControl', 'fullscreenControl'],
         });
+        const overlayRoot = document.createElement('div');
+        overlayRoot.dataset.routeZoneOverlay = 'true';
+        Object.assign(overlayRoot.style, {
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          zIndex: '10000',
+          pointerEvents: 'none',
+        });
+        containerRef.current.appendChild(overlayRoot);
+        setZoneOverlayRoot(overlayRoot);
         mapRef.current.container.fitToViewport();
         mapRef.current.events.add('click', (e: any) => {
           if (drawModeRef.current === 'rectangle' && draftZoneObjectRef.current) {
@@ -278,6 +291,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
       cancelled = true;
       mapRef.current?.destroy();
       mapRef.current = null;
+      setZoneOverlayRoot(null);
       placemarks.clear();
       zoneObjects.clear();
       draftZoneObjectRef.current = null;
@@ -630,8 +644,9 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
       <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', paddingTop: 10 }}>
         <div style={{ flex: 1, minHeight: 0, borderRadius: 16, overflow: 'hidden', background: '#fff', position: 'relative', border: '1px solid #E1E8EA' }}>
-          <div ref={containerRef} style={{ width: '100%', height: '100%' }} />
-          <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 25 }}>
+          <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }} />
+          {zoneOverlayRoot && createPortal((
+          <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 25, pointerEvents: 'auto' }}>
             <button
               type="button"
               onClick={() => setZonePanelOpen(open => !open)}
@@ -647,7 +662,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
             {zonePanelOpen && (
               <div style={{
                 width: 340,
-                maxHeight: 'calc(100vh - 250px)',
+                maxHeight: 'calc(100vh - 90px)',
                 overflowY: 'auto',
                 marginTop: 8,
                 padding: 14,
@@ -784,6 +799,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
               </div>
             )}
           </div>
+          ), zoneOverlayRoot)}
           {rows !== null && pointRows.length === 0 && (
             <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 12, padding: '9px 14px', borderRadius: 10, color: '#667389', fontSize: 12, fontWeight: 700, background: 'rgba(255,255,255,0.92)', boxShadow: '0 4px 16px rgba(29,55,68,.12)', pointerEvents: 'none' }}>
               Нет адресов с координатами для отображения
