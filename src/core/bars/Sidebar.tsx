@@ -35,10 +35,10 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   let sections: NavSection[];
   if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
   else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
-  else if (role === 'director')     sections = ['families', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
   else if (role === 'manager')      sections = ['families'];
   else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
-  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses'];
+  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses', 'employees'];
   else if (role === 'cashier')       sections = ['cashier', 'expenses'];
   else sections = ['families'];
   return userId === MARKET_OWNER_EMPLOYEE_ID ? [...sections, 'market'] : sections;

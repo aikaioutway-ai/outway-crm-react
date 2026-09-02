@@ -375,7 +375,7 @@ export function mapV2Family(row: any, children: any[] = []): Family {
   const firstChild = firstPresent(children, c => c.branch_id) ?? children[0];
   const branch = firstChild?.v2_school_branches;
   const schoolCode = toSchoolCode(branch?.code);
-  const vehicleType = normalizeVehicle(firstChild?.vehicle_type) as VehicleType;
+  const vehicleType = normalizeVehicle(firstChild?.v2_transfers?.vehicle_type ?? firstChild?.vehicle_type) as VehicleType;
   const zone = normalizeZone(firstChild?.zone, 'A') as Zone;
   const price = Number(firstChild?.final_price ?? firstChild?.base_price ?? 0);
 
@@ -436,7 +436,7 @@ export function mapV2Child(row: any, family: Family): Child {
     branchName: branch?.name,
     branchShort: branch?.short_name ?? branch?.code,
     zone: normalizeZone(row.zone, family.zone) as Zone,
-    vehicleType: normalizeVehicle(row.vehicle_type) as VehicleType,
+    vehicleType: normalizeVehicle(row.v2_transfers?.vehicle_type ?? row.vehicle_type) as VehicleType,
     basePrice: Number(row.base_price ?? 0),
     siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
     manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
@@ -448,7 +448,7 @@ export function mapV2Child(row: any, family: Family): Child {
 const CHILD_SELECT = `
   *,
   v2_school_branches(id, code, short_name, name),
-  v2_transfers(id, transfer_number, driver_id)
+  v2_transfers(id, transfer_number, driver_id, vehicle_type)
 `;
 
 export interface PeriodChargeStats {
@@ -589,7 +589,7 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
       const branch = child?.branch_id ? branchById[String(child.branch_id)] : null;
       const branchCode = branch?.code ?? '';
       const schoolCode = normalizeSchoolCode(branchCode);
-      const vt = normalizeVehicle(child?.vehicle_type);
+      const vt = normalizeVehicle(child?.v2_transfers?.vehicle_type ?? child?.vehicle_type);
       const paymentStatus = derivePaymentStatus(totalCharged, totalPaid, debtAmount);
       const pp = pendingMap[family.id];
 
@@ -735,7 +735,7 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
       const branch = child.branch_id ? branchById[String(child.branch_id)] : null;
       const branchCode = branch?.code ?? child.branch_code ?? '';
       const schoolCode = normalizeSchoolCode(branchCode);
-      const vt = normalizeVehicle(child.vehicle_type);
+      const vt = normalizeVehicle(child.transfer_vehicle_type ?? child.vehicle_type);
 
       rows.push({
         rowId: hasChild ? String(child.child_id) : `${child.family_id}_empty`,
@@ -1025,6 +1025,17 @@ export async function updateV2ChildRoute(params: {
   stopNumber?: number;
   timeMorning?: string;
 }): Promise<void> {
+  let existingTransferVehicleType: string | null = null;
+  if (params.transferNumber && params.child.branchId) {
+    const { data: existingTransfer } = await supabase
+      .from('v2_transfers')
+      .select('vehicle_type')
+      .eq('branch_id', params.child.branchId)
+      .eq('transfer_number', params.transferNumber)
+      .maybeSingle();
+    existingTransferVehicleType = existingTransfer?.vehicle_type ?? null;
+  }
+
   const transferId = params.transferNumber
     ? await ensureV2Transfer({
       schoolId: params.child.schoolId,
@@ -1040,6 +1051,19 @@ export async function updateV2ChildRoute(params: {
     stop_order: params.stopNumber ?? null,
     time_morning: params.timeMorning || null,
   });
+
+  if (existingTransferVehicleType && normalizeVehicle(existingTransferVehicleType) !== normalizeVehicle(params.vehicleType)) {
+    try {
+      await addV2Audit({
+        action: 'vehicle_change',
+        entityType: 'vehicle_type',
+        entityId: params.child.familyId,
+        oldValue: params.vehicleType,
+        newValue: normalizeVehicle(existingTransferVehicleType),
+        comment: `Клиент запрашивал ${VT_LABEL[normalizeVehicle(params.vehicleType)] ?? params.vehicleType}, назначен на трансфер №${params.transferNumber} (${VT_LABEL[normalizeVehicle(existingTransferVehicleType)] ?? existingTransferVehicleType})`,
+      });
+    } catch { /* audit failure must not block the assignment */ }
+  }
 }
 
 export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRow[]> {
