@@ -1,5 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { clearV2TransferVehicleType, updateV2TransferVehicleType } from '../../services/crmV2Service';
+import { VehicleType } from '../../types';
 
 interface LogisticsSchoolTransferDashboardProps {
   schoolKey: string;
@@ -9,6 +11,13 @@ interface LogisticsSchoolTransferDashboardProps {
 }
 
 const TRANSFER_COUNT = 15;
+
+const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }[] = [
+  { value: 'unassigned', label: 'Не назначен' },
+  { value: 'microbus', label: 'Микроавтобус' },
+  { value: 'minivan', label: 'Минивэн' },
+  { value: 'sedan', label: 'Седан' },
+];
 
 export const VEHICLE_COLOR: Record<string, string> = {
   microbus: '#2DD4BF',
@@ -25,11 +34,48 @@ function vehicleShort(vehicleType?: string): string {
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
   const { data: rows } = useFamiliesTable(false);
+  const [vehicleMenu, setVehicleMenu] = useState<{
+    x: number;
+    y: number;
+    transferNumber: string;
+    branchId: string | null;
+    schoolId: string | null;
+  } | null>(null);
+  const [savingVehicleType, setSavingVehicleType] = useState(false);
+
+  useEffect(() => {
+    if (!vehicleMenu) return;
+    const close = () => setVehicleMenu(null);
+    window.addEventListener('click', close);
+    return () => window.removeEventListener('click', close);
+  }, [vehicleMenu]);
 
   const allSchoolRows = useMemo(() => (
     (rows ?? []).filter(row => row.branchFilter === schoolKey)
   ), [rows, schoolKey]);
   const schoolRows = useMemo(() => allSchoolRows.filter(row => row.status !== 'rejected'), [allSchoolRows]);
+
+  const applyVehicleType = async (value: VehicleType | 'unassigned') => {
+    if (!vehicleMenu || !vehicleMenu.branchId) { setVehicleMenu(null); return; }
+    setSavingVehicleType(true);
+    try {
+      if (value === 'unassigned') {
+        await clearV2TransferVehicleType({ branchId: vehicleMenu.branchId, transferNumber: Number(vehicleMenu.transferNumber) });
+      } else {
+        await updateV2TransferVehicleType({
+          schoolId: vehicleMenu.schoolId,
+          branchId: vehicleMenu.branchId,
+          transferNumber: Number(vehicleMenu.transferNumber),
+          vehicleType: value,
+        });
+      }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось изменить тип транспорта');
+    } finally {
+      setSavingVehicleType(false);
+      setVehicleMenu(null);
+    }
+  };
 
   if (!rows) return null;
 
@@ -43,6 +89,8 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       vehicleType: transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
         ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
         ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType,
+      branchId: transferRows[0]?.branchId ?? allSchoolRows[0]?.branchId ?? null,
+      schoolId: transferRows[0]?.schoolId ?? allSchoolRows[0]?.schoolId ?? null,
     };
   });
 
@@ -77,7 +125,19 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
             className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            title={active ? `Учеников: ${cell.count}` : undefined}
+            onContextMenu={event => {
+              if (!/^\d+$/.test(cell.filterKey)) return;
+              event.preventDefault();
+              event.stopPropagation();
+              setVehicleMenu({
+                x: event.clientX,
+                y: event.clientY,
+                transferNumber: cell.filterKey,
+                branchId: 'branchId' in cell ? cell.branchId : null,
+                schoolId: 'schoolId' in cell ? cell.schoolId : null,
+              });
+            }}
+            title={active ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
             style={{
               flex: 1,
               minWidth: 0,
@@ -107,6 +167,54 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
           </button>
         );
       })}
+      {vehicleMenu && (
+        <div
+          onClick={event => event.stopPropagation()}
+          style={{
+            position: 'fixed',
+            left: vehicleMenu.x,
+            top: vehicleMenu.y,
+            zIndex: 1600,
+            width: 176,
+            padding: 8,
+            border: '1px solid #D4E3E7',
+            borderRadius: 14,
+            background: '#fff',
+            boxShadow: '0 18px 44px rgba(20, 35, 48, 0.18)',
+          }}
+        >
+          <div style={{ padding: '2px 6px 8px', fontSize: 12, fontWeight: 900, color: '#17222F', borderBottom: '1px solid #EEF3F5', marginBottom: 6 }}>
+            Трансфер №{vehicleMenu.transferNumber} · тип транспорта
+          </div>
+          {!vehicleMenu.branchId ? (
+            <div style={{ padding: '4px 6px', fontSize: 11, color: '#94A3B8' }}>Нет данных о филиале</div>
+          ) : (
+            <div style={{ display: 'grid', gap: 3 }}>
+              {VEHICLE_MENU_OPTIONS.map(option => (
+                <button
+                  key={option.value}
+                  disabled={savingVehicleType}
+                  onClick={() => void applyVehicleType(option.value)}
+                  style={{
+                    textAlign: 'left',
+                    padding: '7px 9px',
+                    borderRadius: 9,
+                    border: '1px solid transparent',
+                    background: '#F5FAFB',
+                    color: option.value === 'unassigned' ? '#626C8B' : (VEHICLE_COLOR[option.value] ?? '#17222F'),
+                    fontSize: 12,
+                    fontWeight: 700,
+                    cursor: savingVehicleType ? 'default' : 'pointer',
+                    opacity: savingVehicleType ? 0.6 : 1,
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
