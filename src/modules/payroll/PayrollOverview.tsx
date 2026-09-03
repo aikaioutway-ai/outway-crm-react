@@ -203,7 +203,7 @@ export default function PayrollOverview({ view, sessionToken, periodKey, onPerio
             >
               {sortedStats.map((row, index) => (
                 <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data[key] > 0 ? color : undefined }}>{money(row.data[key])}</span>
+                  <span style={{ fontSize: 14, fontWeight: 700, color: (row.data[key] ?? 0) > 0 ? color : undefined }}>{money(row.data[key] ?? 0)}</span>
                 </div>
               ))}
             </ColumnCard>

@@ -1,0 +1,24 @@
+.b2b-cashier-overlay { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 20px; background: rgba(23,34,47,.36); backdrop-filter: blur(4px); }
+.b2b-cashier-modal { width: min(980px, 100%); max-height: calc(100vh - 40px); overflow: auto; border-radius: 21px; background: #fff; box-shadow: 0 26px 80px rgba(23,34,47,.25); }
+.b2b-cashier-modal > header { padding: 18px 20px; border-bottom: 1px solid #e3ecee; display: flex; align-items: center; justify-content: space-between; }
+.b2b-cashier-modal h2, .b2b-cashier-modal p { margin: 0; }
+.b2b-cashier-modal h2 { color: #17222f; font-size: 18px; }
+.b2b-cashier-modal p { margin-top: 4px; color: #8b96a9; font-size: 12px; }
+.b2b-cashier-modal header > button { width: 34px; height: 34px; border: 0; border-radius: 11px; display: grid; place-items: center; background: #f2f7f8; color: #626c8b; cursor: pointer; }
+.b2b-cashier-table-wrap { padding: 18px 20px 20px; overflow-x: auto; }
+.b2b-cashier-table-wrap table { width: 100%; min-width: 820px; border: 1px solid #e1eaec; border-collapse: separate; border-spacing: 0; border-radius: 14px; overflow: hidden; }
+.b2b-cashier-table-wrap th { padding: 10px 12px; background: #f5fafb; color: #7a859d; text-align: left; text-transform: uppercase; letter-spacing: .035em; font-size: 9px; }
+.b2b-cashier-table-wrap td { padding: 11px 12px; border-top: 1px solid #edf2f3; color: #4b5964; font-size: 11px; }
+.b2b-cashier-table-wrap tbody tr:nth-child(even) td { background: #f7fbfb; }
+.b2b-cashier-table-wrap .num { text-align: right; white-space: nowrap; }
+.b2b-cashier-table-wrap .order { color: #287f82; font-weight: 850; }
+.b2b-cashier-table-wrap .amount { color: #17222f; font-weight: 850; }
+.b2b-cashier-table-wrap .empty { height: 180px; text-align: center; color: #8b96a9; }
+.b2b-cashier-table-wrap .state { display: inline-flex; align-items: center; gap: 5px; padding: 6px 8px; border-radius: 9px; font-size: 10px; font-weight: 800; white-space: nowrap; }
+.b2b-cashier-table-wrap .state.pending { background: #fff7e8; color: #a96e13; }
+.b2b-cashier-table-wrap .state.confirmed { background: #eaf7ef; color: #2b8952; }
+.b2b-cashier-table-wrap .state.rejected { background: #fff0ef; color: #b85145; }
+.b2b-cashier-table-wrap .actions { display: flex; justify-content: flex-end; gap: 6px; }
+.b2b-cashier-table-wrap .actions button { min-height: 31px; padding: 0 9px; border-radius: 9px; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-size: 10px; font-weight: 800; cursor: pointer; white-space: nowrap; }
+.b2b-cashier-table-wrap .approve { border: 0; background: #31a4a5; color: #fff; }
+.b2b-cashier-table-wrap .reject { border: 1px solid #e7c7c3; background: #fff; color: #b85145; }

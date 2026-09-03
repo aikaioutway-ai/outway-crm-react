@@ -38,6 +38,7 @@ const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 const MarketModule = lazy(() => import('./modules/market/MarketModule'));
+const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
 
 function SectionLoading() {
   return (
@@ -362,7 +363,9 @@ export default function App() {
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: 10, background: 'var(--active-bg)' }}
       >
         <Suspense fallback={<SectionLoading />}>
-        {section === 'cashier' ? (
+        {section === 'b2b' ? (
+          <B2BModule />
+        ) : section === 'cashier' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>

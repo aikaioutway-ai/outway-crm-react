@@ -9,6 +9,8 @@ import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/u
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
+import { B2B_ORDER_STATUSES, B2BOrder } from '../b2b/B2BOrders';
+import { useB2BOrders } from '../../hooks/useB2BData';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import {
@@ -346,7 +348,7 @@ type TransferCardData = {
     status: string;
   }[];
 };
-type DriverCardTab = 'main' | 'documents' | 'finance' | 'advances';
+type DriverCardTab = 'main' | 'documents' | 'finance' | 'b2b' | 'advances';
 type DriverFinanceRow = {
   month: string;
   days: number;
@@ -674,6 +676,7 @@ function rowToFamily(row: ChildRow): Family {
 }
 
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
+  const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
   const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
@@ -2075,6 +2078,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           .sort((a, b) => Number(a.stopNumber ?? 999) - Number(b.stopNumber ?? 999))
       : []
   ), [rows, selectedDriverId]);
+  const selectedDriverB2BOrders = useMemo<B2BOrder[]>(() => (
+    selectedDriverId
+      ? b2bOrders
+          .filter(order => order.driverId === selectedDriverId)
+          .sort((a, b) => b.departureDate.localeCompare(a.departureDate))
+      : []
+  ), [b2bOrders, selectedDriverId]);
   const selectedDriverFinanceRows = useMemo<DriverFinanceRow[]>(() => (
     DRIVER_FINANCE_MONTHS.map(month => ({
       month,
@@ -3214,6 +3224,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 { key: 'main' as DriverCardTab, label: 'Основная' },
                 { key: 'documents' as DriverCardTab, label: 'Документы' },
                 { key: 'finance' as DriverCardTab, label: 'Финансы' },
+                { key: 'b2b' as DriverCardTab, label: `B2B${selectedDriverB2BOrders.length ? ` (${selectedDriverB2BOrders.length})` : ''}` },
                 { key: 'advances' as DriverCardTab, label: `Авансы${driverAdvances.length ? ` (${driverAdvances.length})` : ''}` },
               ].map(tabItem => {
                 const active = selectedDriverTab === tabItem.key;
@@ -3732,6 +3743,40 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       </tfoot>
                     </table>
                   </div>
+                </section>
+              ) : selectedDriverTab === 'b2b' ? (
+                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+                  <div style={{ minHeight: 52, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+                    <div>
+                      <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F' }}>История заказов B2B</div>
+                      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 650, color: '#7A859D' }}>Корпоративные выезды, на которые был назначен водитель</div>
+                    </div>
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                      <span style={{ padding: '6px 9px', borderRadius: 9, background: '#E7F6F4', color: '#237F81', fontSize: 11, fontWeight: 900 }}>Заказов: {selectedDriverB2BOrders.length}</span>
+                      <span style={{ padding: '6px 9px', borderRadius: 9, background: '#F1F7FA', color: '#52606F', fontSize: 11, fontWeight: 900 }}>Начислено: {money(selectedDriverB2BOrders.reduce((sum, order) => sum + (order.driverPricePerUnit ?? 0) * order.transportCount, 0))}</span>
+                    </div>
+                  </div>
+                  {selectedDriverB2BOrders.length === 0 ? (
+                    <div style={{ minHeight: 190, padding: 24, display: 'grid', placeItems: 'center', color: '#7A859D', fontSize: 13, textAlign: 'center' }}>У водителя пока нет заказов B2B</div>
+                  ) : (
+                    <div style={{ overflowX: 'auto' }}>
+                      <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
+                        <thead><tr>{['Дата выезда', 'Заказ', 'Клиент', 'Маршрут', 'Транспорт', 'Начислено', 'Статус'].map(label => <th key={label} style={{ height: 36, padding: '0 11px', borderBottom: '1px solid #E5EEF1', background: '#F8FCFC', color: '#7A859D', textAlign: label === 'Начислено' ? 'right' : 'left', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
+                        <tbody>{selectedDriverB2BOrders.map((order, index) => {
+                          const status = B2B_ORDER_STATUSES.find(item => item.key === order.status)?.label ?? order.status;
+                          return <tr key={order.id}>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#52606F', fontSize: 12, fontWeight: 750, whiteSpace: 'nowrap' }}>{order.departureDate || '—'}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#237F81', fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>{order.number}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#17222F', fontSize: 12, fontWeight: 800 }}>{order.client}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#52606F', fontSize: 12 }}>{order.routeFrom} → {order.routeTo}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#52606F', fontSize: 12, whiteSpace: 'nowrap' }}>{order.transportCount}× {order.transport}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#17222F', fontSize: 12, fontWeight: 900, textAlign: 'right', whiteSpace: 'nowrap' }}>{money((order.driverPricePerUnit ?? 0) * order.transportCount)}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6' }}><span style={{ display: 'inline-flex', padding: '5px 8px', borderRadius: 8, background: order.status === 'success' ? '#EAF7EF' : order.status === 'driver_assigned' ? '#FFF7E8' : '#EEF4FF', color: order.status === 'success' ? '#2B8952' : order.status === 'driver_assigned' ? '#A96E13' : '#4770BD', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' }}>{status}</span></td>
+                          </tr>;
+                        })}</tbody>
+                      </table>
+                    </div>
+                  )}
                 </section>
               ) : selectedDriverTab === 'advances' ? (
               <>

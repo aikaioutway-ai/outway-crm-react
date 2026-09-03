@@ -1617,7 +1617,7 @@ export async function upsertV2PayrollEntries(patches: Array<{
   const saved = (data ?? []).map(mapV2PayrollEntry);
   const periodMonth = patches[0].periodMonth;
   const periodYear = patches[0].periodYear;
-  queryClient.setQueryData<V2PayrollEntry[]>(QK.payrollEntries(periodMonth, periodYear), current => {
+  queryClient.setQueryData<V2PayrollEntry[]>(QK.payrollEntries(periodMonth, periodYear), (current: V2PayrollEntry[] | undefined) => {
     const next = [...(current ?? [])];
     saved.forEach(entry => {
       const index = next.findIndex(item => item.subjectId === entry.subjectId && item.subjectType === entry.subjectType);

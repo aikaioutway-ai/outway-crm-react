@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3, Headphones, ShoppingBag } from 'lucide-react';
 import { UserRole } from '../../types';
+import B2BIcon from '../icons/B2BIcon';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'settings';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings';
 
 interface SidebarProps {
   active: NavSection;
@@ -26,6 +27,7 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'dispatch',  label: 'Диспетчер',  icon: <Headphones size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
   { key: 'market',     label: 'Маркет',    icon: <ShoppingBag size={18} /> },
+  { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={22} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
 ];
 
@@ -33,9 +35,9 @@ export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
 
 export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
   let sections: NavSection[];
-  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
-  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
-  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
+  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
+  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
   else if (role === 'manager')      sections = ['families'];
   else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
   else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses', 'employees'];
