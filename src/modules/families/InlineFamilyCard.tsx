@@ -377,6 +377,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if ('branchId' in patch) dbPatch.branch_id = nextChild.branchId ?? null;
       if ('schoolId' in patch) dbPatch.school_id = nextChild.schoolId ?? null;
       if ('zone' in patch) dbPatch.zone = nextChild.zone;
+      if ('distanceKm' in patch) dbPatch.distance_km = nextChild.distanceKm ?? null;
       if ('selfExitAllowed' in patch) dbPatch.self_exit_allowed = Boolean(nextChild.selfExitAllowed);
       if ('status' in patch) dbPatch.status = nextChild.status ?? 'new';
 
@@ -566,7 +567,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
 
               <DetailPanel title={`Дети (${cardChildren.length})`}>
-                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
+                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
             </div>
           )}
@@ -822,6 +823,7 @@ function ChildCard({
   onDeleteChild,
   busy,
   editing,
+  isAdmin,
 }: {
   child: Child;
   index: number;
@@ -830,6 +832,7 @@ function ChildCard({
   onDeleteChild: (child: Child) => void;
   busy?: boolean;
   editing?: boolean;
+  isAdmin?: boolean;
 }) {
   // новый ребёнок (ещё не сохранён) сразу открыт — его нужно заполнить
   const [manuallyExpanded, setManuallyExpanded] = React.useState(() => child.id.startsWith('draft-'));
@@ -908,6 +911,12 @@ function ChildCard({
                 content: editing ? <EditableText value={child.class} onCommit={value => onSaveChild(child, { class: value })} /> : <ReadOnlyValue value={child.class} />,
               },
               {
+                label: 'Расстояние (км)',
+                content: editing && isAdmin
+                  ? <EditableNumber value={child.distanceKm ?? undefined} onCommit={value => onSaveChild(child, { distanceKm: value ?? 0 })} step={0.1} min={0} />
+                  : <ReadOnlyValue value={child.distanceKm != null ? `${child.distanceKm} км` : '-'} />,
+              },
+              {
                 label: 'Зона / ТС',
                 content: (
                   editing ? <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -939,6 +948,12 @@ function ChildCard({
                 ) : <ReadOnlyValue value={child.selfExitAllowed ? 'Да' : 'Нет'} />,
               },
               {
+                label: 'Цена (сом)',
+                content: editing && isAdmin
+                  ? <EditableNumber value={basePrice || undefined} onCommit={value => onSaveChild(child, { basePrice: value ?? 0 })} step={100} min={0} />
+                  : <ReadOnlyValue value={money(basePrice)} />,
+              },
+              {
                 label: 'Скидка %',
                 content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
               },
@@ -967,6 +982,7 @@ function ChildrenOverviewTable({
   onDeleteChild,
   busy,
   editing,
+  isAdmin,
 }: {
   children: Child[];
   branches: V2BranchOption[];
@@ -975,6 +991,7 @@ function ChildrenOverviewTable({
   onDeleteChild: (child: Child) => void;
   busy?: boolean;
   editing?: boolean;
+  isAdmin?: boolean;
 }) {
   return (
     <div style={{ display: 'grid', gap: 10 }}>
@@ -998,6 +1015,7 @@ function ChildrenOverviewTable({
               onDeleteChild={onDeleteChild}
               busy={busy}
               editing={editing}
+              isAdmin={isAdmin}
             />
           ))}
         </div>
