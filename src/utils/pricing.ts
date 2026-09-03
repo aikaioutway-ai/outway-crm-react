@@ -21,6 +21,7 @@ const PRICE_RULES: Record<SchoolCode, { zone1: number; zone2: number; zone3: num
   TSL:     { zone1: 6000, zone2: 6500, zone3: null },
   SANARIP: { zone1: 6000, zone2: 6500, zone3: null },
   ELLIPSE: { zone1: 6000, zone2: 6500, zone3: null },
+  Ilim_k:  { zone1: 5500, zone2: 6000, zone3: 6500 },
 };
 
 export function getPriceByZone(schoolCode: SchoolCode, zone: Zone, vehicleType: VehicleType): number {

@@ -23,6 +23,7 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'TSL',   label: 'TSL',   codes: ['TSL'],  branches: [], logo: '/school-logos/TSL.png' },
   { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
   { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
+  { key: 'ILIM_K', label: 'Ilim_k', codes: ['Ilim_k'], branches: [], logo: '/school-logos/Ilim_k.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
@@ -136,6 +137,7 @@ export const SCHOOL_NAME: Record<string, string> = {
   ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
   KLM: 'Kalem Academy', TSL: 'Tesla Academy',
   SANARIP: 'Sanarip', ELLIPSE: 'Ellipse',
+  Ilim_k: 'Илим Кадам',
 };
 
 export const SCHOOL_SHORT: Record<string, string> = {
@@ -146,6 +148,7 @@ export const SCHOOL_SHORT: Record<string, string> = {
   AES_KAS: 'AES',
   ABL1: 'ABL #2', ABL2: 'ABL #1', KLM: 'KLM', TSL: 'TSL',
   SANARIP: 'SNP', ELLIPSE: 'ELS',
+  Ilim_k: 'Ilim_k',
 };
 
 export const SCHOOL_CODE_ALIASES: Record<string, string> = {
