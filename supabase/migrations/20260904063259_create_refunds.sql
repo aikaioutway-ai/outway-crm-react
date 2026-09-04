@@ -45,6 +45,23 @@ begin
   ) then
     create policy "v2 authenticated write" on public.v2_refunds for all to authenticated using (true) with check (true);
   end if;
+
+  -- Приложение обращается к Supabase без выполненного auth signIn — все
+  -- запросы идут под ролью anon, поэтому нужны и anon-политики (см. остальные
+  -- v2_*-таблицы в crm_v2_schema.sql).
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'v2_refunds' and policyname = 'v2 anon read'
+  ) then
+    create policy "v2 anon read" on public.v2_refunds for select to anon using (true);
+  end if;
+
+  if not exists (
+    select 1 from pg_policies
+    where schemaname = 'public' and tablename = 'v2_refunds' and policyname = 'v2 anon write'
+  ) then
+    create policy "v2 anon write" on public.v2_refunds for all to anon using (true) with check (true);
+  end if;
 end $$;
 
 -- Подтверждение возврата кассиром: списывает баланс семьи (может уйти в минус)
