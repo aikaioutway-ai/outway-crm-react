@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useReceiptOcr } from '../../hooks/useReceiptOcr';
-import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentType, UserRole } from '../../types';
+import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentType, Refund, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL } from './constants';
 import { Section, Spinner, Empty } from './DrawerUI';
@@ -17,11 +17,13 @@ interface Props {
   charges: Charge[];
   payments: FamilyPayment[];
   paymentItems: PaymentItem[];
+  refunds: Refund[];
   loading: boolean;
   family: Family;
   children: Child[];
   isAdmin: boolean;
   isCashier: boolean;
+  isManager: boolean;
   userRole?: UserRole;
   onSaveCharge: (charge: Charge, updates: Partial<Charge>) => Promise<boolean>;
   onDeleteCharge: (charge: Charge) => void;
@@ -31,6 +33,9 @@ interface Props {
   onUnconfirmPayment?: (payment: FamilyPayment) => Promise<boolean>;
   onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDeletePayment: (payment: FamilyPayment) => Promise<boolean>;
+  onCreateRefund: (amount: number, comment: string) => Promise<boolean>;
+  onConfirmRefund: (refund: Refund, paymentMethod: 'cash' | 'cashless') => Promise<boolean>;
+  onRejectRefund: (refund: Refund, reason: string) => Promise<boolean>;
   readOnly?: boolean;
 }
 
@@ -38,10 +43,12 @@ export default function TabFinance({
   charges,
   payments,
   paymentItems,
+  refunds,
   loading,
   children: _children,
   isAdmin,
   isCashier,
+  isManager,
   userRole: _userRole,
   onSaveCharge: _onSaveCharge,
   onDeleteCharge: _onDeleteCharge,
@@ -51,6 +58,9 @@ export default function TabFinance({
   onUnconfirmPayment,
   onSavePayment,
   onDeletePayment,
+  onCreateRefund,
+  onConfirmRefund,
+  onRejectRefund,
   readOnly = false,
 }: Props) {
   const [addingPeriod, setAddingPeriod] = useState(false);
@@ -64,9 +74,16 @@ export default function TabFinance({
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundComment, setRefundComment] = useState('');
+  const [savingRefund, setSavingRefund] = useState(false);
+  const [confirmingRefundId, setConfirmingRefundId] = useState<string | null>(null);
+
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const canCreatePayment = !isCashier || isAdmin;
   const canConfirmPayment = !readOnly && (isCashier || isAdmin);
+  const canCreateRefund = !readOnly && (isManager || isAdmin);
+  const canConfirmRefund = !readOnly && (isCashier || isAdmin);
 
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));
   const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(`${p.month}:${p.year}`));
@@ -106,6 +123,40 @@ export default function TabFinance({
     const ok = await onConfirmPayment(payment, actualPaymentDate);
     setConfirmingPaymentId(null);
     setMsg(ok ? 'Платёж подтверждён и распределён' : 'Не удалось подтвердить платёж');
+    setTimeout(() => setMsg(''), 2500);
+  }
+
+  async function submitRefund() {
+    const amount = Number(refundAmount);
+    if (!amount || amount <= 0) return;
+    setSavingRefund(true);
+    const ok = await onCreateRefund(amount, refundComment);
+    setSavingRefund(false);
+    if (ok) {
+      setMsg('Возврат отправлен кассиру на проверку');
+      setRefundAmount('');
+      setRefundComment('');
+      setTimeout(() => setMsg(''), 2500);
+    } else {
+      setMsg('Не удалось оформить возврат');
+    }
+  }
+
+  async function confirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless') {
+    setConfirmingRefundId(refund.id);
+    const ok = await onConfirmRefund(refund, paymentMethod);
+    setConfirmingRefundId(null);
+    setMsg(ok ? 'Возврат подтверждён и списан с баланса' : 'Не удалось подтвердить возврат');
+    setTimeout(() => setMsg(''), 2500);
+  }
+
+  async function rejectRefund(refund: Refund) {
+    const reason = window.prompt('Причина отказа:', '')?.trim();
+    if (reason === undefined) return;
+    setConfirmingRefundId(refund.id);
+    const ok = await onRejectRefund(refund, reason);
+    setConfirmingRefundId(null);
+    setMsg(ok ? 'Возврат отклонён' : 'Не удалось отклонить возврат');
     setTimeout(() => setMsg(''), 2500);
   }
 
@@ -172,6 +223,34 @@ export default function TabFinance({
             </div>
           </Section>
         </div>
+
+        {(canCreateRefund || refunds.length > 0) && (
+          <Section title="Возвраты">
+            <div style={paymentPanelStyle}>
+              {canCreateRefund && (
+                <div style={{ ...newPaymentGridStyle, marginBottom: refunds.length > 0 ? 10 : 0 }}>
+                  <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="Сумма возврата" style={inputStyle} />
+                  <input value={refundComment} onChange={e => setRefundComment(e.target.value)} placeholder="Комментарий" style={inputStyle} />
+                  <button onClick={submitRefund} disabled={savingRefund || !refundAmount} style={submitPaymentBtnStyle(savingRefund || !refundAmount)}>
+                    {savingRefund ? 'Сохраняем...' : 'Оформить возврат →'}
+                  </button>
+                </div>
+              )}
+              {refunds.length === 0 ? (
+                canCreateRefund ? null : <Empty text="Возвратов нет" />
+              ) : refunds.map(refund => (
+                <RefundRow
+                  key={refund.id}
+                  refund={refund}
+                  canConfirm={canConfirmRefund && refund.status === 'На проверке'}
+                  confirming={confirmingRefundId === refund.id}
+                  onConfirm={paymentMethod => confirmRefund(refund, paymentMethod)}
+                  onReject={() => rejectRefund(refund)}
+                />
+              ))}
+            </div>
+          </Section>
+        )}
 
         <Section
           title="Месячная таблица"
@@ -394,6 +473,77 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
+  refund: Refund;
+  canConfirm: boolean;
+  confirming: boolean;
+  onConfirm: (paymentMethod: 'cash' | 'cashless') => void;
+  onReject: () => void;
+}) {
+  const [paymentMethod, setPaymentMethod] = useState<'cash' | 'cashless'>('cashless');
+  const statusStyle = refund.status === 'Подтверждено'
+    ? { background: '#ECFDF5', color: '#065F46' }
+    : refund.status === 'Отклонено'
+      ? { background: '#FEE2E2', color: '#991B1B' }
+      : { background: '#FEF9C3', color: '#92400E' };
+
+  return (
+    <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginBottom: 7 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(refund.amount)}</div>
+          <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
+            {refund.requestedAt ? new Date(refund.requestedAt).toLocaleDateString('ru-RU') : 'без даты'}
+            {refund.requestedBy && <> · {refund.requestedBy}</>}
+          </div>
+        </div>
+        <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+          {refund.status}
+        </div>
+      </div>
+
+      {canConfirm && (
+        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+          <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as 'cash' | 'cashless')} style={{ ...inputStyle, width: '100%' }}>
+            <option value="cashless">Перевод</option>
+            <option value="cash">Наличные</option>
+          </select>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+            <button
+              onClick={() => onConfirm(paymentMethod)}
+              disabled={confirming}
+              style={{
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                cursor: confirming ? 'default' : 'pointer',
+                background: confirming ? '#D1FAE5' : '#10B981',
+                color: '#fff',
+              }}
+            >
+              {confirming ? '...' : '✓ Подтвердить'}
+            </button>
+            <button
+              onClick={onReject}
+              disabled={confirming}
+              style={{
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                cursor: confirming ? 'default' : 'pointer',
+                background: '#FEE2E2', color: '#991B1B',
+              }}
+            >
+              ✕ Отклонить
+            </button>
+          </div>
+        </div>
+      )}
+
+      {refund.comment && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 6 }}>{refund.comment}</div>}
+      {refund.status === 'Отклонено' && refund.rejectReason && (
+        <div style={{ fontSize: 11, color: '#991B1B', marginTop: 4 }}>Причина: {refund.rejectReason}</div>
       )}
     </div>
   );

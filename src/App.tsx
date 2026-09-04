@@ -4,6 +4,7 @@ import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOvervi
 import CashierOverview from './modules/families/CashierOverview';
 import CashierSchoolKpiStrip from './modules/families/CashierSchoolKpiStrip';
 import CashierSchoolTransferDashboard from './modules/families/CashierSchoolTransferDashboard';
+import CashierRefundsTable from './modules/families/CashierRefundsTable';
 import LogisticsOverview from './modules/families/LogisticsOverview';
 import LogisticsSchoolKpiStrip from './modules/families/LogisticsSchoolKpiStrip';
 import LogisticsSchoolTransferDashboard from './modules/families/LogisticsSchoolTransferDashboard';
@@ -85,7 +86,7 @@ export default function App() {
   const [cashierPeriodKey, setCashierPeriodKey] = useState(currentCashierPeriodKey);
   const [cashierTransferFilter, setCashierTransferFilter] = useState('');
   const [cashierOpenFamilySearch, setCashierOpenFamilySearch] = useState('');
-  const [cashierView, setCashierView] = useState<'pending' | 'confirmed'>('pending');
+  const [cashierView, setCashierView] = useState<'pending' | 'confirmed' | 'refunds'>('pending');
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
@@ -381,6 +382,9 @@ export default function App() {
                     <button onClick={() => setCashierView('confirmed')} style={managerModeTabStyle(cashierView === 'confirmed')}>
                       Подтвержденные
                     </button>
+                    <button onClick={() => setCashierView('refunds')} style={managerModeTabStyle(cashierView === 'refunds')}>
+                      Возвраты
+                    </button>
                   </>
                 )}
                 {extraTabs(true)}
@@ -388,45 +392,65 @@ export default function App() {
             </div>
             {cashierSchoolKey ? (
               <>
-              <DashboardTopPanel>
+              {cashierView === 'refunds' ? (
+                <DashboardTopPanel>
                   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
                       <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />
                     </div>
                     <DashboardSearch value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
                   </div>
-                <CashierSchoolKpiStrip
+                </DashboardTopPanel>
+              ) : (
+                <DashboardTopPanel>
+                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+                      <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+                        <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />
+                      </div>
+                      <DashboardSearch value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
+                    </div>
+                  <CashierSchoolKpiStrip
+                    schoolKey={cashierSchoolKey}
+                    periodKey={cashierPeriodKey}
+                    rightReserveWidth={schoolSidebarReserveWidth}
+                  />
+                  <CashierSchoolTransferDashboard
+                    schoolKey={cashierSchoolKey}
+                    periodKey={cashierPeriodKey}
+                    rightReserveWidth={schoolSidebarReserveWidth}
+                    selectedKey={cashierTransferFilter}
+                    onSelect={setCashierTransferFilter}
+                    statusFilter={cashierView}
+                  />
+                </DashboardTopPanel>
+              )}
+              {cashierView === 'refunds' ? (
+                <CashierRefundsTable
                   schoolKey={cashierSchoolKey}
                   periodKey={cashierPeriodKey}
-                  rightReserveWidth={schoolSidebarReserveWidth}
+                  searchQuery={cashierOpenFamilySearch}
+                  confirmedBy={currentUser?.name}
                 />
-                <CashierSchoolTransferDashboard
-                  schoolKey={cashierSchoolKey}
-                  periodKey={cashierPeriodKey}
-                  rightReserveWidth={schoolSidebarReserveWidth}
-                  selectedKey={cashierTransferFilter}
-                  onSelect={setCashierTransferFilter}
-                  statusFilter={cashierView}
+              ) : (
+                <FamiliesPage
+                  mode="cashier"
+                  userRole={currentUserRole}
+                  userName={currentUser?.name}
+                  allowedSchools={currentUser?.schoolKeys}
+                  initialQuickFilter={{ activeTab: cashierSchoolKey }}
+                  onSchoolKeyChange={handleCashierSelectSchool}
+                  adminFiltersOpen={adminFiltersOpen}
+                  onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+                  columnsOpen={columnsOpen}
+                  onColumnsOpenChange={setColumnsOpen}
+                  onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                  externalPeriodKey={cashierPeriodKey}
+                  hideTransferBars
+                  externalQuickTransfer={cashierTransferFilter}
+                  initialSearch={cashierOpenFamilySearch}
+                  cashierView={cashierView}
                 />
-              </DashboardTopPanel>
-              <FamiliesPage
-                mode="cashier"
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                allowedSchools={currentUser?.schoolKeys}
-                initialQuickFilter={{ activeTab: cashierSchoolKey }}
-                onSchoolKeyChange={handleCashierSelectSchool}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-                externalPeriodKey={cashierPeriodKey}
-                hideTransferBars
-                externalQuickTransfer={cashierTransferFilter}
-                initialSearch={cashierOpenFamilySearch}
-                cashierView={cashierView}
-              />
+              )}
               </>
             ) : (
               <CashierOverview

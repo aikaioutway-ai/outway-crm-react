@@ -2000,3 +2000,84 @@ async function fetchPaymentsTableUncached(): Promise<PaymentTableRow[]> {
     };
   });
 }
+
+export interface RefundTableRow {
+  id: string;
+  familyId: string;
+  parentName: string;
+  phone: string;
+  childrenNames: string;
+  branchShort: string;
+  transferNumber: string | null;
+  amount: number;
+  comment: string;
+  status: string;
+  requestedBy: string | null;
+  requestedAt: string;
+  createdAt: string;
+}
+
+let refundsTableInflight: Promise<RefundTableRow[]> | null = null;
+
+export async function fetchRefundsTable(): Promise<RefundTableRow[]> {
+  if (refundsTableInflight) return refundsTableInflight;
+  const request = fetchRefundsTableUncached();
+  refundsTableInflight = request;
+  request.finally(() => {
+    refundsTableInflight = null;
+  });
+  return request;
+}
+
+async function fetchRefundsTableUncached(): Promise<RefundTableRow[]> {
+  const [refunds, families, children] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase
+        .from('v2_refunds')
+        .select('id, family_id, amount, comment, status, requested_by, requested_at, created_at')
+        .order('created_at', { ascending: false })
+        .range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+  ]);
+
+  const familyMap: Record<string, { parentName: string; phone: string }> = {};
+  families.forEach((f: any) => {
+    familyMap[f.id] = { parentName: f.parent_name ?? '', phone: f.phone ?? '' };
+  });
+
+  const childrenByFamily: Record<string, { names: string[]; branchShort: string; transferNumber: string | null }> = {};
+  children.forEach((c: any) => {
+    if (!childrenByFamily[c.family_id]) {
+      const branch = Array.isArray(c.v2_school_branches) ? c.v2_school_branches[0] : c.v2_school_branches;
+      const transfer = Array.isArray(c.v2_transfers) ? c.v2_transfers[0] : c.v2_transfers;
+      childrenByFamily[c.family_id] = {
+        names: [],
+        branchShort: branch?.short_name ?? '',
+        transferNumber: transfer?.transfer_number ? String(transfer.transfer_number) : null,
+      };
+    }
+    const parts = (c.child_name ?? '').trim().split(' ');
+    const name = parts[1] ?? parts[0] ?? '';
+    if (name) childrenByFamily[c.family_id].names.push(name);
+  });
+
+  return refunds.map((r: any): RefundTableRow => {
+    const family = familyMap[r.family_id] ?? { parentName: '', phone: '' };
+    const kids = childrenByFamily[r.family_id];
+    return {
+      id: String(r.id),
+      familyId: String(r.family_id),
+      parentName: family.parentName,
+      phone: family.phone,
+      childrenNames: kids?.names.join(', ') ?? '',
+      branchShort: kids?.branchShort ?? '',
+      transferNumber: kids?.transferNumber ?? null,
+      amount: Number(r.amount ?? 0),
+      comment: r.comment ?? '',
+      status: r.status ?? '',
+      requestedBy: r.requested_by ?? null,
+      requestedAt: String(r.requested_at ?? r.created_at ?? ''),
+      createdAt: String(r.created_at ?? ''),
+    };
+  });
+}

@@ -18,6 +18,7 @@ export const QK = {
   driversTable: ['driversTable'] as const,
   paymentsTable: ['paymentsTable'] as const,
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
+  refundsTable: ['refundsTable'] as const,
   employees: ['employees'] as const,
   payrollEntries: (periodMonth: number, periodYear: number) => ['payrollEntries', periodMonth, periodYear] as const,
   payrollApproval: (schoolKey: string, periodMonth: number, periodYear: number) => ['payrollApproval', schoolKey, periodMonth, periodYear] as const,

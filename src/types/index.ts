@@ -185,10 +185,24 @@ export interface PaymentItem {
   createdAt: string;
 }
 
+export interface Refund {
+  id: string;
+  familyId: string;
+  amount: number;
+  comment?: string;
+  status: PaymentReviewStatus;
+  requestedBy?: string;
+  requestedAt: string;
+  confirmedBy?: string;
+  confirmedAt?: string;
+  rejectReason?: string;
+}
+
 export interface FinanceSnapshot {
   charges: Charge[];
   payments: FamilyPayment[];
   paymentItems: PaymentItem[];
+  refunds: Refund[];
   mainBalance?: number;
   depositBalance?: number;
 }

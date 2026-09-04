@@ -5,6 +5,7 @@ import {
   fetchV2DriversTable,
   fetchPaymentsTable,
   fetchCashierPaymentsTable,
+  fetchRefundsTable,
   fetchBranchStats,
   fetchV2PayrollEntriesForPeriod,
   fetchV2PayrollApproval,
@@ -17,6 +18,7 @@ import {
   V2DriverTableRow,
   PaymentTableRow,
   CashierPaymentRow,
+  RefundTableRow,
   BranchStat,
   V2PayrollEntry,
   V2PayrollApproval,
@@ -70,6 +72,14 @@ export function useCashierPaymentsTable(): UseQueryResult<CashierPaymentRow[]> {
   return useQuery({
     queryKey: QK.cashierPaymentsTable,
     queryFn: fetchCashierPaymentsTable,
+  });
+}
+
+export function useRefundsTable(options?: { enabled?: boolean }): UseQueryResult<RefundTableRow[]> {
+  return useQuery({
+    queryKey: QK.refundsTable,
+    queryFn: fetchRefundsTable,
+    enabled: options?.enabled ?? true,
   });
 }
 

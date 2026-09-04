@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, QrCode, ReceiptText, Search, X } from 'lucide-react';
-import { PaymentTableRow } from '../../services/crmV2Service';
-import { usePaymentsTable } from '../../hooks/useCrmQueries';
+import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, QrCode, ReceiptText, RotateCcw, Search, X } from 'lucide-react';
+import { PaymentTableRow, RefundTableRow } from '../../services/crmV2Service';
+import { usePaymentsTable, useRefundsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
 import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS } from './constants';
 import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
@@ -13,7 +13,7 @@ import { B2BPaymentRecord } from '../../services/b2bPaymentService';
 import B2BCashierReview from '../b2b/B2BCashierReview';
 import B2BIcon from '../../core/icons/B2BIcon';
 
-type SortKey = 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount';
+type SortKey = 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsAmount';
 
 interface CashierOverviewProps {
   periodKey: string;
@@ -35,6 +35,9 @@ interface CashierSchoolStat {
   confirmedAmount: number;
   qrAmount: number;
   cashAmount: number;
+  refundsAmount: number;
+  refundsPendingAmount: number;
+  refundsConfirmedAmount: number;
 }
 
 const SCHOOL_COLORS = [
@@ -49,6 +52,7 @@ const KPI_COLORS: Record<SortKey, string> = {
   confirmedAmount: 'var(--success)',
   qrAmount: '#1D6FA4',
   cashAmount: '#15803D',
+  refundsAmount: '#B91C1C',
 };
 
 const COLUMN_WEIGHTS: Record<SortKey, number> = {
@@ -58,9 +62,10 @@ const COLUMN_WEIGHTS: Record<SortKey, number> = {
   confirmedAmount: 1.2,
   qrAmount: 1,
   cashAmount: 1,
+  refundsAmount: 1.15,
 };
 
-const GRID_TEMPLATE = ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount']
+const GRID_TEMPLATE = ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsAmount']
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
 
@@ -112,6 +117,26 @@ function isCash(row: PaymentTableRow): boolean {
 function rowMatchesSchool(row: PaymentTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
   const branch = row.branchShort.toLowerCase();
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
+}
+
+function refundMatchesSchool(row: RefundTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
+  const branch = row.branchShort.toLowerCase();
+  return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
+}
+
+function refundDate(row: RefundTableRow): Date | null {
+  const raw = row.requestedAt || row.createdAt;
+  if (!raw) return null;
+  const date = new Date(raw);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function refundMatchesPeriod(row: RefundTableRow, periodKey: string): boolean {
+  if (periodKey === 'ALL') return CASHIER_PERIODS.some(period => refundMatchesPeriod(row, period.key));
+  const period = CASHIER_PERIODS.find(item => item.key === periodKey);
+  const date = refundDate(row);
+  if (!period || !date) return false;
+  return date.getMonth() + 1 === period.month && date.getFullYear() === period.year;
 }
 
 function paymentPeriodKey(row: PaymentTableRow): string {
@@ -198,6 +223,7 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
 
 export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
+  const { data: refundRows = [] } = useRefundsTable();
   const b2bPayments = useB2BPayments();
   const searchablePayments = useMemo(
     () => (rows ?? []).filter(row => isSchoolAllowed(getBranchFilter(row.branchShort, row.branchShort), allowedSchools)),
@@ -219,6 +245,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   }, [onPeriodKeyChange, periodKey]);
 
   const periodRows = useMemo(() => (rows ?? []).filter(row => matchesPeriod(row, periodKey)), [periodKey, rows]);
+  const periodRefundRows = useMemo(() => (refundRows ?? []).filter(row => refundMatchesPeriod(row, periodKey)), [periodKey, refundRows]);
 
   const stats = useMemo(() => {
     const schoolStats = SCHOOL_TABS.filter(tab => tab.key !== 'ALL').map((tab, index): CashierSchoolStat => {
@@ -227,6 +254,9 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
     const confirmedRows = schoolRows.filter(isConfirmed);
     const paymentRows = schoolRows.filter(row => isPending(row) || isConfirmed(row));
     const activeRows = schoolRows.filter(row => !String(row.status ?? '').toLowerCase().includes('отклон') && String(row.status ?? '').toLowerCase() !== 'rejected');
+    const schoolRefundRows = periodRefundRows.filter(row => refundMatchesSchool(row, tab));
+    const refundsPendingAmount = schoolRefundRows.filter(row => row.status === 'pending').reduce((sum, row) => sum + row.amount, 0);
+    const refundsConfirmedAmount = schoolRefundRows.filter(row => row.status === 'confirmed').reduce((sum, row) => sum + row.amount, 0);
     return {
       key: tab.key,
       label: tab.label,
@@ -238,6 +268,9 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
       confirmedAmount: confirmedRows.reduce((sum, row) => sum + row.amount, 0),
       qrAmount: activeRows.filter(isQr).reduce((sum, row) => sum + row.amount, 0),
       cashAmount: activeRows.filter(isCash).reduce((sum, row) => sum + row.amount, 0),
+      refundsAmount: refundsPendingAmount + refundsConfirmedAmount,
+      refundsPendingAmount,
+      refundsConfirmedAmount,
     };
     });
     const periodB2BPayments = b2bPayments.filter(payment => b2bMatchesPeriod(payment, periodKey));
@@ -252,9 +285,12 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
       confirmedAmount: confirmed.reduce((sum, payment) => sum + payment.amount, 0),
       qrAmount: active.filter(payment => payment.method === 'legal_account').reduce((sum, payment) => sum + payment.amount, 0),
       cashAmount: active.filter(payment => payment.method === 'cash').reduce((sum, payment) => sum + payment.amount, 0),
+      refundsAmount: 0,
+      refundsPendingAmount: 0,
+      refundsConfirmedAmount: 0,
     };
     return [...schoolStats, b2bStat];
-  }, [b2bPayments, periodKey, periodRows]);
+  }, [b2bPayments, periodKey, periodRefundRows, periodRows]);
 
   const totals = useMemo(() => stats.reduce((acc, s) => ({
     pendingCount: acc.pendingCount + s.pendingCount,
@@ -263,14 +299,17 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
     confirmedAmount: acc.confirmedAmount + s.confirmedAmount,
     qrAmount: acc.qrAmount + s.qrAmount,
     cashAmount: acc.cashAmount + s.cashAmount,
-  }), { paymentsAmount: 0, pendingCount: 0, pendingAmount: 0, confirmedAmount: 0, qrAmount: 0, cashAmount: 0 }), [stats]);
+    refundsAmount: acc.refundsAmount + s.refundsAmount,
+    refundsPendingAmount: acc.refundsPendingAmount + s.refundsPendingAmount,
+    refundsConfirmedAmount: acc.refundsConfirmedAmount + s.refundsConfirmedAmount,
+  }), { paymentsAmount: 0, pendingCount: 0, pendingAmount: 0, confirmedAmount: 0, qrAmount: 0, cashAmount: 0, refundsAmount: 0, refundsPendingAmount: 0, refundsConfirmedAmount: 0 }), [stats]);
 
   const displayRows = useMemo(() => {
     const b2bStat = stats.find(stat => stat.key === 'B2B');
     const schoolRows = buildGroupedRows(
       stats.filter(stat => stat.key !== 'B2B'),
       expandedGroups,
-      ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount'],
+      ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsAmount', 'refundsPendingAmount', 'refundsConfirmedAmount'],
       (a, b) => {
         const cmp = a.data[sortState.key] - b.data[sortState.key];
         return sortState.dir === 'asc' ? cmp : -cmp;
@@ -369,6 +408,27 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
                 })}
               </ColumnCard>
             ))}
+
+            <ColumnCard
+              sortKey="refundsAmount"
+              label="Возвраты"
+              icon={<RotateCcw size={17} color="#fff" />}
+              value={money(totals.refundsAmount)}
+              color={KPI_COLORS.refundsAmount}
+              sortState={sortState}
+              onSort={handleSort}
+            >
+              {displayRows.map((row, i) => {
+                const pending = Number(row.data.refundsPendingAmount);
+                const confirmed = Number(row.data.refundsConfirmedAmount);
+                return (
+                  <div key={row.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: pending > 0 ? '#B91C1C' : 'var(--text-2)' }}>{pending > 0 ? money(pending) : '0'}</span>
+                    {confirmed > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981' }}>{money(confirmed)}</span>}
+                  </div>
+                );
+              })}
+            </ColumnCard>
         </DashboardGrid>
       </div>
 

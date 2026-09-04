@@ -10,6 +10,7 @@ import {
   PaymentReviewStatus,
   PaymentStatus,
   PaymentType,
+  Refund,
 } from '../types';
 
 /** Платежи/начисления меняют total_paid/debt/pending в v2_families_summary —
@@ -20,6 +21,7 @@ function invalidateFinanceCache(): void {
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   queryClient.invalidateQueries({ queryKey: QK.paymentsTable });
   queryClient.invalidateQueries({ queryKey: QK.cashierPaymentsTable });
+  queryClient.invalidateQueries({ queryKey: QK.refundsTable });
 }
 
 function toPaymentStatus(status: string): PaymentStatus {
@@ -85,6 +87,21 @@ function mapPayment(row: any): FamilyPayment {
   };
 }
 
+function mapRefund(row: any): Refund {
+  return {
+    id: String(row.id),
+    familyId: String(row.family_id),
+    amount: Number(row.amount ?? 0),
+    comment: row.comment ?? '',
+    status: toReviewStatus(row.status ?? 'pending'),
+    requestedBy: row.requested_by ?? undefined,
+    requestedAt: String(row.requested_at ?? row.created_at ?? ''),
+    confirmedBy: row.reviewed_by ?? undefined,
+    confirmedAt: row.reviewed_at ?? undefined,
+    rejectReason: row.reject_reason ?? undefined,
+  };
+}
+
 function mapPaymentItem(row: any): PaymentItem {
   const tx = row.v2_wallet_transactions;
   return {
@@ -103,7 +120,7 @@ function mapPaymentItem(row: any): PaymentItem {
 }
 
 export async function fetchFinanceSnapshot(familyId: string, children?: Child[]): Promise<FinanceSnapshot> {
-  const [chargeRes, paymentRes, walletRes, childrenRes] = await Promise.all([
+  const [chargeRes, paymentRes, walletRes, childrenRes, refundRes] = await Promise.all([
     supabase
       .from('v2_charges')
       .select('*')
@@ -123,6 +140,11 @@ export async function fetchFinanceSnapshot(familyId: string, children?: Child[])
     children
       ? Promise.resolve({ data: children, error: null })
       : supabase.from('v2_children').select('*').eq('family_id', familyId),
+    supabase
+      .from('v2_refunds')
+      .select('*')
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: false }),
   ]);
 
   const resolvedChildren: Child[] = children ?? (childrenRes.data ?? []);
@@ -155,10 +177,13 @@ export async function fetchFinanceSnapshot(familyId: string, children?: Child[])
     }
   }
 
+  const refunds = refundRes.error ? [] : (refundRes.data ?? []).map(mapRefund);
+
   return {
     charges,
     payments,
     paymentItems,
+    refunds,
     mainBalance: Number(walletRes.data?.main_balance ?? 0),
     depositBalance: Number(walletRes.data?.deposit_balance ?? 0),
   };
@@ -457,4 +482,54 @@ export async function autoChargeOnBoarding(familyId: string, children: Child[]):
   if (!hasDeposit) {
     await createDepositCharge(familyId, children);
   }
+}
+
+// ─── Возвраты ────────────────────────────────────────────────────────────────
+
+export async function requestFamilyRefund(params: {
+  familyId: string;
+  amount: number;
+  comment?: string;
+  requestedBy?: string;
+}): Promise<Refund> {
+  const { data, error } = await supabase
+    .from('v2_refunds')
+    .insert({
+      family_id: params.familyId,
+      amount: params.amount,
+      comment: params.comment || null,
+      status: 'pending',
+      requested_by: params.requestedBy,
+    })
+    .select()
+    .single();
+
+  if (error) throw new Error(error.message);
+  invalidateFinanceCache();
+  return mapRefund(data);
+}
+
+export async function confirmFamilyRefund(params: {
+  refund: Refund;
+  confirmedBy?: string;
+  paymentMethod?: 'cash' | 'cashless';
+}): Promise<void> {
+  if (params.refund.status === 'Подтверждено') return;
+  const { error } = await supabase.rpc('v2_confirm_refund', {
+    p_refund_id: params.refund.id,
+    p_confirmed_by: params.confirmedBy ?? 'CRM',
+    p_expense_payment_method: params.paymentMethod ?? 'cashless',
+  });
+  if (error) throw new Error(error.message);
+  invalidateFinanceCache();
+}
+
+export async function rejectFamilyRefund(refund: Refund, reason: string, reviewedBy?: string): Promise<void> {
+  const { error } = await supabase.rpc('v2_reject_refund', {
+    p_refund_id: refund.id,
+    p_reject_reason: reason,
+    p_reviewed_by: reviewedBy ?? 'CRM',
+  });
+  if (error) throw new Error(error.message);
+  invalidateFinanceCache();
 }

@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CreditCard, ExternalLink, FileText, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
-import { Family, Child, Charge, FamilyPayment, PaymentItem, VehicleType, Zone } from '../../types';
+import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
@@ -9,6 +9,7 @@ import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
   updateFamilyPayment, updateCharge,
+  requestFamilyRefund, confirmFamilyRefund, rejectFamilyRefund,
 } from '../../services/financeService';
 import TabFinance from './TabFinance';
 import TabHistory from './TabHistory';
@@ -50,6 +51,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [charges, setCharges] = useState<Charge[]>([]);
   const [payments, setPayments] = useState<FamilyPayment[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
+  const [refunds, setRefunds] = useState<Refund[]>([]);
   const [mainBalance, setMainBalance] = useState(0);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
@@ -70,6 +72,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
+  const isManager = userRole === 'manager';
 
   const activeFamilyIdRef = useRef(family.id);
 
@@ -118,6 +121,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setCharges(snap.charges);
     setPayments(snap.payments);
     setPaymentItems(snap.paymentItems);
+    setRefunds(snap.refunds);
     setMainBalance(snap.mainBalance ?? 0);
     setLoadingFinance(false);
     setFinanceLoaded(true);
@@ -366,6 +370,55 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       return true;
     } catch { return false; }
   }
+
+  async function handleCreateRefund(amount: number, comment: string): Promise<boolean> {
+    try {
+      await requestFamilyRefund({ familyId: family.id, amount, comment, requestedBy: userName });
+      try {
+        await addAudit('Возврат', 'family_refund', '-', `${money(amount)} на проверке`);
+      } catch (error) {
+        console.error('Refund audit save failed', error);
+      }
+      await loadFinance();
+      await loadAudit();
+      onUpdated?.();
+      return true;
+    } catch (error) {
+      console.error('Refund save failed', error);
+      window.alert(error instanceof Error ? error.message : 'Не удалось оформить возврат');
+      return false;
+    }
+  }
+
+  async function handleConfirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless'): Promise<boolean> {
+    try {
+      await confirmFamilyRefund({ refund, confirmedBy: userName, paymentMethod });
+      await addAudit('Подтверждение возврата', 'family_refund', refund.status, `${money(refund.amount)} подтверждено`);
+      await loadFinance();
+      await loadAudit();
+      onUpdated?.();
+      return true;
+    } catch (error) {
+      console.error('Refund confirm failed', error);
+      window.alert(error instanceof Error ? error.message : 'Не удалось подтвердить возврат');
+      return false;
+    }
+  }
+
+  async function handleRejectRefund(refund: Refund, reason: string): Promise<boolean> {
+    try {
+      await rejectFamilyRefund(refund, reason, userName);
+      await addAudit('Отклонение возврата', 'family_refund', refund.status, reason || '-');
+      await loadFinance();
+      await loadAudit();
+      onUpdated?.();
+      return true;
+    } catch (error) {
+      console.error('Refund reject failed', error);
+      return false;
+    }
+  }
+
   async function handleSaveChild(child: Child, patch: Partial<Child>): Promise<boolean> {
     try {
       const nextChild = { ...child, ...patch };
@@ -587,13 +640,14 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <TabFinanceLazy
               loaded={financeLoaded}
               onLoad={() => loadFinance()}
-              charges={charges} payments={payments} paymentItems={paymentItems}
+              charges={charges} payments={payments} paymentItems={paymentItems} refunds={refunds}
               loading={loadingFinance} family={savedFamily} children={children}
-              isAdmin={isAdmin} isCashier={isCashier} userRole={userRole as any}
+              isAdmin={isAdmin} isCashier={isCashier} isManager={isManager} userRole={userRole as any}
               onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
               onAddCharges={handleAddCharges} onCreatePayment={handleCreatePayment}
               onConfirmPayment={handleConfirmPayment} onUnconfirmPayment={handleUnconfirmPayment} onSavePayment={handleSavePayment}
               onDeletePayment={handleDeletePayment}
+              onCreateRefund={handleCreateRefund} onConfirmRefund={handleConfirmRefund} onRejectRefund={handleRejectRefund}
               readOnly={!editing}
             />
           )}
