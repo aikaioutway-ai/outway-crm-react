@@ -74,6 +74,16 @@ export interface B2BExpenseRecord {
   source: string;
 }
 
+export interface NewB2BExpenseRecord {
+  expenseDate: string;
+  category: string;
+  amount: number;
+  method: B2BPaymentMethod;
+  purpose: string;
+  orderId?: string;
+  comment: string;
+}
+
 const transportLabel = (value: string) => ({
   sedan: 'Легковое', comfort: 'Комфорт', minivan: 'Минивэн', minibus: 'Микроавтобус',
 }[value] ?? value);
@@ -172,6 +182,20 @@ export async function fetchB2BExpenses(): Promise<B2BExpenseRecord[]> {
     method: row.payment_method, taxAmount: Number(row.tax_amount), netAmount: Number(row.net_amount),
     purpose: row.purpose ?? '', orderNumber: row.order?.order_number ?? '—', comment: row.comment ?? '', source: row.source,
   }));
+}
+
+export async function createB2BExpense(expense: NewB2BExpenseRecord): Promise<void> {
+  const { error } = await supabase.from('v2_b2b_expenses').insert({
+    expense_date: expense.expenseDate,
+    category: expense.category,
+    amount: expense.amount,
+    payment_method: expense.method,
+    purpose: expense.purpose,
+    order_id: expense.orderId || null,
+    comment: expense.comment || null,
+    source: 'manual',
+  });
+  assert(error);
 }
 
 export async function createB2BClient(client: Omit<B2BClientRecord, 'id'>): Promise<B2BClientRecord> {

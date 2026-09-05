@@ -21,8 +21,14 @@ type B2BTab = typeof B2B_TABS[number]['key'];
 
 export default function B2BModule() {
   const [activeTab, setActiveTab] = useState<B2BTab>('orders');
+  const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
   const currentTab = B2B_TABS.find(tab => tab.key === activeTab) ?? B2B_TABS[0];
   const CurrentIcon = currentTab.icon;
+
+  const openOrderCard = (orderId: string) => {
+    setOrderToOpenId(orderId);
+    setActiveTab('orders');
+  };
 
   return (
     <section className="b2b-module">
@@ -44,7 +50,10 @@ export default function B2BModule() {
               type="button"
               className={`b2b-tab${active ? ' active' : ''}`}
               aria-current={active ? 'page' : undefined}
-              onClick={() => setActiveTab(tab.key)}
+              onClick={() => {
+                setOrderToOpenId(null);
+                setActiveTab(tab.key);
+              }}
             >
               <Icon size={16} aria-hidden="true" />
               {tab.label}
@@ -54,15 +63,15 @@ export default function B2BModule() {
       </nav>
 
       {activeTab === 'orders' ? (
-        <B2BOrders />
+        <B2BOrders openOrderId={orderToOpenId} />
       ) : activeTab === 'logistics' ? (
         <B2BLogistics />
       ) : activeTab === 'calendar' ? (
         <B2BCalendar />
       ) : activeTab === 'clients' ? (
-        <B2BClients />
+        <B2BClients onOpenOrder={openOrderCard} />
       ) : activeTab === 'expenses' ? (
-        <B2BExpenses />
+        <B2BExpenses onOpenOrder={openOrderCard} />
       ) : (
         <div className="b2b-empty" role="tabpanel">
           <CurrentIcon size={34} aria-hidden="true" />

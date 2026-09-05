@@ -15,6 +15,28 @@ export interface B2BDocumentOrder {
 
 export type B2BGeneratedDocumentType = 'invoice' | 'act';
 
+export interface B2BReconciliationTransaction {
+  date: string;
+  document: string;
+  description: string;
+  debit: number;
+  credit: number;
+  balance: number;
+}
+
+export interface B2BReconciliationDocument {
+  clientName: string;
+  clientInn?: string;
+  clientAddress?: string;
+  dateFrom: string;
+  dateTo: string;
+  openingBalance: number;
+  debitTotal: number;
+  creditTotal: number;
+  closingBalance: number;
+  transactions: B2BReconciliationTransaction[];
+}
+
 const COMPANY = {
   name: 'ОсОО «АйКай Груп»',
   inn: '03010202310037',
@@ -118,6 +140,96 @@ export async function downloadB2BGeneratedDocument(type: B2BGeneratedDocumentTyp
   const link = document.createElement('a');
   link.href = url;
   link.download = `${number}.pdf`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+export function buildB2BReconciliationDefinition(data: B2BReconciliationDocument): TDocumentDefinitions {
+  const debtText = data.closingBalance > 0
+    ? `Задолженность заказчика в пользу ${COMPANY.name}: ${money(data.closingBalance)}`
+    : data.closingBalance < 0
+      ? `Переплата заказчика: ${money(Math.abs(data.closingBalance))}`
+      : 'Задолженность между сторонами отсутствует.';
+  const body: any[][] = [[
+    { text: 'Дата', style: 'tableHead' },
+    { text: 'Документ', style: 'tableHead' },
+    { text: 'Содержание операции', style: 'tableHead' },
+    { text: 'Начислено', style: 'tableHead', alignment: 'right' },
+    { text: 'Оплачено', style: 'tableHead', alignment: 'right' },
+    { text: 'Сальдо', style: 'tableHead', alignment: 'right' },
+  ]];
+  body.push([
+    '', '', { text: 'Сальдо на начало периода', bold: true }, '', '',
+    { text: money(data.openingBalance), bold: true, alignment: 'right' },
+  ]);
+  data.transactions.forEach(transaction => body.push([
+    documentDate(transaction.date), transaction.document, transaction.description,
+    { text: transaction.debit ? money(transaction.debit) : '—', alignment: 'right' },
+    { text: transaction.credit ? money(transaction.credit) : '—', alignment: 'right' },
+    { text: money(transaction.balance), alignment: 'right' },
+  ]));
+  body.push([
+    '', '', { text: 'ИТОГО ЗА ПЕРИОД:', bold: true, color: '#FFFFFF', alignment: 'right' },
+    { text: money(data.debitTotal), bold: true, color: '#FFFFFF', alignment: 'right' },
+    { text: money(data.creditTotal), bold: true, color: '#FFFFFF', alignment: 'right' },
+    { text: money(data.closingBalance), bold: true, color: '#FFFFFF', alignment: 'right' },
+  ]);
+
+  return {
+    pageSize: 'A4', pageOrientation: 'landscape', pageMargins: [34, 34, 34, 32],
+    content: [
+      {
+        table: { widths: ['*', 180], body: [[
+          { text: 'АКТ СВЕРКИ ВЗАИМНЫХ РАСЧЁТОВ', bold: true, fontSize: 16, color: '#FFFFFF', margin: [10, 10, 6, 10] },
+          { text: `за ${documentDate(data.dateFrom)} — ${documentDate(data.dateTo)}`, fontSize: 9, color: '#D0E4F5', alignment: 'right', margin: [4, 13, 8, 10] },
+        ]] },
+        layout: { fillColor: () => '#1A3A5C', hLineWidth: () => 0, vLineWidth: () => 0 },
+      },
+      { text: 'По данным бухгалтерского учёта сторон', color: '#2E5F8A', italics: true, alignment: 'center', margin: [0, 9, 0, 13] },
+      {
+        columns: [
+          { width: '*', stack: [{ text: 'ИСПОЛНИТЕЛЬ', style: 'caption' }, { text: COMPANY.name, bold: true }, { text: `ИНН ${COMPANY.inn} · ОКПО ${COMPANY.okpo}`, style: 'small' }, { text: COMPANY.address, style: 'small' }] },
+          { width: '*', stack: [{ text: 'ЗАКАЗЧИК', style: 'caption' }, { text: data.clientName, bold: true }, { text: data.clientInn ? `ИНН ${data.clientInn}` : 'ИНН не указан', style: 'small' }, { text: data.clientAddress || 'Адрес не указан', style: 'small' }] },
+        ], columnGap: 22, margin: [0, 0, 0, 13],
+      },
+      {
+        table: { headerRows: 1, widths: [55, 92, '*', 72, 72, 76], body },
+        layout: {
+          fillColor: row => row === 0 || row === body.length - 1 ? '#1A3A5C' : row % 2 === 0 ? '#F5F8F9' : '#FFFFFF',
+          hLineColor: () => '#DDE5E8', vLineColor: () => '#DDE5E8',
+        },
+      },
+      { text: debtText, bold: true, fontSize: 12, color: data.closingBalance > 0 ? '#A04D42' : '#1A3A5C', alignment: 'right', margin: [0, 13, 0, 24] },
+      {
+        columns: [
+          { width: '*', stack: [{ text: 'ИСПОЛНИТЕЛЬ', style: 'caption' }, { text: `Генеральный директор  __________  ${COMPANY.signer}`, margin: [0, 18, 0, 0] }] },
+          { width: '*', stack: [{ text: 'ЗАКАЗЧИК', style: 'caption' }, { text: '________________  __________  __________________', margin: [0, 18, 0, 0] }] },
+        ], columnGap: 28,
+      },
+    ],
+    defaultStyle: { font: 'Roboto', fontSize: 8, color: '#1A1A1A', lineHeight: 1.2 },
+    styles: {
+      caption: { bold: true, fontSize: 8, color: '#2E5F8A', characterSpacing: 0.6 },
+      small: { fontSize: 8, color: '#5E6872', margin: [0, 3, 0, 0] },
+      tableHead: { bold: true, fontSize: 7.5, color: '#FFFFFF', margin: [2, 4, 2, 4] },
+    },
+    info: { title: `Акт сверки ${data.clientName} ${data.dateFrom}–${data.dateTo}`, author: COMPANY.name },
+  };
+}
+
+export async function downloadB2BReconciliation(data: B2BReconciliationDocument) {
+  const [{ default: pdfMake }, { default: pdfFonts }] = await Promise.all([
+    import('pdfmake/build/pdfmake'),
+    import('pdfmake/build/vfs_fonts'),
+  ]);
+  pdfMake.addVirtualFileSystem(pdfFonts);
+  const blob = await pdfMake.createPdf(buildB2BReconciliationDefinition(data)).getBlob();
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = `Акт-сверки-${data.clientName.replace(/[^\p{L}\p{N}-]+/gu, '-')}-${data.dateFrom}-${data.dateTo}.pdf`;
   document.body.appendChild(link);
   link.click();
   link.remove();

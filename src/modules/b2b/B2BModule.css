@@ -309,16 +309,31 @@
 .b2b-logistics-order-actions button:hover { background: #eef8f7; }
 .b2b-logistics-history-empty { padding: 18px; border-top: 1px solid #edf2f3; color: #91a3a8; text-align: center; font-size: 10px; }
 
-.b2b-expenses { flex: 1; min-height: 0; padding: 18px; border-radius: 16px; background: #fff; overflow: auto; }
-.b2b-expenses-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
-.b2b-expenses-head h2 { margin: 0; color: #17222f; font-size: 18px; }
-.b2b-expenses-head p { margin: 4px 0 0; color: #8b96a9; font-size: 11px; }
-.b2b-expenses-head > span { padding: 6px 10px; border-radius: 999px; background: #eef6f7; color: #477279; font-size: 11px; font-weight: 800; }
-.b2b-expenses-tax-note { margin-top: 14px; padding: 12px 14px; border: 1px solid #f0d9a6; border-radius: 13px; background: #fff9e9; color: #b27a1a; display: flex; align-items: flex-start; gap: 10px; }
+.b2b-expenses { flex: 1; min-height: 0; border-radius: 16px; overflow: auto; display: flex; flex-direction: column; gap: 12px; }
+.b2b-expenses-overview { flex-shrink: 0; padding: 18px; border-radius: 16px; background: #fff; }
+.b2b-expenses-toolbar { margin-bottom: 17px; display: grid; grid-template-columns: minmax(250px, auto) minmax(620px, 1fr); align-items: center; gap: 18px; }
+.b2b-expenses-toolbar h2 { margin: 0; color: #17222f; font-size: 20px; letter-spacing: -.02em; }
+.b2b-expenses-toolbar p { margin: 4px 0 0; color: #8b96a9; font-size: 11px; font-weight: 650; }
+.b2b-expenses-back { margin: 0 0 5px; padding: 0; border: 0; background: transparent; color: #258b8c; font: inherit; font-size: 11px; font-weight: 800; cursor: pointer; }
+.b2b-expenses-period-controls { min-width: 0; display: grid; grid-template-columns: auto minmax(420px, 1fr); gap: 8px; align-items: center; }
+.b2b-expenses-year-picker { height: 44px; padding: 4px; border: 1px solid #dce7e9; border-radius: 12px; background: #fff; display: flex; align-items: center; box-sizing: border-box; }
+.b2b-expenses-year-picker button { width: 32px; height: 34px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #667085; display: grid; place-items: center; cursor: pointer; }
+.b2b-expenses-year-picker button:hover { background: #eef8f7; color: #287f82; }
+.b2b-expenses-year-picker select { height: 34px; padding: 0 5px; border: 0; outline: 0; background: transparent; color: #354052; font: inherit; font-size: 12px; font-weight: 850; cursor: pointer; }
+.b2b-expense-category-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 11px; }
+.b2b-expense-category-card { min-width: 0; min-height: 140px; padding: 15px; border: 1px solid #dbe7ea; border-radius: 17px; background: #fff; color: #17222f; display: flex; flex-direction: column; align-items: flex-start; text-align: left; font: inherit; cursor: pointer; transition: transform .14s, box-shadow .14s, border-color .14s; }
+.b2b-expense-category-card:hover { transform: translateY(-3px); border-color: #aad4d4; box-shadow: 0 13px 28px rgba(43,72,89,.13); z-index: 2; }
+.b2b-expense-category-card.total { background: #f9fcfc; cursor: default; }
+.b2b-expense-category-card.total:hover { transform: none; box-shadow: none; }
+.b2b-expense-category-icon { width: 38px; height: 38px; margin-bottom: 12px; border-radius: 12px; background: #e7f2f4; color: #477279; display: grid; place-items: center; }
+.b2b-expense-category-name { width: 100%; color: #17222f; font-size: 13px; font-weight: 850; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.b2b-expense-category-card > strong { margin-top: 4px; color: #17222f; font-size: 17px; font-weight: 850; white-space: nowrap; }
+.b2b-expense-category-card > small { margin-top: 3px; color: #8b96a9; font-size: 10px; font-weight: 650; }
+.b2b-expenses-tax-note { margin-top: 12px; padding: 11px 13px; border: 1px solid #f0d9a6; border-radius: 13px; background: #fff9e9; color: #b27a1a; display: flex; align-items: flex-start; gap: 10px; }
 .b2b-expenses-tax-note > div { display: grid; gap: 3px; }
 .b2b-expenses-tax-note strong { color: #795313; font-size: 11px; }
 .b2b-expenses-tax-note span { color: #927039; font-size: 10px; line-height: 1.45; }
-.b2b-expenses-summary { margin-top: 11px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.b2b-expenses-summary { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
 .b2b-expenses-summary article { padding: 13px 14px; border: 1px solid #e2ebed; border-radius: 13px; background: #fbfdfd; display: grid; gap: 5px; }
 .b2b-expenses-summary span { color: #8b96a9; font-size: 9px; font-weight: 800; }
 .b2b-expenses-summary strong { color: #17222f; font-size: 17px; }
@@ -326,7 +341,13 @@
 .b2b-expenses-summary article.tax strong { color: #a66e12; }
 .b2b-expenses-summary article.net { background: #f1faf5; }
 .b2b-expenses-summary article.net strong { color: #2d8c57; }
-.b2b-expenses-search { width: min(520px, 100%); height: 39px; margin: 13px 0; padding: 0 11px; border: 1px solid #dce7e9; border-radius: 12px; background: #f9fcfc; color: #91a3a8; display: flex; align-items: center; gap: 8px; }
+.b2b-expenses-panel { flex-shrink: 0; border: 1px solid #dbe7ea; border-radius: 16px; background: #fff; overflow: hidden; }
+.b2b-expenses-panel-head { min-height: 62px; padding: 10px 14px; border-bottom: 1px solid #e6eef0; display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.b2b-expenses-panel-head > div { display: grid; gap: 3px; }
+.b2b-expenses-panel-head strong { color: #17222f; font-size: 13px; }
+.b2b-expenses-panel-head span { color: #8b96a9; font-size: 10px; font-weight: 700; }
+.b2b-expenses-panel-actions { min-width: 0; display: flex; align-items: center; justify-content: flex-end; gap: 9px; }
+.b2b-expenses-search { width: min(390px, 38vw); height: 39px; padding: 0 11px; border: 1px solid #dce7e9; border-radius: 12px; background: #f9fcfc; color: #91a3a8; display: flex; align-items: center; gap: 8px; box-sizing: border-box; }
 .b2b-expenses-search:focus-within { border-color: #7fc3c4; background: #fff; box-shadow: 0 0 0 3px rgba(49,164,165,.1); }
 .b2b-expenses-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #17222f; font: inherit; font-size: 12px; }
 .b2b-expenses-table-wrap { border: 1px solid #e1eaec; border-radius: 14px; overflow-x: auto; }
@@ -342,6 +363,32 @@
 .b2b-expenses-table td.net { color: #2d8c57; font-weight: 800; }
 .b2b-expenses-table td.empty { height: 220px; color: #91a3a8; text-align: center; }
 .b2b-expense-badge { padding: 6px 8px; border-radius: 8px; background: #fff3e8; color: #b26c28; display: inline-flex; align-items: center; gap: 5px; font-size: 9px; font-weight: 800; white-space: nowrap; }
+.b2b-expense-order-link { appearance: none; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 850; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(40,127,130,.3); text-underline-offset: 3px; }
+.b2b-expense-order-link:hover { color: #1f696c; text-decoration-color: currentColor; }
+.b2b-expense-order-link:focus-visible { outline: 2px solid #31a5a8; outline-offset: 3px; border-radius: 3px; }
+.b2b-expense-create-card { width: min(900px, 100%); max-height: calc(100vh - 40px); overflow: auto; border-radius: 21px; background: #fff; box-shadow: 0 26px 80px rgba(23,34,47,.24); }
+.b2b-expense-create-form { padding: 18px 20px 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, .9fr); gap: 16px; align-items: start; }
+.b2b-expense-create-form > section { min-height: 100%; padding: 15px; border: 1px solid #e2ebed; border-radius: 16px; background: #fbfdfd; box-sizing: border-box; }
+.b2b-expense-create-form > section:nth-of-type(2) { background: #f8fbfb; }
+.b2b-expense-create-form h3 { margin: 0 0 13px; padding-bottom: 10px; border-bottom: 1px solid #e5edef; color: #287f82; display: flex; align-items: center; gap: 7px; font-size: 12px; }
+.b2b-expense-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
+.b2b-expense-form-grid.single { grid-template-columns: 1fr; }
+.b2b-expense-form-grid label { min-width: 0; display: grid; gap: 6px; }
+.b2b-expense-form-grid label.full { grid-column: 1 / -1; }
+.b2b-expense-form-grid label > span { color: #626c8b; font-size: 11px; font-weight: 800; }
+.b2b-expense-form-grid input,
+.b2b-expense-form-grid select,
+.b2b-expense-form-grid textarea { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid #d4e3e7; border-radius: 12px; outline: 0; background: #fff; color: #17222f; font: inherit; font-size: 12px; }
+.b2b-expense-form-grid input:focus,
+.b2b-expense-form-grid select:focus,
+.b2b-expense-form-grid textarea:focus { border-color: #7fc3c4; box-shadow: 0 0 0 3px rgba(49,164,165,.12); }
+.b2b-expense-form-grid textarea { min-height: 85px; resize: vertical; }
+.b2b-expense-live-total { padding: 12px; border: 1px solid #d9e9e8; border-radius: 13px; background: #fff; display: grid; gap: 8px; }
+.b2b-expense-live-total span { color: #7a859d; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 10px; font-weight: 750; }
+.b2b-expense-live-total strong { color: #17222f; font-size: 12px; }
+.b2b-expense-live-total span:nth-child(2) strong { color: #a66e12; }
+.b2b-expense-live-total span:last-child { padding-top: 8px; border-top: 1px solid #e5edef; }
+.b2b-expense-live-total span:last-child strong { color: #2d8c57; font-size: 14px; }
 
 @media (max-width: 640px) {
   .b2b-logistics { padding: 13px; }
@@ -349,8 +396,19 @@
   .b2b-logistics-dialog form label.full,
   .b2b-logistics-dialog-total,
   .b2b-logistics-payment-summary { grid-column: 1; }
-  .b2b-expenses { padding: 13px; }
+  .b2b-expenses-overview { padding: 13px; }
+  .b2b-expenses-toolbar { grid-template-columns: 1fr; }
+  .b2b-expenses-period-controls { grid-template-columns: 1fr; }
+  .b2b-expense-category-grid { grid-template-columns: 1fr 1fr; }
+  .b2b-expenses-panel-head { align-items: stretch; flex-direction: column; }
+  .b2b-expenses-panel-actions { align-items: stretch; flex-direction: column; }
+  .b2b-expenses-search { width: 100%; }
   .b2b-expenses-summary { grid-template-columns: 1fr; }
+  .b2b-expense-create-form { grid-template-columns: 1fr; }
+  .b2b-expense-form-grid { grid-template-columns: 1fr; }
+  .b2b-expense-form-grid label.full,
+  .b2b-expense-create-form .b2b-form-error,
+  .b2b-expense-create-form .b2b-form-actions { grid-column: 1; }
 }
 
 .b2b-orders { flex: 1; min-height: 0; padding: 18px; border-radius: 16px; background: #fff; overflow: auto; }
@@ -621,6 +679,21 @@
 
 .b2b-clients-empty h3 { margin-top: 14px; color: #17222f; font-size: 16px; }
 .b2b-clients-empty p { max-width: 420px; margin-top: 6px; margin-bottom: 16px; color: #8b96a9; font-size: 13px; line-height: 1.5; }
+.b2b-clients-filter-empty { min-height: 240px; }
+
+.b2b-client-tools { margin: -4px 0 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.b2b-client-filters { min-width: 0; display: flex; align-items: center; gap: 8px; overflow-x: auto; }
+.b2b-client-filters button { min-height: 38px; padding: 0 11px; border: 1px solid #dce7e9; border-radius: 12px; background: #f9fbfb; color: #69758b; display: inline-flex; align-items: center; gap: 7px; font: inherit; font-size: 11px; font-weight: 800; white-space: nowrap; cursor: pointer; }
+.b2b-client-filters button:hover { border-color: #a8d2d3; color: #287f82; }
+.b2b-client-filters button.active { border-color: #31a4a5; background: #e8f7f6; color: #287f82; box-shadow: 0 4px 12px rgba(49,164,165,.1); }
+.b2b-client-filters button b { min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; background: #eef3f4; display: inline-grid; place-items: center; color: #718096; font-size: 9px; }
+.b2b-client-filters button.active b { background: #31a4a5; color: #fff; }
+.b2b-client-search { width: min(330px, 35vw); min-width: 245px; height: 40px; padding: 0 10px 0 12px; border: 1px solid #dce7e9; border-radius: 12px; background: #f9fbfb; color: #91a3a8; display: flex; align-items: center; gap: 8px; transition: border-color .16s ease, box-shadow .16s ease, background .16s ease; }
+.b2b-client-search:focus-within { border-color: #7fc3c4; background: #fff; box-shadow: 0 0 0 3px rgba(49,164,165,.12); }
+.b2b-client-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: #17222f; font: inherit; font-size: 12px; }
+.b2b-client-search input::placeholder { color: #98a3b5; }
+.b2b-client-search input::-webkit-search-cancel-button { display: none; }
+.b2b-client-search > button { width: 25px; height: 25px; padding: 0; border: 0; border-radius: 8px; background: #edf3f4; color: #718096; display: grid; place-items: center; cursor: pointer; }
 
 .b2b-client-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
 .b2b-client-card { padding: 17px; border: 1px solid #e0eaec; border-radius: 16px; background: #fff; box-shadow: 0 7px 20px rgba(43,72,89,.055); cursor: pointer; transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease; }
@@ -632,6 +705,9 @@
 .b2b-client-badges { display: flex; align-items: center; gap: 6px; }
 .b2b-client-badges > span:first-child { padding: 5px 9px; border-radius: 999px; background: #f0f4f5; color: #667085; font-size: 10px; font-weight: 850; }
 .b2b-client-card h3 { margin-top: 14px; color: #17222f; font-size: 16px; }
+.b2b-client-company { margin-top: 8px; padding: 9px 11px; border-radius: 11px; background: #f2f9f8; display: grid; gap: 3px; }
+.b2b-client-company span { color: #849297; font-size: 9px; font-weight: 800; text-transform: uppercase; letter-spacing: .035em; }
+.b2b-client-company strong { color: #287f82; font-size: 12px; line-height: 1.35; overflow-wrap: anywhere; }
 .b2b-client-org { margin: 4px 0 0; color: #8b96a9; font-size: 11px; line-height: 1.4; }
 .b2b-client-details { margin-top: 14px; padding-top: 12px; border-top: 1px solid #edf2f3; display: grid; gap: 9px; }
 .b2b-client-details div { display: flex; align-items: flex-start; gap: 8px; color: #626c8b; font-size: 12px; line-height: 1.35; }
@@ -663,6 +739,9 @@
 .b2b-client-orders-table td { height: 51px; padding: 6px 11px; border-top: 1px solid #edf2f3; color: #667085; font-size: 11px; vertical-align: middle; }
 .b2b-client-orders-table .number { text-align: right; white-space: nowrap; }
 .b2b-client-orders-table .order-number { color: #287f82; font-weight: 900; white-space: nowrap; }
+.b2b-client-order-link { appearance: none; border: 0; padding: 0; background: transparent; color: #287f82; font: inherit; font-weight: 900; cursor: pointer; text-decoration: underline; text-decoration-color: rgba(40,127,130,.3); text-underline-offset: 3px; }
+.b2b-client-order-link:hover { color: #1f696c; text-decoration-color: currentColor; }
+.b2b-client-order-link:focus-visible { outline: 2px solid #31a5a8; outline-offset: 3px; border-radius: 3px; }
 .b2b-client-order-route { min-width: 180px; display: grid; gap: 2px; }
 .b2b-client-order-route b { color: #31a4a5; font-weight: 900; }
 .b2b-client-order-status,
@@ -687,7 +766,75 @@
 .b2b-client-money-summary article.paid strong { color: #2d8c57; }
 .b2b-client-money-summary article.debt { background: #fff6f3; }
 .b2b-client-money-summary article.debt strong { color: #bc5c4e; }
+.b2b-client-finance-summary { margin-bottom: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+.b2b-client-finance-summary article { padding: 13px 14px; border: 1px solid #e2ebed; border-radius: 13px; background: #fbfdfd; display: grid; gap: 5px; }
+.b2b-client-finance-summary span { color: #8b96a9; font-size: 10px; font-weight: 800; }
+.b2b-client-finance-summary strong { color: #17222f; font-size: 16px; }
+.b2b-client-finance-summary article.revenue { background: #f1faf5; }
+.b2b-client-finance-summary article.revenue strong { color: #2d8c57; }
+.b2b-client-finance-summary article.expenses { background: #fff8ed; }
+.b2b-client-finance-summary article.expenses strong { color: #ae7217; }
+.b2b-client-finance-summary article.balance { background: #eef8fb; }
+.b2b-client-finance-summary article.balance strong { color: #287f82; }
+.b2b-client-finance-summary article.balance.negative { background: #fff1f1; }
+.b2b-client-finance-summary article.balance.negative strong { color: #bc4e4e; }
+.b2b-client-finance-table-wrap { border: 1px solid #e2ebed; border-radius: 14px; overflow: auto; }
+.b2b-client-finance-table { width: 100%; min-width: 1050px; border-collapse: collapse; }
+.b2b-client-finance-table th { height: 38px; padding: 0 13px; background: #f6fafa; color: #7a859d; text-align: left; font-size: 9px; font-weight: 900; text-transform: uppercase; letter-spacing: .035em; }
+.b2b-client-finance-table td { height: 56px; padding: 7px 13px; border-top: 1px solid #edf2f3; color: #667085; font-size: 11px; }
+.b2b-client-finance-table td:first-child { display: grid; align-content: center; gap: 3px; }
+.b2b-client-finance-table td:first-child strong { color: #287f82; font-size: 11px; }
+.b2b-client-finance-table td:first-child span { color: #8b96a9; font-size: 9px; }
+.b2b-client-finance-table .number { text-align: right; white-space: nowrap; }
+.b2b-client-finance-table td.driver { color: #52636e; font-weight: 800; white-space: nowrap; }
+.b2b-client-finance-table td.revenue { color: #2d8c57; font-weight: 850; }
+.b2b-client-finance-table td.driver-cost { color: #52636e; font-weight: 850; }
+.b2b-client-finance-table td.tax { color: #a66e12; font-weight: 850; }
+.b2b-client-finance-table td.other-cost { color: #7a859d; font-weight: 800; }
+.b2b-client-finance-table td.expenses { color: #ae7217; font-weight: 850; }
+.b2b-client-finance-table td.balance { color: #287f82; font-weight: 900; }
+.b2b-client-finance-table td.balance.negative { color: #bc4e4e; }
 .b2b-client-documents-tab { display: grid; gap: 12px; }
+.b2b-reconciliation-card { padding: 14px; border: 1px solid #dce8ea; border-radius: 16px; background: #fbfdfd; display: grid; gap: 12px; }
+.b2b-reconciliation-head { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.b2b-reconciliation-head > div { min-width: 0; display: flex; align-items: center; gap: 10px; }
+.b2b-reconciliation-head > div > span { width: 40px; height: 40px; border-radius: 12px; flex-shrink: 0; background: #e6faf8; color: #287f82; display: grid; place-items: center; }
+.b2b-reconciliation-head > div > div { min-width: 0; display: grid; gap: 3px; }
+.b2b-reconciliation-head strong { color: #17222f; font-size: 14px; }
+.b2b-reconciliation-head small { color: #8b96a9; font-size: 10px; }
+.b2b-reconciliation-period { padding: 10px 12px; border: 1px solid #e0eaec; border-radius: 13px; background: #fff; color: #31a4a5; display: flex; align-items: end; gap: 10px; }
+.b2b-reconciliation-period > svg { margin: 0 2px 10px 0; flex-shrink: 0; }
+.b2b-reconciliation-period label { display: grid; gap: 5px; }
+.b2b-reconciliation-period label span { color: #667085; font-size: 9px; font-weight: 850; }
+.b2b-reconciliation-period input { height: 36px; padding: 0 9px; border: 1px solid #d4e3e7; border-radius: 10px; outline: none; background: #f9fcfc; color: #354052; font: inherit; font-size: 11px; box-sizing: border-box; }
+.b2b-reconciliation-period input:focus { border-color: #7fc3c4; box-shadow: 0 0 0 3px rgba(49,164,165,.1); }
+.b2b-reconciliation-period > div { margin-left: auto; display: flex; gap: 6px; }
+.b2b-reconciliation-period > div button { min-height: 36px; padding: 0 10px; border: 1px solid #cbe0e2; border-radius: 10px; background: #f5fbfa; color: #287f82; font: inherit; font-size: 9px; font-weight: 850; cursor: pointer; }
+.b2b-reconciliation-period > div button:hover { border-color: #7fc3c4; background: #eaf7f6; }
+.b2b-reconciliation-summary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.b2b-reconciliation-summary article { min-width: 0; padding: 11px 12px; border: 1px solid #e2ebed; border-radius: 12px; background: #fff; display: grid; gap: 4px; }
+.b2b-reconciliation-summary span { color: #8b96a9; font-size: 9px; font-weight: 800; }
+.b2b-reconciliation-summary strong { overflow: hidden; color: #354052; font-size: 14px; text-overflow: ellipsis; white-space: nowrap; }
+.b2b-reconciliation-summary article.debit { background: #f1faf5; }
+.b2b-reconciliation-summary article.debit strong,
+.b2b-reconciliation-summary article.credit strong { color: #2d8c57; }
+.b2b-reconciliation-summary article.credit { background: #eef8fb; }
+.b2b-reconciliation-summary article.debt { background: #fff3f1; }
+.b2b-reconciliation-summary article.debt strong { color: #bc4e4e; }
+.b2b-reconciliation-summary article.closing { background: #f2f8f8; }
+.b2b-reconciliation-summary article.closing strong { color: #287f82; }
+.b2b-reconciliation-table-wrap { max-height: 270px; border: 1px solid #e1eaec; border-radius: 12px; overflow: auto; background: #fff; }
+.b2b-reconciliation-table { width: 100%; min-width: 780px; border-collapse: collapse; }
+.b2b-reconciliation-table th { position: sticky; top: 0; z-index: 1; height: 34px; padding: 0 10px; background: #f4f9f9; color: #7a859d; text-align: left; font-size: 8px; font-weight: 900; text-transform: uppercase; letter-spacing: .035em; white-space: nowrap; }
+.b2b-reconciliation-table td { height: 42px; padding: 5px 10px; border-top: 1px solid #edf2f3; color: #667085; font-size: 10px; }
+.b2b-reconciliation-table th.number,
+.b2b-reconciliation-table td.number { text-align: right; white-space: nowrap; }
+.b2b-reconciliation-table tr.opening td { height: 36px; background: #f7fafb; color: #52636e; font-weight: 850; }
+.b2b-reconciliation-table tr.opening td:first-child { text-align: right; }
+.b2b-reconciliation-table td.debit { color: #2d8c57; font-weight: 800; }
+.b2b-reconciliation-table td.credit { color: #287f82; font-weight: 800; }
+.b2b-reconciliation-table td.balance { color: #354052; font-weight: 900; }
+.b2b-reconciliation-table td.empty { height: 80px; color: #91a3a8; text-align: center; }
 .b2b-client-document-toolbar { padding: 12px 14px; border: 1px solid #e2ebed; border-radius: 13px; background: #f7fbfb; display: flex; align-items: end; gap: 12px; }
 .b2b-client-document-toolbar label { min-width: 0; flex: 1; display: grid; gap: 6px; }
 .b2b-client-document-toolbar label span { color: #667085; font-size: 10px; font-weight: 850; }
@@ -747,6 +894,8 @@
 
 @media (max-width: 720px) {
   .b2b-panel-head { align-items: flex-start; flex-direction: column; }
+  .b2b-client-tools { align-items: stretch; flex-direction: column; }
+  .b2b-client-search { width: 100%; min-width: 0; box-sizing: border-box; }
   .b2b-client-form { grid-template-columns: 1fr; }
   .b2b-form-row { grid-template-columns: 1fr; }
   .b2b-order-card-grid { grid-template-columns: 1fr; }
@@ -775,10 +924,17 @@
   .b2b-client-profile-head { align-items: flex-start; }
   .b2b-client-profile-summary > span { display: none; }
   .b2b-client-main-grid,
-  .b2b-client-money-summary { grid-template-columns: 1fr; }
+  .b2b-client-money-summary,
+  .b2b-client-finance-summary { grid-template-columns: 1fr; }
   .b2b-client-generated-docs { grid-template-columns: 1fr; }
   .b2b-client-document-toolbar,
   .b2b-client-attachments-head { align-items: stretch; flex-direction: column; }
+  .b2b-reconciliation-head,
+  .b2b-reconciliation-period { align-items: stretch; flex-direction: column; }
+  .b2b-reconciliation-period > svg { display: none; }
+  .b2b-reconciliation-period > div { width: 100%; margin-left: 0; }
+  .b2b-reconciliation-period > div button { flex: 1; }
+  .b2b-reconciliation-summary { grid-template-columns: 1fr 1fr; }
   .b2b-client-document-toolbar > strong { padding-bottom: 0; }
 }
 

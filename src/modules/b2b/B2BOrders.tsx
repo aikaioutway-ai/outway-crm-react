@@ -52,7 +52,11 @@ function toDateTimeInput(value: string): string {
   return match ? `${match[3]}-${match[2]}-${match[1]}T${match[4]}:${match[5]}` : '';
 }
 
-export default function B2BOrders() {
+interface B2BOrdersProps {
+  openOrderId?: string | null;
+}
+
+export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
   const { data: storedOrders } = useB2BOrders();
   const { data: storedPayouts } = useB2BDriverPayouts();
   const { data: clients = [] } = useB2BClients();
@@ -82,6 +86,11 @@ export default function B2BOrders() {
 
   useEffect(() => { if (storedOrders) setOrders(storedOrders); }, [storedOrders]);
   useEffect(() => { if (storedPayouts) setDriverPayouts(storedPayouts); }, [storedPayouts]);
+  useEffect(() => {
+    if (!openOrderId) return;
+    setOrderCardTab('main');
+    setSelectedOrderId(openOrderId);
+  }, [openOrderId]);
 
   const confirmedPaymentsFor = useCallback((orderId: string) => payments
     .filter(payment => payment.orderId === orderId && payment.status === 'confirmed')
