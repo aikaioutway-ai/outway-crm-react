@@ -23,6 +23,7 @@ export interface B2BOrderRecord {
   driverId?: string;
   driverName: string;
   driverPricePerUnit?: number;
+  driverTotal?: number;
 }
 
 export interface B2BDriverPayoutRecord {
@@ -72,6 +73,7 @@ export interface B2BExpenseRecord {
   orderNumber: string;
   comment: string;
   source: string;
+  sourceId?: string;
 }
 
 export interface NewB2BExpenseRecord {
@@ -134,6 +136,7 @@ export async function fetchB2BOrders(): Promise<B2BOrderRecord[]> {
       driverId: assignment?.driver_id,
       driverName: assignment?.driver?.full_name ?? '',
       driverPricePerUnit: assignment ? Number(assignment.driver_price) : undefined,
+      driverTotal: assignment ? Number(assignment.driver_total) : undefined,
     };
   });
 }
@@ -181,6 +184,7 @@ export async function fetchB2BExpenses(): Promise<B2BExpenseRecord[]> {
     id: row.id, expenseDate: row.expense_date, category: row.category, amount: Number(row.amount),
     method: row.payment_method, taxAmount: Number(row.tax_amount), netAmount: Number(row.net_amount),
     purpose: row.purpose ?? '', orderNumber: row.order?.order_number ?? '—', comment: row.comment ?? '', source: row.source,
+    sourceId: row.source_id ?? undefined,
   }));
 }
 
@@ -195,6 +199,19 @@ export async function createB2BExpense(expense: NewB2BExpenseRecord): Promise<vo
     comment: expense.comment || null,
     source: 'manual',
   });
+  assert(error);
+}
+
+export async function updateB2BExpense(id: string, expense: NewB2BExpenseRecord): Promise<void> {
+  const { error } = await supabase.from('v2_b2b_expenses').update({
+    expense_date: expense.expenseDate,
+    category: expense.category,
+    amount: expense.amount,
+    payment_method: expense.method,
+    purpose: expense.purpose,
+    order_id: expense.orderId || null,
+    comment: expense.comment || null,
+  }).eq('id', id).select('id').single();
   assert(error);
 }
 

@@ -5,16 +5,18 @@ import {
   ChevronLeft,
   ChevronRight,
   CircleDollarSign,
-  Fuel,
+  Gift,
+  LockKeyhole,
+  Pencil,
   Percent,
   Plus,
   ReceiptText,
+  RotateCcw,
   Search,
-  Wrench,
   X,
 } from 'lucide-react';
 import { B2B_PAYMENT_METHODS, B2BPaymentMethod, calculateB2BExpenseTax, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
-import { createB2BExpense, type B2BExpenseRecord } from '../../services/b2bDataService';
+import { createB2BExpense, updateB2BExpense, type B2BExpenseRecord } from '../../services/b2bDataService';
 import { B2B_QUERY_KEYS, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { queryClient } from '../../services/queryClient';
@@ -35,18 +37,28 @@ type CategoryMeta = {
 const CATEGORY_META: Record<string, CategoryMeta> = {
   driver_payments: { label: 'Водители', color: '#477279', soft: '#e7f2f4', icon: Bus },
   taxes: { label: 'Налоги', color: '#a66e12', soft: '#fff4d8', icon: Percent },
-  fuel: { label: 'Топливо', color: '#b26c28', soft: '#fff0e2', icon: Fuel },
+  bonus: { label: 'Премия', color: '#7b62b4', soft: '#f3efff', icon: Gift },
+  returns: { label: 'Возвраты', color: '#b55353', soft: '#fff0ef', icon: RotateCcw },
   rent: { label: 'Аренда', color: '#596bb3', soft: '#eef0ff', icon: Building2 },
-  maintenance: { label: 'Ремонт и обслуживание', color: '#8b5b96', soft: '#f7ebfa', icon: Wrench },
   marketing: { label: 'Маркетинг', color: '#b45f7a', soft: '#fff0f5', icon: ReceiptText },
   salary: { label: 'Зарплата', color: '#307c62', soft: '#eaf7f1', icon: CircleDollarSign },
   other: { label: 'Прочие расходы', color: '#69758b', soft: '#eef2f5', icon: ReceiptText },
 };
 
-const CATEGORY_ORDER = ['driver_payments', 'taxes', 'salary', 'fuel', 'rent', 'maintenance', 'marketing', 'other'];
+const CATEGORY_ORDER = ['driver_payments', 'taxes', 'salary', 'bonus', 'returns', 'rent', 'marketing', 'other'];
+
+function normalizedCategory(key: string) {
+  const normalized = (key || 'other').toLocaleLowerCase('ru-RU');
+  return normalized === 'fuel' || normalized === 'maintenance' ? 'other' : normalized;
+}
+
+function isAutomaticExpense(row: B2BExpenseRecord) {
+  return row.source === 'driver_payment' || row.source === 'tax_4pct';
+}
 
 function categoryMeta(key: string): CategoryMeta {
-  return CATEGORY_META[key.toLocaleLowerCase('ru-RU')] ?? {
+  const normalized = normalizedCategory(key);
+  return CATEGORY_META[normalized] ?? {
     label: key.replaceAll('_', ' ').replace(/^./, letter => letter.toLocaleUpperCase('ru-RU')),
     color: '#69758b',
     soft: '#eef2f5',
@@ -60,11 +72,13 @@ function periodContains(date: string, periodKey: string, year: number) {
 }
 
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-const FORM_CATEGORIES = ['driver_payments', 'taxes', 'salary', 'fuel', 'rent', 'maintenance', 'marketing', 'other'];
+const FORM_CATEGORIES = ['driver_payments', 'taxes', 'salary', 'bonus', 'returns', 'rent', 'marketing', 'other'];
 const CURRENT_YEAR = new Date().getFullYear();
 
+const localDateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+
 const emptyExpenseForm = () => ({
-  expenseDate: new Date().toISOString().slice(0, 10),
+  expenseDate: localDateInput(new Date()),
   category: 'other',
   amount: '',
   method: 'cash' as B2BPaymentMethod,
@@ -83,6 +97,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [search, setSearch] = useState('');
   const [showCreate, setShowCreate] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyExpenseForm);
   const [formError, setFormError] = useState('');
   const [isSaving, setIsSaving] = useState(false);
@@ -106,7 +121,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   );
 
   const categories = useMemo(() => {
-    const keys = Array.from(new Set([...FORM_CATEGORIES, ...expenses.map(row => row.category || 'other')]));
+    const keys = Array.from(new Set([...FORM_CATEGORIES, ...expenses.map(row => normalizedCategory(row.category))]));
     return keys.sort((left, right) => {
       const leftIndex = CATEGORY_ORDER.indexOf(left.toLocaleLowerCase('ru-RU'));
       const rightIndex = CATEGORY_ORDER.indexOf(right.toLocaleLowerCase('ru-RU'));
@@ -120,7 +135,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   const categoryTotals = useMemo(() => {
     const result: Record<string, { amount: number; tax: number; net: number; count: number }> = {};
     periodRows.forEach(row => {
-      const key = row.category || 'other';
+      const key = normalizedCategory(row.category);
       const current = result[key] ?? { amount: 0, tax: 0, net: 0, count: 0 };
       current.amount += row.amount;
       current.tax += row.taxAmount;
@@ -138,7 +153,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   }), { gross: 0, tax: 0, net: 0 }), [periodRows]);
 
   const rows = useMemo(() => periodRows.filter(row => {
-    if (selectedCategory && (row.category || 'other') !== selectedCategory) return false;
+    if (selectedCategory && normalizedCategory(row.category) !== selectedCategory) return false;
     const query = search.trim().toLocaleLowerCase('ru-RU');
     return !query || [row.orderNumber, categoryMeta(row.category || 'other').label, row.category, row.purpose, row.comment, formatB2BPaymentMethod(row.method)]
       .some(value => value.toLocaleLowerCase('ru-RU').includes(query));
@@ -165,18 +180,48 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
     setIsSaving(true);
     setFormError('');
     try {
-      await createB2BExpense({ ...form, amount, purpose: form.purpose.trim(), comment: form.comment.trim() });
+      const payload = { ...form, amount, purpose: form.purpose.trim(), comment: form.comment.trim() };
+      if (editingExpenseId) await updateB2BExpense(editingExpenseId, payload);
+      else await createB2BExpense(payload);
       await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses });
       const expenseDate = new Date(`${form.expenseDate}T00:00:00`);
       setSelectedYear(expenseDate.getFullYear());
       setPeriodKey(String(expenseDate.getMonth() + 1));
       setForm(emptyExpenseForm());
+      setEditingExpenseId(null);
       setShowCreate(false);
     } catch (error) {
       setFormError(error instanceof Error ? error.message : 'Не удалось сохранить расход.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const openNewExpense = () => {
+    setEditingExpenseId(null);
+    setForm(emptyExpenseForm());
+    setFormError('');
+    setShowCreate(true);
+  };
+
+  const openExpenseEdit = (row: B2BExpenseRecord) => {
+    if (isAutomaticExpense(row)) return;
+    const orderId = orders.find(order => order.number === row.orderNumber)?.id ?? '';
+    setEditingExpenseId(row.id);
+    setForm({
+      expenseDate: row.expenseDate.slice(0, 10), category: normalizedCategory(row.category), amount: String(row.amount),
+      method: row.method, purpose: row.purpose, orderId, comment: row.comment,
+    });
+    setFormError('');
+    setShowCreate(true);
+  };
+
+  const closeExpenseEditor = () => {
+    if (isSaving) return;
+    setShowCreate(false);
+    setEditingExpenseId(null);
+    setForm(emptyExpenseForm());
+    setFormError('');
   };
 
   const openOrder = (row: B2BExpenseRecord) => {
@@ -244,27 +289,27 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
           <div><strong>{selectedLabel ? `Расходы: ${selectedLabel}` : 'Все расходы за период'}</strong><span>{rows.length} записей</span></div>
           <div className="b2b-expenses-panel-actions">
             <label className="b2b-expenses-search"><Search size={15} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Заказ, категория, назначение, оплата..." /></label>
-            <button type="button" className="b2b-primary-button" onClick={() => { setFormError(''); setShowCreate(true); }}><Plus size={16} />Новый расход</button>
+            <button type="button" className="b2b-primary-button" onClick={openNewExpense}><Plus size={16} />Новый расход</button>
           </div>
         </div>
-        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th className="number">Начислено</th><th className="number">Налог 4%</th><th className="number">К перечислению</th><th>Комментарий</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={9} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
-          const meta = categoryMeta(row.category || 'other');
+        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th className="number">Начислено</th><th className="number">Налог 4%</th><th className="number">К перечислению</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={10} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
+          const meta = categoryMeta(normalizedCategory(row.category));
           const Icon = meta.icon;
           const canOpenOrder = Boolean(onOpenOrder && row.orderNumber !== '—' && orders.some(order => order.number === row.orderNumber));
-          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td className="number">{money(row.amount)}</td><td className={`number ${row.taxAmount > 0 ? 'tax' : ''}`}>{money(row.taxAmount)}</td><td className="number net">{money(row.netAmount)}</td><td title={row.comment}>{row.comment || '—'}</td></tr>;
-        }) : <tr><td colSpan={9} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
+          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td className="number">{money(row.amount)}</td><td className={`number ${row.taxAmount > 0 ? 'tax' : ''}`}>{money(row.taxAmount)}</td><td className="number net">{money(row.netAmount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions">{!isAutomaticExpense(row) ? <button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title="Редактировать расход"><Pencil size={14} /></button> : <span className="b2b-expense-auto" title="Автоматическая запись редактируется в исходной оплате"><LockKeyhole size={12} />Авто</span>}</td></tr>;
+        }) : <tr><td colSpan={10} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
       </div>
 
-      {showCreate && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget && !isSaving) setShowCreate(false); }}>
+      {showCreate && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeExpenseEditor(); }}>
         <div className="b2b-expense-create-card" role="dialog" aria-modal="true" aria-labelledby="b2b-new-expense-title">
-          <header className="b2b-modal-head"><div><h2 id="b2b-new-expense-title">Новый расход B2B</h2><p>Добавление расхода в финансовый учёт</p></div><button type="button" onClick={() => setShowCreate(false)} disabled={isSaving} aria-label="Закрыть"><X size={18} /></button></header>
+          <header className="b2b-modal-head"><div><h2 id="b2b-new-expense-title">{editingExpenseId ? 'Редактирование расхода' : 'Новый расход B2B'}</h2><p>{editingExpenseId ? 'Измените данные операции' : 'Добавление расхода в финансовый учёт'}</p></div><button type="button" onClick={closeExpenseEditor} disabled={isSaving} aria-label="Закрыть"><X size={18} /></button></header>
           <form className="b2b-expense-create-form" onSubmit={saveExpense}>
             <section>
               <h3><ReceiptText size={16} />Основные данные</h3>
               <div className="b2b-expense-form-grid">
                 <label><span>Дата *</span><input type="date" value={form.expenseDate} onChange={event => setForm(current => ({ ...current, expenseDate: event.target.value }))} /></label>
                 <label><span>Категория *</span><select value={form.category} onChange={event => setForm(current => ({ ...current, category: event.target.value }))}>{FORM_CATEGORIES.map(key => <option key={key} value={key}>{categoryMeta(key).label}</option>)}</select></label>
-                <label className="full"><span>Назначение *</span><input autoFocus value={form.purpose} onChange={event => setForm(current => ({ ...current, purpose: event.target.value }))} placeholder="Например: топливо для поездки" /></label>
+                <label className="full"><span>Назначение *</span><input autoFocus value={form.purpose} onChange={event => setForm(current => ({ ...current, purpose: event.target.value }))} placeholder="Например: премия сотруднику" /></label>
                 <label><span>Сумма, сом *</span><input type="number" min="0.01" step="0.01" value={form.amount} onChange={event => setForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
                 <label><span>Способ оплаты *</span><select value={form.method} onChange={event => setForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
               </div>
@@ -278,7 +323,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
               </div>
             </section>
             {formError && <div className="b2b-form-error">{formError}</div>}
-            <div className="b2b-form-actions"><button type="button" className="b2b-cancel-button" onClick={() => setShowCreate(false)} disabled={isSaving}>Отмена</button><button type="submit" className="b2b-primary-button" disabled={isSaving}>{isSaving ? 'Сохранение…' : 'Сохранить расход'}</button></div>
+            <div className="b2b-form-actions"><button type="button" className="b2b-cancel-button" onClick={closeExpenseEditor} disabled={isSaving}>Отмена</button><button type="submit" className="b2b-primary-button" disabled={isSaving}>{isSaving ? 'Сохранение…' : editingExpenseId ? 'Сохранить изменения' : 'Сохранить расход'}</button></div>
           </form>
         </div>
       </div>}

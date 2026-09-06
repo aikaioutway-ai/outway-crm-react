@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList } from 'lucide-react';
+import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList, WalletCards } from 'lucide-react';
 import B2BIcon from '../../core/icons/B2BIcon';
 import B2BClients from './B2BClients';
 import B2BOrders from './B2BOrders';
 import B2BCalendar from './B2BCalendar';
 import B2BLogistics from './B2BLogistics';
 import B2BExpenses from './B2BExpenses';
+import B2BFinance from './B2BFinance';
+import B2BCashflow from './B2BCashflow';
 import './B2BModule.css';
 
 const B2B_TABS = [
@@ -14,7 +16,8 @@ const B2B_TABS = [
   { key: 'calendar', label: 'Календарь', icon: CalendarDays },
   { key: 'clients', label: 'Клиенты', icon: UserRound },
   { key: 'expenses', label: 'Расходы', icon: ReceiptText },
-  { key: 'finance', label: 'Финансы', icon: CircleDollarSign },
+  { key: 'finance', label: 'P&L по заказам', icon: CircleDollarSign },
+  { key: 'cashflow', label: 'Cashflow', icon: WalletCards },
 ] as const;
 
 type B2BTab = typeof B2B_TABS[number]['key'];
@@ -22,12 +25,20 @@ type B2BTab = typeof B2B_TABS[number]['key'];
 export default function B2BModule() {
   const [activeTab, setActiveTab] = useState<B2BTab>('orders');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
+  const [returnTabAfterOrder, setReturnTabAfterOrder] = useState<B2BTab | null>(null);
   const currentTab = B2B_TABS.find(tab => tab.key === activeTab) ?? B2B_TABS[0];
   const CurrentIcon = currentTab.icon;
 
   const openOrderCard = (orderId: string) => {
+    setReturnTabAfterOrder(activeTab === 'orders' ? null : activeTab);
     setOrderToOpenId(orderId);
     setActiveTab('orders');
+  };
+
+  const closeLinkedOrderCard = () => {
+    setOrderToOpenId(null);
+    if (returnTabAfterOrder) setActiveTab(returnTabAfterOrder);
+    setReturnTabAfterOrder(null);
   };
 
   return (
@@ -52,6 +63,7 @@ export default function B2BModule() {
               aria-current={active ? 'page' : undefined}
               onClick={() => {
                 setOrderToOpenId(null);
+                setReturnTabAfterOrder(null);
                 setActiveTab(tab.key);
               }}
             >
@@ -63,7 +75,7 @@ export default function B2BModule() {
       </nav>
 
       {activeTab === 'orders' ? (
-        <B2BOrders openOrderId={orderToOpenId} />
+        <B2BOrders openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
       ) : activeTab === 'logistics' ? (
         <B2BLogistics />
       ) : activeTab === 'calendar' ? (
@@ -72,6 +84,10 @@ export default function B2BModule() {
         <B2BClients onOpenOrder={openOrderCard} />
       ) : activeTab === 'expenses' ? (
         <B2BExpenses onOpenOrder={openOrderCard} />
+      ) : activeTab === 'finance' ? (
+        <B2BFinance onOpenOrder={openOrderCard} />
+      ) : activeTab === 'cashflow' ? (
+        <B2BCashflow onOpenOrder={openOrderCard} />
       ) : (
         <div className="b2b-empty" role="tabpanel">
           <CurrentIcon size={34} aria-hidden="true" />

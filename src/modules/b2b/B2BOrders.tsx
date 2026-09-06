@@ -1,9 +1,9 @@
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, CircleDollarSign, ClipboardList, CreditCard, FileText, MapPin, Pencil, Plus, Search, Truck, UserRound, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Search, Truck, UserRound, X } from 'lucide-react';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, calculateB2BExpenseTax, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BOrders } from '../../hooks/useB2BData';
+import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, saveB2BAssignment, updateB2BClientPayment, updateB2BOrder } from '../../services/b2bDataService';
 import { queryClient } from '../../services/queryClient';
 import B2BOrderDocuments from './B2BOrderDocuments';
@@ -14,7 +14,7 @@ export type B2BDriverPayout = B2BDriverPayoutRecord;
 
 type SortKey = 'number' | 'client' | 'requestDate' | 'departureDate' | 'transport' | 'transportCount' | 'pricePerUnit' | 'total' | 'paid' | 'status' | 'driverName' | 'route' | 'remaining';
 type SortDirection = 'asc' | 'desc';
-type OrderCardTab = 'main' | 'payment' | 'driver' | 'documents';
+type OrderCardTab = 'main' | 'payment' | 'driver' | 'pnl' | 'documents';
 
 export const B2B_ORDER_STATUSES: { key: OrderStatus; label: string }[] = [
   { key: 'new', label: 'Новый' },
@@ -26,6 +26,15 @@ export const B2B_ORDER_STATUSES: { key: OrderStatus; label: string }[] = [
   { key: 'ready_to_close', label: 'Готов к закрытию' },
   { key: 'success', label: 'Успешно' },
 ];
+
+const B2B_ORDER_FILTER_STATUSES = B2B_ORDER_STATUSES.filter(status =>
+  ['new', 'driver_assigned', 'trip_completed', 'ready_to_close'].includes(status.key),
+);
+
+const B2B_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
+  driver_payments: 'Водитель', taxes: 'Налог', salary: 'Зарплата', bonus: 'Премия',
+  refunds: 'Возврат', rent: 'Аренда', marketing: 'Маркетинг', other: 'Прочее',
+};
 
 const EMPTY_ORDER_FORM = {
   client: '', routeFrom: '', routeTo: '', requestDate: new Date().toISOString().slice(0, 10), departureDate: '',
@@ -54,11 +63,13 @@ function toDateTimeInput(value: string): string {
 
 interface B2BOrdersProps {
   openOrderId?: string | null;
+  onCloseOrder?: () => void;
 }
 
-export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
+export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrdersProps) {
   const { data: storedOrders } = useB2BOrders();
   const { data: storedPayouts } = useB2BDriverPayouts();
+  const { data: expenses = [] } = useB2BExpenses();
   const { data: clients = [] } = useB2BClients();
   const [orders, setOrders] = useState<B2BOrder[]>([]);
   const payments = useB2BPayments();
@@ -82,7 +93,10 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
   const [editingDriverPayoutId, setEditingDriverPayoutId] = useState<string | null>(null);
   const [driverPayoutForm, setDriverPayoutForm] = useState({ ...EMPTY_DRIVER_PAYOUT_FORM });
   const [driverPayoutFormError, setDriverPayoutFormError] = useState('');
+  const [relatedProfile, setRelatedProfile] = useState<'client' | 'driver' | null>(null);
   const selectedOrder = orders.find(order => order.id === selectedOrderId) ?? null;
+  const selectedClient = selectedOrder ? clients.find(client => client.id === selectedOrder.clientId) ?? null : null;
+  const selectedDriver = selectedOrder?.driverId ? drivers.find(driver => driver.driverId === selectedOrder.driverId) ?? null : null;
 
   useEffect(() => { if (storedOrders) setOrders(storedOrders); }, [storedOrders]);
   useEffect(() => { if (storedPayouts) setDriverPayouts(storedPayouts); }, [storedPayouts]);
@@ -100,14 +114,29 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
   const selectedPayments = selectedOrder ? payments.filter(payment => payment.orderId === selectedOrder.id) : [];
   const selectedPaid = selectedOrder ? effectivePaidFor(selectedOrder) : 0;
   const selectedDriverPayouts = selectedOrder ? driverPayouts.filter(payout => payout.orderId === selectedOrder.id) : [];
-  const selectedDriverTotal = selectedOrder ? (selectedOrder.driverPricePerUnit ?? 0) * selectedOrder.transportCount : 0;
+  const selectedDriverTotal = selectedOrder ? selectedOrder.driverTotal ?? (selectedOrder.driverPricePerUnit ?? 0) * selectedOrder.transportCount : 0;
   const selectedDriverPaid = selectedDriverPayouts.reduce((sum, payout) => sum + payout.amount, 0);
   const selectedDriverDebt = Math.max(0, selectedDriverTotal - selectedDriverPaid);
+  const validDriverPayoutIds = new Set(driverPayouts.map(payout => payout.id));
+  const selectedOrderExpenses = selectedOrder ? expenses.filter(expense =>
+    expense.orderNumber === selectedOrder.number &&
+    !(expense.source === 'driver_payment' && expense.sourceId && !validDriverPayoutIds.has(expense.sourceId)),
+  ) : [];
+  const recordedDriverCosts = selectedOrderExpenses.filter(expense => expense.category === 'driver_payments').reduce((sum, expense) => sum + expense.amount, 0);
+  const selectedOtherExpenses = selectedOrderExpenses.filter(expense => expense.category !== 'driver_payments');
+  const selectedDriverCost = Math.max(selectedDriverTotal, recordedDriverCosts);
+  const selectedOrderCosts = selectedDriverCost + selectedOtherExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const selectedOrderBalance = selectedOrder ? selectedOrder.total - selectedOrderCosts : 0;
+  const selectedOrderReceivable = selectedOrder ? Math.max(0, selectedOrder.total - selectedPaid) : 0;
+  const selectedOrderMargin = selectedOrder?.total ? (selectedOrderBalance / selectedOrder.total) * 100 : 0;
+  const successfulOrdersCount = orders.filter(order => order.status === 'success').length;
+  const allFilterOrdersCount = orders.length - successfulOrdersCount;
 
   const filteredOrders = useMemo(() => {
     const query = search.trim().toLowerCase();
     return orders.filter(order => {
       if (statusFilter !== 'all' && order.status !== statusFilter) return false;
+      if (statusFilter === 'all' && order.status === 'success') return false;
       if (!query) return true;
       return order.number.toLowerCase().includes(query) || order.client.toLowerCase().includes(query) ||
         order.routeFrom.toLowerCase().includes(query) || order.routeTo.toLowerCase().includes(query);
@@ -160,6 +189,12 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
   const openOrderCard = (id: string) => {
     setOrderCardTab('main');
     setSelectedOrderId(id);
+  };
+
+  const closeOrderCard = () => {
+    setRelatedProfile(null);
+    setSelectedOrderId(null);
+    onCloseOrder?.();
   };
 
   const closeOrderForm = () => {
@@ -322,12 +357,27 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
       </div>
 
       <div className="b2b-order-statuses" aria-label="Фильтр по статусу">
-        <button className={statusFilter === 'all' ? 'active' : ''} onClick={() => setStatusFilter('all')}>Все <span>{orders.length}</span></button>
-        {B2B_ORDER_STATUSES.map(status => (
+        <button
+          className={statusFilter === 'all' ? 'active' : ''}
+          onClick={() => setStatusFilter('all')}
+        >
+          Все <span>{allFilterOrdersCount}</span>
+        </button>
+        {B2B_ORDER_FILTER_STATUSES.map(status => (
           <button key={status.key} className={`status-${status.key}${statusFilter === status.key ? ' active' : ''}`} onClick={() => setStatusFilter(status.key)}>
             <i />{status.label}<span>{orders.filter(order => order.status === status.key).length}</span>
           </button>
         ))}
+        <button
+          type="button"
+          className={`b2b-success-visibility${statusFilter === 'success' ? ' active' : ''}`}
+          aria-pressed={statusFilter === 'success'}
+          onClick={() => setStatusFilter('success')}
+        >
+          <Eye size={14} />
+          Успешные
+          <span>{successfulOrdersCount}</span>
+        </button>
       </div>
 
       <div className="b2b-orders-search">
@@ -368,7 +418,7 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
       </div>
 
       {selectedOrder && (
-        <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedOrderId(null); }}>
+        <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeOrderCard(); }}>
           <article className="b2b-order-card" role="dialog" aria-modal="true" aria-labelledby="b2b-order-card-title">
             <header className="b2b-order-card-head">
               <div><span>Карточка заказа</span><h2 id="b2b-order-card-title">{selectedOrder.number}</h2></div>
@@ -377,14 +427,14 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
                   {B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
                 </select>
                 <button type="button" onClick={() => openEditOrderForm(selectedOrder)} aria-label="Редактировать заказ"><Pencil size={16} /></button>
-                <button type="button" onClick={() => setSelectedOrderId(null)} aria-label="Закрыть"><X size={18} /></button>
+                <button type="button" onClick={closeOrderCard} aria-label="Закрыть"><X size={18} /></button>
               </div>
             </header>
 
             <nav className="b2b-order-card-tabs" aria-label="Разделы карточки заказа">
               {([
                 ['main', 'Основной', ClipboardList], ['payment', 'Оплата', CreditCard],
-                ['driver', 'Водитель', Truck], ['documents', 'Документы', FileText],
+                ['driver', 'Водитель', Truck], ['pnl', 'P&L', CircleDollarSign], ['documents', 'Документы', FileText],
               ] as const).map(([key, label, Icon]) => (
                 <button key={key} type="button" className={orderCardTab === key ? 'active' : ''} onClick={() => setOrderCardTab(key)}><Icon size={15} />{label}</button>
               ))}
@@ -392,7 +442,7 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
 
             {orderCardTab === 'main' && (
               <div className="b2b-order-card-grid">
-                <section><h3><UserRound size={16} /> Клиент</h3><strong>{selectedOrder.client}</strong><span>Корпоративный заказчик</span></section>
+                <section><h3><UserRound size={16} /> Клиент</h3>{selectedClient ? <button type="button" className="b2b-related-record-link" onClick={() => setRelatedProfile('client')}>{selectedOrder.client}</button> : <strong>{selectedOrder.client}</strong>}<span>{selectedClient ? 'Открыть карточку клиента' : 'Корпоративный заказчик'}</span></section>
                 <section><h3><CalendarDays size={16} /> Даты</h3><div><span>Заявка</span><strong>{selectedOrder.requestDate}</strong></div><div><span>Выезд</span><strong>{selectedOrder.departureDate || 'Не указан'}</strong></div></section>
                 <section className="wide"><h3><MapPin size={16} /> Маршрут</h3><div className="b2b-order-card-route"><span><i>A</i>{selectedOrder.routeFrom}</span><b /><span><i>B</i>{selectedOrder.routeTo}</span></div></section>
                 <section className="wide"><h3><Truck size={16} /> Транспорт</h3><div><span>Вид транспорта</span><strong>{selectedOrder.transport}</strong></div><div><span>Количество</span><strong>{selectedOrder.transportCount}</strong></div><div><span>Цена за единицу</span><strong>{selectedOrder.pricePerUnit.toLocaleString()} сом</strong></div><div><span>Общая сумма</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></div></section>
@@ -432,6 +482,7 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
               <div className="b2b-order-tab-panel">
                 <div className="b2b-driver-editor">
                   <label className="wide"><span>Водитель из общего модуля *</span><select value={selectedOrder.driverId ?? ''} onChange={event => selectDriver(event.target.value)} disabled={driversLoading}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Выберите водителя'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
+                  {selectedDriver && <button type="button" className="b2b-linked-driver-card" onClick={() => setRelatedProfile('driver')}><UserRound size={16} /><span>Открыть карточку водителя</span><strong>{selectedDriver.fullName}</strong></button>}
                   <label><span>Количество</span><input value={selectedOrder.transportCount} readOnly /></label>
                   <label><span>Цена водителю за единицу, сом</span><input type="number" min="0" value={selectedOrder.driverPricePerUnit ?? ''} onChange={event => setDriverPrice(event.target.value)} placeholder="0" /></label>
                 </div>
@@ -462,9 +513,54 @@ export default function B2BOrders({ openOrderId = null }: B2BOrdersProps) {
               </div>
             )}
 
+            {orderCardTab === 'pnl' && (
+              <div className="b2b-order-tab-panel b2b-order-pnl">
+                <div className="b2b-order-pnl-summary">
+                  <article><span>Продано</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></article>
+                  <article className="received"><span>Поступило</span><strong>{selectedPaid.toLocaleString()} сом</strong></article>
+                  <article className="costs"><span>Затраты заказа</span><strong>{selectedOrderCosts.toLocaleString()} сом</strong></article>
+                  <article className={selectedOrderBalance < 0 ? 'balance negative' : 'balance'}><span>Остаток</span><strong>{selectedOrderBalance.toLocaleString()} сом</strong></article>
+                </div>
+                <div className="b2b-order-pnl-secondary">
+                  <article><span>Нам должны</span><strong>{selectedOrderReceivable.toLocaleString()} сом</strong></article>
+                  <article><span>Мы должны водителю</span><strong>{selectedDriverDebt.toLocaleString()} сом</strong></article>
+                  <article className={selectedOrderMargin < 0 ? 'negative' : ''}><span>Маржа</span><strong>{selectedOrderMargin.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%</strong></article>
+                </div>
+                <div className="b2b-order-pnl-breakdown">
+                  <header><strong>Расшифровка затрат</strong><span>{(selectedDriverCost > 0 ? 1 : 0) + selectedOtherExpenses.length} позиций</span></header>
+                  {selectedDriverCost <= 0 && selectedOtherExpenses.length === 0 ? (
+                    <div className="b2b-order-pnl-empty">Затрат по заказу пока нет</div>
+                  ) : (
+                    <table><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
+                      {selectedDriverCost > 0 && <tr><td>Водитель</td><td>{selectedOrder.driverName || 'Начисление водителю'}</td><td>{selectedOrder.departureDate || selectedOrder.requestDate}</td><td className="number">{selectedDriverCost.toLocaleString()} сом</td></tr>}
+                      {selectedOtherExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()} сом</td></tr>)}
+                    </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()} сом</td></tr></tfoot></table>
+                  )}
+                </div>
+              </div>
+            )}
+
             {orderCardTab === 'documents' && (
               <div className="b2b-order-tab-panel"><B2BOrderDocuments order={selectedOrder} /></div>
             )}
+          </article>
+        </div>
+      )}
+
+      {relatedProfile === 'client' && selectedClient && (
+        <div className="b2b-modal-overlay b2b-related-profile-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setRelatedProfile(null); }}>
+          <article className="b2b-related-profile-card" role="dialog" aria-modal="true" aria-labelledby="b2b-related-client-title">
+            <header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><UserRound size={22} /></span><div><small>Карточка клиента</small><h2 id="b2b-related-client-title">{selectedClient.companyName || selectedClient.contactName}</h2><p>{selectedClient.clientType === 'school' ? 'Школа' : selectedClient.clientType === 'company' ? 'Юридическое лицо' : 'Частный клиент'}</p></div></div><div className="b2b-client-profile-summary"><button type="button" onClick={() => setRelatedProfile(null)} aria-label="Закрыть"><X size={18} /></button></div></header>
+            <div className="b2b-related-profile-body"><section><h3>Контактные данные</h3><div><span>Контактное лицо</span><strong>{selectedClient.contactName || '—'}</strong></div><div><span>Телефон</span><strong>{selectedClient.phone1 || '—'}</strong></div><div><span>Доп. телефон</span><strong>{selectedClient.phone2 || '—'}</strong></div><div><span>Email</span><strong>{selectedClient.email || '—'}</strong></div></section><section><h3>Реквизиты</h3><div><span>ИНН</span><strong>{selectedClient.inn || '—'}</strong></div><div><span>ОКПО</span><strong>{selectedClient.okpo || '—'}</strong></div><div><span>Банк</span><strong>{selectedClient.bankName || '—'}</strong></div><div><span>Адрес</span><strong>{selectedClient.legalAddress || '—'}</strong></div></section></div>
+          </article>
+        </div>
+      )}
+
+      {relatedProfile === 'driver' && selectedDriver && (
+        <div className="b2b-modal-overlay b2b-related-profile-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setRelatedProfile(null); }}>
+          <article className="b2b-related-profile-card" role="dialog" aria-modal="true" aria-labelledby="b2b-related-driver-title">
+            <header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><Truck size={22} /></span><div><small>Карточка водителя</small><h2 id="b2b-related-driver-title">{selectedDriver.fullName}</h2><p>{selectedDriver.status === 'inactive' ? 'Неактивен' : 'Активный водитель'}</p></div></div><div className="b2b-client-profile-summary"><button type="button" onClick={() => setRelatedProfile(null)} aria-label="Закрыть"><X size={18} /></button></div></header>
+            <div className="b2b-related-profile-body"><section><h3>Контактные данные</h3><div><span>Телефон</span><strong>{selectedDriver.phone || '—'}</strong></div><div><span>Доп. телефон</span><strong>{selectedDriver.secondPhone || '—'}</strong></div><div><span>Адрес</span><strong>{selectedDriver.address || '—'}</strong></div><div><span>Филиалы</span><strong>{selectedDriver.branchShorts.join(', ') || '—'}</strong></div></section><section><h3>Автомобиль</h3><div><span>Тип</span><strong>{selectedDriver.vehicleLabel || '—'}</strong></div><div><span>Марка и модель</span><strong>{[selectedDriver.brand, selectedDriver.model].filter(Boolean).join(' ') || '—'}</strong></div><div><span>Госномер</span><strong>{selectedDriver.plateNumber || '—'}</strong></div><div><span>Мест</span><strong>{selectedDriver.seats ?? '—'}</strong></div></section></div>
           </article>
         </div>
       )}
