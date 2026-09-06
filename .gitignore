@@ -29,3 +29,9 @@ yarn-error.log*
 # Local source archive used to prepare optimized public school logos.
 /Логотип школ/
 .vercel
+
+# Local/scratch working files, not part of the app.
+tmp/
+
+# Local Claude Code settings (may contain machine-specific permission entries).
+.claude/
