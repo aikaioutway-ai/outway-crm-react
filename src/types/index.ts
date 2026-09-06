@@ -160,6 +160,7 @@ export interface FamilyPayment {
   year?: number;
   amount: number;
   paymentType: PaymentType;
+  paymentOrderNumber?: string;
   receiptUrl?: string;
   paymentDate: string;
   actualPaymentDate?: string;

@@ -38,6 +38,7 @@ export default function SalaryPaymentModal({ subjects, payments, recipients, per
   const [amount, setAmount] = useState(String(initialAmount));
   const [paymentDate, setPaymentDate] = useState(todayValue);
   const [paymentMethod, setPaymentMethod] = useState<PayrollPaymentMethod>('cashless');
+  const [paymentOrderNumber, setPaymentOrderNumber] = useState('');
   const [recipientId, setRecipientId] = useState(defaultRecipient?.id ?? '');
   const [comment, setComment] = useState('');
   const [saving, setSaving] = useState(false);
@@ -64,6 +65,7 @@ export default function SalaryPaymentModal({ subjects, payments, recipients, per
         periodYear,
         paymentDate,
         paymentMethod,
+        paymentOrderNumber: paymentOrderNumber.trim() || undefined,
         recipientId: recipient.id,
         recipientName: recipient.name,
         paidByName,
@@ -123,7 +125,7 @@ export default function SalaryPaymentModal({ subjects, payments, recipients, per
             <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 750, color: '#64748B' }}>
               СПОСОБ ВЫПЛАТЫ
               <select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as PayrollPaymentMethod)} style={FIELD_STYLE}>
-                <option value="cashless">Безналичный</option>
+                <option value="cashless">АйКай Мбанк</option>
                 <option value="cash">Наличные</option>
               </select>
             </label>
@@ -135,6 +137,11 @@ export default function SalaryPaymentModal({ subjects, payments, recipients, per
               </select>
             </label>
           </div>
+
+          <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 750, color: '#64748B' }}>
+            № ПЛАТЁЖНОГО ПОРУЧЕНИЯ
+            <input value={paymentOrderNumber} onChange={event => setPaymentOrderNumber(event.target.value)} placeholder="Необязательно" style={FIELD_STYLE} />
+          </label>
 
           <label style={{ display: 'grid', gap: 5, fontSize: 11, fontWeight: 750, color: '#64748B' }}>
             КОММЕНТАРИЙ
@@ -150,7 +157,7 @@ export default function SalaryPaymentModal({ subjects, payments, recipients, per
                 {history.map(payment => (
                   <div key={payment.id} style={{ padding: '9px 11px', display: 'grid', gridTemplateColumns: '88px 1fr auto', gap: 8, borderBottom: '1px solid #F1F5F9', fontSize: 11 }}>
                     <span style={{ color: '#64748B' }}>{dateLabel(payment.paymentDate)}</span>
-                    <span style={{ minWidth: 0, color: '#334155' }}>{payment.recipientName} · {payment.paymentMethod === 'cash' ? 'наличные' : 'безналичный'}</span>
+                    <span style={{ minWidth: 0, color: '#334155' }}>{payment.recipientName} · {payment.paymentMethod === 'cash' ? 'наличные' : 'АйКай Мбанк'}</span>
                     <span style={{ fontWeight: 800, color: '#15803D' }}>{payment.amount.toLocaleString('ru-RU')} сом</span>
                   </div>
                 ))}

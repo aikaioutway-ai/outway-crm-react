@@ -57,6 +57,7 @@ function expensePayload(rawExpense: unknown, createdBy?: string) {
     amount: Math.round(unitPrice * quantity * 100) / 100,
     expense_date: expenseDate,
     payment_method: paymentMethod,
+    payment_order_number: String(expense.paymentOrderNumber ?? '').trim() || null,
     comment: String(expense.comment ?? '').trim() || null,
     ...(createdBy ? { created_by: createdBy } : {}),
   };

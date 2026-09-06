@@ -48,6 +48,7 @@ const FIELD_LABEL: Record<string, string> = {
   zone:             'Зона',
   amount:           'Сумма',
   payment_method:   'Способ оплаты',
+  payment_order_number: '№ платёжного поручения',
   phone:            'Телефон',
   phone_telegram:   'Телефон (Telegram)',
   second_phone:     'Доп. телефон',

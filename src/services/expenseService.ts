@@ -16,6 +16,7 @@ function mapExpense(row: any): ExpenseRecord {
     amount: Number(row.amount ?? 0),
     expenseDate: String(row.expense_date ?? ''),
     paymentMethod: row.payment_method as ExpensePaymentMethod,
+    paymentOrderNumber: row.payment_order_number ? String(row.payment_order_number) : undefined,
     comment: String(row.comment ?? ''),
     createdBy: row.created_by ? String(row.created_by) : undefined,
     createdAt: String(row.created_at ?? ''),

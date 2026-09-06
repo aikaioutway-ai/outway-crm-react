@@ -75,6 +75,7 @@ function mapPayment(row: any): FamilyPayment {
     familyId: String(row.family_id),
     amount: Number(row.amount ?? 0),
     paymentType: (row.payment_method ?? 'cash') as PaymentType,
+    paymentOrderNumber: row.payment_order_number ?? undefined,
     receiptUrl: row.receipt_url ?? undefined,
     paymentDate: String(row.payment_date ?? row.created_at ?? ''),
     actualPaymentDate: row.actual_payment_date ? String(row.actual_payment_date) : undefined,
@@ -266,6 +267,7 @@ function fromReviewStatus(status: PaymentReviewStatus): string {
 export async function updateFamilyPayment(paymentId: string, updates: {
   amount?: number;
   paymentType?: PaymentType;
+  paymentOrderNumber?: string;
   paymentDate?: string;
   actualPaymentDate?: string;
   status?: PaymentReviewStatus;
@@ -277,6 +279,7 @@ export async function updateFamilyPayment(paymentId: string, updates: {
     row.suggested_main_amount = updates.amount;
   }
   if (updates.paymentType !== undefined) row.payment_method = updates.paymentType;
+  if (updates.paymentOrderNumber !== undefined) row.payment_order_number = updates.paymentOrderNumber || null;
   if (updates.paymentDate !== undefined) row.payment_date = updates.paymentDate;
   if (updates.actualPaymentDate !== undefined) row.actual_payment_date = updates.actualPaymentDate || null;
   if (updates.status !== undefined) row.status = fromReviewStatus(updates.status);
@@ -311,6 +314,7 @@ export async function createFamilyPayment(params: {
   familyId: string;
   amount: number;
   paymentType: PaymentType;
+  paymentOrderNumber?: string;
   paymentDate: string;
   receiptFile?: File | null;
   receiptCode?: string;
@@ -329,6 +333,7 @@ export async function createFamilyPayment(params: {
       suggested_main_amount: params.amount,
       suggested_deposit_amount: 0,
       payment_method: params.paymentType,
+      payment_order_number: params.paymentOrderNumber || null,
       payment_date: params.paymentDate,
       receipt_url: receiptUrl,
       receipt_code: params.receiptCode || null,
@@ -513,12 +518,14 @@ export async function confirmFamilyRefund(params: {
   refund: Refund;
   confirmedBy?: string;
   paymentMethod?: 'cash' | 'cashless';
+  paymentOrderNumber?: string;
 }): Promise<void> {
   if (params.refund.status === 'Подтверждено') return;
   const { error } = await supabase.rpc('v2_confirm_refund', {
     p_refund_id: params.refund.id,
     p_confirmed_by: params.confirmedBy ?? 'CRM',
     p_expense_payment_method: params.paymentMethod ?? 'cashless',
+    p_payment_order_number: params.paymentOrderNumber?.trim() || null,
   });
   if (error) throw new Error(error.message);
   invalidateFinanceCache();

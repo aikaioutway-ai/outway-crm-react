@@ -203,6 +203,7 @@ export interface V2PayrollPayment {
   amount: number;
   paymentDate: string;
   paymentMethod: PayrollPaymentMethod;
+  paymentOrderNumber?: string;
   recipientId: string;
   recipientName: string;
   paidByName: string;
@@ -1484,6 +1485,7 @@ function mapV2PayrollPayment(row: any): V2PayrollPayment {
     amount: Number(row.amount),
     paymentDate: row.payment_date ?? '',
     paymentMethod: row.payment_method as PayrollPaymentMethod,
+    paymentOrderNumber: row.payment_order_number ? String(row.payment_order_number) : undefined,
     recipientId: row.recipient_id ? String(row.recipient_id) : '',
     recipientName: row.recipient_name ?? '',
     paidByName: row.paid_by_name ?? '',
@@ -1510,6 +1512,7 @@ export async function recordV2PayrollPayments(input: {
   periodYear: number;
   paymentDate: string;
   paymentMethod: PayrollPaymentMethod;
+  paymentOrderNumber?: string;
   recipientId?: string;
   recipientName: string;
   paidByName?: string;
@@ -1528,6 +1531,7 @@ export async function recordV2PayrollPayments(input: {
     p_paid_by_name: input.paidByName?.trim() ?? '',
     p_comment: input.comment?.trim() ?? '',
     p_payments: input.payments,
+    p_payment_order_number: input.paymentOrderNumber?.trim() || null,
   });
   if (error) throw new Error(error.message);
   queryClient.invalidateQueries({ queryKey: QK.payrollEntries(input.periodMonth, input.periodYear) });

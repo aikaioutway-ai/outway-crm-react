@@ -8,8 +8,8 @@ import { Section, Spinner, Empty } from './DrawerUI';
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
   cash: 'Наличные',
-  transfer: 'Безналичный QR',
-  card: 'Безналичный QR',
+  transfer: 'АйКай Мбанк',
+  card: 'АйКай Мбанк',
   other: 'Другое',
 };
 
@@ -28,13 +28,13 @@ interface Props {
   onSaveCharge: (charge: Charge, updates: Partial<Charge>) => Promise<boolean>;
   onDeleteCharge: (charge: Charge) => void;
   onAddCharges: (month: number, year: number) => void | Promise<void>;
-  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string) => Promise<boolean>;
+  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string, paymentOrderNumber?: string) => Promise<boolean>;
   onConfirmPayment: (payment: FamilyPayment, actualPaymentDate: string) => Promise<boolean>;
   onUnconfirmPayment?: (payment: FamilyPayment) => Promise<boolean>;
   onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDeletePayment: (payment: FamilyPayment) => Promise<boolean>;
   onCreateRefund: (amount: number, comment: string) => Promise<boolean>;
-  onConfirmRefund: (refund: Refund, paymentMethod: 'cash' | 'cashless') => Promise<boolean>;
+  onConfirmRefund: (refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string) => Promise<boolean>;
   onRejectRefund: (refund: Refund, reason: string) => Promise<boolean>;
   readOnly?: boolean;
 }
@@ -67,6 +67,7 @@ export default function TabFinance({
   const [newPeriodKey, setNewPeriodKey] = useState('9');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
+  const [paymentOrderNumber, setPaymentOrderNumber] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const { ocrLoading, ocrMsg, receiptFile, receiptCode, setReceiptCode, handleFileChange: handleOcrFile, reset: resetOcr } = useReceiptOcr();
   const [comment, setComment] = useState('');
@@ -98,13 +99,14 @@ export default function TabFinance({
     const amount = Number(paymentAmount);
     if (!amount || amount <= 0) return;
     setSavingPayment(true);
-    const ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile, receiptCode || undefined);
+    const ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile, receiptCode || undefined, paymentOrderNumber.trim() || undefined);
     setSavingPayment(false);
     if (ok) {
       setMsg('Платёж отправлен кассиру на проверку');
       setPaymentAmount('');
       resetOcr();
       setComment('');
+      setPaymentOrderNumber('');
       setTimeout(() => setMsg(''), 2500);
     } else {
       setMsg('Не удалось внести платёж');
@@ -142,9 +144,9 @@ export default function TabFinance({
     }
   }
 
-  async function confirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless') {
+  async function confirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string) {
     setConfirmingRefundId(refund.id);
-    const ok = await onConfirmRefund(refund, paymentMethod);
+    const ok = await onConfirmRefund(refund, paymentMethod, paymentOrderNumber);
     setConfirmingRefundId(null);
     setMsg(ok ? 'Возврат подтверждён и списан с баланса' : 'Не удалось подтвердить возврат');
     setTimeout(() => setMsg(''), 2500);
@@ -177,9 +179,10 @@ export default function TabFinance({
                   <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'} style={inputStyle} />
                   <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
                     <option value="cash">Наличные</option>
-                    <option value="transfer">Безналичный QR</option>
+                    <option value="transfer">АйКай Мбанк</option>
                   </select>
                   <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
+                  <input value={paymentOrderNumber} onChange={e => setPaymentOrderNumber(e.target.value)} placeholder="№ платёжного поручения" style={inputStyle} />
                   <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={inputStyle} />
                   <label style={{ ...fileInputStyle, width: '100%', boxSizing: 'border-box' }}>
                     {ocrLoading ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Paperclip size={14} />}
@@ -331,6 +334,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
   const [editing, setEditing] = useState(false);
   const [amount, setAmount] = useState(String(payment.amount));
   const [paymentType, setPaymentType] = useState<PaymentType>(payment.paymentType);
+  const [paymentOrderNumber, setPaymentOrderNumber] = useState(payment.paymentOrderNumber ?? '');
   const [paymentDate, setPaymentDate] = useState(payment.paymentDate ? payment.paymentDate.slice(0, 10) : new Date().toISOString().slice(0, 10));
   const [actualPaymentDate, setActualPaymentDate] = useState(
     payment.actualPaymentDate
@@ -348,7 +352,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
 
   async function save() {
     setSaving(true);
-    const ok = await onSave({ amount: Number(amount), paymentType, paymentDate, actualPaymentDate, status, comment });
+    const ok = await onSave({ amount: Number(amount), paymentType, paymentOrderNumber: paymentOrderNumber.trim() || undefined, paymentDate, actualPaymentDate, status, comment });
     setSaving(false);
     if (ok) setEditing(false);
   }
@@ -370,6 +374,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
           <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(payment.amount)}</div>
           <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
             {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ru-RU') : 'без даты'} · {PAYMENT_TYPE_LABEL[payment.paymentType] ?? payment.paymentType}
+            {payment.paymentOrderNumber && <> · п/п {payment.paymentOrderNumber}</>}
             {payment.actualPaymentDate && <> · факт {new Date(payment.actualPaymentDate).toLocaleDateString('ru-RU')}</>}
           </div>
         </div>
@@ -439,10 +444,11 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма" style={inputStyle} />
             <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
               <option value="cash">Наличные</option>
-              <option value="transfer">Безналичный QR</option>
+              <option value="transfer">АйКай Мбанк</option>
             </select>
             <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
             <input type="date" value={actualPaymentDate} onChange={e => setActualPaymentDate(e.target.value)} style={inputStyle} />
+            <input value={paymentOrderNumber} onChange={e => setPaymentOrderNumber(e.target.value)} placeholder="№ платёжного поручения" style={{ ...inputStyle, gridColumn: '1 / -1' }} />
           </div>
           <select value={status} onChange={e => setStatus(e.target.value as any)} style={{ ...inputStyle, width: '100%' }}>
             <option value="На проверке">На проверке</option>
@@ -482,10 +488,11 @@ function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
   refund: Refund;
   canConfirm: boolean;
   confirming: boolean;
-  onConfirm: (paymentMethod: 'cash' | 'cashless') => void;
+  onConfirm: (paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string) => void;
   onReject: () => void;
 }) {
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'cashless'>('cashless');
+  const [paymentOrderNumber, setPaymentOrderNumber] = useState('');
   const statusStyle = refund.status === 'Подтверждено'
     ? { background: '#ECFDF5', color: '#065F46' }
     : refund.status === 'Отклонено'
@@ -510,12 +517,13 @@ function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
       {canConfirm && (
         <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <select value={paymentMethod} onChange={e => setPaymentMethod(e.target.value as 'cash' | 'cashless')} style={{ ...inputStyle, width: '100%' }}>
-            <option value="cashless">Перевод</option>
+            <option value="cashless">АйКай Мбанк</option>
             <option value="cash">Наличные</option>
           </select>
+          <input value={paymentOrderNumber} onChange={e => setPaymentOrderNumber(e.target.value)} placeholder="№ платёжного поручения" style={{ ...inputStyle, width: '100%' }} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <button
-              onClick={() => onConfirm(paymentMethod)}
+              onClick={() => onConfirm(paymentMethod, paymentOrderNumber.trim() || undefined)}
               disabled={confirming}
               style={{
                 height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,

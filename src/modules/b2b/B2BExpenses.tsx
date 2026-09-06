@@ -82,6 +82,7 @@ const emptyExpenseForm = () => ({
   category: 'other',
   amount: '',
   method: 'cash' as B2BPaymentMethod,
+  paymentOrderNumber: '',
   purpose: '',
   orderId: '',
   comment: '',
@@ -210,7 +211,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
     setEditingExpenseId(row.id);
     setForm({
       expenseDate: row.expenseDate.slice(0, 10), category: normalizedCategory(row.category), amount: String(row.amount),
-      method: row.method, purpose: row.purpose, orderId, comment: row.comment,
+      method: row.method, paymentOrderNumber: row.paymentOrderNumber ?? '', purpose: row.purpose, orderId, comment: row.comment,
     });
     setFormError('');
     setShowCreate(true);
@@ -281,7 +282,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
           </div>
         )}
 
-        <div className="b2b-expenses-tax-note"><Percent size={18} /><div><strong>Налог удерживается автоматически</strong><span>Для способа «Безнал — юрлицо» система удерживает 4% из начисленной суммы и показывает сумму к перечислению.</span></div></div>
+        <div className="b2b-expenses-tax-note"><Percent size={18} /><div><strong>Налог удерживается автоматически</strong><span>Для способа «АйКай Мбанк — юрлицо» система удерживает 4% из начисленной суммы и показывает сумму к перечислению.</span></div></div>
       </div>
 
       <div className="b2b-expenses-panel">
@@ -292,12 +293,12 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
             <button type="button" className="b2b-primary-button" onClick={openNewExpense}><Plus size={16} />Новый расход</button>
           </div>
         </div>
-        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th className="number">Начислено</th><th className="number">Налог 4%</th><th className="number">К перечислению</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={10} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
+        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th>№ платёжного поручения</th><th className="number">Начислено</th><th className="number">Налог 4%</th><th className="number">К перечислению</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={11} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
           const meta = categoryMeta(normalizedCategory(row.category));
           const Icon = meta.icon;
           const canOpenOrder = Boolean(onOpenOrder && row.orderNumber !== '—' && orders.some(order => order.number === row.orderNumber));
-          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td className="number">{money(row.amount)}</td><td className={`number ${row.taxAmount > 0 ? 'tax' : ''}`}>{money(row.taxAmount)}</td><td className="number net">{money(row.netAmount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions">{!isAutomaticExpense(row) ? <button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title="Редактировать расход"><Pencil size={14} /></button> : <span className="b2b-expense-auto" title="Автоматическая запись редактируется в исходной оплате"><LockKeyhole size={12} />Авто</span>}</td></tr>;
-        }) : <tr><td colSpan={10} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
+          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td>{row.paymentOrderNumber || '—'}</td><td className="number">{money(row.amount)}</td><td className={`number ${row.taxAmount > 0 ? 'tax' : ''}`}>{money(row.taxAmount)}</td><td className="number net">{money(row.netAmount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions">{!isAutomaticExpense(row) ? <button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title="Редактировать расход"><Pencil size={14} /></button> : <span className="b2b-expense-auto" title="Автоматическая запись редактируется в исходной оплате"><LockKeyhole size={12} />Авто</span>}</td></tr>;
+        }) : <tr><td colSpan={11} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
       </div>
 
       {showCreate && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeExpenseEditor(); }}>
@@ -312,6 +313,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
                 <label className="full"><span>Назначение *</span><input autoFocus value={form.purpose} onChange={event => setForm(current => ({ ...current, purpose: event.target.value }))} placeholder="Например: премия сотруднику" /></label>
                 <label><span>Сумма, сом *</span><input type="number" min="0.01" step="0.01" value={form.amount} onChange={event => setForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
                 <label><span>Способ оплаты *</span><select value={form.method} onChange={event => setForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
+                <label><span>№ платёжного поручения</span><input value={form.paymentOrderNumber} onChange={event => setForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder="Необязательно" /></label>
               </div>
             </section>
             <section>

@@ -55,14 +55,14 @@ export function B2BClientOrderEditModal({ order, onClose }: { order: B2BOrderRec
 }
 
 export function B2BClientPaymentEditModal({ payment, onClose }: { payment: B2BPaymentRecord; onClose: () => void }) {
-  const [form, setForm] = useState({ amount: String(payment.amount), method: payment.method, paymentDate: payment.paymentDate, comment: payment.comment });
+  const [form, setForm] = useState({ amount: String(payment.amount), method: payment.method, paymentOrderNumber: payment.paymentOrderNumber ?? '', paymentDate: payment.paymentDate, comment: payment.comment });
   const [error, setError] = useState('');
   const submit = async (event: FormEvent) => {
     event.preventDefault();
     const amount = Number(form.amount);
     if (!(amount > 0)) return setError('Укажите сумму больше нуля.');
     try {
-      await updateB2BClientPayment(payment.id, { amount, method: form.method, paymentDate: form.paymentDate, comment: form.comment.trim() });
+      await updateB2BClientPayment(payment.id, { amount, method: form.method, paymentOrderNumber: form.paymentOrderNumber.trim() || undefined, paymentDate: form.paymentDate, comment: form.comment.trim() });
       await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payments });
       onClose();
     } catch (submitError) { setError(submitError instanceof Error ? submitError.message : 'Не удалось сохранить оплату.'); }
@@ -73,6 +73,7 @@ export function B2BClientPaymentEditModal({ payment, onClose }: { payment: B2BPa
       <div className="b2b-payment-notice"><CircleDollarSign size={18} /><div><strong>Изменение оплаты</strong><span>После сохранения сумма и способ оплаты обновятся в карточке клиента.</span></div></div>
       <label><span>Сумма, сом *</span><input autoFocus type="number" min="1" value={form.amount} onChange={event => setForm(current => ({ ...current, amount: event.target.value }))} /></label>
       <label><span>Способ оплаты *</span><select value={form.method} onChange={event => setForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
+      <label><span>№ платёжного поручения</span><input value={form.paymentOrderNumber} onChange={event => setForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder="Необязательно" /></label>
       <label><span>Дата оплаты *</span><input type="date" value={form.paymentDate} onChange={event => setForm(current => ({ ...current, paymentDate: event.target.value }))} /></label>
       <label className="full"><span>Комментарий</span><textarea value={form.comment} onChange={event => setForm(current => ({ ...current, comment: event.target.value }))} /></label>
       {error && <div className="b2b-form-error">{error}</div>}

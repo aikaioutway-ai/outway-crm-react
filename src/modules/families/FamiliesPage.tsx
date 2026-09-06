@@ -156,7 +156,7 @@ const TRANSFER_BAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1))
 const STOP_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 const PAYMENT_METHOD_OPTIONS: { value: PaymentType; label: string }[] = [
   { value: 'cash', label: 'Наличные' },
-  { value: 'transfer', label: 'Безналичный QR' },
+  { value: 'transfer', label: 'АйКай Мбанк' },
 ];
 
 const COLUMNS: ColumnDef<ChildRow>[] = [
@@ -512,7 +512,7 @@ const PAYMENT_TYPE_COL: ColumnDef<ChildRow> = {
     const type = row.pendingPaymentType;
     if (!type) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
     const lower = type.toLowerCase();
-    if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>QR</span>;
+    if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
     if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
     return <span style={{ fontSize: 11, color: '#52606F', fontWeight: 600 }}>{type}</span>;
   },
@@ -629,7 +629,7 @@ const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
     render: (val) => {
       if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
       const lower = String(val).toLowerCase();
-      if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>QR</span>;
+      if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
       if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
       return <span style={{ fontSize: 11, color: '#52606F' }}>{val}</span>;
     },
@@ -807,7 +807,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       render: (val) => {
         if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
         const lower = String(val).toLowerCase();
-        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>QR</span>;
+        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
         return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
       },
     },
@@ -2259,7 +2259,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         const type = row.pendingPaymentType;
         if (!row.isFirstChild || !type) return <span style={{ color: 'var(--text-2)' }}>—</span>;
         const lower = type.toLowerCase();
-        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>QR</span>;
+        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
         if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
         return <span style={{ fontSize: 11, color: '#52606F', fontWeight: 600 }}>{type}</span>;
       },

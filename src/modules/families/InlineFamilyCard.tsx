@@ -331,9 +331,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     await loadFinance();
     await loadAudit();
   }
-  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string): Promise<boolean> {
+  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string, paymentOrderNumber?: string): Promise<boolean> {
     try {
-      await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentDate, receiptFile, receiptCode, comment, createdBy: userName });
+      await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentOrderNumber, paymentDate, receiptFile, receiptCode, comment, createdBy: userName });
       try {
         await addAudit('Платёж', 'family_payment', '-', `${money(amount)} на проверке`);
       } catch (error) {
@@ -390,9 +390,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     }
   }
 
-  async function handleConfirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless'): Promise<boolean> {
+  async function handleConfirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string): Promise<boolean> {
     try {
-      await confirmFamilyRefund({ refund, confirmedBy: userName, paymentMethod });
+      await confirmFamilyRefund({ refund, confirmedBy: userName, paymentMethod, paymentOrderNumber });
       await addAudit('Подтверждение возврата', 'family_refund', refund.status, `${money(refund.amount)} подтверждено`);
       await loadFinance();
       await loadAudit();

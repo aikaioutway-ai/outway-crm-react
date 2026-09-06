@@ -36,6 +36,7 @@ export interface B2BDriverPayoutRecord {
   taxAmount: number;
   netAmount: number;
   method: B2BPaymentMethod;
+  paymentOrderNumber?: string;
   paymentDate: string;
   comment: string;
   createdAt: string;
@@ -67,6 +68,7 @@ export interface B2BExpenseRecord {
   category: string;
   amount: number;
   method: B2BPaymentMethod;
+  paymentOrderNumber?: string;
   taxAmount: number;
   netAmount: number;
   purpose: string;
@@ -81,6 +83,7 @@ export interface NewB2BExpenseRecord {
   category: string;
   amount: number;
   method: B2BPaymentMethod;
+  paymentOrderNumber?: string;
   purpose: string;
   orderId?: string;
   comment: string;
@@ -147,8 +150,8 @@ export async function fetchB2BDriverPayouts(): Promise<B2BDriverPayoutRecord[]> 
   return (data ?? []).map((row: any) => ({
     id: row.id, orderId: row.order_id, assignmentId: row.assignment_id, driverId: row.driver_id,
     driverName: row.driver?.full_name ?? '', amount: Number(row.amount), taxAmount: Number(row.tax_amount),
-    netAmount: Number(row.net_amount), method: row.payment_method, paymentDate: row.payment_date,
-    comment: row.purpose ?? '', createdAt: row.created_at,
+    netAmount: Number(row.net_amount), method: row.payment_method, paymentOrderNumber: row.payment_order_number ?? undefined,
+    paymentDate: row.payment_date, comment: row.purpose ?? '', createdAt: row.created_at,
   }));
 }
 
@@ -160,8 +163,8 @@ export async function fetchB2BPayments(): Promise<B2BPaymentRecord[]> {
   return (data ?? []).map((row: any) => ({
     id: row.id, orderId: row.order_id, orderNumber: row.order?.order_number ?? '—',
     clientName: row.order?.client?.company_name || row.order?.client?.contact_name || '—',
-    amount: Number(row.amount), method: row.payment_method, paymentDate: row.payment_date,
-    comment: row.comment ?? '', status: row.status, createdAt: row.created_at,
+    amount: Number(row.amount), method: row.payment_method, paymentOrderNumber: row.payment_order_number ?? undefined,
+    paymentDate: row.payment_date, comment: row.comment ?? '', status: row.status, createdAt: row.created_at,
   }));
 }
 
@@ -182,7 +185,8 @@ export async function fetchB2BExpenses(): Promise<B2BExpenseRecord[]> {
   assert(error);
   return (data ?? []).map((row: any) => ({
     id: row.id, expenseDate: row.expense_date, category: row.category, amount: Number(row.amount),
-    method: row.payment_method, taxAmount: Number(row.tax_amount), netAmount: Number(row.net_amount),
+    method: row.payment_method, paymentOrderNumber: row.payment_order_number ?? undefined,
+    taxAmount: Number(row.tax_amount), netAmount: Number(row.net_amount),
     purpose: row.purpose ?? '', orderNumber: row.order?.order_number ?? '—', comment: row.comment ?? '', source: row.source,
     sourceId: row.source_id ?? undefined,
   }));
@@ -194,6 +198,7 @@ export async function createB2BExpense(expense: NewB2BExpenseRecord): Promise<vo
     category: expense.category,
     amount: expense.amount,
     payment_method: expense.method,
+    payment_order_number: expense.paymentOrderNumber || null,
     purpose: expense.purpose,
     order_id: expense.orderId || null,
     comment: expense.comment || null,
@@ -208,6 +213,7 @@ export async function updateB2BExpense(id: string, expense: NewB2BExpenseRecord)
     category: expense.category,
     amount: expense.amount,
     payment_method: expense.method,
+    payment_order_number: expense.paymentOrderNumber || null,
     purpose: expense.purpose,
     order_id: expense.orderId || null,
     comment: expense.comment || null,
@@ -279,11 +285,12 @@ export async function saveB2BAssignment(order: B2BOrderRecord, driverId: string,
   return result.data!.id as string;
 }
 
-export async function createB2BDriverPayout(order: B2BOrderRecord, amount: number, method: B2BPaymentMethod, paymentDate: string, purpose: string) {
+export async function createB2BDriverPayout(order: B2BOrderRecord, amount: number, method: B2BPaymentMethod, paymentDate: string, purpose: string, paymentOrderNumber?: string) {
   if (!order.assignmentId || !order.driverId) throw new Error('У заказа нет назначения водителя.');
   const { error } = await supabase.from('v2_b2b_driver_payments').insert({
     order_id: order.id, assignment_id: order.assignmentId, driver_id: order.driverId,
     amount, payment_method: method, payment_date: paymentDate, purpose,
+    payment_order_number: paymentOrderNumber || null,
   });
   assert(error);
 }
@@ -291,13 +298,13 @@ export async function createB2BDriverPayout(order: B2BOrderRecord, amount: numbe
 export async function createB2BClientPayment(record: Omit<B2BPaymentRecord, 'id' | 'status' | 'createdAt'>) {
   const { error } = await supabase.from('v2_b2b_client_payments').insert({
     order_id: record.orderId, payment_type: 'final', amount: record.amount, payment_date: record.paymentDate,
-    payment_method: record.method, status: 'pending', comment: record.comment,
+    payment_method: record.method, payment_order_number: record.paymentOrderNumber || null, status: 'pending', comment: record.comment,
   });
   assert(error);
 }
 
-export async function updateB2BClientPayment(id: string, patch: Pick<B2BPaymentRecord, 'amount' | 'method' | 'paymentDate' | 'comment'>) {
-  const { error } = await supabase.from('v2_b2b_client_payments').update({ amount: patch.amount, payment_method: patch.method, payment_date: patch.paymentDate, comment: patch.comment }).eq('id', id);
+export async function updateB2BClientPayment(id: string, patch: Pick<B2BPaymentRecord, 'amount' | 'method' | 'paymentDate' | 'comment' | 'paymentOrderNumber'>) {
+  const { error } = await supabase.from('v2_b2b_client_payments').update({ amount: patch.amount, payment_method: patch.method, payment_date: patch.paymentDate, comment: patch.comment, payment_order_number: patch.paymentOrderNumber || null }).eq('id', id);
   assert(error);
 }
 

@@ -123,6 +123,7 @@ function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
           <th className="number">Сумма</th>
           <th>Дата</th>
           <th>Оплата</th>
+          <th>№ платёжного поручения</th>
           <th>Комментарий</th>
           <th className="expense-actions-column">Действия</th>
         </tr></thead>
@@ -135,7 +136,8 @@ function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
             <td className="number">{new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(row.quantity)}</td>
             <td className="number" style={{ fontWeight: 850, color: '#17222F' }}>{compactMoney(row.amount)}</td>
             <td>{displayDate(row.expenseDate)}</td>
-            <td><span className="expense-badge">{row.source === 'salary' ? 'Из зарплаты' : row.source === 'advance' ? 'Из аванса' : row.paymentMethod === 'cash' ? 'Наличные' : 'Безнал'}</span></td>
+            <td><span className="expense-badge">{row.source === 'salary' ? 'Из зарплаты' : row.source === 'advance' ? 'Из аванса' : row.paymentMethod === 'cash' ? 'Наличные' : 'АйКай Мбанк'}</span></td>
+            <td>{row.paymentOrderNumber || '—'}</td>
             <td title={row.comment}>{row.comment || '—'}</td>
             <td className="expense-row-actions">
               {row.source === 'manual' && <>
@@ -169,6 +171,7 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
   const [quantity, setQuantity] = useState(expense ? String(expense.quantity) : '1');
   const [expenseDate, setExpenseDate] = useState(expense?.expenseDate ?? today());
   const [paymentMethod, setPaymentMethod] = useState<ExpensePaymentMethod>(expense?.paymentMethod ?? 'cashless');
+  const [paymentOrderNumber, setPaymentOrderNumber] = useState(expense?.paymentOrderNumber ?? '');
   const [comment, setComment] = useState(expense?.comment ?? '');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
@@ -191,7 +194,7 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
       const payload = {
         name, category, subcategory,
         unitPrice: Number(unitPrice), quantity: Number(quantity),
-        expenseDate, paymentMethod, comment, createdBy: userName,
+        expenseDate, paymentMethod, paymentOrderNumber: paymentOrderNumber.trim() || undefined, comment, createdBy: userName,
       };
       const saved = expense
         ? await updateExpense(expense.id, payload, sessionToken)
@@ -216,7 +219,8 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
           <div className="expense-field"><label>Количество</label><input type="number" min="0.01" step="0.01" value={quantity} onChange={event => setQuantity(event.target.value)} /></div>
           <div className="expense-total-preview"><span>Итоговая сумма</span><strong>{money(total)}</strong></div>
           <div className="expense-field"><label>Фактическая дата расхода</label><input type="date" value={expenseDate} onChange={event => setExpenseDate(event.target.value)} /></div>
-          <div className="expense-field"><label>Способ оплаты</label><select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as ExpensePaymentMethod)}><option value="cash">Наличные</option><option value="cashless">Безнал</option></select></div>
+          <div className="expense-field"><label>Способ оплаты</label><select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as ExpensePaymentMethod)}><option value="cash">Наличные</option><option value="cashless">АйКай Мбанк</option></select></div>
+          <div className="expense-field"><label>№ платёжного поручения</label><input value={paymentOrderNumber} onChange={event => setPaymentOrderNumber(event.target.value)} placeholder="Необязательно" /></div>
           <div className="expense-field full"><label>Комментарий</label><textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="Необязательно" /></div>
           {error && <div className="expense-form-error">{error}</div>}
           <div className="expense-form-actions"><button type="button" className="expense-cancel" onClick={onClose}>Отмена</button><button type="submit" className="expense-save" disabled={saving}>{saving ? 'Сохранение…' : expense ? 'Сохранить изменения' : 'Добавить расход'}</button></div>

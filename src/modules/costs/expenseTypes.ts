@@ -11,6 +11,7 @@ export interface ExpenseRecord {
   amount: number;
   expenseDate: string;
   paymentMethod: ExpensePaymentMethod;
+  paymentOrderNumber?: string;
   comment: string;
   createdBy?: string;
   createdAt: string;
@@ -25,6 +26,7 @@ export interface NewExpenseRecord {
   quantity: number;
   expenseDate: string;
   paymentMethod: ExpensePaymentMethod;
+  paymentOrderNumber?: string;
   comment: string;
   createdBy?: string;
 }

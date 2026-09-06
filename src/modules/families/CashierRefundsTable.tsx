@@ -41,6 +41,7 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
   const { data: rows = [], isLoading } = useRefundsTable();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [paymentMethodById, setPaymentMethodById] = useState<Record<string, 'cash' | 'cashless'>>({});
+  const [paymentOrderNumberById, setPaymentOrderNumberById] = useState<Record<string, string>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
   async function confirm(row: RefundTableRow) {
@@ -50,6 +51,7 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
         refund: { id: row.id, familyId: row.familyId, amount: row.amount, status: 'На проверке', requestedAt: row.requestedAt },
         confirmedBy,
         paymentMethod: paymentMethodById[row.id] ?? 'cashless',
+        paymentOrderNumber: paymentOrderNumberById[row.id]?.trim() || undefined,
       });
       setEditingId(null);
     } finally {
@@ -115,9 +117,16 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
               onChange={e => setPaymentMethodById(prev => ({ ...prev, [row.id]: e.target.value as 'cash' | 'cashless' }))}
               style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '3px 6px', fontSize: 12, color: 'var(--text)', background: '#fff' }}
             >
-              <option value="cashless">Перевод</option>
+              <option value="cashless">АйКай Мбанк</option>
               <option value="cash">Наличные</option>
             </select>
+            <input
+              disabled={busy}
+              value={paymentOrderNumberById[row.id] ?? ''}
+              onChange={e => setPaymentOrderNumberById(prev => ({ ...prev, [row.id]: e.target.value }))}
+              placeholder="№ платёжного поручения"
+              style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '3px 6px', fontSize: 12, color: 'var(--text)', background: '#fff', width: 130 }}
+            />
             <button
               title="Подтвердить"
               disabled={busy}
