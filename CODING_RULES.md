@@ -178,7 +178,7 @@ created_at
 id, child_id, family_id,
 period_month, period_year,
 amount, paid_amount, debt_amount,
-penalty_amount, status, is_frozen,
+status,
 created_at, updated_at
 ```
 
@@ -272,11 +272,7 @@ const PRICE_RULES = {
 - Депозит = цена семьи за 1 месяц
 
 ### Пеня
-- До 5-го числа → 0
-- С 6-го числа → +100 сом/день
-- Максимум → 15% от суммы долга
-- На депозит → пеня НЕ начисляется
-- Статус "На проверке" → пеня ЗАМОРОЖЕНА
+Пеня по задолженности семей в текущей CRM не используется и не начисляется.
 
 ### Периоды
 ```
