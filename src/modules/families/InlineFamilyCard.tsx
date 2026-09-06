@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CreditCard, ExternalLink, FileText, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
-import { getPriceByZone, money } from '../../utils/pricing';
+import { getPriceByZone, getSiblingDiscountPercent, money } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
@@ -193,6 +193,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     const zone = (template?.zone || draftFamily.zone || 'A') as Zone;
     const vehicleType = (template?.vehicleType || draftFamily.vehicleType || 'microbus') as VehicleType;
     const basePrice = getPriceByZone(schoolCode, zone, vehicleType);
+    // draftChildren в этот момент — уже существующие + добавленные в этой сессии дети,
+    // до вставки нового — это и есть порядковый номер нового ребёнка в семье.
+    const siblingDiscountPercent = getSiblingDiscountPercent(draftChildren.length);
+    const finalPrice = Math.round(basePrice * (1 - siblingDiscountPercent / 100));
     setDraftChildren(current => [...current, {
       id: `draft-${Date.now()}`,
       familyId: family.id,
@@ -208,7 +212,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       zone,
       vehicleType,
       basePrice,
-      finalPrice: basePrice,
+      siblingDiscountPercent,
+      finalPrice,
       status: 'new',
     }]);
   }
@@ -258,6 +263,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             zone: draft.zone,
             vehicleType: draft.vehicleType,
             basePrice: draft.basePrice,
+            siblingDiscountPercent: draft.siblingDiscountPercent,
             finalPrice: draft.finalPrice,
             status: draft.status,
           });

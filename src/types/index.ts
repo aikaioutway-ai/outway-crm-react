@@ -130,7 +130,6 @@ export interface Payment {
   accountantStatus: PaymentStatus;
   factAmount: number;      // подтверждено кассиром
   factDate: string;
-  isFrozen: boolean;       // пеня заморожена
   comment: string;
 }
 
@@ -145,9 +144,7 @@ export interface Charge {
   amount: number;
   paidAmount: number;
   debtAmount: number;
-  penaltyAmount: number;
   status: PaymentStatus;
-  isFrozen: boolean;
   comment?: string;
   createdAt: string;
   updatedAt?: string;

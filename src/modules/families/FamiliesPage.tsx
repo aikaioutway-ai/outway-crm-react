@@ -103,7 +103,6 @@ export interface ChildRow {
   childDebtAmount: number;
   debtAmount: number;
   balance: number;
-  penaltyAmount?: number;
 }
 
 type FamiliesMode = 'requests' | 'payments' | 'charges' | 'debtors' | 'directory' | 'cashier' | 'logistics';
@@ -269,7 +268,6 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   { key: 'totalCharged', label: 'Общ. начисл.', type: 'currency', category: 'Финансы', width: 110, visible: false, aggregateByKey: 'familyId', render: (val, row) => <span>{row.isFirstChild ? money(Number(val ?? 0)) : '—'}</span> },
   { key: 'totalPaid', label: 'Платежи', type: 'currency', category: 'Финансы', width: 110, aggregateByKey: 'familyId', render: (val, row) => <span>{row.isFirstChild ? money(Number(val ?? 0)) : '—'}</span> },
   { key: 'pendingPayment', label: 'На проверке', type: 'currency', category: 'Финансы', width: 105, visible: false, aggregateByKey: 'familyId', render: (val, row) => <span>{row.isFirstChild ? money(Number(val ?? 0)) : '—'}</span> },
-  { key: 'penaltyAmount', label: 'Пеня', type: 'currency', category: 'Финансы', width: 90, visible: false, render: (val) => <span>{money(Number(val ?? 0))}</span> },
   { key: 'schoolCode',     label: 'Код школы',   type: 'text',   category: 'Система',  width: 90,  visible: false, filterable: false, sortable: false, showInProperties: false },
   { key: 'branchName',     label: 'Филиал',       type: 'text',   category: 'Система',  width: 160, visible: false, filterable: false, sortable: false, showInProperties: false },
   { key: 'vehicleType',    label: 'Тип ТС',       type: 'select', category: 'Система', width: 100, visible: false, filterable: false, sortable: false, showInProperties: false },

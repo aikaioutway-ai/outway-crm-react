@@ -458,7 +458,6 @@ export interface PeriodChargeStats {
   charged: number;
   paid: number;
   debt: number;
-  penalty: number;
   pending: number;
 }
 
@@ -473,7 +472,7 @@ export async function fetchChargesForPeriod(
   const data = await fetchAllRows<any>((from, to) => {
     let query = supabase
       .from('v2_charges')
-      .select('family_id, child_id, amount, paid_amount, penalty_amount, debt_amount');
+      .select('family_id, child_id, amount, paid_amount, debt_amount');
     if (chargeType) {
       query = query.eq('charge_type', chargeType);
     } else if (periodMonth !== null && periodYear !== null) {
@@ -493,14 +492,12 @@ export async function fetchChargesForPeriod(
     const fid = String(row.family_id);
     const childId = String(row.child_id ?? '');
     const key = childId || fid;
-    if (!map[key]) map[key] = { familyId: fid, childId, charged: 0, paid: 0, debt: 0, penalty: 0, pending: 0 };
+    if (!map[key]) map[key] = { familyId: fid, childId, charged: 0, paid: 0, debt: 0, pending: 0 };
     const amount = Number(row.amount ?? 0);
     const paid = Number(row.paid_amount ?? 0);
-    const penalty = Number(row.penalty_amount ?? 0);
     map[key].charged += amount;
     map[key].paid += paid;
-    map[key].penalty += penalty;
-    map[key].debt += Math.max(0, Number(row.debt_amount ?? amount + penalty - paid));
+    map[key].debt += Math.max(0, Number(row.debt_amount ?? amount - paid));
   });
   const pendingByFamily: Record<string, number> = {};
   pendingRows.forEach((row: any) => {

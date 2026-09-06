@@ -54,9 +54,15 @@ interface KidPriceInput {
   discountValue?: number;
 }
 
+/** Первый ребёнок семьи — 0%, второй и каждый последующий — 5%.
+ * index — порядковый номер ребёнка в семье, начиная с 0. */
+export function getSiblingDiscountPercent(index: number): number {
+  return index === 0 ? 0 : 5;
+}
+
 export function getChildPrice(kid: KidPriceInput, index = 0): number {
   const base = getPriceByZone(kid.schoolCode, kid.zone, kid.vehicleType);
-  let price = index === 0 ? base : Math.round(base * 0.95);
+  let price = Math.round(base * (1 - getSiblingDiscountPercent(index) / 100));
 
   if (kid.discountType === 'percent' && kid.discountValue) {
     price = Math.round(price * (1 - kid.discountValue / 100));
@@ -71,17 +77,6 @@ export function getChildPrice(kid: KidPriceInput, index = 0): number {
 export function getFamilyPrice(kids: KidPriceInput[]): number {
   if (!kids.length) return 0;
   return kids.reduce((sum, kid, index) => sum + getChildPrice(kid, index), 0);
-}
-
-// ─── ПЕНЯ ────────────────────────────────────────────────────────────────────
-
-export function calcPenalty(amount: number, dueDate: Date, today = new Date()): number {
-  const day5 = new Date(dueDate.getFullYear(), dueDate.getMonth(), 5);
-  if (today <= day5) return 0;
-
-  const daysLate = Math.floor((today.getTime() - day5.getTime()) / 86400000);
-  const maxPenalty = Math.round(amount * 0.15);
-  return Math.min(daysLate * 100, maxPenalty);
 }
 
 // ─── ФОРМАТИРОВАНИЕ ──────────────────────────────────────────────────────────

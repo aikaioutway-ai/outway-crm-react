@@ -52,7 +52,7 @@ B2BModule      = lazy(() => import('./modules/b2b/B2BModule'))
 - `src/modules/<name>/` — один модуль на бизнес-область: `families` (Менеджер+Кассир+Логистика — исторически объединены в одной папке, см. ниже), `drivers`, `costs` + `expenses` + `payroll` (три разных папки под один UI-раздел "Финансы" — см. `docs/modules/finance.md`), `employees`, `b2b`, `market`, `auth`, `parentDemo`. Модуль самодостаточен: страница + под-виды + свой `.css`.
 - `src/services/` — весь доступ к Supabase и остальному внешнему миру, один файл на предметную область (`crmV2Service.ts`, `financeService.ts`, `employeeService.ts`, `b2bPaymentService.ts`, `expenseService.ts` и т.д.). Компоненты не должны напрямую вызывать `supabase` — только через сервис.
 - `src/hooks/useCrmQueries.ts` — общие TanStack Query хуки поверх сервисов; ключи запросов — в `src/services/queryClient.ts` (`QK`). Переиспользовать существующий хук/ключ, а не плодить параллельный запрос за теми же данными.
-- `src/utils/pricing.ts` — вся логика тарифов/зон/скидок/пени (`getPriceByZone`, `getChildPrice`, `getFamilyPrice`, `calcPenalty`, `getZoneByDistance`). Формулы централизованы здесь, но не все из них реально используются в приложении сейчас — детали в `docs/business-rules.md`.
+- `src/utils/pricing.ts` — вся логика тарифов/зон/скидок (`getPriceByZone`, `getChildPrice`, `getFamilyPrice`, `getSiblingDiscountPercent`, `getZoneByDistance`). Формулы централизованы здесь — детали в `docs/business-rules.md`.
 - `src/utils/format.ts` — общие утилиты форматирования (деньги и т.п.).
 - `src/types/index.ts` — общие TypeScript-типы (`SchoolCode`, `Zone`, `VehicleType`, `UserRole` и т.д.).
 
@@ -71,5 +71,5 @@ Supabase Auth не используется. `services/employeeService.ts` ау�
 ## Где смотреть дальше
 
 - Модель данных и реальные таблицы Supabase — `docs/data-model.md`.
-- Денежная логика (тарифы, скидки, депозит, пеня) — `docs/business-rules.md`.
+- Денежная логика (тарифы, скидки, депозит) — `docs/business-rules.md`.
 - Разбор конкретных модулей — `docs/modules/*.md`.

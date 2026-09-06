@@ -48,8 +48,7 @@ function fromPaymentStatus(status: PaymentStatus): string {
 function mapCharge(row: any, childName?: string): Charge {
   const amount = Number(row.amount ?? 0);
   const paidAmount = Number(row.paid_amount ?? 0);
-  const penaltyAmount = Number(row.penalty_amount ?? 0);
-  const debtAmount = Math.max(0, Number(row.debt_amount ?? amount + penaltyAmount - paidAmount));
+  const debtAmount = Math.max(0, Number(row.debt_amount ?? amount - paidAmount));
   return {
     id: String(row.id),
     childId: String(row.child_id),
@@ -61,9 +60,7 @@ function mapCharge(row: any, childName?: string): Charge {
     amount,
     paidAmount,
     debtAmount,
-    penaltyAmount,
     status: toPaymentStatus(row.status ?? 'unpaid'),
-    isFrozen: Boolean(row.is_frozen ?? row.status === 'cancelled'),
     createdAt: String(row.created_at ?? ''),
     updatedAt: row.updated_at ? String(row.updated_at) : undefined,
   };
@@ -242,8 +239,6 @@ export async function updateCharge(chargeId: string, updates: Partial<Charge>): 
 
   const row: Record<string, unknown> = {};
   if (updates.status !== undefined) row.status = fromPaymentStatus(updates.status);
-  if (updates.isFrozen !== undefined) row.is_frozen = updates.isFrozen;
-  if (updates.penaltyAmount !== undefined) row.penalty_amount = updates.penaltyAmount;
 
   if (Object.keys(row).length === 0) return;
   const { error } = await supabase.from('v2_charges').update(row).eq('id', chargeId);

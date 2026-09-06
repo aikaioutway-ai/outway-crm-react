@@ -1,4 +1,32 @@
-import { getPriceByZone, getChildPrice, getFamilyPrice, getZoneByDistance, calcPenalty, money } from '../utils/pricing';
+import { getPriceByZone, getChildPrice, getFamilyPrice, getSiblingDiscountPercent, getZoneByDistance, money } from '../utils/pricing';
+
+// ─── getSiblingDiscountPercent ─────────────────────────────────────────────────
+
+describe('getSiblingDiscountPercent', () => {
+  test('1 ребёнок (index 0) — 0%', () => {
+    expect(getSiblingDiscountPercent(0)).toBe(0);
+  });
+
+  test('2 ребёнка — второй (index 1) — 5%', () => {
+    expect(getSiblingDiscountPercent(1)).toBe(5);
+  });
+
+  test('3 ребёнка — второй и третий (index 1 и 2) — 5%', () => {
+    expect(getSiblingDiscountPercent(1)).toBe(5);
+    expect(getSiblingDiscountPercent(2)).toBe(5);
+  });
+
+  test('уже есть 1 ребёнок + добавляется 1 — новый (index 1) получает 5%', () => {
+    const existingCount = 1;
+    expect(getSiblingDiscountPercent(existingCount)).toBe(5);
+  });
+
+  test('уже есть 1 ребёнок + добавляются 2 — оба новых (index 1 и 2) получают 5%', () => {
+    const existingCount = 1;
+    expect(getSiblingDiscountPercent(existingCount)).toBe(5);
+    expect(getSiblingDiscountPercent(existingCount + 1)).toBe(5);
+  });
+});
 
 // ─── getPriceByZone ───────────────────────────────────────────────────────────
 
@@ -122,38 +150,6 @@ describe('getFamilyPrice', () => {
     const kid2 = { schoolCode: 'AES' as const, zone: 'B' as const, vehicleType: 'microbus' as const };
     // kid1 = 5000 (первый), kid2 = 6100 * 0.95 = 5795 (второй)
     expect(getFamilyPrice([kid1, kid2])).toBe(10795);
-  });
-});
-
-// ─── calcPenalty ──────────────────────────────────────────────────────────────
-
-describe('calcPenalty', () => {
-  const amount = 6000;
-  const dueDate = new Date(2026, 5, 1); // 1 июня 2026
-
-  test('до 5-го числа — пеня 0', () => {
-    const today = new Date(2026, 5, 4); // 4 июня
-    expect(calcPenalty(amount, dueDate, today)).toBe(0);
-  });
-
-  test('5-е число — пеня ещё 0', () => {
-    const today = new Date(2026, 5, 5); // 5 июня
-    expect(calcPenalty(amount, dueDate, today)).toBe(0);
-  });
-
-  test('6-е число — 1 день просрочки = 100 сом', () => {
-    const today = new Date(2026, 5, 6); // 6 июня
-    expect(calcPenalty(amount, dueDate, today)).toBe(100);
-  });
-
-  test('9 дней просрочки = 900 сом (макс 15% от 6000)', () => {
-    const today = new Date(2026, 5, 14); // 14 июня = 9 дней после 5-го → 900 сом = макс
-    expect(calcPenalty(amount, dueDate, today)).toBe(900);
-  });
-
-  test('максимум пени = 15% от суммы = 900 сом для 6000', () => {
-    const today = new Date(2026, 8, 1); // далеко в будущем
-    expect(calcPenalty(amount, dueDate, today)).toBe(900); // 6000 * 0.15
   });
 });
 
