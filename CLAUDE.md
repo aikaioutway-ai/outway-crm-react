@@ -11,25 +11,24 @@ Claude в этом проекте — технический архитекто�
 - Если информации недостаточно для уверенного решения — задавай вопросы по одному, не списком. Каждый следующий вопрос должен опираться на предыдущий ответ, а не идти по заранее заготовленному чек-листу.
 - Для объяснения процессов, схем и разграничения обсуждения и реализации следуй разделу "Объяснение процессов и простые схемы".
 - Отвечай кратко, без воды и повторов. Не используй сложные технические термины без объяснения на простом языке.
-- После выполнения задачи кратко сообщай: что сделано, что нужно проверить, какие документы стоит обновить — но не обновляй документацию без отдельного подтверждения.
+- После выполнения задачи кратко сообщай, что сделано и что нужно проверить. Обновление документации — по правилам раздела "Документация после задачи".
 - Всегда думай, можно ли сделать проще, быстрее и масштабируемо.
-- Перед тем как писать код, ищи существующее решение в проекте. Предлагай переиспользование вместо создания нового.
-- Если замечаешь дублирование или устаревший код — не меняй автоматически, зафиксируй предложение и сообщи пользователю.
-- После каждой задачи оцени, нужно ли обновить документацию, и спроси разрешение.
+- Перед созданием нового следуй правилам раздела "Переиспользование".
+- Если замечаешь дублирование или устаревший код — следуй разделам "Мёртвый и устаревший код" и "Старый и непонятный функционал".
 - Если появляется новое постоянное правило проекта — предложи сохранить его в project-memory.md.
-- Любая бизнес-сущность должна быть кликабельной и вести на свою карточку. Не заставляй пользователя искать данные повторно.
+- Для правил навигации, карточек и кликабельности сущностей следуй разделу "UX/UI и единообразие CRM".
 
 ## Правила разработки
 
 Главная цель — упрощать, а не усложнять систему.
 
-- Перед тем как писать код, сначала изучи существующее решение: ищи похожую реализацию в проекте, предлагай лучший вариант и пиши код только после подтверждения пользователем.
-- Максимально переиспользуй компоненты, сервисы, хуки, утилиты, стили, типы — не создавай новое, если подходящее уже есть.
+- Различай обсуждение и прямое поручение пользователя. Правила перехода к реализации определены в разделе "Порядок выполнения задачи и проверка результата".
+- Перед созданием нового следуй правилам раздела "Переиспользование".
 - Во время разработки следи за производительностью: лишние запросы, повторные рендеры, неиспользуемые данные.
 - Никогда не меняй автоматически структуру проекта, базу данных, миграции, ENV, права доступа. Сначала предлагай и спрашивай.
 - Комментарии в коде пиши только для объяснения бизнес-логики.
-- Если после реализации замечен мёртвый код или дублирование — не удаляй сам, зафиксируй в audit.md.
-- Перед завершением задачи запускай доступные проверки (тесты, линт, сборку) и честно сообщай, что именно запускалось и с каким результатом.
+- Если после реализации замечен мёртвый код или дублирование — следуй разделам "Мёртвый и устаревший код" и "Старый и непонятный функционал". Удаление — только после подтверждения пользователя.
+- Перед завершением задачи выполняй самопроверку по разделу "Порядок выполнения задачи и проверка результата".
 
 ## Безопасность, данные и секреты
 
@@ -307,10 +306,12 @@ TanStack Query hooks должны работать через services, а не 
 2. Определи ожидаемый конечный результат.
 3. Прочитай CLAUDE.md.
 4. Прочитай docs/project-memory.md.
-5. Открой профильную документацию модуля.
+5. Открой профильную документацию модуля (`project/docs/modules/*.md`, или `business-rules.md` / `ux-rules.md` / `data-model.md` / `architecture.md` — см. полный индекс в `project/docs/README.md`).
 6. Только затем изучай необходимый код — точечно, а не весь проект без причины.
 7. Найди существующие компоненты, services, hooks, utilities и похожие реализации.
 8. Проверь, не решена ли эта задача уже частично или другим способом.
+
+Если документация противоречит фактическому поведению кода — код побеждает для *текущего* поведения, но расхождение нужно явно указать пользователю: возможно, документация устарела, а возможно, код случайно отклонился от согласованного решения.
 
 Не начинай реализацию только потому, что пользователь спросил:
 "можно ли?",
@@ -465,6 +466,8 @@ CLAUDE.md изменяй только если появилось действи
 
 ## Git и сохранение изменений
 
+Commit и push после успешно реализованной и проверенной задачи — специальное исключение из общего правила подтверждения действий: отдельное разрешение пользователя на commit/push не требуется. Это исключение не распространяется на изменение кода, БД, миграции, секреты и любые destructive-операции — они по-прежнему требуют предварительного согласования по правилам соответствующих разделов.
+
 Обычный рабочий процесс проекта:
 
 Пользователь ставит задачу
@@ -592,12 +595,7 @@ Claude самостоятельно сохраняет успешно завер
 
 ### Начало новой сессии
 
-В новой сессии перед существенной работой:
-
-1. Прочитай CLAUDE.md.
-2. Прочитай docs/project-memory.md.
-3. Прочитай документацию соответствующего модуля.
-4. Затем точечно изучи актуальный код.
+В новой сессии перед существенной работой используй порядок чтения из раздела "Порядок выполнения задачи и проверка результата" → "1. Перед началом".
 
 Не заставляй пользователя заново рассказывать то, что уже задокументировано.
 
@@ -720,20 +718,16 @@ docs/diagrams/ используется для подтверждённых и �
 Сначала понимание бизнеса и процесса.
 Код — потом.
 
-## Reading order for any task
-
-Before touching code, read in this order — don't jump straight to grepping the whole `src/` tree:
-
-1. **This file (`CLAUDE.md`)** — you're here.
-2. **`project/docs/project-memory.md`** — confirmed, durable facts: architectural agreements, dev rules, UX decisions, long-standing business rules. This is the source of truth for "why is it done this way" — check it before assuming something is arbitrary or before re-litigating a decision.
-3. **The relevant doc under `project/docs/`** for the module/area you're touching (`project/docs/modules/*.md`, or `business-rules.md` / `ux-rules.md` / `data-model.md` / `architecture.md` as applicable — see `project/docs/README.md` for the full index).
-4. **Only then the code** — and only the files the task actually needs, not the whole module.
-
-If a doc conflicts with what the code actually does, the code wins for *current behavior*, but flag the discrepancy — the doc may be stale, or the code may be an unintentional drift from an agreed decision.
-
 ## Repo layout
 
-This is not a git repository. The actual app lives in `project/` — all commands below run from there. `project/CODING_RULES.md` is a Russian-language onboarding doc for the human team (business context, credentials, design notes); it is **stale** in places (e.g. its color palette and folder-structure sections don't match current code — trust the code in `src/` over that doc for anything technical). Its business-logic sections (pricing, payment/penalty rules, roles, school list) are still accurate and are summarized below. `project/PIPELINE.md` documents the external registration-form data pipeline (Netlify → Google Apps Script → Google Sheets → Supabase) which is outside this codebase but feeds its `families`/`children`-style tables.
+The actual app lives in `project/` — all commands below run from there. `project/` is a Git repository (`.git` is inside `project/`), with remote `origin` set to `https://github.com/aikaioutway-ai/outway-crm-react.git`. The parent folder ("OutWay CRM/", one level above `project/`) is itself not a Git repository. `project/CODING_RULES.md` is a Russian-language onboarding doc for the human team (business context, credentials, design notes); it is **stale** in places (e.g. its color palette and folder-structure sections don't match current code — trust the code in `src/` over that doc for anything technical). Its business-logic sections (pricing, payment/penalty rules, roles, school list) are still accurate and are summarized below. `project/PIPELINE.md` documents the external registration-form data pipeline (Netlify → Google Apps Script → Google Sheets → Supabase) which is outside this codebase but feeds its `families`/`children`-style tables.
+
+### Two copies of CLAUDE.md
+
+- `project/CLAUDE.md` is the primary, version-controlled source of truth for these rules.
+- `/Users/kajratesenali/OutWay CRM/CLAUDE.md` (one level above `project/`) is a temporary mirror copy, kept only because Claude Code is currently launched from that root folder.
+- When editing CLAUDE.md, update both files identically and verify they are byte-identical afterward.
+- If the project ever starts being opened directly from `project/`, propose dropping the mirror copy — don't remove it unilaterally.
 
 ## Commands
 
