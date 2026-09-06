@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Check, ChevronDown, CreditCard, ExternalLink, FileText, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
-import { getPriceByZone, getSiblingDiscountPercent, money } from '../../utils/pricing';
+import { getPriceByZone, getSiblingDiscountPercent, money, repriceChild } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
@@ -441,23 +441,24 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if ('status' in patch) dbPatch.status = nextChild.status ?? 'new';
 
       if (shouldReprice) {
-        const basePrice = ('zone' in patch || 'vehicleType' in patch)
+        const basePriceForZoneOrVehicle = ('zone' in patch || 'vehicleType' in patch)
           ? getPriceByZone(nextChild.schoolCode, nextChild.zone as Zone, nextChild.vehicleType as VehicleType)
           : Math.max(0, Number(nextChild.basePrice || 0));
-        const discountPercent = clampToStep(Number(nextChild.manualDiscountPercent || nextChild.siblingDiscountPercent || 0), 0, 100, 5);
-        const percentAmount = Math.round(basePrice * discountPercent / 100);
-        const maxManualAmount = Math.max(0, basePrice - percentAmount);
-        const manualAmount = clampToStep(Number(nextChild.manualDiscountAmount || 0), 0, maxManualAmount, 100);
-        const finalPrice = Math.max(0, basePrice - percentAmount - manualAmount);
+        const repriced = repriceChild({
+          basePrice: basePriceForZoneOrVehicle,
+          siblingDiscountPercent: Number(nextChild.siblingDiscountPercent || 0),
+          manualDiscountPercent: Number(nextChild.manualDiscountPercent || 0),
+          manualDiscountAmount: Number(nextChild.manualDiscountAmount || 0),
+        });
 
-        nextChild.basePrice = basePrice;
-        nextChild.manualDiscountPercent = discountPercent;
-        nextChild.manualDiscountAmount = manualAmount;
-        nextChild.finalPrice = finalPrice;
-        dbPatch.base_price = basePrice;
-        dbPatch.manual_discount_percent = discountPercent;
-        dbPatch.manual_discount_amount = manualAmount;
-        dbPatch.final_price = finalPrice;
+        nextChild.basePrice = repriced.basePrice;
+        nextChild.manualDiscountPercent = repriced.manualDiscountPercent;
+        nextChild.manualDiscountAmount = repriced.manualDiscountAmount;
+        nextChild.finalPrice = repriced.finalPrice;
+        dbPatch.base_price = repriced.basePrice;
+        dbPatch.manual_discount_percent = repriced.manualDiscountPercent;
+        dbPatch.manual_discount_amount = repriced.manualDiscountAmount;
+        dbPatch.final_price = repriced.finalPrice;
       } else if ('finalPrice' in patch) {
         nextChild.finalPrice = Math.max(0, Number(nextChild.finalPrice || 0));
         dbPatch.final_price = nextChild.finalPrice;
@@ -1188,10 +1189,6 @@ function clampNumber(value: number, min?: number, max?: number, step?: number): 
   const upper = max ?? Number.POSITIVE_INFINITY;
   const stepped = step && Number.isFinite(step) && step > 0 ? Math.round(value / step) * step : value;
   return Math.min(upper, Math.max(lower, stepped));
-}
-
-function clampToStep(value: number, min: number, max: number, step: number): number {
-  return clampNumber(value, min, max, step);
 }
 
 function modalStyle(): React.CSSProperties {

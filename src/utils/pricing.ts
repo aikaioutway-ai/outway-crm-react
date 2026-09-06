@@ -79,6 +79,45 @@ export function getFamilyPrice(kids: KidPriceInput[]): number {
   return kids.reduce((sum, kid, index) => sum + getChildPrice(kid, index), 0);
 }
 
+// ─── РЕПРАЙСИНГ УЖЕ СОЗДАННОГО РЕБЁНКА (смена зоны/авто, ручная скидка) ────────
+
+function roundToStep(value: number, min: number, max: number, step: number): number {
+  const stepped = Math.round(value / step) * step;
+  return Math.min(max, Math.max(min, stepped));
+}
+
+export interface RepriceChildInput {
+  basePrice: number;
+  siblingDiscountPercent: number;
+  manualDiscountPercent: number;
+  manualDiscountAmount: number;
+}
+
+export interface RepriceChildResult {
+  basePrice: number;
+  manualDiscountPercent: number;
+  manualDiscountAmount: number;
+  finalPrice: number;
+}
+
+/**
+ * manualDiscountPercent в результате — это всегда только то, что реально задал
+ * человек (что пришло на входе), sibling-скидка используется исключительно как
+ * fallback при расчёте итоговой цены и никогда не записывается в manual-поле —
+ * иначе после любого репрайсинга sibling- и manual-скидки перестают различаться.
+ */
+export function repriceChild(input: RepriceChildInput): RepriceChildResult {
+  const basePrice = Math.max(0, input.basePrice);
+  const manualPercent = roundToStep(input.manualDiscountPercent || 0, 0, 100, 5);
+  const siblingPercent = input.siblingDiscountPercent || 0;
+  const effectivePercent = manualPercent || siblingPercent;
+  const percentAmount = Math.round(basePrice * effectivePercent / 100);
+  const maxManualAmount = Math.max(0, basePrice - percentAmount);
+  const manualAmount = roundToStep(input.manualDiscountAmount || 0, 0, maxManualAmount, 100);
+  const finalPrice = Math.max(0, basePrice - percentAmount - manualAmount);
+  return { basePrice, manualDiscountPercent: manualPercent, manualDiscountAmount: manualAmount, finalPrice };
+}
+
 // ─── ФОРМАТИРОВАНИЕ ──────────────────────────────────────────────────────────
 
 export function money(n: number): string {
