@@ -778,13 +778,14 @@ React 19 + TypeScript, no router (single-page state machine — see below), Supa
 
 ### Data model (Supabase)
 
-Core tables: `families` (contact info only), `children` (each child is independent: school, zone, address, vehicle type — joined to `families` for display), `charges` (auto-generated monthly billing per child), `payments` (money received per family, split across children via `payment_items`), `audit_log`. A parallel `v2_*`-prefixed table set (`v2_families`, `v2_children`, `v2_schools`, etc., per `PIPELINE.md`) is fed by the external registration pipeline and synced into the same Supabase project — `crmV2Service.ts` is the read path for that data from inside the CRM. Migrations live in `project/supabase/migrations/`; `project/supabase/finance_schema.sql` documents the finance-side schema.
+The current working data layer is the `v2_*`-prefixed table set (`v2_families`, `v2_children`, `v2_charges`, `v2_payments`, `v2_family_wallets`, etc.) — every service under `src/services/` reads and writes only `v2_*` tables. The older, non-prefixed tables (`families`, `children`, `charges`, `payments`, `payment_items`) and `project/supabase/finance_schema.sql` are **not** the current source of truth just because they exist in the repo — no service uses them. Full table list, relations, and the nuances worth knowing (what's actually stored vs. computed, deposit/May mechanics, penalty columns) are in `project/docs/data-model.md` — read that instead of re-deriving this from the SQL files. Migrations live in `project/supabase/migrations/`.
 
 Key domain rules (enforced in `financeService.ts`/`crmV2Service.ts`, not just documented):
-- Price is never stored — it's derived from `school_code` + `zone` + `vehicle_type` via `pricing.ts`. Zone is a number (1/2/3) in the DB and a letter (A/B/C) in application code; conversion happens at the data-loading boundary.
+- Zone is `'A' | 'B' | 'C'` in both the `v2_children` table and application code — no number↔letter conversion happens in current code. Don't introduce one unless a specific piece of legacy code you're touching actually requires it.
+- Price can be a stored value: `v2_children` holds `base_price`/`final_price` (plus discount columns), written by the client after computing them via `pricing.ts` when zone/vehicle/discount changes. `pricing.ts` stays the one centralized place for tariff/pricing *calculations* where that logic is actually used — but don't auto-recalculate or overwrite a stored price without understanding why it was set that way.
 - Deposit = one month's family price, and it is defined to cover the last month (May) of the school year — a `periodMonth = 0` deposit maps to `period_month = 5` in the DB by design, not by accident.
 - Second and subsequent children in a family get a 5% discount.
-- Penalty: 0 before the 5th of the month, then +100 som/day up to a 15% cap on the debt; never applied to a deposit; frozen while a payment is "На проверке" (pending review).
+- Penalty: 0 before the 5th of the month, then +100 som/day up to a 15% cap on the debt; never applied to a deposit; frozen while a payment is "На проверке" (pending review). This runs server-side via the `daily-penalty` Supabase Edge Function, not client code — a client-side helper with similar math existing somewhere isn't evidence of the active implementation.
 - Roles (`UserRole` in `types/index.ts`): `admin`, `gen_director`, `director`, `manager`, `logist`, `senior_logist`, `cashier` — each maps to a fixed set of allowed `NavSection`s in `Sidebar.tsx`.
 
 ### Styling
