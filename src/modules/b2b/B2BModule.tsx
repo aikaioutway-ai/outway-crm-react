@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList, WalletCards } from 'lucide-react';
+import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList, WalletCards, BadgeDollarSign } from 'lucide-react';
 import B2BIcon from '../../core/icons/B2BIcon';
 import B2BClients from './B2BClients';
 import B2BOrders from './B2BOrders';
@@ -8,9 +8,11 @@ import B2BLogistics from './B2BLogistics';
 import B2BExpenses from './B2BExpenses';
 import B2BFinance from './B2BFinance';
 import B2BCashflow from './B2BCashflow';
+import B2BCashier from './B2BCashier';
 import './B2BModule.css';
 
 const B2B_TABS = [
+  { key: 'cashier', label: 'Cashier', icon: BadgeDollarSign },
   { key: 'orders', label: 'Заказы', icon: ClipboardList },
   { key: 'logistics', label: 'Логистика', icon: Route },
   { key: 'calendar', label: 'Календарь', icon: CalendarDays },
@@ -74,7 +76,9 @@ export default function B2BModule() {
         })}
       </nav>
 
-      {activeTab === 'orders' ? (
+      {activeTab === 'cashier' ? (
+        <B2BCashier onOpenOrder={openOrderCard} />
+      ) : activeTab === 'orders' ? (
         <B2BOrders openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
       ) : activeTab === 'logistics' ? (
         <B2BLogistics />
