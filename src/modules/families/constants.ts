@@ -23,7 +23,7 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'TSL',   label: 'TSL',   codes: ['TSL'],  branches: [], logo: '/school-logos/TSL.png' },
   { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
   { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
-  { key: 'ILIM_K', label: 'Ilim_k', codes: ['Ilim_k'], branches: [], logo: '/school-logos/Ilim_k.png' },
+  { key: 'ILIM_K', label: 'Ilim_k', codes: ['ILIM_K'], branches: [], logo: '/school-logos/Ilim_k.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
@@ -127,6 +127,7 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Light Academy Primary': 'LA_P',
   'Международная школа Сан Арип': 'SNP',
   'Ellipse International School': 'ELS',
+  'Илим Кадам': 'ILIM_K',
 };
 
 export const SCHOOL_NAME: Record<string, string> = {
@@ -137,7 +138,7 @@ export const SCHOOL_NAME: Record<string, string> = {
   ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
   KLM: 'Kalem Academy', TSL: 'Tesla Academy',
   SANARIP: 'Sanarip', ELLIPSE: 'Ellipse',
-  Ilim_k: 'Илим Кадам',
+  ILIM_K: 'Илим Кадам',
 };
 
 export const SCHOOL_SHORT: Record<string, string> = {
@@ -148,7 +149,7 @@ export const SCHOOL_SHORT: Record<string, string> = {
   AES_KAS: 'AES',
   ABL1: 'ABL #2', ABL2: 'ABL #1', KLM: 'KLM', TSL: 'TSL',
   SANARIP: 'SNP', ELLIPSE: 'ELS',
-  Ilim_k: 'Ilim_k',
+  ILIM_K: 'Ilim_k',
 };
 
 export const SCHOOL_CODE_ALIASES: Record<string, string> = {
@@ -176,6 +177,8 @@ export const SCHOOL_CODE_ALIASES: Record<string, string> = {
   'ABL_1': 'ABL1',
   'ABL #2': 'ABL2',
   'ABL_2': 'ABL2',
+  'ILIM KADAM': 'ILIM_K',
+  ILIM_K: 'ILIM_K',
 };
 
 export const VT_LABEL: Record<string, string> = {
@@ -283,6 +286,7 @@ export function getFilterFromSchoolCode(rawCode: unknown): string | null {
   if (upper === 'GEN4' || upper === 'GEN_4' || upper === 'GEN #4') return 'GEN4';
   if (upper === 'ABL1' || upper === 'ABL_1' || upper === 'ABL #1') return 'ABL1';
   if (upper === 'ABL2' || upper === 'ABL_2' || upper === 'ABL #2') return 'ABL2';
+  if (upper === 'ILIM_K' || upper === 'ILIM KADAM') return 'ILIM_K';
   const schoolCode = normalizeSchoolCode(rawCode);
   return SCHOOL_SHORT[schoolCode] ?? schoolCode ?? null;
 }
@@ -296,5 +300,10 @@ export function getBranchShort(branchName: string | null, schoolCode: string): s
 // Получить filter-ключ для фильтра филиалов
 export function getBranchFilter(branchName: string | null, schoolCode: string): string {
   if (branchName && BRANCH_TO_FILTER[branchName]) return BRANCH_TO_FILTER[branchName];
-  return SCHOOL_SHORT[schoolCode] ?? schoolCode;
+  const normalizedSchoolCode = normalizeSchoolCode(schoolCode);
+  const matchingTab = SCHOOL_TABS.find(tab => (
+    tab.key !== 'ALL'
+    && tab.codes.some(code => normalizeSchoolCode(code) === normalizedSchoolCode)
+  ));
+  return matchingTab?.key ?? SCHOOL_SHORT[normalizedSchoolCode] ?? normalizedSchoolCode;
 }

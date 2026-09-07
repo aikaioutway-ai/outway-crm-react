@@ -689,8 +689,20 @@ const FAMILIES_PAGE_SIZE_DEFAULT = 100;
 export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Promise<FamiliesPageResult> {
   const pageSize = params.pageSize ?? FAMILIES_PAGE_SIZE_DEFAULT;
   const page = params.page ?? 0;
+  // An explicitly resolved empty school selection must stay empty. Sending
+  // null to the RPC means "all branches" and previously leaked every school
+  // when a school code (for example Ilim_k) failed to match branch statistics.
+  if (params.branchIds && params.branchIds.length === 0) {
+    return {
+      rows: [],
+      totalFamilies: 0,
+      totalChildren: 0,
+      totalWithTransfer: 0,
+      totalWithoutTransfer: 0,
+    };
+  }
   const { data, error } = await supabase.rpc('get_families_page', {
-    p_branch_ids: params.branchIds && params.branchIds.length > 0 ? params.branchIds : null,
+    p_branch_ids: params.branchIds ?? null,
     p_search: params.search || null,
     p_child_status: params.childStatus || null,
     p_has_transfer: params.hasTransfer ?? null,

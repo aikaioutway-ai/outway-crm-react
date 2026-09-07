@@ -267,7 +267,7 @@ export async function updateFamilyPayment(paymentId: string, updates: {
   actualPaymentDate?: string;
   status?: PaymentReviewStatus;
   comment?: string;
-}): Promise<void> {
+}): Promise<PaymentType | undefined> {
   const row: Record<string, unknown> = {};
   if (updates.amount !== undefined) {
     row.amount = updates.amount;
@@ -280,10 +280,28 @@ export async function updateFamilyPayment(paymentId: string, updates: {
   if (updates.status !== undefined) row.status = fromReviewStatus(updates.status);
   if (updates.comment !== undefined) row.comment = updates.comment || null;
 
-  if (Object.keys(row).length === 0) return;
+  if (Object.keys(row).length === 0) return undefined;
+
+  if (updates.paymentType !== undefined) {
+    const { data, error } = await supabase
+      .from('v2_payments')
+      .update(row)
+      .eq('id', paymentId)
+      .select('payment_method')
+      .single();
+    if (error) throw new Error(error.message);
+    const savedPaymentType = data?.payment_method as PaymentType | undefined;
+    if (savedPaymentType !== updates.paymentType) {
+      throw new Error('База не подтвердила выбранный вид оплаты');
+    }
+    invalidateFinanceCache();
+    return savedPaymentType;
+  }
+
   const { error } = await supabase.from('v2_payments').update(row).eq('id', paymentId);
   if (error) throw new Error(error.message);
   invalidateFinanceCache();
+  return undefined;
 }
 
 export async function cancelConfirmedPayment(paymentId: string, reason: string, cancelledBy: string): Promise<void> {

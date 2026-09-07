@@ -1028,12 +1028,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
     try {
       const paymentType = value as PaymentType;
-      await updateFamilyPayment(row.id, { paymentType });
+      const savedPaymentType = await updateFamilyPayment(row.id, { paymentType });
+      if (savedPaymentType !== paymentType) return false;
       setPaymentRows(prev => prev.map(item => (
-        item.id === row.id ? { ...item, paymentMethod: paymentType } : item
+        item.id === row.id ? { ...item, paymentMethod: savedPaymentType } : item
       )));
       setCashierRows(prev => prev.map(item => (
-        item.id === row.id ? { ...item, paymentMethod: paymentType } : item
+        item.id === row.id ? { ...item, paymentMethod: savedPaymentType } : item
       )));
       return true;
     } catch (error) {
