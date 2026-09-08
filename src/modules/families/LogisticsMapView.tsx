@@ -93,7 +93,6 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
         <select data-role="stop" style="width:80px;padding:4px 6px;border:1px solid #D7E0E3;border-radius:6px;font-size:12px;">
           ${buildSelectOptions(STOP_SELECT_OPTIONS, row.stopNumber)}
         </select>
-        <button data-role="save" style="padding:4px 10px;border:none;border-radius:6px;background:#2DD4BF;color:#fff;font-size:12px;font-weight:700;cursor:pointer;">Сохранить</button>
       </div>
       <div data-role="status" style="font-size:11px;color:#7A859D;margin-top:4px;min-height:14px;"></div>
     </div>
@@ -238,9 +237,12 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
             return;
           }
 
-          const button = (event.target as HTMLElement).closest('[data-role="save"]') as HTMLElement | null;
-          if (!button) return;
-          const block = button.closest('[data-block]') as HTMLElement | null;
+        });
+
+        containerRef.current.addEventListener('change', async (event: Event) => {
+          const select = (event.target as HTMLElement).closest('[data-role="transfer"], [data-role="stop"]') as HTMLSelectElement | null;
+          if (!select) return;
+          const block = select.closest('[data-block]') as HTMLElement | null;
           const childId = block?.getAttribute('data-block');
           const row = childId ? rowsRef.current?.find(r => r.rowId === childId) : undefined;
           if (!row) return;
@@ -251,7 +253,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
           const transferValue = transferInput?.value.trim() ?? '';
           const stopValue = stopInput?.value.trim() ?? '';
 
-          button.setAttribute('disabled', 'true');
+          select.setAttribute('disabled', 'true');
           if (statusEl) statusEl.textContent = 'Сохраняю…';
 
           try {
@@ -280,7 +282,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
           } catch {
             if (statusEl) statusEl.textContent = 'Ошибка сохранения';
           } finally {
-            button.removeAttribute('disabled');
+            select.removeAttribute('disabled');
           }
         });
 
