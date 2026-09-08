@@ -32,6 +32,10 @@ export interface B2BCashOperation {
 
 export interface B2BCashierSummary {
   clientAccrued: number;
+  actualBalance: number;
+  clientDebts: { orderId: string; orderNumber: string; client: string; accrued: number; paid: number; remaining: number }[];
+  periodDriverPaid: number;
+  periodDriverRemaining: number;
   confirmedReceived: number;
   pendingReview: number;
   outstandingReceivable: number;
@@ -76,17 +80,13 @@ export function calculateB2BCashierSummary(
     const date = normalizeB2BCashierDate(value);
     return date >= start && date <= end;
   };
-  const isThroughPeriod = (value: string) => {
-    const date = normalizeB2BCashierDate(value);
-    return Boolean(date && date <= end);
-  };
   const orderDate = (order: B2BOrderRecord) => normalizeB2BCashierDate(order.departureDate || order.requestDate);
-  const accountableOrders = orders.filter(order => order.status !== 'cancelled' && isThroughPeriod(orderDate(order)));
+  const accountableOrders = orders.filter(order => order.status !== 'cancelled');
   const periodOrders = accountableOrders.filter(order => isInPeriod(orderDate(order)));
 
   const confirmedThroughPeriod = new Map<string, number>();
   payments.forEach(payment => {
-    if (payment.status !== 'confirmed' || !isThroughPeriod(payment.paymentDate)) return;
+    if (payment.status !== 'confirmed') return;
     confirmedThroughPeriod.set(payment.orderId, (confirmedThroughPeriod.get(payment.orderId) ?? 0) + payment.amount);
   });
 
@@ -100,7 +100,7 @@ export function calculateB2BCashierSummary(
 
   const periodConfirmedPayments = payments.filter(payment => payment.status === 'confirmed' && isInPeriod(payment.paymentDate));
   const pendingPayments = payments
-    .filter(payment => payment.status === 'pending' && isThroughPeriod(payment.paymentDate))
+    .filter(payment => payment.status === 'pending')
     .sort((left, right) => left.paymentDate.localeCompare(right.paymentDate));
   const periodPayouts = payouts.filter(payout => isInPeriod(payout.paymentDate));
   const periodManualExpenses = expenses.filter(expense => expense.source === 'manual' && isInPeriod(expense.expenseDate));
@@ -108,7 +108,7 @@ export function calculateB2BCashierSummary(
 
   const payoutsThroughPeriodByAssignment = new Map<string, B2BDriverPayoutRecord[]>();
   payouts.forEach(payout => {
-    if (!isThroughPeriod(payout.paymentDate)) return;
+
     const rows = payoutsThroughPeriodByAssignment.get(payout.assignmentId) ?? [];
     rows.push(payout);
     payoutsThroughPeriodByAssignment.set(payout.assignmentId, rows);
@@ -177,7 +177,17 @@ export function calculateB2BCashierSummary(
     })),
   ].sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id));
 
+  const clientDebts = accountableOrders.map(order => ({ orderId: order.id, orderNumber: order.number, client: order.client, accrued: order.total, paid: confirmedThroughPeriod.get(order.id) ?? 0, remaining: Math.max(order.total - (confirmedThroughPeriod.get(order.id) ?? 0), 0) })).filter(row => row.remaining > 0);
+  const periodDriverBalances = periodOrders.map(order => {
+    const accrued = order.driverTotal ?? (order.driverPricePerUnit ?? 0) * order.transportCount;
+    const paid = (payoutsThroughPeriodByAssignment.get(order.assignmentId ?? '') ?? []).reduce((sum, row) => sum + row.amount, 0);
+    return { paid, remaining: Math.max(accrued - paid, 0) };
+  });
   return {
+    actualBalance: payments.filter(row => row.status === 'confirmed').reduce((sum, row) => sum + row.amount, 0) - payouts.reduce((sum, row) => sum + row.netAmount, 0) - expenses.filter(row => row.source === 'manual').reduce((sum, row) => sum + row.netAmount, 0),
+    clientDebts,
+    periodDriverPaid: periodDriverBalances.reduce((sum, row) => sum + row.paid, 0),
+    periodDriverRemaining: periodDriverBalances.reduce((sum, row) => sum + row.remaining, 0),
     clientAccrued: periodOrders.reduce((sum, order) => sum + order.total, 0),
     confirmedReceived: periodConfirmedPayments.reduce((sum, payment) => sum + payment.amount, 0),
     pendingReview: pendingPayments.reduce((sum, payment) => sum + payment.amount, 0),

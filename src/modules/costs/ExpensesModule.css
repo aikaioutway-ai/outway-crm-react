@@ -68,3 +68,6 @@
 @media (max-width: 1280px) { .expenses-toolbar { grid-template-columns: minmax(190px, auto) minmax(360px, 1fr) auto; } .expense-category-grid { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 900px) { .expenses-toolbar { grid-template-columns: 1fr auto; } .expenses-toolbar > div:nth-child(2) { grid-column: 1 / -1; grid-row: 2; } }
 @media (max-width: 760px) { .expenses-toolbar { align-items: start; } .expense-category-grid, .expense-subcategory-grid { grid-template-columns: 1fr 1fr; } .expenses-panel-title { align-items: flex-start; gap: 8px; flex-direction: column; } .expense-form { grid-template-columns: 1fr; } .expense-field.full, .expense-total-preview, .expense-form-error, .expense-form-actions { grid-column: 1; } }
+
+.expenses-create-actions { display: flex; gap: 8px; }
+.expenses-create-actions .expenses-add { width: 40px; padding: 0; justify-content: center; flex-shrink: 0; }

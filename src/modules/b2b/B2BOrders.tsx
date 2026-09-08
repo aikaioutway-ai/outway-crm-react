@@ -1,3 +1,5 @@
+import type { UserRole } from '../../types';
+import { b2bAccess } from './b2bAccess';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Search, Truck, UserRound, X } from 'lucide-react';
 import useB2BPayments from '../../hooks/useB2BPayments';
@@ -62,11 +64,14 @@ function toDateTimeInput(value: string): string {
 }
 
 interface B2BOrdersProps {
+  userRole?: UserRole;
+  cardOnly?: boolean;
   openOrderId?: string | null;
   onCloseOrder?: () => void;
 }
 
-export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrdersProps) {
+export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole = 'admin', cardOnly = false }: B2BOrdersProps) {
+  const access = b2bAccess(userRole);
   const { data: storedOrders } = useB2BOrders();
   const { data: storedPayouts } = useB2BDriverPayouts();
   const { data: expenses = [] } = useB2BExpenses();
@@ -317,6 +322,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
   };
 
   const openDriverPayoutForm = (payout?: B2BDriverPayout) => {
+    if (!access.driverPay) return;
     if (payout) {
       setEditingDriverPayoutId(payout.id);
       setDriverPayoutForm({ amount: String(payout.amount), method: payout.method, paymentOrderNumber: payout.paymentOrderNumber ?? '', paymentDate: payout.paymentDate, comment: payout.comment });
@@ -331,6 +337,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
   };
 
   const submitDriverPayout = async (event: FormEvent) => {
+    if (!access.driverPay) { event.preventDefault(); return; }
     event.preventDefault();
     if (!selectedOrder?.driverId || !selectedOrder.driverName) return setDriverPayoutFormError('Сначала выберите водителя.');
     const amount = Number(driverPayoutForm.amount);
@@ -348,6 +355,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
 
   return (
     <div className="b2b-orders">
+      {!cardOnly && <>
       <div className="b2b-panel-head b2b-orders-head">
         <div><h2>Заказы</h2><p>Табличный список корпоративных перевозок</p></div>
         <div className="b2b-orders-head-actions">
@@ -417,6 +425,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
         </table>
       </div>
 
+      </>}
       {selectedOrder && (
         <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeOrderCard(); }}>
           <article className="b2b-order-card" role="dialog" aria-modal="true" aria-labelledby="b2b-order-card-title">
@@ -426,7 +435,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
                 <select className={`b2b-order-status status-${selectedOrder.status}`} value={selectedOrder.status} onChange={event => changeStatus(selectedOrder.id, event.target.value as OrderStatus)}>
                   {B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
                 </select>
-                <button type="button" onClick={() => openEditOrderForm(selectedOrder)} aria-label="Редактировать заказ"><Pencil size={16} /></button>
+                {access.editOrder && <button type="button" onClick={() => openEditOrderForm(selectedOrder)} aria-label="Редактировать заказ"><Pencil size={16} /></button>}
                 <button type="button" onClick={closeOrderCard} aria-label="Закрыть"><X size={18} /></button>
               </div>
             </header>
@@ -435,21 +444,21 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
               {([
                 ['main', 'Основной', ClipboardList], ['payment', 'Оплата', CreditCard],
                 ['driver', 'Водитель', Truck], ['pnl', 'P&L', CircleDollarSign], ['documents', 'Документы', FileText],
-              ] as const).map(([key, label, Icon]) => (
+              ] as const).filter(([key]) => access.orderTabs.includes(key)).map(([key, label, Icon]) => (
                 <button key={key} type="button" className={orderCardTab === key ? 'active' : ''} onClick={() => setOrderCardTab(key)}><Icon size={15} />{label}</button>
               ))}
             </nav>
 
-            {orderCardTab === 'main' && (
+            {access.orderTabs.includes('main') && orderCardTab === 'main' && (
               <div className="b2b-order-card-grid">
-                <section><h3><UserRound size={16} /> Клиент</h3>{selectedClient ? <button type="button" className="b2b-related-record-link" onClick={() => setRelatedProfile('client')}>{selectedOrder.client}</button> : <strong>{selectedOrder.client}</strong>}<span>{selectedClient ? 'Открыть карточку клиента' : 'Корпоративный заказчик'}</span></section>
+                <section><h3><UserRound size={16} /> Клиент</h3>{selectedClient && access.openClient ? <button type="button" className="b2b-related-record-link" onClick={() => setRelatedProfile('client')}>{selectedOrder.client}</button> : <strong>{selectedOrder.client}</strong>}<span>{selectedClient && access.openClient ? 'Открыть карточку клиента' : 'Корпоративный заказчик'}</span></section>
                 <section><h3><CalendarDays size={16} /> Даты</h3><div><span>Заявка</span><strong>{selectedOrder.requestDate}</strong></div><div><span>Выезд</span><strong>{selectedOrder.departureDate || 'Не указан'}</strong></div></section>
                 <section className="wide"><h3><MapPin size={16} /> Маршрут</h3><div className="b2b-order-card-route"><span><i>A</i>{selectedOrder.routeFrom}</span><b /><span><i>B</i>{selectedOrder.routeTo}</span></div></section>
                 <section className="wide"><h3><Truck size={16} /> Транспорт</h3><div><span>Вид транспорта</span><strong>{selectedOrder.transport}</strong></div><div><span>Количество</span><strong>{selectedOrder.transportCount}</strong></div><div><span>Цена за единицу</span><strong>{selectedOrder.pricePerUnit.toLocaleString()} сом</strong></div><div><span>Общая сумма</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></div></section>
               </div>
             )}
 
-            {orderCardTab === 'payment' && (
+            {access.orderTabs.includes('payment') && orderCardTab === 'payment' && (
               <div className="b2b-order-tab-panel">
                 <div className="b2b-payment-panel-head">
                   <div className="b2b-payment-summary">
@@ -478,22 +487,23 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
               </div>
             )}
 
-            {orderCardTab === 'driver' && (
+            {access.orderTabs.includes('driver') && orderCardTab === 'driver' && (
               <div className="b2b-order-tab-panel">
                 <div className="b2b-driver-editor">
                   <label className="wide"><span>Водитель из общего модуля *</span><select value={selectedOrder.driverId ?? ''} onChange={event => selectDriver(event.target.value)} disabled={driversLoading}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Выберите водителя'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
                   {selectedDriver && <button type="button" className="b2b-linked-driver-card" onClick={() => setRelatedProfile('driver')}><UserRound size={16} /><span>Открыть карточку водителя</span><strong>{selectedDriver.fullName}</strong></button>}
                   <label><span>Количество</span><input value={selectedOrder.transportCount} readOnly /></label>
-                  <label><span>Цена водителю за единицу, сом</span><input type="number" min="0" value={selectedOrder.driverPricePerUnit ?? ''} onChange={event => setDriverPrice(event.target.value)} placeholder="0" /></label>
+                  {access.driverPrice && <label><span>Цена водителю за единицу, сом</span><input type="number" min="0" value={selectedOrder.driverPricePerUnit ?? ''} onChange={event => setDriverPrice(event.target.value)} placeholder="0" /></label>}
                 </div>
 
+                {access.driverPrice && <>
                 <div className="b2b-driver-finance-head">
                   <div className="b2b-payment-summary">
                     <div><span>Начислено водителю</span><strong>{selectedDriverTotal.toLocaleString()} сом</strong></div>
                     <div className="paid"><span>Выплачено</span><strong>{selectedDriverPaid.toLocaleString()} сом</strong></div>
                     <div className="debt"><span>Наш долг</span><strong>{selectedDriverDebt.toLocaleString()} сом</strong></div>
                   </div>
-                  <button className="b2b-primary-button" type="button" onClick={() => openDriverPayoutForm()} disabled={!selectedOrder.driverId || selectedDriverDebt <= 0}><Plus size={16} /> Добавить выплату</button>
+                  {access.driverPay && <button className="b2b-primary-button" type="button" onClick={() => openDriverPayoutForm()} disabled={!selectedOrder.driverId || selectedDriverDebt <= 0}><Plus size={16} /> Добавить выплату</button>}
                 </div>
 
                 {selectedDriverPayouts.length === 0 ? (
@@ -505,15 +515,16 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
                       <div className="b2b-driver-payout-row" key={payout.id}>
                         <span className="b2b-payment-method"><CircleDollarSign size={16} />{formatB2BPaymentMethod(payout.method)}</span>
                         <span>{payout.paymentDate}</span><strong>{payout.amount.toLocaleString()} сом</strong><span title={payout.comment}>{payout.comment || 'Без комментария'}</span>
-                        <button className="b2b-history-edit" type="button" onClick={() => openDriverPayoutForm(payout)} aria-label={`Редактировать выплату ${payout.amount.toLocaleString()} сом`}><Pencil size={14} /></button>
+                        {access.driverPay && <button className="b2b-history-edit" type="button" onClick={() => openDriverPayoutForm(payout)} aria-label={`Редактировать выплату ${payout.amount.toLocaleString()} сом`}><Pencil size={14} /></button>}
                       </div>
                     ))}
                   </div>
                 )}
+                </>}
               </div>
             )}
 
-            {orderCardTab === 'pnl' && (
+            {access.orderTabs.includes('pnl') && orderCardTab === 'pnl' && (
               <div className="b2b-order-tab-panel b2b-order-pnl">
                 <div className="b2b-order-pnl-summary">
                   <article><span>Продано</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></article>
@@ -540,14 +551,14 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
               </div>
             )}
 
-            {orderCardTab === 'documents' && (
+            {access.orderTabs.includes('documents') && orderCardTab === 'documents' && (
               <div className="b2b-order-tab-panel"><B2BOrderDocuments order={selectedOrder} /></div>
             )}
           </article>
         </div>
       )}
 
-      {relatedProfile === 'client' && selectedClient && (
+      {access.openClient && relatedProfile === 'client' && selectedClient && (
         <div className="b2b-modal-overlay b2b-related-profile-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setRelatedProfile(null); }}>
           <article className="b2b-related-profile-card" role="dialog" aria-modal="true" aria-labelledby="b2b-related-client-title">
             <header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><UserRound size={22} /></span><div><small>Карточка клиента</small><h2 id="b2b-related-client-title">{selectedClient.companyName || selectedClient.contactName}</h2><p>{selectedClient.clientType === 'school' ? 'Школа' : selectedClient.clientType === 'company' ? 'Юридическое лицо' : 'Частный клиент'}</p></div></div><div className="b2b-client-profile-summary"><button type="button" onClick={() => setRelatedProfile(null)} aria-label="Закрыть"><X size={18} /></button></div></header>
@@ -612,7 +623,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder }: B2BOrder
         </div>
       )}
 
-      {driverPayoutFormOpen && selectedOrder && (
+      {access.driverPay && driverPayoutFormOpen && selectedOrder && (
         <div className="b2b-modal-overlay b2b-payment-form-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeDriverPayoutForm(); }}>
           <div className="b2b-payment-form-modal" role="dialog" aria-modal="true" aria-labelledby="b2b-driver-payout-title">
             <div className="b2b-modal-head">

@@ -1,3 +1,4 @@
+import { useEmployeeAdvances } from '../../hooks/useCrmQueries';
 import { useEffect, useMemo, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, ReceiptText, School, ShieldCheck, WalletCards } from 'lucide-react';
 import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApprovalsForPeriod, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
@@ -63,13 +64,14 @@ export default function PayrollOverview({ view, sessionToken, periodKey, onPerio
   const periodMonth = period?.month ?? new Date().getMonth() + 1;
   const periodYear = period?.year ?? new Date().getFullYear();
 
+  const { data: employeeAdvances = [] } = useEmployeeAdvances();
   const { data: entries = null } = usePayrollEntriesForPeriod(periodMonth, periodYear);
   const { data: advances = null } = useDriverAdvancesForPeriod(periodMonth, periodYear);
   const { data: approvals = [] } = usePayrollApprovalsForPeriod(periodMonth, periodYear, sessionToken);
 
   const summaryBySchool = useMemo(
-    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? []),
-    [entries, advances, rows, employees],
+    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? [], employeeAdvances),
+    [entries, advances, rows, employees, employeeAdvances],
   );
 
   const approvalBySchool = useMemo(() => new Map(approvals.map(approval => [approval.schoolKey, approval.status])), [approvals]);

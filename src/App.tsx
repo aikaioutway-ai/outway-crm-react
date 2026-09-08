@@ -54,7 +54,7 @@ const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
   settings:  'Настройки — в разработке',
 };
 
-const ROLES: UserRole[] = ['admin', 'gen_director', 'director', 'manager', 'logist', 'senior_logist', 'cashier'];
+const ROLES: UserRole[] = ['b2b_manager', 'b2b_logist', 'admin', 'gen_director', 'director', 'manager', 'logist', 'senior_logist', 'cashier'];
 const SESSION_KEY = 'outway_auth_user';
 
 function getSavedRole(): UserRole {
@@ -365,7 +365,7 @@ export default function App() {
       >
         <Suspense fallback={<SectionLoading />}>
         {section === 'b2b' ? (
-          <B2BModule />
+          <B2BModule userRole={currentUserRole} />
         ) : section === 'cashier' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>

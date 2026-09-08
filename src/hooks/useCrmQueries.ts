@@ -1,3 +1,4 @@
+import { EmployeeAdvance, fetchAllEmployeeAdvances } from '../services/employeeService';
 import { useQuery, UseQueryResult, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchV2FamiliesTable,
@@ -138,4 +139,8 @@ export function useDriverAdvancesForPeriod(periodMonth: number, periodYear: numb
     queryKey: QK.driverAdvancesForPeriod(periodMonth, periodYear),
     queryFn: () => fetchV2DriverAdvancesForPeriod(periodMonth, periodYear),
   });
+}
+
+export function useEmployeeAdvances(): UseQueryResult<EmployeeAdvance[]> {
+  return useQuery({ queryKey: ['employeeAdvances'], queryFn: fetchAllEmployeeAdvances });
 }

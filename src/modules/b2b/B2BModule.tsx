@@ -1,4 +1,6 @@
 import { useState } from 'react';
+import { b2bAccess } from './b2bAccess';
+import type { UserRole } from '../../types';
 import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList, WalletCards, BadgeDollarSign } from 'lucide-react';
 import B2BIcon from '../../core/icons/B2BIcon';
 import B2BClients from './B2BClients';
@@ -24,14 +26,19 @@ const B2B_TABS = [
 
 type B2BTab = typeof B2B_TABS[number]['key'];
 
-export default function B2BModule() {
-  const [activeTab, setActiveTab] = useState<B2BTab>('orders');
+export default function B2BModule({ userRole }: { userRole: UserRole }) {
+  const access = b2bAccess(userRole);
+  const canOpenOrders = access.openOrders;
+  const allowedTabs = B2B_TABS.filter(tab => access.tabs.includes(tab.key));
+  const [activeTab, setActiveTab] = useState<B2BTab>(canOpenOrders ? 'orders' : 'cashier');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
   const [returnTabAfterOrder, setReturnTabAfterOrder] = useState<B2BTab | null>(null);
-  const currentTab = B2B_TABS.find(tab => tab.key === activeTab) ?? B2B_TABS[0];
+  const visibleTab = allowedTabs.some(tab => tab.key === activeTab) ? activeTab : allowedTabs[0].key;
+  const currentTab = B2B_TABS.find(tab => tab.key === visibleTab) ?? B2B_TABS[0];
   const CurrentIcon = currentTab.icon;
 
   const openOrderCard = (orderId: string) => {
+    if (!canOpenOrders) return;
     setReturnTabAfterOrder(activeTab === 'orders' ? null : activeTab);
     setOrderToOpenId(orderId);
     setActiveTab('orders');
@@ -54,9 +61,9 @@ export default function B2BModule() {
       </header>
 
       <nav className="b2b-tabs" aria-label="Разделы B2B">
-        {B2B_TABS.map(tab => {
+        {allowedTabs.map(tab => {
           const Icon = tab.icon;
-          const active = tab.key === activeTab;
+          const active = tab.key === visibleTab;
           return (
             <button
               key={tab.key}
@@ -76,22 +83,24 @@ export default function B2BModule() {
         })}
       </nav>
 
-      {activeTab === 'cashier' ? (
-        <B2BCashier onOpenOrder={openOrderCard} />
-      ) : activeTab === 'orders' ? (
-        <B2BOrders openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
-      ) : activeTab === 'logistics' ? (
-        <B2BLogistics />
-      ) : activeTab === 'calendar' ? (
-        <B2BCalendar />
-      ) : activeTab === 'clients' ? (
-        <B2BClients onOpenOrder={openOrderCard} />
-      ) : activeTab === 'expenses' ? (
-        <B2BExpenses onOpenOrder={openOrderCard} />
-      ) : activeTab === 'finance' ? (
-        <B2BFinance onOpenOrder={openOrderCard} />
-      ) : activeTab === 'cashflow' ? (
-        <B2BCashflow onOpenOrder={openOrderCard} />
+      {orderToOpenId && canOpenOrders ? (
+        <B2BOrders userRole={userRole} cardOnly openOrderId={orderToOpenId} onCloseOrder={closeLinkedOrderCard} />
+      ) : visibleTab === 'cashier' ? (
+        <B2BCashier onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+      ) : visibleTab === 'orders' ? (
+        <B2BOrders userRole={userRole} openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
+      ) : visibleTab === 'logistics' ? (
+        <B2BLogistics canPay={access.driverPay} onOpenOrder={openOrderCard} />
+      ) : visibleTab === 'calendar' ? (
+        <B2BCalendar onOpenOrder={openOrderCard} />
+      ) : visibleTab === 'clients' ? (
+        <B2BClients canViewFinance={access.clientFinance} onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+      ) : visibleTab === 'expenses' ? (
+        <B2BExpenses onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+      ) : visibleTab === 'finance' ? (
+        <B2BFinance onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+      ) : visibleTab === 'cashflow' ? (
+        <B2BCashflow onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : (
         <div className="b2b-empty" role="tabpanel">
           <CurrentIcon size={34} aria-hidden="true" />

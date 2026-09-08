@@ -58,10 +58,11 @@ const normalizeSearch = (value: string) => value
   .replace(/[^\p{L}\p{N}]+/gu, '');
 
 interface B2BClientsProps {
+  canViewFinance?: boolean;
   onOpenOrder?: (orderId: string) => void;
 }
 
-export default function B2BClients({ onOpenOrder }: B2BClientsProps) {
+export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BClientsProps) {
   const { data: clients = [], isLoading } = useB2BClients();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
@@ -275,7 +276,7 @@ export default function B2BClients({ onOpenOrder }: B2BClientsProps) {
                 ['payments', `Оплаты (${selectedClientPayments.length})`, CreditCard],
                 ['finance', 'Финансы', CircleDollarSign],
                 ['documents', 'Документы', FileText],
-              ] as const).map(([key, label, Icon]) => <button key={key} type="button" className={clientCardTab === key ? 'active' : ''} onClick={() => setClientCardTab(key)}><Icon size={15} />{label}</button>)}
+              ] as const).filter(([key]) => canViewFinance || key !== 'finance').map(([key, label, Icon]) => <button key={key} type="button" className={clientCardTab === key ? 'active' : ''} onClick={() => setClientCardTab(key)}><Icon size={15} />{label}</button>)}
             </nav>
 
             <div className="b2b-client-profile-body">
@@ -296,7 +297,7 @@ export default function B2BClients({ onOpenOrder }: B2BClientsProps) {
                 {selectedClientPayments.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Способ</th><th className="number">Сумма</th><th>Статус</th><th>Комментарий</th><th></th></tr></thead><tbody>{selectedClientPayments.map(payment => <tr key={payment.id}><td>{payment.paymentDate}</td><td className="order-number"><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(payment.orderId)} aria-label={`Открыть карточку заказа ${payment.orderNumber}`}>{payment.orderNumber}</button></td><td>{formatB2BPaymentMethod(payment.method)}</td><td className="number">{payment.amount.toLocaleString()} сом</td><td><span className={`b2b-client-payment-status ${payment.status}`}>{payment.status === 'confirmed' ? 'Подтверждено' : payment.status === 'pending' ? 'На проверке' : 'Отклонено'}</span></td><td>{payment.comment || '—'}</td><td><button className="b2b-client-edit-button" type="button" onClick={() => setEditingPayment(payment)} title="Редактировать оплату"><Pencil size={14} /></button></td></tr>)}</tbody></table></div> : <div className="b2b-client-tab-empty"><CreditCard size={28} /><strong>Оплат пока нет</strong><span>Платежи по заказам клиента появятся здесь.</span></div>}
               </div>}
 
-              {clientCardTab === 'finance' && <div className="b2b-client-finance-panel">
+              {canViewFinance && clientCardTab === 'finance' && <div className="b2b-client-finance-panel">
                 <div className="b2b-client-finance-summary">
                   <article><span>Заказов</span><strong>{selectedClientOrders.length}</strong></article>
                   <article className="revenue"><span>Выручка</span><strong>{clientOrdersTotal.toLocaleString()} сом</strong></article>

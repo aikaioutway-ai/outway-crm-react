@@ -1,3 +1,4 @@
+import type { EmployeeAdvance } from '../../services/employeeService';
 import { V2DriverAdvance, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
 import { Employee } from '../../types';
 import { PAYROLL_OFFICE_COLOR, PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, TimesheetPayrollSummary } from '../expenses/timesheetTypes';
@@ -91,6 +92,7 @@ export function buildPayrollSummaryBySchool(
   advances: V2DriverAdvance[],
   drivers: V2DriverTableRow[],
   employees: Employee[],
+  employeeAdvances: EmployeeAdvance[] = [],
 ): Record<string, PayrollMoneySummary> {
   const advanceByDriver: Record<string, number> = {};
   advances.forEach(advance => {
@@ -125,7 +127,8 @@ export function buildPayrollSummaryBySchool(
     } else {
       const employee = employeeById.get(entry.subjectId);
       if (!employee || employee.status !== 'active' || employee.role === 'driver') return;
-      addTo(PAYROLL_OFFICE_KEY, accrued, 0, entry.salaryAmount, entry.salaryAmount);
+      const advance = employeeAdvances.filter(row => row.employeeId === entry.subjectId && row.periodMonth === entry.periodMonth && row.periodYear === entry.periodYear).reduce((sum, row) => sum + row.amount, 0);
+      addTo(PAYROLL_OFFICE_KEY, accrued, advance, entry.salaryAmount, entry.salaryAmount + advance);
     }
   });
 

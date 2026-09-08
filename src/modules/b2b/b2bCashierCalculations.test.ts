@@ -93,3 +93,28 @@ test('flags risky manual driver and tax categories without removing them from th
   expect(summary.manualExpenses).toBe(1_100);
   expect(summary.riskyManualExpenses).toEqual({ count: 2, amount: 1_100 });
 });
+
+test('current debts and cash balance stay unchanged when selected month changes', () => {
+  const orders = [order()];
+  const payments = [payment(), payment({ id: 'pending', status: 'pending', amount: 500 })];
+  const september = calculateB2BCashierSummary(orders, payments, [payout()], [expense()], period);
+  const january = calculateB2BCashierSummary(orders, payments, [payout()], [expense()], { year: 2026, month: 1 });
+  expect(january.outstandingReceivable).toBe(6000);
+  expect(january.clientDebts).toEqual(september.clientDebts);
+  expect(january.driverPayables).toEqual(september.driverPayables);
+  expect(january.pendingReview).toBe(500);
+  expect(january.actualBalance).toBe(1120);
+  expect(january.actualBalance).toBe(september.actualBalance);
+  expect(january.confirmedReceived).toBe(0);
+});
+
+test('driver period totals include earlier payments only for selected orders and current assignments', () => {
+  const result = calculateB2BCashierSummary([order()], [], [
+    payout({ paymentDate: '2026-08-15' }),
+    payout({ id: 'superseded', assignmentId: 'old', amount: 5000 }),
+    payout({ id: 'other-order', orderId: 'other', assignmentId: 'other', amount: 9000 }),
+  ], [], period);
+  expect(result.driverAccrued).toBe(6000);
+  expect(result.periodDriverPaid).toBe(2000);
+  expect(result.periodDriverRemaining).toBe(4000);
+});

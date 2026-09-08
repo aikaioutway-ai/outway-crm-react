@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { CalendarDays, ChevronLeft, ChevronRight, MapPin, Search, Truck, UserRound, X } from 'lucide-react';
+import { CalendarDays, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { B2B_ORDER_STATUSES, B2BOrder, OrderStatus } from './B2BOrders';
 import { useB2BOrders } from '../../hooks/useB2BData';
 
@@ -69,7 +69,7 @@ function capitalize(value: string) {
   return value.charAt(0).toLocaleUpperCase('ru-RU') + value.slice(1);
 }
 
-export default function B2BCalendar() {
+export default function B2BCalendar({ onOpenOrder }: { onOpenOrder: (id: string) => void }) {
   const { data: orders = [] } = useB2BOrders();
   const [currentDate, setCurrentDate] = useState(() => startOfLocalDay(new Date()));
   const [view, setView] = useState<CalendarView>('month');
@@ -77,7 +77,6 @@ export default function B2BCalendar() {
   const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
   const [search, setSearch] = useState('');
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
-  const [selectedOrder, setSelectedOrder] = useState<B2BOrder | null>(null);
 
   const driverNames = useMemo(() => Array.from(new Set(orders.map(order => order.driverName).filter(Boolean))).sort((a, b) => a.localeCompare(b, 'ru')), [orders]);
 
@@ -127,7 +126,7 @@ export default function B2BCalendar() {
 
   const openOrder = (order: B2BOrder) => {
     setSelectedDay(null);
-    setSelectedOrder(order);
+    onOpenOrder(order.id);
   };
 
   const renderEvent = (order: B2BOrder, compact = false) => {
@@ -224,19 +223,7 @@ export default function B2BCalendar() {
         </div>
       )}
 
-      {selectedOrder && (
-        <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedOrder(null); }}>
-          <article className="b2b-calendar-order-card" role="dialog" aria-modal="true">
-            <header><div><span>Карточка выезда</span><h2>{selectedOrder.number}</h2></div><button type="button" onClick={() => setSelectedOrder(null)} aria-label="Закрыть"><X size={18} /></button></header>
-            <div className="b2b-calendar-order-status"><i className={`status-${selectedOrder.status}`}>{statusLabel(selectedOrder.status)}</i><span>{selectedOrder.departureDate}</span></div>
-            <div className="b2b-calendar-order-grid">
-              <section><h3><UserRound size={16} /> Клиент</h3><strong>{selectedOrder.client}</strong><span>{selectedOrder.driverName || 'Водитель не назначен'}</span></section>
-              <section><h3><MapPin size={16} /> Маршрут</h3><strong>{selectedOrder.routeFrom}</strong><span>→ {selectedOrder.routeTo}</span></section>
-              <section><h3><Truck size={16} /> Транспорт</h3><strong>{selectedOrder.transportCount}× {selectedOrder.transport}</strong><span>{selectedOrder.total.toLocaleString()} сом</span></section>
-            </div>
-          </article>
-        </div>
-      )}
+
     </section>
   );
 }

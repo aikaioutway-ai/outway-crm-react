@@ -1,5 +1,5 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
-import { Building2, Bus, CircleUserRound, LockKeyhole, Pencil, Plus, ReceiptText, Route, School, Trash2, X } from 'lucide-react';
+import { Building2, Bus, CircleUserRound, LockKeyhole, WalletCards, Pencil, Plus, ReceiptText, Route, School, Trash2, X } from 'lucide-react';
 import { createExpense, deleteExpense, fetchExpenses, updateExpense } from '../../services/expenseService';
 import {
   fetchV2DriverAdvancesForPeriod,
@@ -9,7 +9,8 @@ import {
   V2DriverTableRow,
   V2PayrollEntry,
 } from '../../services/crmV2Service';
-import { fetchEmployees } from '../../services/employeeService';
+import EmployeeAdvanceModal from './EmployeeAdvanceModal';
+import { fetchAllEmployeeAdvances, fetchEmployees } from '../../services/employeeService';
 import { Employee, UserRole } from '../../types';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { CASHIER_PERIODS, currentCashierPeriodKey } from '../families/constants';
@@ -235,6 +236,8 @@ export default function ExpensesModule({ userName, userRole, sessionToken }: Exp
   const [rows, setRows] = useState<ExpenseRecord[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | null>(null);
   const [selectedSubcategory, setSelectedSubcategory] = useState('ALL');
+  const [advanceOpen, setAdvanceOpen] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingExpense, setEditingExpense] = useState<ExpenseRecord | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -266,18 +269,26 @@ export default function ExpensesModule({ userName, userRole, sessionToken }: Exp
       Promise.all(selectedPeriods.map(period => fetchV2DriverAdvancesForPeriod(period.month, period.year))).then(result => result.flat()),
       fetchV2DriversTable(),
       fetchEmployees(),
-    ]).then(([manualRows, payrollEntries, advances, drivers, employees]) => {
+      fetchAllEmployeeAdvances(),
+    ]).then(([manualRows, payrollEntries, advances, drivers, employees, employeeAdvances]) => {
       if (!active) return;
       const combined = [
         ...manualRows.map(row => ({ ...row, source: 'manual' as const })),
         ...systemExpenseRows(payrollEntries, advances, drivers, employees),
+        ...employeeAdvances.filter(row => row.date >= bounds.first && row.date <= bounds.last).map(row => ({
+          id: `employee-advance-${row.id}`, name: `Аванс — ${employees.find(employee => employee.id === row.employeeId)?.fullName || 'сотрудник'}`,
+          category: row.schoolKey && row.schoolKey !== 'OFFICE' ? 'school' as const : 'office' as const, subcategory: 'Аванс',
+          unitPrice: row.amount, quantity: 1, amount: row.amount, expenseDate: row.date,
+          paymentMethod: row.paymentMethod === 'cash' ? 'cash' as const : 'cashless' as const, paymentOrderNumber: row.paymentOrderNumber,
+          comment: `За ${String(row.periodMonth).padStart(2, '0')}.${row.periodYear} · ${row.comment}`, createdAt: row.createdAt, source: 'advance' as const,
+        })),
       ].sort((a, b) => b.expenseDate.localeCompare(a.expenseDate) || b.createdAt.localeCompare(a.createdAt));
       setRows(combined);
     }).catch(reason => {
       if (active) setLoadError(reason instanceof Error ? reason.message : 'Не удалось загрузить расходы');
     }).finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
-  }, [bounds.first, bounds.last, selectedPeriods, sessionToken]);
+  }, [bounds.first, bounds.last, selectedPeriods, sessionToken, refreshKey]);
 
   const totals = useMemo(() => {
     const byCategory = Object.fromEntries(EXPENSE_CATEGORY_KEYS.map(key => [key, { amount: 0, count: 0 }])) as Record<ExpenseCategory, { amount: number; count: number }>;
@@ -340,7 +351,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken }: Exp
             <div className="expenses-subtitle">Ручные расходы и системные выплаты из раздела «Зарплата»</div>
           </div>
           <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} />
-          <button className="expenses-add" onClick={() => { setEditingExpense(null); setModalOpen(true); }}><Plus size={17} /> Новый расход</button>
+          <div className="expenses-create-actions"><button className="expenses-add" title="Новый расход" aria-label="Новый расход" onClick={() => { setEditingExpense(null); setModalOpen(true); }}><Plus size={17} /></button><button className="expenses-add" title="Новый аванс" aria-label="Новый аванс" onClick={() => setAdvanceOpen(true)}><WalletCards size={17} /></button></div>
         </div>
 
         {loadError && <div className="expenses-load-error">Не удалось загрузить данные: {loadError}. Проверьте, что миграция расходов применена.</div>}
@@ -386,6 +397,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken }: Exp
         </div>
         {loading ? <div className="expenses-empty">Загрузка…</div> : <ExpensesTable rows={canViewPersonalDetails ? visibleRows : visibleRows.filter(row => row.category !== 'personal')} showCategory={!selectedCategory} onEdit={expense => { setEditingExpense(expense); setModalOpen(true); }} onDelete={handleDelete} deletingId={deletingId} />}
       </div>
+      {advanceOpen && <EmployeeAdvanceModal onClose={() => setAdvanceOpen(false)} onSaved={() => setRefreshKey(value => value + 1)} />}
       {modalOpen && <ExpenseModal initialCategory={selectedCategory} expense={editingExpense} userName={userName} sessionToken={sessionToken} allowPersonalCategory={canViewPersonalDetails} onClose={() => { setModalOpen(false); setEditingExpense(null); }} onSaved={handleSaved} />}
     </div>
   );

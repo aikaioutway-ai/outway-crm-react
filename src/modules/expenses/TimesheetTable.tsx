@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PayrollSubjectType, setV2PayrollApprovalStatus, upsertV2PayrollEntries, upsertV2PayrollEntry, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
-import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApproval, usePayrollEntriesForPeriod, usePayrollPaymentsForPeriod } from '../../hooks/useCrmQueries';
+import { useEmployeeAdvances, useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApproval, usePayrollEntriesForPeriod, usePayrollPaymentsForPeriod } from '../../hooks/useCrmQueries';
 import { queryClient, QK } from '../../services/queryClient';
 import { UserRole } from '../../types';
 import { SCHOOL_TABS } from '../families/constants';
@@ -78,6 +78,8 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
   const { data: allDrivers = [], isLoading: driversLoading } = useDriversTable();
   const { data: allEmployees = [], isLoading: employeesLoading } = useEmployees();
   const { data: entries = [] } = usePayrollEntriesForPeriod(periodMonth, periodYear);
+  const { data: employeeAdvances = [] } = useEmployeeAdvances();
+  const employeeAdvanceById = useMemo(() => employeeAdvances.filter(row => row.periodMonth === periodMonth && row.periodYear === periodYear).reduce<Record<string, number>>((map, row) => { map[row.employeeId] = (map[row.employeeId] ?? 0) + row.amount; return map; }, {}), [employeeAdvances, periodMonth, periodYear]);
   const { data: rawAdvances = [] } = useDriverAdvancesForPeriod(periodMonth, periodYear);
   const { data: payrollPayments = [] } = usePayrollPaymentsForPeriod(periodMonth, periodYear);
   const { data: approval = null } = usePayrollApproval(schoolKey, periodMonth, periodYear, sessionToken);
@@ -202,10 +204,10 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
           bonusAmount,
           penaltyAmount,
           accrued,
-          advanceAmount: 0,
+          advanceAmount: employeeAdvanceById[employee.id] ?? 0,
           salaryAmount,
-          paidAmount: salaryAmount,
-          remainingAmount: salaryRemainingAmount(accrued, 0, salaryAmount),
+          paidAmount: salaryAmount + (employeeAdvanceById[employee.id] ?? 0),
+          remainingAmount: salaryRemainingAmount(accrued, employeeAdvanceById[employee.id] ?? 0, salaryAmount),
         };
       });
     }
@@ -235,7 +237,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         remainingAmount: salaryRemainingAmount(accrued, advanceAmount, salaryAmount),
       };
     });
-  }, [advanceByDriver, filteredDrivers, filteredEmployees, isOffice, entryBySubject, globalDays, globalRate]);
+  }, [employeeAdvanceById, advanceByDriver, filteredDrivers, filteredEmployees, isOffice, entryBySubject, globalDays, globalRate]);
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLowerCase().replace(/\s+/g, '');
