@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, Inbox, Landmark, Plus, Receipt, Search, Users, Wallet, X } from 'lucide-react';
 import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
 import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
-import { ALL_PERIODS, SCHOOL_TABS, getBranchFilter, isSchoolAllowed } from './constants';
+import { ALL_PERIODS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
@@ -277,6 +277,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [periodKey, setPeriodKey] = useState('ALL');
+  const [schoolTier, setSchoolTier] = useState<'1.0' | '2.0'>('1.0');
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
@@ -331,8 +332,10 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   }, [periodKey]);
 
   const stats = useMemo(
-    () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? []).filter(stat => isSchoolAllowed(stat.key, allowedSchools)),
-    [allowedSchools, branchStatsQuery.data],
+    () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? [])
+      .filter(stat => isSchoolAllowed(stat.key, allowedSchools))
+      .filter(stat => SCHOOL_TIER_2_KEYS.includes(stat.key) === (schoolTier === '2.0')),
+    [allowedSchools, branchStatsQuery.data, schoolTier],
   );
 
   const displayStats = useMemo(() => {
@@ -395,6 +398,22 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         <DashboardTopPanel className="dashboard-control-row">
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, height: 44, padding: 4, flexShrink: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxSizing: 'border-box' }}>
+            {(['1.0', '2.0'] as const).map(tier => {
+              const active = schoolTier === tier;
+              return (
+                <button
+                  key={tier}
+                  type="button"
+                  onClick={() => setSchoolTier(tier)}
+                  title={tier === '1.0' ? 'Школы на постоянной основе' : 'Школы без постоянного контракта'}
+                  style={{ height: 36, padding: '0 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: active ? 850 : 700, background: active ? '#2DD4BF' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', transition: 'background .15s ease, color .15s ease' }}
+                >
+                  School {tier}
+                </button>
+              );
+            })}
+          </div>
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />
           </div>
