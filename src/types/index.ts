@@ -4,7 +4,7 @@ export type SchoolCode =
   | 'LIGHT' | 'BILIM'
   | 'AES' | 'KAS' | 'EPSILON' | 'GENIUS' | 'GENIUS4' | 'NOVA' | 'INDIGO'
   | 'ERUDIT' | 'TENSAY' | 'EDISON'
-  | 'ABL1' | 'ABL2' | 'KLM' | 'TSL' | 'SANARIP' | 'ELLIPSE' | 'Ilim_k';
+  | 'ABL1' | 'ABL2' | 'KLM' | 'TSL' | 'SANARIP' | 'ELLIPSE';
 
 export interface School {
   short?: string;
@@ -222,7 +222,7 @@ export interface AuditLog {
 
 // ─── РОЛИ ────────────────────────────────────────────────────────────────────
 
-export type UserRole = 'admin' | 'manager' | 'cashier' | 'logist' | 'senior_logist' | 'director' | 'gen_director';
+export type UserRole = 'b2b_manager' | 'b2b_logist' | 'admin' | 'manager' | 'cashier' | 'logist' | 'senior_logist' | 'director' | 'gen_director';
 export type EmployeeRole = UserRole | 'driver';
 export type EmployeeStatus = 'active' | 'inactive' | 'dismissed';
 

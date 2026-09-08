@@ -23,7 +23,6 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'TSL',   label: 'TSL',   codes: ['TSL'],  branches: [], logo: '/school-logos/TSL.png' },
   { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
   { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
-  { key: 'ILIM_K', label: 'Ilim_k', codes: ['ILIM_K'], branches: [], logo: '/school-logos/Ilim_k.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
@@ -127,7 +126,6 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Light Academy Primary': 'LA_P',
   'Международная школа Сан Арип': 'SNP',
   'Ellipse International School': 'ELS',
-  'Илим Кадам': 'ILIM_K',
 };
 
 export const SCHOOL_NAME: Record<string, string> = {
@@ -138,7 +136,6 @@ export const SCHOOL_NAME: Record<string, string> = {
   ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
   KLM: 'Kalem Academy', TSL: 'Tesla Academy',
   SANARIP: 'Sanarip', ELLIPSE: 'Ellipse',
-  ILIM_K: 'Илим Кадам',
 };
 
 export const SCHOOL_SHORT: Record<string, string> = {
@@ -149,7 +146,6 @@ export const SCHOOL_SHORT: Record<string, string> = {
   AES_KAS: 'AES',
   ABL1: 'ABL #2', ABL2: 'ABL #1', KLM: 'KLM', TSL: 'TSL',
   SANARIP: 'SNP', ELLIPSE: 'ELS',
-  ILIM_K: 'Ilim_k',
 };
 
 export const SCHOOL_CODE_ALIASES: Record<string, string> = {
@@ -177,8 +173,6 @@ export const SCHOOL_CODE_ALIASES: Record<string, string> = {
   'ABL_1': 'ABL1',
   'ABL #2': 'ABL2',
   'ABL_2': 'ABL2',
-  'ILIM KADAM': 'ILIM_K',
-  ILIM_K: 'ILIM_K',
 };
 
 export const VT_LABEL: Record<string, string> = {
@@ -286,7 +280,6 @@ export function getFilterFromSchoolCode(rawCode: unknown): string | null {
   if (upper === 'GEN4' || upper === 'GEN_4' || upper === 'GEN #4') return 'GEN4';
   if (upper === 'ABL1' || upper === 'ABL_1' || upper === 'ABL #1') return 'ABL1';
   if (upper === 'ABL2' || upper === 'ABL_2' || upper === 'ABL #2') return 'ABL2';
-  if (upper === 'ILIM_K' || upper === 'ILIM KADAM') return 'ILIM_K';
   const schoolCode = normalizeSchoolCode(rawCode);
   return SCHOOL_SHORT[schoolCode] ?? schoolCode ?? null;
 }

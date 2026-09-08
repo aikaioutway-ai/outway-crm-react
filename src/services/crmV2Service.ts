@@ -691,7 +691,7 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
   const page = params.page ?? 0;
   // An explicitly resolved empty school selection must stay empty. Sending
   // null to the RPC means "all branches" and previously leaked every school
-  // when a school code (for example Ilim_k) failed to match branch statistics.
+  // when a school code failed to match branch statistics.
   if (params.branchIds && params.branchIds.length === 0) {
     return {
       rows: [],
