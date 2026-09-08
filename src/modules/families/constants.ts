@@ -29,7 +29,7 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
 // School 2.0 — школы без постоянного контракта: обычно один минивэн,
 // небольшой поток и вероятность, что сотрудничество не продолжится.
 // Остальные школы (не в этом списке) — School 1.0.
-export const SCHOOL_TIER_2_KEYS = ['BJ', 'EDI', 'KLM', 'LA_P', 'SNP', 'TSL'];
+export const SCHOOL_TIER_2_KEYS = ['BJ', 'EDI', 'KLM', 'LA_P', 'SNP', 'TSL', 'ING_P', 'ING_W'];
 
 // Школы с несколькими филиалами — схлопываются в один ряд, разворачиваются по клику
 export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; children: string[] }[] = [
