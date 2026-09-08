@@ -35,6 +35,17 @@ export function buildGroupedRows<T extends GroupableStat>(
     const children = group.children.map(k => statByKey.get(k)).filter((s): s is T => !!s);
     if (!children.length) return;
 
+    // Только один филиал остался видимым (например, после фильтра по School 1.0/2.0) —
+    // показываем его отдельной строкой, а не шторкой с самим собой внутри.
+    if (children.length === 1) {
+      const only = children[0];
+      topLevel.push({
+        row: { key: only.key, label: only.label, color: only.color, logo: only.logo, isGroup: false, isChild: false, data: only },
+        childRows: [],
+      });
+      return;
+    }
+
     const aggData: T = { ...children[0] };
     sumFields.forEach(field => {
       (aggData as Record<string, unknown>)[field as string] =
