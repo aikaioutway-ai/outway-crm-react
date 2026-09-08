@@ -3,6 +3,8 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const FINANCE_ROLES = new Set(['admin', 'gen_director', 'director', 'senior_logist', 'cashier']);
+const LIMITED_PAYROLL_VIEWER_ROLES = new Set(['director', 'senior_logist']);
+const CONFIDENTIAL_PAYROLL_ROLES = ['director', 'senior_logist'];
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, x-employee-session',
@@ -68,6 +70,28 @@ Deno.serve(async req => {
     if (!validPeriod(body.periodMonth, body.periodYear)) return response({ ok: false, error: 'Некорректный период' }, 400);
     const periodMonth = Number(body.periodMonth);
     const periodYear = Number(body.periodYear);
+
+    if (body.action === 'listEntries' || body.action === 'listPayments') {
+      const table = body.action === 'listEntries' ? 'v2_payroll_entries' : 'v2_payroll_payments';
+      const { data, error } = await supabase.from(table).select('*')
+        .eq('period_month', periodMonth).eq('period_year', periodYear);
+      if (error) throw error;
+
+      if (!LIMITED_PAYROLL_VIEWER_ROLES.has(employee.role)) {
+        return response({ ok: true, rows: data ?? [] });
+      }
+
+      const { data: confidentialEmployees, error: confidentialError } = await supabase
+        .from('v2_employees')
+        .select('id')
+        .in('role', CONFIDENTIAL_PAYROLL_ROLES);
+      if (confidentialError) throw confidentialError;
+      const confidentialIds = new Set((confidentialEmployees ?? []).map(row => String(row.id)));
+      const visibleRows = (data ?? []).filter(row => (
+        row.subject_type !== 'employee' || !confidentialIds.has(String(row.subject_id))
+      ));
+      return response({ ok: true, rows: visibleRows });
+    }
 
     if (body.action === 'get') {
       if (!schoolKey) return response({ ok: false, error: 'Не указана школа' }, 400);

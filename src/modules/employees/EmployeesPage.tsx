@@ -66,7 +66,7 @@ const COLUMNS: ColumnDef<EmployeeRow>[] = [
   { key: 'status', label: 'Статус', type: 'select', width: 110, render: value => <span className={`employee-status ${value}`}>{statusLabel(value)}</span> },
 ];
 
-export default function EmployeesPage({ viewerRole }: { viewerRole: UserRole }) {
+export default function EmployeesPage({ viewerRole, sessionToken }: { viewerRole: UserRole; sessionToken?: string }) {
   const restrictedRole = restrictedRoleFor(viewerRole);
   const [rows, setRows] = useState<EmployeeRow[]>([]), [loading, setLoading] = useState(true);
   const [query, setQuery] = useState(''), [selected, setSelected] = useState<Employee | null>(null), [creating, setCreating] = useState(false), [loadError, setLoadError] = useState('');
@@ -94,18 +94,18 @@ export default function EmployeesPage({ viewerRole }: { viewerRole: UserRole }) 
       {loadError && <div className="employee-error">{loadError}</div>}
     </section>
     <section className="employees-table-panel"><DataTable<EmployeeRow> columns={COLUMNS} data={filtered} rowKey="id" loading={loading} storageKey="employees_table_v2" emptyText="Сотрудники не найдены" onRowClick={openEmployee} onRowOpen={openEmployee} canManageProperties={false} toolbarRightExtra={<button className="employee-toolbar-add" onClick={openNewEmployee} title="Новый сотрудник"><Plus size={16} /></button>} /></section>
-    {(selected || creating) && <EmployeeCardModal employee={selected} restrictedRole={restrictedRole} onClose={() => { setSelected(null); setCreating(false); }} onChanged={async employee => { setSelected(employee); setCreating(false); await load(); }} onDeleted={async () => { setSelected(null); setCreating(false); await load(); }} />}
+    {(selected || creating) && <EmployeeCardModal employee={selected} restrictedRole={restrictedRole} sessionToken={sessionToken} onClose={() => { setSelected(null); setCreating(false); }} onChanged={async employee => { setSelected(employee); setCreating(false); await load(); }} onDeleted={async () => { setSelected(null); setCreating(false); await load(); }} />}
   </div>;
 }
 function Kpi({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) { return <div className="employee-kpi dock-hover-card"><span style={{ background: color }}>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>; }
 
-function EmployeeCardModal({ employee, restrictedRole, onClose, onChanged, onDeleted }: { employee: Employee | null; restrictedRole: EmployeeRole[] | null; onClose: () => void; onChanged: (employee: Employee) => void; onDeleted: () => void }) {
+function EmployeeCardModal({ employee, restrictedRole, sessionToken, onClose, onChanged, onDeleted }: { employee: Employee | null; restrictedRole: EmployeeRole[] | null; sessionToken?: string; onClose: () => void; onChanged: (employee: Employee) => void; onDeleted: () => void }) {
   const [draft, setDraft] = useState<EmployeeDraft>(employee ? toDraft(employee) : { ...EMPTY_DRAFT, role: restrictedRole?.[0] ?? EMPTY_DRAFT.role, position: restrictedRole ? roleLabel(restrictedRole[0]) : EMPTY_DRAFT.position, startDate: today() });
   const [documents, setDocuments] = useState<EmployeeDocument[]>(createDefaultEmployeeDocuments()), [advances, setAdvances] = useState<EmployeeAdvance[]>([]), [payroll, setPayroll] = useState<V2PayrollEntry[]>([]);
   const [tab, setTab] = useState<EmployeeTab>('main'), [saving, setSaving] = useState(false), [deleting, setDeleting] = useState(false), [loadingDetails, setLoadingDetails] = useState(Boolean(employee)), [error, setError] = useState('');
   const [advanceAmount, setAdvanceAmount] = useState(''), [advanceDate, setAdvanceDate] = useState(today()), [advanceComment, setAdvanceComment] = useState('');
   const periods = useMemo(academicPeriods, []);
-  useEffect(() => { if (!employee) return; setLoadingDetails(true); Promise.all([fetchEmployeeDocuments(employee.id), fetchEmployeeAdvances(employee.id), Promise.all(periods.map(period => fetchV2PayrollEntriesForPeriod(period.month, period.year))).then(items => items.flat())]).then(([docs, employeeAdvances, entries]) => { setDocuments(docs); setAdvances(employeeAdvances); setPayroll(entries.filter(entry => entry.subjectType === 'employee' && entry.subjectId === employee.id)); }).catch(reason => setError(reason instanceof Error ? reason.message : 'Не удалось загрузить карточку')).finally(() => setLoadingDetails(false)); }, [employee, periods]);
+  useEffect(() => { if (!employee) return; setLoadingDetails(true); Promise.all([fetchEmployeeDocuments(employee.id), fetchEmployeeAdvances(employee.id), Promise.all(periods.map(period => fetchV2PayrollEntriesForPeriod(period.month, period.year, sessionToken))).then(items => items.flat())]).then(([docs, employeeAdvances, entries]) => { setDocuments(docs); setAdvances(employeeAdvances); setPayroll(entries.filter(entry => entry.subjectType === 'employee' && entry.subjectId === employee.id)); }).catch(reason => setError(reason instanceof Error ? reason.message : 'Не удалось загрузить карточку')).finally(() => setLoadingDetails(false)); }, [employee, periods, sessionToken]);
   const patch = (updates: Partial<EmployeeDraft>) => setDraft(current => ({ ...current, ...updates }));
   const toggleSchool = (key: string) => setDraft(current => { if (key === 'ALL') return { ...current, schoolKeys: ['ALL'] }; const keys = current.schoolKeys.filter(item => item !== 'ALL'); return { ...current, schoolKeys: keys.includes(key) ? keys.filter(item => item !== key) : [...keys, key] }; });
   const patchDocument = <K extends keyof EmployeeDocument>(index: number, key: K, value: EmployeeDocument[K]) => setDocuments(current => current.map((document, itemIndex) => itemIndex === index ? { ...document, [key]: value } : document));

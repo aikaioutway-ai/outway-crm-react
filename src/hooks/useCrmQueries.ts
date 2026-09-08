@@ -102,10 +102,11 @@ export function useEmployees(): UseQueryResult<Employee[]> {
   });
 }
 
-export function usePayrollEntriesForPeriod(periodMonth: number, periodYear: number): UseQueryResult<V2PayrollEntry[]> {
+export function usePayrollEntriesForPeriod(periodMonth: number, periodYear: number, sessionToken?: string): UseQueryResult<V2PayrollEntry[]> {
   return useQuery({
     queryKey: QK.payrollEntries(periodMonth, periodYear),
-    queryFn: () => fetchV2PayrollEntriesForPeriod(periodMonth, periodYear),
+    queryFn: () => fetchV2PayrollEntriesForPeriod(periodMonth, periodYear, sessionToken),
+    enabled: Boolean(sessionToken),
   });
 }
 
@@ -127,10 +128,11 @@ export function usePayrollApprovalsForPeriod(periodMonth: number, periodYear: nu
   });
 }
 
-export function usePayrollPaymentsForPeriod(periodMonth: number, periodYear: number): UseQueryResult<V2PayrollPayment[]> {
+export function usePayrollPaymentsForPeriod(periodMonth: number, periodYear: number, sessionToken?: string): UseQueryResult<V2PayrollPayment[]> {
   return useQuery({
     queryKey: QK.payrollPayments(periodMonth, periodYear),
-    queryFn: () => fetchV2PayrollPaymentsForPeriod(periodMonth, periodYear),
+    queryFn: () => fetchV2PayrollPaymentsForPeriod(periodMonth, periodYear, sessionToken),
+    enabled: Boolean(sessionToken),
   });
 }
 

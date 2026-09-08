@@ -8,6 +8,7 @@ import { PAYROLL_OFFICE_KEY, PayrollSchoolTab, TimesheetPayrollSummary } from '.
 import { canEditTimesheet, isPayrollApprover } from './payrollApproval';
 import SalaryPaymentModal from './SalaryPaymentModal';
 import { SalaryPaymentSubject, SalaryRecipientOption, salaryRemainingAmount } from './salaryPayment';
+import { canViewEmployeePayroll } from '../payroll/payrollVisibility';
 
 interface DriverRow {
   driverId: string;
@@ -77,11 +78,11 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
 
   const { data: allDrivers = [], isLoading: driversLoading } = useDriversTable();
   const { data: allEmployees = [], isLoading: employeesLoading } = useEmployees();
-  const { data: entries = [] } = usePayrollEntriesForPeriod(periodMonth, periodYear);
+  const { data: entries = [] } = usePayrollEntriesForPeriod(periodMonth, periodYear, sessionToken);
   const { data: employeeAdvances = [] } = useEmployeeAdvances();
   const employeeAdvanceById = useMemo(() => employeeAdvances.filter(row => row.periodMonth === periodMonth && row.periodYear === periodYear).reduce<Record<string, number>>((map, row) => { map[row.employeeId] = (map[row.employeeId] ?? 0) + row.amount; return map; }, {}), [employeeAdvances, periodMonth, periodYear]);
   const { data: rawAdvances = [] } = useDriverAdvancesForPeriod(periodMonth, periodYear);
-  const { data: payrollPayments = [] } = usePayrollPaymentsForPeriod(periodMonth, periodYear);
+  const { data: payrollPayments = [] } = usePayrollPaymentsForPeriod(periodMonth, periodYear, sessionToken);
   const { data: approval = null } = usePayrollApproval(schoolKey, periodMonth, periodYear, sessionToken);
   const loading = driversLoading || employeesLoading;
   const [approvalBusy, setApprovalBusy] = useState(false);
@@ -180,9 +181,13 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
 
   const filteredEmployees = useMemo(() => (
     isOffice
-      ? allEmployees.filter(employee => employee.status === 'active' && employee.role !== 'driver')
+      ? allEmployees.filter(employee => (
+        employee.status === 'active'
+        && employee.role !== 'driver'
+        && canViewEmployeePayroll(userRole, employee.role)
+      ))
       : []
-  ), [allEmployees, isOffice]);
+  ), [allEmployees, isOffice, userRole]);
 
   const rows: DriverRow[] = useMemo(() => {
     if (isOffice) {
@@ -257,10 +262,10 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       .filter(driver => driver.status !== 'inactive')
       .forEach(driver => byId.set(driver.driverId, { id: driver.driverId, name: driver.fullName }));
     allEmployees
-      .filter(employee => employee.status === 'active')
+      .filter(employee => employee.status === 'active' && canViewEmployeePayroll(userRole, employee.role))
       .forEach(employee => byId.set(employee.id, { id: employee.id, name: employee.fullName }));
     return Array.from(byId.values()).sort((left, right) => left.name.localeCompare(right.name, 'ru'));
-  }, [allDrivers, allEmployees]);
+  }, [allDrivers, allEmployees, userRole]);
 
   const selectedSalaryRows = useMemo(
     () => rows.filter(row => selectedSalaryIds.has(row.driverId) && row.remainingAmount > 0),

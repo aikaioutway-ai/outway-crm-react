@@ -10,6 +10,7 @@ import { money } from '../../utils/pricing';
 import { buildPayrollApprovalSummaryBySchool, buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
 import { PAYROLL_OFFICE_KEY, PayrollSchoolTab } from '../expenses/timesheetTypes';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
+import { UserRole } from '../../types';
 
 type SortKey = 'school' | 'accruedAmount' | 'pendingAmount' | 'approvedAmount' | 'advanceAmount' | 'salaryAmount' | 'paidAmount' | 'remainingAmount';
 type PayrollOverviewStat = PayrollSchoolStat & { pendingAmount: number; approvedAmount: number };
@@ -18,6 +19,7 @@ const PAYROLL_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 
 interface PayrollOverviewProps {
   view: PayrollSchoolTab;
+  userRole?: UserRole;
   sessionToken?: string;
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
@@ -43,7 +45,7 @@ function sortValue(stat: PayrollOverviewStat, key: SortKey): number | string {
   return stat[key];
 }
 
-export default function PayrollOverview({ view, sessionToken, periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
+export default function PayrollOverview({ view, userRole, sessionToken, periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const { data: employees = null } = useEmployees();
   const [sidebarHidden, setSidebarHidden] = useState(false);
@@ -65,19 +67,19 @@ export default function PayrollOverview({ view, sessionToken, periodKey, onPerio
   const periodYear = period?.year ?? new Date().getFullYear();
 
   const { data: employeeAdvances = [] } = useEmployeeAdvances();
-  const { data: entries = null } = usePayrollEntriesForPeriod(periodMonth, periodYear);
+  const { data: entries = null } = usePayrollEntriesForPeriod(periodMonth, periodYear, sessionToken);
   const { data: advances = null } = useDriverAdvancesForPeriod(periodMonth, periodYear);
   const { data: approvals = [] } = usePayrollApprovalsForPeriod(periodMonth, periodYear, sessionToken);
 
   const summaryBySchool = useMemo(
-    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? [], employeeAdvances),
-    [entries, advances, rows, employees, employeeAdvances],
+    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? [], employeeAdvances, userRole),
+    [entries, advances, rows, employees, employeeAdvances, userRole],
   );
 
   const approvalBySchool = useMemo(() => new Map(approvals.map(approval => [approval.schoolKey, approval.status])), [approvals]);
   const entryApprovalBySchool = useMemo(
-    () => buildPayrollApprovalSummaryBySchool(entries ?? [], rows ?? [], employees ?? []),
-    [employees, entries, rows],
+    () => buildPayrollApprovalSummaryBySchool(entries ?? [], rows ?? [], employees ?? [], userRole),
+    [employees, entries, rows, userRole],
   );
   const stats = useMemo<PayrollOverviewStat[]>(() => computePayrollStats(rows ?? [], summaryBySchool).map(stat => {
     const approvalStatus = approvalBySchool.get(stat.key);

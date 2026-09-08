@@ -50,6 +50,7 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
     return (
       <PayrollOverview
         view={schoolTab}
+        userRole={props.userRole}
         sessionToken={props.sessionToken}
         periodKey={periodKey}
         onPeriodKeyChange={onPeriodKeyChange}

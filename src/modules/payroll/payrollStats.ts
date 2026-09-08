@@ -1,8 +1,9 @@
 import type { EmployeeAdvance } from '../../services/employeeService';
 import { V2DriverAdvance, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
-import { Employee } from '../../types';
+import { Employee, UserRole } from '../../types';
 import { PAYROLL_OFFICE_COLOR, PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, TimesheetPayrollSummary } from '../expenses/timesheetTypes';
 import { SCHOOL_TABS } from '../families/constants';
+import { canViewEmployeePayroll } from './payrollVisibility';
 
 export type PayrollMoneySummary = TimesheetPayrollSummary;
 export type PayrollApprovalMoneySummary = { pendingAmount: number; approvedAmount: number };
@@ -93,6 +94,7 @@ export function buildPayrollSummaryBySchool(
   drivers: V2DriverTableRow[],
   employees: Employee[],
   employeeAdvances: EmployeeAdvance[] = [],
+  viewerRole?: UserRole,
 ): Record<string, PayrollMoneySummary> {
   const advanceByDriver: Record<string, number> = {};
   advances.forEach(advance => {
@@ -126,7 +128,7 @@ export function buildPayrollSummaryBySchool(
       addTo(tab.key, accrued, advanceAmount, entry.salaryAmount, advanceAmount + entry.salaryAmount);
     } else {
       const employee = employeeById.get(entry.subjectId);
-      if (!employee || employee.status !== 'active' || employee.role === 'driver') return;
+      if (!employee || employee.status !== 'active' || employee.role === 'driver' || !canViewEmployeePayroll(viewerRole, employee.role)) return;
       const advance = employeeAdvances.filter(row => row.employeeId === entry.subjectId && row.periodMonth === entry.periodMonth && row.periodYear === entry.periodYear).reduce((sum, row) => sum + row.amount, 0);
       addTo(PAYROLL_OFFICE_KEY, accrued, advance, entry.salaryAmount, entry.salaryAmount + advance);
     }
@@ -139,6 +141,7 @@ export function buildPayrollApprovalSummaryBySchool(
   entries: V2PayrollEntry[],
   drivers: V2DriverTableRow[],
   employees: Employee[],
+  viewerRole?: UserRole,
 ): Record<string, PayrollApprovalMoneySummary> {
   const driverById = new Map(drivers.map(driver => [driver.driverId, driver]));
   const employeeById = new Map(employees.map(employee => [employee.id, employee]));
@@ -153,7 +156,7 @@ export function buildPayrollApprovalSummaryBySchool(
       schoolKey = schoolTabs.find(tab => payrollDriverMatchesSchool(driver, tab.key))?.key ?? '';
     } else {
       const employee = employeeById.get(entry.subjectId);
-      if (!employee || employee.status !== 'active' || employee.role === 'driver') return;
+      if (!employee || employee.status !== 'active' || employee.role === 'driver' || !canViewEmployeePayroll(viewerRole, employee.role)) return;
       schoolKey = PAYROLL_OFFICE_KEY;
     }
     if (!schoolKey) return;

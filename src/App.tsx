@@ -749,7 +749,7 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            <EmployeesPage viewerRole={currentUserRole} />
+            <EmployeesPage viewerRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
           </div>
         ) : (
           <div style={{

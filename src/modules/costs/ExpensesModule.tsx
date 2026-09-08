@@ -265,7 +265,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken }: Exp
     setLoadError('');
     Promise.all([
       fetchExpenses(bounds.first, bounds.last, sessionToken),
-      Promise.all(selectedPeriods.map(period => fetchV2PayrollEntriesForPeriod(period.month, period.year))).then(result => result.flat()),
+      Promise.all(selectedPeriods.map(period => fetchV2PayrollEntriesForPeriod(period.month, period.year, sessionToken))).then(result => result.flat()),
       Promise.all(selectedPeriods.map(period => fetchV2DriverAdvancesForPeriod(period.month, period.year))).then(result => result.flat()),
       fetchV2DriversTable(),
       fetchEmployees(),

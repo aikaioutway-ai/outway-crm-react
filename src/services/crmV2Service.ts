@@ -1503,8 +1503,12 @@ function mapV2PayrollPayment(row: any): V2PayrollPayment {
   };
 }
 
-export async function fetchV2PayrollPaymentsForPeriod(periodMonth: number, periodYear: number): Promise<V2PayrollPayment[]> {
+export async function fetchV2PayrollPaymentsForPeriod(periodMonth: number, periodYear: number, sessionToken?: string): Promise<V2PayrollPayment[]> {
   if (periodMonth < 1 || periodMonth > 12 || !periodYear) return [];
+  if (sessionToken) {
+    const result = await callPayrollApprovalApi(sessionToken, { action: 'listPayments', periodMonth, periodYear });
+    return (result.rows ?? []).map(mapV2PayrollPayment);
+  }
   const data = await fetchAllRows<any>((from, to) => supabase
     .from('v2_payroll_payments')
     .select('*')
@@ -1548,8 +1552,12 @@ export async function recordV2PayrollPayments(input: {
   return (data ?? []).map(mapV2PayrollPayment);
 }
 
-export async function fetchV2PayrollEntriesForPeriod(periodMonth: number, periodYear: number): Promise<V2PayrollEntry[]> {
+export async function fetchV2PayrollEntriesForPeriod(periodMonth: number, periodYear: number, sessionToken?: string): Promise<V2PayrollEntry[]> {
   if (periodMonth < 1 || periodMonth > 12 || !periodYear) return [];
+  if (sessionToken) {
+    const result = await callPayrollApprovalApi(sessionToken, { action: 'listEntries', periodMonth, periodYear });
+    return (result.rows ?? []).map(mapV2PayrollEntry);
+  }
   const data = await fetchAllRows<any>((from, to) => supabase
     .from('v2_payroll_entries')
     .select('*')
