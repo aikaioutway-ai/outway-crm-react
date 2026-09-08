@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, Inbox, School } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
-import { SCHOOL_GROUPS, SCHOOL_TABS } from './constants';
-import { DashboardGrid, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
+import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
 
 type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 'microbusCount' | 'lightVehicleCount';
 
@@ -82,8 +83,8 @@ function transferStats(rows: FamilyListRow[]) {
   };
 }
 
-function computeLogisticsStats(rows: FamilyListRow[]): LogisticsSchoolStat[] {
-  return SCHOOL_TABS.filter(tab => tab.key !== 'ALL').map((tab, index) => {
+function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier): LogisticsSchoolStat[] {
+  return SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && SCHOOL_TIER_2_KEYS.includes(tab.key) === (tier === '2.0')).map((tab, index) => {
     const schoolRows = rows.filter(row => row.branchFilter === tab.key);
     const transfers = transferStats(schoolRows);
     return {
@@ -105,15 +106,17 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const stats = useMemo(() => computeLogisticsStats(rows ?? []), [rows]);
+  const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier), [rows, schoolTier]);
   const totals = useMemo(() => {
-    const transferSummary = transferStats(rows ?? []);
+    const tierRows = (rows ?? []).filter(row => SCHOOL_TIER_2_KEYS.includes(row.branchFilter) === (schoolTier === '2.0'));
+    const transferSummary = transferStats(tierRows);
     return {
       schools: stats.length,
       newRequests: stats.reduce((sum, stat) => sum + stat.newRequests, 0),
@@ -122,7 +125,7 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
       microbusCount: transferSummary.microbusCount,
       lightVehicleCount: transferSummary.lightVehicleCount,
     };
-  }, [rows, stats]);
+  }, [rows, stats, schoolTier]);
 
   const displayRows = useMemo(() => {
     // microbusAverage — среднее, не сумма: считаем отдельно взвешенным средним по числу микробусов
@@ -160,6 +163,9 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <DashboardTopPanel className="dashboard-control-row">
+          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
+        </DashboardTopPanel>
         <DashboardGrid template={GRID_TEMPLATE}>
           <ColumnCard
             first

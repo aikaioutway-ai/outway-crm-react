@@ -3,10 +3,11 @@ import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, QrCode, Rece
 import { PaymentTableRow, RefundTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable, useRefundsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
-import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS } from './constants';
+import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
 import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
+import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { B2BPaymentRecord } from '../../services/b2bPaymentService';
@@ -233,6 +234,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'paymentsAmount', dir: 'desc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [b2bReviewOpen, setB2bReviewOpen] = useState(false);
+  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
@@ -248,7 +250,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   const periodRefundRows = useMemo(() => (refundRows ?? []).filter(row => refundMatchesPeriod(row, periodKey)), [periodKey, refundRows]);
 
   const stats = useMemo(() => {
-    const schoolStats = SCHOOL_TABS.filter(tab => tab.key !== 'ALL').map((tab, index): CashierSchoolStat => {
+    const schoolStats = SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && SCHOOL_TIER_2_KEYS.includes(tab.key) === (schoolTier === '2.0')).map((tab, index): CashierSchoolStat => {
     const schoolRows = periodRows.filter(row => rowMatchesSchool(row, tab));
     const pendingRows = schoolRows.filter(isPending);
     const confirmedRows = schoolRows.filter(isConfirmed);
@@ -290,7 +292,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
       refundsConfirmedAmount: 0,
     };
     return [...schoolStats, b2bStat];
-  }, [b2bPayments, periodKey, periodRefundRows, periodRows]);
+  }, [b2bPayments, periodKey, periodRefundRows, periodRows, schoolTier]);
 
   const totals = useMemo(() => stats.reduce((acc, s) => ({
     pendingCount: acc.pendingCount + s.pendingCount,
@@ -340,6 +342,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel className="dashboard-control-row">
+          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
               periodKey={periodKey}

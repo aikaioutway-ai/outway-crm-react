@@ -2,10 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, FileWarning, School, UserCheck, UserX } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { isSchoolAllowed, SCHOOL_TABS } from '../families/constants';
-import { DashboardGrid, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
+import SchoolTierTabs, { SchoolTier } from '../families/SchoolTierTabs';
 
 export const DRIVER_RESERVE_KEY = 'RESERVE';
 export const DRIVER_RESERVE_STATUSES = new Set(['vacation', 'reserve', 'waiting', 'pending']);
@@ -97,9 +98,9 @@ function statFromRows(
   };
 }
 
-function computeDriverStats(rows: V2DriverTableRow[], allowedSchools?: string[]): DriverSchoolStat[] {
+function computeDriverStats(rows: V2DriverTableRow[], allowedSchools: string[] | undefined, tier: SchoolTier): DriverSchoolStat[] {
   const schoolStats = SCHOOL_TABS
-    .filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools))
+    .filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (tier === '2.0'))
     .map((tab, index) => {
       const schoolRows = rows.filter(row => !isReserveDriver(row) && driverMatchesSchool(row, tab));
       return statFromRows(tab.key, tab.label, SCHOOL_COLORS[index % SCHOOL_COLORS.length], schoolRows, tab.logo);
@@ -116,6 +117,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   // Каждая колонка KPI — отдельный скролл-контейнер, поэтому синхронизируем
@@ -140,7 +142,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const stats = useMemo(() => computeDriverStats(rows ?? [], allowedSchools), [rows, allowedSchools]);
+  const stats = useMemo(() => computeDriverStats(rows ?? [], allowedSchools, schoolTier), [rows, allowedSchools, schoolTier]);
   const totals = useMemo(() => {
     const allRows = rows ?? [];
     return {
@@ -183,6 +185,9 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <DashboardTopPanel className="dashboard-control-row">
+          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
+        </DashboardTopPanel>
         <DashboardGrid template={GRID_TEMPLATE}>
           <ColumnCard
             first

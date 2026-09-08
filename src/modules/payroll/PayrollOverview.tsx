@@ -5,7 +5,8 @@ import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollAp
 import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
-import { ALL_PERIODS, currentPayrollPeriodKey } from '../families/constants';
+import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_TIER_2_KEYS } from '../families/constants';
+import SchoolTierTabs, { SchoolTier } from '../families/SchoolTierTabs';
 import { money } from '../../utils/pricing';
 import { buildPayrollApprovalSummaryBySchool, buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
 import { PAYROLL_OFFICE_KEY, PayrollSchoolTab } from '../expenses/timesheetTypes';
@@ -51,6 +52,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
+  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
@@ -99,7 +101,12 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
       remainingAmount: 0,
     };
   }), [approvalBySchool, entryApprovalBySchool, rows, summaryBySchool, view]);
-  const totals = useMemo(() => stats.reduce((acc, stat) => ({
+  const visibleStats = useMemo(
+    () => stats.filter(stat => stat.key === PAYROLL_OFFICE_KEY || SCHOOL_TIER_2_KEYS.includes(stat.key) === (schoolTier === '2.0')),
+    [stats, schoolTier],
+  );
+
+  const totals = useMemo(() => visibleStats.reduce((acc, stat) => ({
     schools: acc.schools + (stat.driverCount > 0 ? 1 : 0),
     accruedAmount: acc.accruedAmount + stat.accruedAmount,
     pendingAmount: acc.pendingAmount + stat.pendingAmount,
@@ -108,7 +115,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
     salaryAmount: acc.salaryAmount + stat.salaryAmount,
     paidAmount: acc.paidAmount + stat.paidAmount,
     remainingAmount: acc.remainingAmount + stat.remainingAmount,
-  }), { schools: 0, accruedAmount: 0, pendingAmount: 0, approvedAmount: 0, advanceAmount: 0, salaryAmount: 0, paidAmount: 0, remainingAmount: 0 }), [stats]);
+  }), { schools: 0, accruedAmount: 0, pendingAmount: 0, approvedAmount: 0, advanceAmount: 0, salaryAmount: 0, paidAmount: 0, remainingAmount: 0 }), [visibleStats]);
 
   const columnKeys: SortKey[] = view === 'timesheet'
     ? ['school', 'accruedAmount', 'pendingAmount', 'approvedAmount']
@@ -116,8 +123,8 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
   const gridTemplate = columnKeys.map(key => `minmax(0, ${COLUMN_WEIGHTS[key]}fr)`).join(' ');
 
   const sortedStats = useMemo(() => {
-    const officeStats = stats.filter(stat => stat.key === PAYROLL_OFFICE_KEY);
-    const schoolStats = stats.filter(stat => stat.key !== PAYROLL_OFFICE_KEY);
+    const officeStats = visibleStats.filter(stat => stat.key === PAYROLL_OFFICE_KEY);
+    const schoolStats = visibleStats.filter(stat => stat.key !== PAYROLL_OFFICE_KEY);
     const grouped = buildGroupedRows(
       schoolStats,
       expandedGroups,
@@ -134,7 +141,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
     }));
     const query = search.trim().toLowerCase();
     return [...grouped, ...officeRows].filter(row => !query || row.label.toLowerCase().includes(query));
-  }, [sortState, stats, expandedGroups, search]);
+  }, [sortState, visibleStats, expandedGroups, search]);
 
   const handleSort = (key: SortKey) => {
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
@@ -149,6 +156,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel>
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+            <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
             <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
               <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} periods={PAYROLL_PERIODS} showAll={false} />
             </div>
@@ -218,7 +226,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />
 
       <SchoolDockSidebar
-        items={stats.map(stat => ({ key: stat.key, label: stat.label, color: stat.color, logo: stat.logo }))}
+        items={visibleStats.map(stat => ({ key: stat.key, label: stat.label, color: stat.color, logo: stat.logo }))}
         hidden={sidebarHidden}
         onHiddenChange={setSidebarHidden}
         onSelect={onSelectSchool}
