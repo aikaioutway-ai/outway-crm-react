@@ -42,6 +42,12 @@ export interface B2BDriverPayoutRecord {
   createdAt: string;
 }
 
+export interface B2BAssignmentRecord {
+  id: string;
+  driverPricePerUnit: number;
+  driverTotal: number;
+}
+
 export interface B2BClientRecord {
   id: string;
   clientType: 'individual' | 'company' | 'school';
@@ -275,14 +281,20 @@ export async function updateB2BOrder(id: string, patch: Partial<B2BOrderRecord>)
   assert(error);
 }
 
-export async function saveB2BAssignment(order: B2BOrderRecord, driverId: string, driverPrice: number) {
-  const payload = { order_id: order.id, driver_id: driverId, driver_price: driverPrice, driver_total: driverPrice * order.transportCount };
+export async function saveB2BAssignment(order: B2BOrderRecord, driverId: string, driverPrice: number): Promise<B2BAssignmentRecord> {
+  const normalizedDriverPrice = Math.max(0, driverPrice);
+  const driverTotal = normalizedDriverPrice * Math.max(1, order.transportCount);
+  const payload = { order_id: order.id, driver_id: driverId, driver_price: normalizedDriverPrice, driver_total: driverTotal };
   const result = order.assignmentId
-    ? await supabase.from('v2_b2b_order_driver_assignments').update(payload).eq('id', order.assignmentId).select('id').single()
-    : await supabase.from('v2_b2b_order_driver_assignments').insert(payload).select('id').single();
+    ? await supabase.from('v2_b2b_order_driver_assignments').update(payload).eq('id', order.assignmentId).select('id, driver_price, driver_total').single()
+    : await supabase.from('v2_b2b_order_driver_assignments').insert(payload).select('id, driver_price, driver_total').single();
   assert(result.error);
   await updateB2BOrder(order.id, { status: 'driver_assigned' });
-  return result.data!.id as string;
+  return {
+    id: result.data!.id as string,
+    driverPricePerUnit: Number(result.data!.driver_price),
+    driverTotal: Number(result.data!.driver_total),
+  };
 }
 
 export async function createB2BDriverPayout(order: B2BOrderRecord, amount: number, method: B2BPaymentMethod, paymentDate: string, purpose: string, paymentOrderNumber?: string) {

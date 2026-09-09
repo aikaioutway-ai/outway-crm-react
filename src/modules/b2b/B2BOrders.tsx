@@ -1,7 +1,7 @@
 import type { UserRole } from '../../types';
 import { b2bAccess } from './b2bAccess';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 import { useDriversTable } from '../../hooks/useCrmQueries';
@@ -102,6 +102,9 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const [driverPayoutForm, setDriverPayoutForm] = useState({ ...EMPTY_DRIVER_PAYOUT_FORM });
   const [driverPayoutFormError, setDriverPayoutFormError] = useState('');
   const [deletingDriverPayoutId, setDeletingDriverPayoutId] = useState<string | null>(null);
+  const [savingDriverAssignment, setSavingDriverAssignment] = useState(false);
+  const [driverAssignmentError, setDriverAssignmentError] = useState('');
+  const [driverAssignmentSaved, setDriverAssignmentSaved] = useState(false);
   const [relatedProfile, setRelatedProfile] = useState<'client' | 'driver' | null>(null);
   const selectedOrder = orders.find(order => order.id === selectedOrderId) ?? null;
   const selectedClient = selectedOrder ? clients.find(client => client.id === selectedOrder.clientId) ?? null : null;
@@ -114,6 +117,10 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     setOrderCardTab('main');
     setSelectedOrderId(openOrderId);
   }, [openOrderId]);
+  useEffect(() => {
+    setDriverAssignmentError('');
+    setDriverAssignmentSaved(false);
+  }, [selectedOrderId]);
 
   const confirmedPaymentsFor = useCallback((orderId: string) => payments
     .filter(payment => payment.orderId === orderId && payment.status === 'confirmed')
@@ -319,18 +326,51 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   };
 
   const selectDriver = async (driverId: string) => {
-    if (!selectedOrder) return;
+    if (!selectedOrder || !driverId) return;
     const driver = drivers.find(item => item.driverId === driverId);
-    const assignmentId = await saveB2BAssignment(selectedOrder, driverId, selectedOrder.driverPricePerUnit ?? 0);
-    setOrders(current => current.map(order => order.id === selectedOrder.id
-      ? { ...order, assignmentId, driverId, driverName: driver?.fullName ?? '', status: 'driver_assigned' }
-      : order));
+    setSavingDriverAssignment(true);
+    setDriverAssignmentError('');
+    setDriverAssignmentSaved(false);
+    try {
+      const assignment = await saveB2BAssignment(selectedOrder, driverId, selectedOrder.driverPricePerUnit ?? 0);
+      setOrders(current => current.map(order => order.id === selectedOrder.id
+        ? { ...order, assignmentId: assignment.id, driverId, driverName: driver?.fullName ?? '', driverPricePerUnit: assignment.driverPricePerUnit, driverTotal: assignment.driverTotal, status: 'driver_assigned' }
+        : order));
+      setDriverAssignmentSaved(true);
+      await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.orders });
+    } catch (assignmentError) {
+      setDriverAssignmentError(assignmentError instanceof Error ? assignmentError.message : 'Не удалось сохранить водителя.');
+    } finally {
+      setSavingDriverAssignment(false);
+    }
   };
 
   const setDriverPrice = (value: string) => {
     if (!selectedOrder) return;
     const driverPricePerUnit = Math.max(0, Number(value) || 0);
-    setOrders(current => current.map(order => order.id === selectedOrder.id ? { ...order, driverPricePerUnit } : order));
+    const driverTotal = driverPricePerUnit * Math.max(1, selectedOrder.transportCount);
+    setOrders(current => current.map(order => order.id === selectedOrder.id ? { ...order, driverPricePerUnit, driverTotal } : order));
+    setDriverAssignmentError('');
+    setDriverAssignmentSaved(false);
+  };
+
+  const saveDriverPrice = async () => {
+    if (!selectedOrder?.driverId) return setDriverAssignmentError('Сначала выберите водителя.');
+    setSavingDriverAssignment(true);
+    setDriverAssignmentError('');
+    setDriverAssignmentSaved(false);
+    try {
+      const assignment = await saveB2BAssignment(selectedOrder, selectedOrder.driverId, selectedOrder.driverPricePerUnit ?? 0);
+      setOrders(current => current.map(order => order.id === selectedOrder.id
+        ? { ...order, assignmentId: assignment.id, driverPricePerUnit: assignment.driverPricePerUnit, driverTotal: assignment.driverTotal, status: 'driver_assigned' }
+        : order));
+      setDriverAssignmentSaved(true);
+      await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.orders });
+    } catch (assignmentError) {
+      setDriverAssignmentError(assignmentError instanceof Error ? assignmentError.message : 'Не удалось сохранить начисление водителю.');
+    } finally {
+      setSavingDriverAssignment(false);
+    }
   };
 
   const closeDriverPayoutForm = () => {
@@ -530,10 +570,14 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
             {access.orderTabs.includes('driver') && orderCardTab === 'driver' && (
               <div className="b2b-order-tab-panel">
                 <div className="b2b-driver-editor">
-                  <label className="wide"><span>Водитель из общего модуля *</span><select value={selectedOrder.driverId ?? ''} onChange={event => selectDriver(event.target.value)} disabled={driversLoading}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Выберите водителя'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
+                  <label className="wide"><span>Водитель из общего модуля *</span><select value={selectedOrder.driverId ?? ''} onChange={event => void selectDriver(event.target.value)} disabled={driversLoading || savingDriverAssignment}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Выберите водителя'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
                   {selectedDriver && <button type="button" className="b2b-linked-driver-card" onClick={() => setRelatedProfile('driver')}><UserRound size={16} /><span>Открыть карточку водителя</span><strong>{selectedDriver.fullName}</strong></button>}
                   <label><span>Количество</span><input value={selectedOrder.transportCount} readOnly /></label>
-                  {access.driverPrice && <label><span>Цена водителю за единицу, сом</span><input type="number" min="0" value={selectedOrder.driverPricePerUnit ?? ''} onChange={event => setDriverPrice(event.target.value)} placeholder="0" /></label>}
+                  {access.driverPrice && <label><span>Цена водителю за единицу, сом</span><input type="number" min="0" value={selectedOrder.driverPricePerUnit ?? ''} onChange={event => setDriverPrice(event.target.value)} placeholder="0" disabled={savingDriverAssignment} /></label>}
+                  {access.driverPrice && <div className="b2b-driver-save-row">
+                    <div aria-live="polite">{driverAssignmentError ? <span className="error">{driverAssignmentError}</span> : driverAssignmentSaved ? <span className="saved"><Check size={14} /> Данные водителя сохранены</span> : <span>Начисление: {selectedDriverTotal.toLocaleString()} сом</span>}</div>
+                    <button className="b2b-primary-button" type="button" onClick={() => void saveDriverPrice()} disabled={savingDriverAssignment || !selectedOrder.driverId}><Save size={15} />{savingDriverAssignment ? 'Сохранение...' : 'Сохранить'}</button>
+                  </div>}
                 </div>
 
                 {access.driverPrice && <>
