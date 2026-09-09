@@ -1,6 +1,6 @@
 import { FormEvent, useState } from 'react';
 import { Building2, CircleDollarSign, ClipboardList, CreditCard, FileCheck2, FileText, Landmark, Mail, MapPin, Pencil, Phone, Plus, School, Search, UserRound, X } from 'lucide-react';
-import { B2B_QUERY_KEYS, useB2BClients, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
+import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import { B2BOrderRecord, createB2BClient, updateB2BClient } from '../../services/b2bDataService';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { formatB2BPaymentMethod } from '../../services/b2bPaymentService';
@@ -10,6 +10,7 @@ import { queryClient } from '../../services/queryClient';
 import B2BClientDocumentsTab from './B2BClientDocumentsTab';
 import { B2BClientOrderEditModal, B2BClientPaymentEditModal } from './B2BClientEditModals';
 import { B2BPaymentRecord } from '../../services/b2bPaymentService';
+import { calculateB2BOrderProfit } from './b2bProfitCalculations';
 
 type ClientType = 'individual' | 'company' | 'school';
 type ClientFilter = 'all' | ClientType;
@@ -74,6 +75,7 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
   const [searchQuery, setSearchQuery] = useState('');
   const { data: orders = [] } = useB2BOrders();
   const { data: expenses = [] } = useB2BExpenses();
+  const { data: payouts = [] } = useB2BDriverPayouts();
   const payments = useB2BPayments();
   const [form, setForm] = useState<B2BClientForm>({ ...EMPTY_CLIENT });
   const [error, setError] = useState('');
@@ -85,19 +87,8 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
   const clientOrdersTotal = selectedClientOrders.reduce((sum, order) => sum + order.total, 0);
   const clientPaidTotal = selectedClientPayments.filter(payment => payment.status === 'confirmed').reduce((sum, payment) => sum + payment.amount, 0);
   const clientFinanceRows = selectedClientOrders.map(order => {
-    const orderExpenses = expenses.filter(expense => expense.orderNumber === order.number);
-    const driverCost = orderExpenses
-      .filter(expense => expense.source === 'driver_payment' || expense.category === 'driver_payments')
-      .reduce((sum, expense) => sum + expense.netAmount, 0);
-    const taxCost = orderExpenses.reduce((sum, expense) => {
-      if (expense.source === 'tax_4pct' || expense.category === 'taxes') return sum + expense.amount;
-      return sum + expense.taxAmount;
-    }, 0);
-    const otherCost = orderExpenses
-      .filter(expense => expense.source !== 'driver_payment' && expense.category !== 'driver_payments' && expense.source !== 'tax_4pct' && expense.category !== 'taxes')
-      .reduce((sum, expense) => sum + expense.amount, 0);
-    const totalExpenses = driverCost + taxCost + otherCost;
-    return { order, revenue: order.total, driverCost, taxCost, otherCost, totalExpenses, balance: order.total - totalExpenses };
+    const profit = calculateB2BOrderProfit(order, payments, payouts, expenses);
+    return { order, revenue: profit.sold, driverCost: profit.driverCost, taxCost: profit.taxCost, otherCost: profit.otherCost, totalExpenses: profit.totalCosts, balance: profit.balance };
   });
   const clientExpensesTotal = clientFinanceRows.reduce((sum, row) => sum + row.totalExpenses, 0);
   const clientBalanceTotal = clientOrdersTotal - clientExpensesTotal;

@@ -16,3 +16,18 @@ test('director has no B2B sidebar access while logistics head retains it', () =>
   expect(getAllowedSections('director')).not.toContain('b2b');
   expect(getAllowedSections('senior_logist')).toContain('b2b');
 });
+
+test('only admin and cashier can manage existing driver payouts', () => {
+  expect(b2bAccess('admin').manageDriverPayouts).toBe(true);
+  expect(b2bAccess('cashier').manageDriverPayouts).toBe(true);
+  expect(b2bAccess('gen_director').manageDriverPayouts).toBe(false);
+  expect(b2bAccess('senior_logist').manageDriverPayouts).toBe(false);
+});
+
+test('cashier can open linked order cards without getting order editing access', () => {
+  expect(b2bAccess('cashier')).toMatchObject({
+    openOrders: true,
+    editOrder: false,
+    orderTabs: ['main', 'driver'],
+  });
+});

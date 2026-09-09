@@ -20,7 +20,8 @@ export function formatB2BPaymentMethod(value: unknown): string {
 
 export const B2B_LEGAL_ACCOUNT_TAX_RATE = 0.04;
 
-export function calculateB2BExpenseTax(amount: number, method: unknown) {
+/** Tax is charged only on confirmed client revenue received to the legal account. */
+export function calculateB2BRevenueTax(amount: number, method: unknown) {
   const grossAmount = Math.max(0, Number(amount) || 0);
   const taxAmount = normalizeB2BPaymentMethod(method) === 'legal_account'
     ? Math.round(grossAmount * B2B_LEGAL_ACCOUNT_TAX_RATE * 100) / 100

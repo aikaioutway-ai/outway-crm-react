@@ -1,14 +1,15 @@
 import type { UserRole } from '../../types';
 import { b2bAccess } from './b2bAccess';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Search, Truck, UserRound, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
 import useB2BPayments from '../../hooks/useB2BPayments';
-import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, calculateB2BExpenseTax, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
+import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
-import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, saveB2BAssignment, updateB2BClientPayment, updateB2BOrder } from '../../services/b2bDataService';
+import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, deleteB2BDriverPayout, saveB2BAssignment, updateB2BClientPayment, updateB2BDriverPayout, updateB2BOrder } from '../../services/b2bDataService';
 import { queryClient } from '../../services/queryClient';
 import B2BOrderDocuments from './B2BOrderDocuments';
+import { calculateB2BOrderProfit } from './b2bProfitCalculations';
 
 export type OrderStatus = B2BOrderStatus;
 export type B2BOrder = B2BOrderRecord;
@@ -65,12 +66,13 @@ function toDateTimeInput(value: string): string {
 
 interface B2BOrdersProps {
   userRole?: UserRole;
+  sessionToken?: string;
   cardOnly?: boolean;
   openOrderId?: string | null;
   onCloseOrder?: () => void;
 }
 
-export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole = 'admin', cardOnly = false }: B2BOrdersProps) {
+export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole = 'admin', sessionToken, cardOnly = false }: B2BOrdersProps) {
   const access = b2bAccess(userRole);
   const { data: storedOrders } = useB2BOrders();
   const { data: storedPayouts } = useB2BDriverPayouts();
@@ -98,6 +100,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const [editingDriverPayoutId, setEditingDriverPayoutId] = useState<string | null>(null);
   const [driverPayoutForm, setDriverPayoutForm] = useState({ ...EMPTY_DRIVER_PAYOUT_FORM });
   const [driverPayoutFormError, setDriverPayoutFormError] = useState('');
+  const [deletingDriverPayoutId, setDeletingDriverPayoutId] = useState<string | null>(null);
   const [relatedProfile, setRelatedProfile] = useState<'client' | 'driver' | null>(null);
   const selectedOrder = orders.find(order => order.id === selectedOrderId) ?? null;
   const selectedClient = selectedOrder ? clients.find(client => client.id === selectedOrder.clientId) ?? null : null;
@@ -121,19 +124,17 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const selectedDriverPayouts = selectedOrder ? driverPayouts.filter(payout => payout.orderId === selectedOrder.id) : [];
   const selectedDriverTotal = selectedOrder ? selectedOrder.driverTotal ?? (selectedOrder.driverPricePerUnit ?? 0) * selectedOrder.transportCount : 0;
   const selectedDriverPaid = selectedDriverPayouts.reduce((sum, payout) => sum + payout.amount, 0);
-  const selectedDriverDebt = Math.max(0, selectedDriverTotal - selectedDriverPaid);
-  const validDriverPayoutIds = new Set(driverPayouts.map(payout => payout.id));
-  const selectedOrderExpenses = selectedOrder ? expenses.filter(expense =>
-    expense.orderNumber === selectedOrder.number &&
-    !(expense.source === 'driver_payment' && expense.sourceId && !validDriverPayoutIds.has(expense.sourceId)),
-  ) : [];
-  const recordedDriverCosts = selectedOrderExpenses.filter(expense => expense.category === 'driver_payments').reduce((sum, expense) => sum + expense.amount, 0);
-  const selectedOtherExpenses = selectedOrderExpenses.filter(expense => expense.category !== 'driver_payments');
-  const selectedDriverCost = Math.max(selectedDriverTotal, recordedDriverCosts);
-  const selectedOrderCosts = selectedDriverCost + selectedOtherExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-  const selectedOrderBalance = selectedOrder ? selectedOrder.total - selectedOrderCosts : 0;
-  const selectedOrderReceivable = selectedOrder ? Math.max(0, selectedOrder.total - selectedPaid) : 0;
-  const selectedOrderMargin = selectedOrder?.total ? (selectedOrderBalance / selectedOrder.total) * 100 : 0;
+  const selectedDriverBalance = selectedDriverTotal - selectedDriverPaid;
+  const selectedDriverDebt = Math.max(0, selectedDriverBalance);
+  const selectedOrderExpenses = selectedOrder ? expenses.filter(expense => expense.orderNumber === selectedOrder.number && expense.source === 'manual' && !['driver_payments', 'taxes'].includes(expense.category)) : [];
+  const selectedProfit = selectedOrder ? calculateB2BOrderProfit(selectedOrder, payments, driverPayouts, expenses) : null;
+  const selectedDriverCost = selectedProfit?.driverCost ?? 0;
+  const selectedTaxCost = selectedProfit?.taxCost ?? 0;
+  const selectedOtherCost = selectedProfit?.otherCost ?? 0;
+  const selectedOrderCosts = selectedProfit?.totalCosts ?? 0;
+  const selectedOrderBalance = selectedProfit?.balance ?? 0;
+  const selectedOrderReceivable = selectedProfit?.receivable ?? 0;
+  const selectedOrderMargin = selectedProfit?.margin ?? 0;
   const successfulOrdersCount = orders.filter(order => order.status === 'success').length;
   const allFilterOrdersCount = orders.length - successfulOrdersCount;
 
@@ -324,6 +325,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const openDriverPayoutForm = (payout?: B2BDriverPayout) => {
     if (!access.driverPay) return;
     if (payout) {
+      if (!access.manageDriverPayouts) return;
       setEditingDriverPayoutId(payout.id);
       setDriverPayoutForm({ amount: String(payout.amount), method: payout.method, paymentOrderNumber: payout.paymentOrderNumber ?? '', paymentDate: payout.paymentDate, comment: payout.comment });
       setDriverPayoutFormError('');
@@ -346,11 +348,29 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     const available = selectedDriverDebt + existingAmount;
     if (amount > available) return setDriverPayoutFormError(`Сумма превышает доступный остаток ${available.toLocaleString()} сом.`);
     try {
-      if (editingDriverPayoutId) return setDriverPayoutFormError('Редактирование перенесённых выплат пока недоступно.');
-      await createB2BDriverPayout(selectedOrder, amount, driverPayoutForm.method, driverPayoutForm.paymentDate, driverPayoutForm.comment.trim(), driverPayoutForm.paymentOrderNumber.trim() || undefined);
-      await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payouts });
+      if (editingDriverPayoutId) {
+        if (!access.manageDriverPayouts) return setDriverPayoutFormError('Редактировать выплаты могут только администратор и кассир.');
+        await updateB2BDriverPayout(editingDriverPayoutId, { amount, method: driverPayoutForm.method, paymentDate: driverPayoutForm.paymentDate, purpose: driverPayoutForm.comment.trim(), paymentOrderNumber: driverPayoutForm.paymentOrderNumber.trim() || undefined }, sessionToken);
+      } else {
+        await createB2BDriverPayout(selectedOrder, amount, driverPayoutForm.method, driverPayoutForm.paymentDate, driverPayoutForm.comment.trim(), driverPayoutForm.paymentOrderNumber.trim() || undefined);
+      }
+      await Promise.all([queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payouts }), queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses })]);
       closeDriverPayoutForm();
     } catch (submitError) { setDriverPayoutFormError(submitError instanceof Error ? submitError.message : 'Не удалось сохранить выплату.'); }
+  };
+
+  const removeDriverPayout = async (payout: B2BDriverPayout) => {
+    if (!access.manageDriverPayouts || !window.confirm(`Удалить выплату ${payout.amount.toLocaleString()} сом водителю ${payout.driverName}?`)) return;
+    setDeletingDriverPayoutId(payout.id);
+    setDriverPayoutFormError('');
+    try {
+      await deleteB2BDriverPayout(payout.id, sessionToken);
+      await Promise.all([queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payouts }), queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses })]);
+    } catch (deleteError) {
+      setDriverPayoutFormError(deleteError instanceof Error ? deleteError.message : 'Не удалось удалить выплату.');
+    } finally {
+      setDeletingDriverPayoutId(null);
+    }
   };
 
   return (
@@ -501,7 +521,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                   <div className="b2b-payment-summary">
                     <div><span>Начислено водителю</span><strong>{selectedDriverTotal.toLocaleString()} сом</strong></div>
                     <div className="paid"><span>Выплачено</span><strong>{selectedDriverPaid.toLocaleString()} сом</strong></div>
-                    <div className="debt"><span>Наш долг</span><strong>{selectedDriverDebt.toLocaleString()} сом</strong></div>
+                    <div className={selectedDriverBalance > 0 ? 'debt' : selectedDriverBalance < 0 ? 'credit' : undefined}><span>Остаток</span><strong>{selectedDriverBalance.toLocaleString()} сом</strong></div>
                   </div>
                   {access.driverPay && <button className="b2b-primary-button" type="button" onClick={() => openDriverPayoutForm()} disabled={!selectedOrder.driverId || selectedDriverDebt <= 0}><Plus size={16} /> Добавить выплату</button>}
                 </div>
@@ -515,7 +535,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                       <div className="b2b-driver-payout-row" key={payout.id}>
                         <span className="b2b-payment-method"><CircleDollarSign size={16} />{formatB2BPaymentMethod(payout.method)}</span>
                         <span>{payout.paymentDate}</span><strong>{payout.amount.toLocaleString()} сом</strong><span title={payout.comment}>{payout.comment || 'Без комментария'}</span>
-                        {access.driverPay && <button className="b2b-history-edit" type="button" onClick={() => openDriverPayoutForm(payout)} aria-label={`Редактировать выплату ${payout.amount.toLocaleString()} сом`}><Pencil size={14} /></button>}
+                        {access.manageDriverPayouts && <><button className="b2b-history-edit" type="button" onClick={() => openDriverPayoutForm(payout)} aria-label={`Редактировать выплату ${payout.amount.toLocaleString()} сом`}><Pencil size={14} /></button><button className="b2b-history-edit" type="button" disabled={deletingDriverPayoutId === payout.id} onClick={() => void removeDriverPayout(payout)} aria-label={`Удалить выплату ${payout.amount.toLocaleString()} сом`}><Trash2 size={14} /></button></>}
                       </div>
                     ))}
                   </div>
@@ -529,7 +549,9 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                 <div className="b2b-order-pnl-summary">
                   <article><span>Продано</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></article>
                   <article className="received"><span>Поступило</span><strong>{selectedPaid.toLocaleString()} сом</strong></article>
-                  <article className="costs"><span>Затраты заказа</span><strong>{selectedOrderCosts.toLocaleString()} сом</strong></article>
+                  <article className="costs"><span>Водитель</span><strong>{selectedDriverCost.toLocaleString()} сом</strong></article>
+                  <article className="costs"><span>Налог 4%</span><strong>{selectedTaxCost.toLocaleString()} сом</strong></article>
+                  <article className="costs"><span>Прочие расходы</span><strong>{selectedOtherCost.toLocaleString()} сом</strong></article>
                   <article className={selectedOrderBalance < 0 ? 'balance negative' : 'balance'}><span>Остаток</span><strong>{selectedOrderBalance.toLocaleString()} сом</strong></article>
                 </div>
                 <div className="b2b-order-pnl-secondary">
@@ -538,13 +560,14 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                   <article className={selectedOrderMargin < 0 ? 'negative' : ''}><span>Маржа</span><strong>{selectedOrderMargin.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%</strong></article>
                 </div>
                 <div className="b2b-order-pnl-breakdown">
-                  <header><strong>Расшифровка затрат</strong><span>{(selectedDriverCost > 0 ? 1 : 0) + selectedOtherExpenses.length} позиций</span></header>
-                  {selectedDriverCost <= 0 && selectedOtherExpenses.length === 0 ? (
+                  <header><strong>Расшифровка затрат</strong><span>{(selectedDriverCost > 0 ? 1 : 0) + (selectedTaxCost > 0 ? 1 : 0) + selectedOrderExpenses.length} позиций</span></header>
+                  {selectedDriverCost <= 0 && selectedTaxCost <= 0 && selectedOrderExpenses.length === 0 ? (
                     <div className="b2b-order-pnl-empty">Затрат по заказу пока нет</div>
                   ) : (
                     <table><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
                       {selectedDriverCost > 0 && <tr><td>Водитель</td><td>{selectedOrder.driverName || 'Начисление водителю'}</td><td>{selectedOrder.departureDate || selectedOrder.requestDate}</td><td className="number">{selectedDriverCost.toLocaleString()} сом</td></tr>}
-                      {selectedOtherExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()} сом</td></tr>)}
+                      {selectedTaxCost > 0 && <tr><td>Налог</td><td>4% с подтверждённой выручки на юрсчёт</td><td>По датам оплат</td><td className="number">{selectedTaxCost.toLocaleString()} сом</td></tr>}
+                      {selectedOrderExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()} сом</td></tr>)}
                     </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()} сом</td></tr></tfoot></table>
                   )}
                 </div>
@@ -634,7 +657,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
               <div className="b2b-payment-notice"><CircleDollarSign size={18} /><div><strong>Долг перед водителем: {selectedDriverDebt.toLocaleString()} сом</strong><span>После сохранения выплата появится в истории заказа.</span></div></div>
               <label><span>Сумма выплаты, сом *</span><input autoFocus type="number" min="1" max={selectedDriverDebt + (editingDriverPayoutId ? driverPayouts.find(payout => payout.id === editingDriverPayoutId)?.amount ?? 0 : 0)} value={driverPayoutForm.amount} onChange={event => setDriverPayoutForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
               <label><span>Как оплатили *</span><select value={driverPayoutForm.method} onChange={event => setDriverPayoutForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
-              {driverPayoutForm.method === 'legal_account' && (() => { const tax = calculateB2BExpenseTax(Number(driverPayoutForm.amount), driverPayoutForm.method); return <div className="b2b-tax-preview"><span>Удержание налога 4% <strong>{tax.taxAmount.toLocaleString()} сом</strong></span><span>К перечислению водителю <strong>{tax.netAmount.toLocaleString()} сом</strong></span></div>; })()}
+              <div className="b2b-tax-preview"><span>Водителю будет перечислена вся сумма <strong>{(Number(driverPayoutForm.amount) || 0).toLocaleString()} сом</strong></span><span>Налог с выплаты не удерживается</span></div>
               <label><span>№ платёжного поручения</span><input value={driverPayoutForm.paymentOrderNumber} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder="Необязательно" /></label>
               <label><span>Когда оплатили *</span><input type="date" value={driverPayoutForm.paymentDate} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentDate: event.target.value }))} /></label>
               <label className="full"><span>Комментарий</span><textarea value={driverPayoutForm.comment} onChange={event => setDriverPayoutForm(current => ({ ...current, comment: event.target.value }))} placeholder="Примечание к выплате" /></label>

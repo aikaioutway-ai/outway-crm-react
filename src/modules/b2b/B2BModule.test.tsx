@@ -10,12 +10,18 @@ jest.mock('./B2BFinance', () => () => <div>Finance content</div>);
 jest.mock('./B2BCashflow', () => () => <div>Cashflow content</div>);
 jest.mock('./B2BCashier', () => ({ onOpenOrder }: { onOpenOrder?: (id: string) => void }) => <div>Cashier content{onOpenOrder && <button onClick={() => onOpenOrder('order')}>Open linked order</button>}</div>);
 
-test('cashier cannot open restricted tabs or linked orders', () => {
+test('cashier cannot open restricted tabs but can open a linked order to manage payouts', () => {
   render(<B2BModule userRole="cashier" />);
-  for (const name of ['Заказы', 'Логистика', 'Календарь', 'P&L по заказам', 'Open linked order']) {
+  for (const name of ['Заказы', 'Логистика', 'Календарь', 'P&L по заказам']) {
     expect(screen.queryByRole('button', { name })).not.toBeInTheDocument();
   }
   expect(screen.getByText('Cashier content')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Open linked order' }));
+  expect(screen.getByText('Orders content')).toBeInTheDocument();
+});
+
+test('cashier can still navigate after returning from linked order', () => {
+  render(<B2BModule userRole="cashier" />);
   fireEvent.click(screen.getByRole('button', { name: 'Расходы' }));
   expect(screen.getByText('Expenses content')).toBeInTheDocument();
 });

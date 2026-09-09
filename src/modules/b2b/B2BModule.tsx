@@ -26,11 +26,11 @@ const B2B_TABS = [
 
 type B2BTab = typeof B2B_TABS[number]['key'];
 
-export default function B2BModule({ userRole }: { userRole: UserRole }) {
+export default function B2BModule({ userRole, sessionToken }: { userRole: UserRole; sessionToken?: string }) {
   const access = b2bAccess(userRole);
   const canOpenOrders = access.openOrders;
   const allowedTabs = B2B_TABS.filter(tab => access.tabs.includes(tab.key));
-  const [activeTab, setActiveTab] = useState<B2BTab>(canOpenOrders ? 'orders' : 'cashier');
+  const [activeTab, setActiveTab] = useState<B2BTab>(userRole === 'cashier' ? 'cashier' : 'orders');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
   const [returnTabAfterOrder, setReturnTabAfterOrder] = useState<B2BTab | null>(null);
   const visibleTab = allowedTabs.some(tab => tab.key === activeTab) ? activeTab : allowedTabs[0].key;
@@ -84,11 +84,11 @@ export default function B2BModule({ userRole }: { userRole: UserRole }) {
       </nav>
 
       {orderToOpenId && canOpenOrders ? (
-        <B2BOrders userRole={userRole} cardOnly openOrderId={orderToOpenId} onCloseOrder={closeLinkedOrderCard} />
+        <B2BOrders userRole={userRole} sessionToken={sessionToken} cardOnly openOrderId={orderToOpenId} onCloseOrder={closeLinkedOrderCard} />
       ) : visibleTab === 'cashier' ? (
         <B2BCashier onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'orders' ? (
-        <B2BOrders userRole={userRole} openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
+        <B2BOrders userRole={userRole} sessionToken={sessionToken} openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
       ) : visibleTab === 'logistics' ? (
         <B2BLogistics canPay={access.driverPay} onOpenOrder={openOrderCard} />
       ) : visibleTab === 'calendar' ? (

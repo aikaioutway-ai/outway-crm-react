@@ -771,6 +771,8 @@
 .b2b-payment-summary .paid strong { color: #2d8c57; }
 .b2b-payment-summary .debt { background: #fff6f3; }
 .b2b-payment-summary .debt strong { color: #bc5c4e; }
+.b2b-payment-summary .credit { background: #f1faf5; }
+.b2b-payment-summary .credit strong { color: #2d8c57; }
 .b2b-payment-history { margin-top: 12px; border: 1px solid #e2ebed; border-radius: 14px; overflow: hidden; }
 .b2b-payment-history-title { min-height: 42px; padding: 0 13px; display: flex; align-items: center; gap: 7px; background: #f7fbfb; color: #52636e; font-size: 12px; }
 .b2b-payment-history-title span { min-width: 20px; height: 20px; border-radius: 10px; display: grid; place-items: center; background: #e5f4f3; color: #287f82; font-size: 10px; font-weight: 850; }

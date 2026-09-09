@@ -9,10 +9,6 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
 import ManagerPeriodBar from './ManagerPeriodBar';
-import useB2BPayments from '../../hooks/useB2BPayments';
-import { B2BPaymentRecord } from '../../services/b2bPaymentService';
-import B2BCashierReview from '../b2b/B2BCashierReview';
-import B2BIcon from '../../core/icons/B2BIcon';
 
 type SortKey = 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsAmount';
 
@@ -84,14 +80,6 @@ function matchesPeriod(row: PaymentTableRow, periodKey: string): boolean {
   const period = CASHIER_PERIODS.find(item => item.key === periodKey);
   const date = paymentDate(row);
   if (!period || !date) return false;
-  return date.getMonth() + 1 === period.month && date.getFullYear() === period.year;
-}
-
-function b2bMatchesPeriod(payment: B2BPaymentRecord, periodKey: string): boolean {
-  if (periodKey === 'ALL') return CASHIER_PERIODS.some(period => b2bMatchesPeriod(payment, period.key));
-  const period = CASHIER_PERIODS.find(item => item.key === periodKey);
-  const date = new Date(`${payment.paymentDate}T00:00:00`);
-  if (!period || Number.isNaN(date.getTime())) return false;
   return date.getMonth() + 1 === period.month && date.getFullYear() === period.year;
 }
 
@@ -225,7 +213,6 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
 export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
   const { data: refundRows = [] } = useRefundsTable();
-  const b2bPayments = useB2BPayments();
   const searchablePayments = useMemo(
     () => (rows ?? []).filter(row => isSchoolAllowed(getBranchFilter(row.branchShort, row.branchShort), allowedSchools)),
     [allowedSchools, rows],
@@ -233,7 +220,6 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'paymentsAmount', dir: 'desc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [b2bReviewOpen, setB2bReviewOpen] = useState(false);
   const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
@@ -275,24 +261,8 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
       refundsConfirmedAmount,
     };
     });
-    const periodB2BPayments = b2bPayments.filter(payment => b2bMatchesPeriod(payment, periodKey));
-    const pending = periodB2BPayments.filter(payment => payment.status === 'pending');
-    const confirmed = periodB2BPayments.filter(payment => payment.status === 'confirmed');
-    const active = periodB2BPayments.filter(payment => payment.status !== 'rejected');
-    const b2bStat: CashierSchoolStat = {
-      key: 'B2B', label: 'B2B', color: '#31A4A5',
-      paymentsAmount: [...pending, ...confirmed].reduce((sum, payment) => sum + payment.amount, 0),
-      pendingCount: pending.length,
-      pendingAmount: pending.reduce((sum, payment) => sum + payment.amount, 0),
-      confirmedAmount: confirmed.reduce((sum, payment) => sum + payment.amount, 0),
-      qrAmount: active.filter(payment => payment.method === 'legal_account').reduce((sum, payment) => sum + payment.amount, 0),
-      cashAmount: active.filter(payment => payment.method === 'cash').reduce((sum, payment) => sum + payment.amount, 0),
-      refundsAmount: 0,
-      refundsPendingAmount: 0,
-      refundsConfirmedAmount: 0,
-    };
-    return [...schoolStats, b2bStat];
-  }, [b2bPayments, periodKey, periodRefundRows, periodRows, schoolTier]);
+    return schoolStats;
+  }, [periodRefundRows, periodRows, schoolTier]);
 
   const totals = useMemo(() => stats.reduce((acc, s) => ({
     pendingCount: acc.pendingCount + s.pendingCount,
@@ -307,9 +277,8 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   }), { paymentsAmount: 0, pendingCount: 0, pendingAmount: 0, confirmedAmount: 0, qrAmount: 0, cashAmount: 0, refundsAmount: 0, refundsPendingAmount: 0, refundsConfirmedAmount: 0 }), [stats]);
 
   const displayRows = useMemo(() => {
-    const b2bStat = stats.find(stat => stat.key === 'B2B');
-    const schoolRows = buildGroupedRows(
-      stats.filter(stat => stat.key !== 'B2B'),
+    return buildGroupedRows(
+      stats,
       expandedGroups,
       ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsAmount', 'refundsPendingAmount', 'refundsConfirmedAmount'],
       (a, b) => {
@@ -317,17 +286,6 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
         return sortState.dir === 'asc' ? cmp : -cmp;
       },
     );
-    if (!b2bStat) return schoolRows;
-    return [...schoolRows, {
-      key: b2bStat.key,
-      label: b2bStat.label,
-      color: b2bStat.color,
-      logo: b2bStat.logo,
-      data: b2bStat,
-      isGroup: false,
-      isChild: false,
-      expanded: false,
-    }];
   }, [stats, expandedGroups, sortState]);
 
   const handleSort = (key: SortKey) => {
@@ -367,12 +325,10 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
               {displayRows.map((row, i) => (
                 <div
                   key={row.key}
-                  onClick={() => row.key === 'B2B' ? setB2bReviewOpen(true) : row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
+                  onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
                   style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}
                 >
-                  {row.key === 'B2B'
-                    ? <B2BIcon size={26} />
-                    : <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />}
+                  <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                   <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
                   {row.isGroup ? (
                     row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
@@ -438,12 +394,11 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />
 
       <SchoolDockSidebar
-        items={stats.filter(s => s.key !== 'B2B').map(s => ({ key: s.key, label: s.label, color: s.color, logo: s.logo }))}
+        items={stats.map(s => ({ key: s.key, label: s.label, color: s.color, logo: s.logo }))}
         hidden={sidebarHidden}
         onHiddenChange={setSidebarHidden}
         onSelect={onSelectSchool}
       />
-      <B2BCashierReview open={b2bReviewOpen} onClose={() => setB2bReviewOpen(false)} />
     </div>
   );
 }

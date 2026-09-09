@@ -13,7 +13,6 @@ export interface B2BDriverPayableRow {
   tripDate: string;
   accrued: number;
   paidGross: number;
-  paidNet: number;
   remaining: number;
 }
 
@@ -21,7 +20,7 @@ export interface B2BCashOperation {
   id: string;
   date: string;
   direction: 'income' | 'expense';
-  kind: 'client_payment' | 'driver_payout' | 'manual_expense';
+  kind: 'client_payment' | 'driver_payout' | 'manual_expense' | 'revenue_tax';
   title: string;
   description: string;
   amount: number;
@@ -42,7 +41,6 @@ export interface B2BCashierSummary {
   clientOverpayment: number;
   driverAccrued: number;
   driverPaidGross: number;
-  driverPaidNet: number;
   driverRemaining: number;
   manualExpenses: number;
   calculatedTax: number;
@@ -67,6 +65,9 @@ export function b2bCashierPeriodBounds(period: B2BCashierPeriod) {
 }
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
+const calculatePaymentTax = (payment: B2BPaymentRecord) => payment.status === 'confirmed' && payment.method === 'legal_account'
+  ? roundMoney(payment.amount * B2B_LEGAL_ACCOUNT_TAX_RATE)
+  : 0;
 
 export function calculateB2BCashierSummary(
   orders: B2BOrderRecord[],
@@ -121,7 +122,6 @@ export function calculateB2BCashierSummary(
     const accrued = order.driverTotal ?? (order.driverPricePerUnit ?? 0) * order.transportCount;
     const assignmentPayouts = payoutsThroughPeriodByAssignment.get(order.assignmentId) ?? [];
     const paidGross = assignmentPayouts.reduce((sum, payout) => sum + payout.amount, 0);
-    const paidNet = assignmentPayouts.reduce((sum, payout) => sum + payout.netAmount, 0);
     const remaining = Math.max(accrued - paidGross, 0);
     if (remaining <= 0) return [];
     return [{
@@ -131,7 +131,6 @@ export function calculateB2BCashierSummary(
       tripDate: orderDate(order),
       accrued,
       paidGross,
-      paidNet,
       remaining,
     }];
   }).sort((left, right) => left.tripDate.localeCompare(right.tripDate));
@@ -158,7 +157,7 @@ export function calculateB2BCashierSummary(
       kind: 'driver_payout' as const,
       title: payout.driverName || 'Выплата водителю',
       description: ordersById.get(payout.orderId)?.number ?? 'Заказ B2B',
-      amount: payout.netAmount,
+      amount: payout.amount,
       method: payout.method,
       paymentOrderNumber: payout.paymentOrderNumber,
       orderId: payout.orderId,
@@ -170,10 +169,21 @@ export function calculateB2BCashierSummary(
       kind: 'manual_expense' as const,
       title: expense.purpose || 'Ручной расход B2B',
       description: expense.orderNumber,
-      amount: expense.netAmount,
+      amount: expense.amount,
       method: expense.method,
       paymentOrderNumber: expense.paymentOrderNumber,
       orderId: orderIdsByNumber.get(expense.orderNumber),
+    })),
+    ...periodConfirmedPayments.filter(payment => payment.method === 'legal_account').map(payment => ({
+      id: `tax-${payment.id}`,
+      date: payment.paymentDate,
+      direction: 'expense' as const,
+      kind: 'revenue_tax' as const,
+      title: 'Налог 4% с выручки',
+      description: payment.orderNumber,
+      amount: roundMoney(payment.amount * B2B_LEGAL_ACCOUNT_TAX_RATE),
+      method: payment.method,
+      orderId: payment.orderId,
     })),
   ].sort((left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id));
 
@@ -184,7 +194,7 @@ export function calculateB2BCashierSummary(
     return { paid, remaining: Math.max(accrued - paid, 0) };
   });
   return {
-    actualBalance: payments.filter(row => row.status === 'confirmed').reduce((sum, row) => sum + row.amount, 0) - payouts.reduce((sum, row) => sum + row.netAmount, 0) - expenses.filter(row => row.source === 'manual').reduce((sum, row) => sum + row.netAmount, 0),
+    actualBalance: payments.filter(row => row.status === 'confirmed').reduce((sum, row) => sum + row.amount - calculatePaymentTax(row), 0) - payouts.reduce((sum, row) => sum + row.amount, 0) - expenses.filter(row => row.source === 'manual').reduce((sum, row) => sum + row.amount, 0),
     clientDebts,
     periodDriverPaid: periodDriverBalances.reduce((sum, row) => sum + row.paid, 0),
     periodDriverRemaining: periodDriverBalances.reduce((sum, row) => sum + row.remaining, 0),
@@ -195,15 +205,14 @@ export function calculateB2BCashierSummary(
     clientOverpayment,
     driverAccrued: periodOrders.reduce((sum, order) => sum + (order.driverTotal ?? (order.driverPricePerUnit ?? 0) * order.transportCount), 0),
     driverPaidGross: periodPayouts.reduce((sum, payout) => sum + payout.amount, 0),
-    driverPaidNet: periodPayouts.reduce((sum, payout) => sum + payout.netAmount, 0),
     driverRemaining: driverPayables.reduce((sum, row) => sum + row.remaining, 0),
-    manualExpenses: periodManualExpenses.reduce((sum, expense) => sum + expense.netAmount, 0),
+    manualExpenses: periodManualExpenses.reduce((sum, expense) => sum + expense.amount, 0),
     calculatedTax: periodConfirmedPayments
       .filter(payment => payment.method === 'legal_account')
       .reduce((sum, payment) => sum + roundMoney(payment.amount * B2B_LEGAL_ACCOUNT_TAX_RATE), 0),
     riskyManualExpenses: {
       count: riskyManualRows.length,
-      amount: riskyManualRows.reduce((sum, expense) => sum + expense.netAmount, 0),
+      amount: riskyManualRows.reduce((sum, expense) => sum + expense.amount, 0),
     },
     pendingPayments,
     driverPayables,

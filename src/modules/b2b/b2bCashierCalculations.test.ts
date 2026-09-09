@@ -17,12 +17,12 @@ const payment = (patch: Partial<B2BPaymentRecord> = {}): B2BPaymentRecord => ({
 
 const payout = (patch: Partial<B2BDriverPayoutRecord> = {}): B2BDriverPayoutRecord => ({
   id: 'payout-1', orderId: 'order-1', assignmentId: 'assignment-1', driverId: 'driver-1', driverName: 'Водитель',
-  amount: 2_000, taxAmount: 80, netAmount: 1_920, method: 'legal_account', paymentDate: '2026-09-15', comment: '', createdAt: '2026-09-15T10:00:00Z', ...patch,
+  amount: 2_000, taxAmount: 0, netAmount: 2_000, method: 'legal_account', paymentDate: '2026-09-15', comment: '', createdAt: '2026-09-15T10:00:00Z', ...patch,
 });
 
 const expense = (patch: Partial<B2BExpenseRecord> = {}): B2BExpenseRecord => ({
   id: 'expense-1', expenseDate: '2026-09-16', category: 'marketing', amount: 1_000, method: 'legal_account',
-  taxAmount: 40, netAmount: 960, purpose: 'Реклама', orderNumber: 'B2B-001', comment: '', source: 'manual', ...patch,
+  taxAmount: 0, netAmount: 1_000, purpose: 'Реклама', orderNumber: 'B2B-001', comment: '', source: 'manual', ...patch,
 });
 
 const period = { year: 2026, month: 9 };
@@ -38,7 +38,7 @@ test('separates confirmed, pending and rejected payments without using order.pai
   expect(summary.confirmedReceived).toBe(4_000);
   expect(summary.pendingReview).toBe(700);
   expect(summary.outstandingReceivable).toBe(6_000);
-  expect(summary.operations).toHaveLength(1);
+  expect(summary.operations).toHaveLength(2);
 });
 
 test('calculates receivable and overpayment per order through period end', () => {
@@ -61,9 +61,8 @@ test('keeps success-order driver debt and matches payouts to the current assignm
   );
 
   expect(summary.driverPaidGross).toBe(5_000);
-  expect(summary.driverPaidNet).toBe(4_920);
   expect(summary.driverRemaining).toBe(4_000);
-  expect(summary.driverPayables[0]).toMatchObject({ paidGross: 2_000, paidNet: 1_920, remaining: 4_000 });
+  expect(summary.driverPayables[0]).toMatchObject({ paidGross: 2_000, remaining: 4_000 });
 });
 
 test('uses only primary cash movements and calculates revenue tax directly from confirmed payments', () => {
@@ -76,17 +75,17 @@ test('uses only primary cash movements and calculates revenue tax directly from 
   );
 
   expect(summary.calculatedTax).toBe(400);
-  expect(summary.manualExpenses).toBe(960);
+  expect(summary.manualExpenses).toBe(1_000);
   expect(summary.operations.map(row => [row.kind, row.amount])).toEqual(expect.arrayContaining([
-    ['client_payment', 10_000], ['client_payment', 2_000], ['driver_payout', 1_920], ['manual_expense', 960],
+    ['client_payment', 10_000], ['client_payment', 2_000], ['driver_payout', 2_000], ['manual_expense', 1_000], ['revenue_tax', 400],
   ]));
-  expect(summary.operations).toHaveLength(4);
+  expect(summary.operations).toHaveLength(5);
 });
 
 test('flags risky manual driver and tax categories without removing them from the manual total', () => {
   const summary = calculateB2BCashierSummary(
     [], [], [],
-    [expense({ category: 'driver_payments', netAmount: 800 }), expense({ id: 'manual-tax', category: 'taxes', netAmount: 300 })],
+    [expense({ category: 'driver_payments', amount: 800, netAmount: 800 }), expense({ id: 'manual-tax', category: 'taxes', amount: 300, netAmount: 300 })],
     period,
   );
 
@@ -103,7 +102,7 @@ test('current debts and cash balance stay unchanged when selected month changes'
   expect(january.clientDebts).toEqual(september.clientDebts);
   expect(january.driverPayables).toEqual(september.driverPayables);
   expect(january.pendingReview).toBe(500);
-  expect(january.actualBalance).toBe(1120);
+  expect(january.actualBalance).toBe(840);
   expect(january.actualBalance).toBe(september.actualBalance);
   expect(january.confirmedReceived).toBe(0);
 });

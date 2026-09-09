@@ -5,12 +5,13 @@ export function b2bAccess(role: UserRole) {
   const cashier = role === 'cashier';
   return {
     tabs: manager ? ['orders', 'calendar', 'clients'] : logist ? ['logistics', 'calendar'] : cashier ? ['cashier', 'clients', 'expenses', 'cashflow'] : ['cashier', 'orders', 'logistics', 'calendar', 'clients', 'expenses', 'finance', 'cashflow'],
-    orderTabs: logist ? ['main', 'driver'] : manager ? ['main', 'payment', 'driver', 'documents'] : ['main', 'payment', 'driver', 'pnl', 'documents'],
-    openOrders: !cashier,
+    orderTabs: logist ? ['main', 'driver'] : manager ? ['main', 'payment', 'driver', 'documents'] : cashier ? ['main', 'driver'] : ['main', 'payment', 'driver', 'pnl', 'documents'],
+    openOrders: true,
     clientFinance: !manager && !logist,
     openClient: !logist,
     driverPrice: !manager,
     driverPay: !manager && !logist,
-    editOrder: !logist,
+    manageDriverPayouts: role === 'admin' || cashier,
+    editOrder: !logist && !cashier,
   };
 }

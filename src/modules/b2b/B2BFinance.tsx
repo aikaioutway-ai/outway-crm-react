@@ -1,35 +1,21 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, BanknoteArrowDown, BanknoteArrowUp, CircleDollarSign, Search, ShoppingCart, WalletCards, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, BanknoteArrowDown, BanknoteArrowUp, Calculator, CircleDollarSign, Search, ShoppingCart, Truck, WalletCards, X } from 'lucide-react';
 import { useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import useB2BPayments from '../../hooks/useB2BPayments';
-import type { B2BExpenseRecord } from '../../services/b2bDataService';
 import { B2B_ORDER_STATUSES } from './B2BOrders';
+import { calculateB2BOrderProfit } from './b2bProfitCalculations';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
 const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сом`;
 const percent = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`;
 
 type SortDirection = 'asc' | 'desc';
-type FinanceSortKey = 'month' | 'number' | 'client' | 'sold' | 'received' | 'costs' | 'balance' | 'receivable' | 'payable' | 'margin';
+type FinanceSortKey = 'month' | 'number' | 'client' | 'sold' | 'received' | 'driverCost' | 'taxCost' | 'otherCost' | 'balance' | 'receivable' | 'payable' | 'margin';
 
 function isoDate(value: string) {
   if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.slice(0, 10);
   const match = value.match(/^(\d{2})\.(\d{2})\.(\d{4})/);
   return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
-}
-
-function expenseCategory(value: string) {
-  const normalized = (value || 'other').toLocaleLowerCase('ru-RU');
-  return normalized === 'fuel' || normalized === 'maintenance' ? 'other' : normalized;
-}
-
-function splitExpense(rows: B2BExpenseRecord[]) {
-  return rows.reduce((totals, expense) => {
-    const category = expenseCategory(expense.category);
-    if (category === 'driver_payments') totals.driverPayments += expense.amount;
-    else totals.other += expense.amount;
-    return totals;
-  }, { driverPayments: 0, other: 0 });
 }
 
 interface B2BFinanceProps {
@@ -70,28 +56,12 @@ export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
   }, [clientId, orders, search, status, year]);
 
   const orderRows = useMemo(() => {
-    const validDriverPaymentIds = new Set(payouts.map(payout => payout.id));
     return filteredOrders.map(order => {
-    const recordedCosts = splitExpense(expenses.filter(expense =>
-      expense.orderNumber === order.number &&
-      !(expense.source === 'driver_payment' && expense.sourceId && !validDriverPaymentIds.has(expense.sourceId)),
-    ));
-    const confirmedPayments = payments.filter(payment => payment.status === 'confirmed' && payment.orderId === order.id).reduce((sum, payment) => sum + payment.amount, 0);
-    const received = Math.min(order.total, order.paid + confirmedPayments);
-    const paidToDriver = payouts.filter(payout => payout.orderId === order.id).reduce((sum, payout) => sum + payout.amount, 0);
-    const driverAccrued = order.driverTotal ?? (order.driverPricePerUnit ?? 0) * order.transportCount;
-    const costs = Math.max(driverAccrued, recordedCosts.driverPayments) + recordedCosts.other;
-    const balance = order.total - costs;
+    const profit = calculateB2BOrderProfit(order, payments, payouts, expenses);
     return {
       order,
       month: Number(isoDate(order.departureDate || order.requestDate).slice(5, 7)),
-      sold: order.total,
-      received,
-      costs,
-      balance,
-      receivable: Math.max(0, order.total - received),
-      payable: order.status === 'success' ? 0 : Math.max(0, driverAccrued - paidToDriver),
-      margin: order.total > 0 ? (balance / order.total) * 100 : 0,
+      ...profit,
     };
   });
   }, [expenses, filteredOrders, payments, payouts]);
@@ -102,22 +72,26 @@ export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
     const totals = rows.reduce((result, row) => ({
       sold: result.sold + row.sold,
       received: result.received + row.received,
-      costs: result.costs + row.costs,
+      driverCost: result.driverCost + row.driverCost,
+      taxCost: result.taxCost + row.taxCost,
+      otherCost: result.otherCost + row.otherCost,
       balance: result.balance + row.balance,
       receivable: result.receivable + row.receivable,
       payable: result.payable + row.payable,
-    }), { sold: 0, received: 0, costs: 0, balance: 0, receivable: 0, payable: 0 });
+    }), { sold: 0, received: 0, driverCost: 0, taxCost: 0, otherCost: 0, balance: 0, receivable: 0, payable: 0 });
     return { month, label, rows, ...totals, margin: totals.sold > 0 ? (totals.balance / totals.sold) * 100 : 0 };
   }), [orderRows]);
 
   const totals = months.reduce((result, month) => ({
     sold: result.sold + month.sold,
     received: result.received + month.received,
-    costs: result.costs + month.costs,
+    driverCost: result.driverCost + month.driverCost,
+    taxCost: result.taxCost + month.taxCost,
+    otherCost: result.otherCost + month.otherCost,
     balance: result.balance + month.balance,
     receivable: result.receivable + month.receivable,
     payable: result.payable + month.payable,
-  }), { sold: 0, received: 0, costs: 0, balance: 0, receivable: 0, payable: 0 });
+  }), { sold: 0, received: 0, driverCost: 0, taxCost: 0, otherCost: 0, balance: 0, receivable: 0, payable: 0 });
   const totalMargin = totals.sold > 0 ? (totals.balance / totals.sold) * 100 : 0;
 
   const sortedMonths = useMemo(() => [...months].sort((left, right) => {
@@ -163,19 +137,21 @@ export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
     <div className="b2b-finance-equation b2b-finance-result-cards">
       <article><span><ShoppingCart size={17} />Продано</span><strong>{money(totals.sold)}</strong></article>
       <article><span><BanknoteArrowDown size={17} />Поступило</span><strong>{money(totals.received)}</strong></article>
-      <article><span><WalletCards size={17} />Затраты заказов</span><strong>{money(totals.costs)}</strong></article>
+      <article><span><Truck size={17} />Водители</span><strong>{money(totals.driverCost)}</strong></article>
+      <article><span><Calculator size={17} />Налог 4%</span><strong>{money(totals.taxCost)}</strong></article>
+      <article><span><WalletCards size={17} />Прочие расходы</span><strong>{money(totals.otherCost)}</strong></article>
       <article className={totals.balance < 0 ? 'negative' : 'result'}><span><CircleDollarSign size={17} />Остаток</span><strong>{money(totals.balance)}</strong></article>
       <article className="margin"><span>Маржа</span><strong>{percent(totalMargin)}</strong></article>
     </div>
 
     <div className="b2b-finance-debts"><article><span><BanknoteArrowDown size={18} /><b>Дебиторская задолженность</b><small>Клиенты должны нам</small></span><strong>{money(totals.receivable)}</strong></article><article><span><BanknoteArrowUp size={18} /><b>Кредиторская задолженность</b><small>Мы должны водителям</small></span><strong>{money(totals.payable)}</strong></article></div>
 
-    <div className="b2b-finance-table-wrap"><table><thead><tr><th>{monthHead('Период', 'month')}</th><th>{monthHead('Продано', 'sold')}</th><th>{monthHead('Поступило', 'received')}</th><th>{monthHead('Затраты заказов', 'costs')}</th><th>{monthHead('Остаток', 'balance')}</th><th>{monthHead('Должны нам', 'receivable')}</th><th>{monthHead('Должны мы', 'payable')}</th><th>{monthHead('Маржа', 'margin')}</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={8} className="empty">Загрузка…</td></tr> : sortedMonths.map(month => <tr key={month.month} onClick={() => { setSelectedMonthNumber(month.month); setOrderSort({ key: 'number', direction: 'asc' }); }}><td><button type="button" className="month" aria-label={`Открыть заказы за ${month.label.toLocaleLowerCase('ru-RU')}`}><span><b>{month.label}</b><small>{month.rows.length} заказов</small></span></button></td><td className="sold">{money(month.sold)}</td><td className="received">{money(month.received)}</td><td className="costs">{money(month.costs)}</td><td className={`balance${month.balance < 0 ? ' negative' : ''}`}>{money(month.balance)}</td><td className="receivable">{money(month.receivable)}</td><td className="payable">{money(month.payable)}</td><td className={`margin${month.margin < 0 ? ' negative' : ''}`}>{percent(month.margin)}</td></tr>)}</tbody><tfoot><tr><td>Итого за {year}</td><td>{money(totals.sold)}</td><td>{money(totals.received)}</td><td>{money(totals.costs)}</td><td>{money(totals.balance)}</td><td>{money(totals.receivable)}</td><td>{money(totals.payable)}</td><td>{percent(totalMargin)}</td></tr></tfoot></table></div>
+    <div className="b2b-finance-table-wrap"><table><thead><tr><th>{monthHead('Период', 'month')}</th><th>{monthHead('Продано', 'sold')}</th><th>{monthHead('Поступило', 'received')}</th><th>{monthHead('Водители', 'driverCost')}</th><th>{monthHead('Налог', 'taxCost')}</th><th>{monthHead('Прочие', 'otherCost')}</th><th>{monthHead('Остаток', 'balance')}</th><th>{monthHead('Должны нам', 'receivable')}</th><th>{monthHead('Должны мы', 'payable')}</th><th>{monthHead('Маржа', 'margin')}</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={10} className="empty">Загрузка…</td></tr> : sortedMonths.map(month => <tr key={month.month} onClick={() => { setSelectedMonthNumber(month.month); setOrderSort({ key: 'number', direction: 'asc' }); }}><td><button type="button" className="month" aria-label={`Открыть заказы за ${month.label.toLocaleLowerCase('ru-RU')}`}><span><b>{month.label}</b><small>{month.rows.length} заказов</small></span></button></td><td className="sold">{money(month.sold)}</td><td className="received">{money(month.received)}</td><td className="costs">{money(month.driverCost)}</td><td className="costs">{money(month.taxCost)}</td><td className="costs">{money(month.otherCost)}</td><td className={`balance${month.balance < 0 ? ' negative' : ''}`}>{money(month.balance)}</td><td className="receivable">{money(month.receivable)}</td><td className="payable">{money(month.payable)}</td><td className={`margin${month.margin < 0 ? ' negative' : ''}`}>{percent(month.margin)}</td></tr>)}</tbody><tfoot><tr><td>Итого за {year}</td><td>{money(totals.sold)}</td><td>{money(totals.received)}</td><td>{money(totals.driverCost)}</td><td>{money(totals.taxCost)}</td><td>{money(totals.otherCost)}</td><td>{money(totals.balance)}</td><td>{money(totals.receivable)}</td><td>{money(totals.payable)}</td><td>{percent(totalMargin)}</td></tr></tfoot></table></div>
 
     {selectedMonth && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedMonthNumber(null); }}>
       <article className="b2b-finance-month-card" role="dialog" aria-modal="true" aria-labelledby="b2b-finance-month-title">
         <header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><CircleDollarSign size={22} /></span><div><small>Детализация финансов</small><h2 id="b2b-finance-month-title">{selectedMonth.label} {year}</h2><p>{selectedMonth.rows.length} заказов · продано на {money(selectedMonth.sold)}</p></div></div><div className="b2b-client-profile-summary"><span>Остаток: <b>{money(selectedMonth.balance)}</b></span><span>Маржа: <b>{percent(selectedMonth.margin)}</b></span><button type="button" onClick={() => setSelectedMonthNumber(null)} aria-label="Закрыть"><X size={18} /></button></div></header>
-        <div className="b2b-finance-month-body"><div className="b2b-finance-orders-wrap"><table><thead><tr><th>{orderHead('Заказ', 'number')}</th><th>{orderHead('Клиент / маршрут', 'client')}</th><th className="number">{orderHead('Продано', 'sold')}</th><th className="number">{orderHead('Поступило', 'received')}</th><th className="number">{orderHead('Затраты заказа', 'costs')}</th><th className="number">{orderHead('Остаток', 'balance')}</th><th className="number">{orderHead('Нам должны', 'receivable')}</th><th className="number">{orderHead('Мы должны', 'payable')}</th><th className="number">{orderHead('Маржа', 'margin')}</th></tr></thead><tbody>{sortedOrderRows.length ? sortedOrderRows.map(row => <tr key={row.order.id} onClick={() => onOpenOrder?.(row.order.id)}><td><button type="button">{row.order.number}</button><small>{row.order.departureDate || row.order.requestDate}</small></td><td><b>{row.order.client}</b><small>{row.order.routeFrom} → {row.order.routeTo}</small></td><td className="number sold">{money(row.sold)}</td><td className="number received">{money(row.received)}</td><td className="number costs">{money(row.costs)}</td><td className={`number balance${row.balance < 0 ? ' negative' : ''}`}>{money(row.balance)}</td><td className="number receivable">{money(row.receivable)}</td><td className="number payable">{money(row.payable)}</td><td className={`number margin${row.margin < 0 ? ' negative' : ''}`}>{percent(row.margin)}</td></tr>) : <tr><td colSpan={9} className="empty">В этом месяце заказов нет</td></tr>}</tbody></table></div></div>
+        <div className="b2b-finance-month-body"><div className="b2b-finance-orders-wrap"><table><thead><tr><th>{orderHead('Заказ', 'number')}</th><th>{orderHead('Клиент / маршрут', 'client')}</th><th className="number">{orderHead('Продано', 'sold')}</th><th className="number">{orderHead('Поступило', 'received')}</th><th className="number">{orderHead('Водитель', 'driverCost')}</th><th className="number">{orderHead('Налог', 'taxCost')}</th><th className="number">{orderHead('Прочие', 'otherCost')}</th><th className="number">{orderHead('Остаток', 'balance')}</th><th className="number">{orderHead('Нам должны', 'receivable')}</th><th className="number">{orderHead('Мы должны', 'payable')}</th><th className="number">{orderHead('Маржа', 'margin')}</th></tr></thead><tbody>{sortedOrderRows.length ? sortedOrderRows.map(row => <tr key={row.order.id} onClick={() => onOpenOrder?.(row.order.id)}><td><button type="button">{row.order.number}</button><small>{row.order.departureDate || row.order.requestDate}</small></td><td><b>{row.order.client}</b><small>{row.order.routeFrom} → {row.order.routeTo}</small></td><td className="number sold">{money(row.sold)}</td><td className="number received">{money(row.received)}</td><td className="number costs">{money(row.driverCost)}</td><td className="number costs">{money(row.taxCost)}</td><td className="number costs">{money(row.otherCost)}</td><td className={`number balance${row.balance < 0 ? ' negative' : ''}`}>{money(row.balance)}</td><td className="number receivable">{money(row.receivable)}</td><td className="number payable">{money(row.payable)}</td><td className={`number margin${row.margin < 0 ? ' negative' : ''}`}>{percent(row.margin)}</td></tr>) : <tr><td colSpan={11} className="empty">В этом месяце заказов нет</td></tr>}</tbody></table></div></div>
       </article>
     </div>}
   </section>;

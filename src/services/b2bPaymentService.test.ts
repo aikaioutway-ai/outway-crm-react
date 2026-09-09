@@ -1,8 +1,8 @@
-import { calculateB2BExpenseTax, normalizeB2BPaymentMethod } from './b2bPaymentService';
+import { calculateB2BRevenueTax, normalizeB2BPaymentMethod } from './b2bPaymentService';
 
-describe('B2B expense tax', () => {
-  test('withholds 4% for a legal-entity cashless payment', () => {
-    expect(calculateB2BExpenseTax(10_000, 'legal_account')).toEqual({
+describe('B2B revenue tax', () => {
+  test('calculates 4% for legal-account client revenue', () => {
+    expect(calculateB2BRevenueTax(10_000, 'legal_account')).toEqual({
       grossAmount: 10_000,
       taxAmount: 400,
       netAmount: 9_600,
@@ -10,7 +10,7 @@ describe('B2B expense tax', () => {
   });
 
   test.each(['cash', 'personal_account'])('does not withhold tax for %s', method => {
-    expect(calculateB2BExpenseTax(10_000, method)).toEqual({
+    expect(calculateB2BRevenueTax(10_000, method)).toEqual({
       grossAmount: 10_000,
       taxAmount: 0,
       netAmount: 10_000,

@@ -15,7 +15,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { B2B_PAYMENT_METHODS, B2BPaymentMethod, calculateB2BExpenseTax, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
+import { B2B_PAYMENT_METHODS, B2BPaymentMethod, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 import { createB2BExpense, updateB2BExpense, type B2BExpenseRecord } from '../../services/b2bDataService';
 import { B2B_QUERY_KEYS, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
@@ -72,7 +72,7 @@ function periodContains(date: string, periodKey: string, year: number) {
 }
 
 const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-const FORM_CATEGORIES = ['driver_payments', 'taxes', 'salary', 'bonus', 'returns', 'rent', 'marketing', 'other'];
+const FORM_CATEGORIES = ['salary', 'bonus', 'returns', 'rent', 'marketing', 'other'];
 const CURRENT_YEAR = new Date().getFullYear();
 
 const localDateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
@@ -134,24 +134,18 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   }, [expenses]);
 
   const categoryTotals = useMemo(() => {
-    const result: Record<string, { amount: number; tax: number; net: number; count: number }> = {};
+    const result: Record<string, { amount: number; count: number }> = {};
     periodRows.forEach(row => {
       const key = normalizedCategory(row.category);
-      const current = result[key] ?? { amount: 0, tax: 0, net: 0, count: 0 };
+      const current = result[key] ?? { amount: 0, count: 0 };
       current.amount += row.amount;
-      current.tax += row.taxAmount;
-      current.net += row.netAmount;
       current.count += 1;
       result[key] = current;
     });
     return result;
   }, [periodRows]);
 
-  const totals = useMemo(() => periodRows.reduce((result, row) => ({
-    gross: result.gross + row.amount,
-    tax: result.tax + row.taxAmount,
-    net: result.net + row.netAmount,
-  }), { gross: 0, tax: 0, net: 0 }), [periodRows]);
+  const totalAmount = useMemo(() => periodRows.reduce((sum, row) => sum + row.amount, 0), [periodRows]);
 
   const rows = useMemo(() => periodRows.filter(row => {
     if (selectedCategory && normalizedCategory(row.category) !== selectedCategory) return false;
@@ -168,8 +162,6 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   const periodLabel = periodKey === 'ALL'
     ? `Весь ${selectedYear} год`
     : calendarPeriods.find(period => period.key === periodKey)?.label ?? 'Выбранный период';
-
-  const taxPreview = calculateB2BExpenseTax(Number(form.amount), form.method);
 
   const saveExpense = async (event: FormEvent) => {
     event.preventDefault();
@@ -257,13 +249,13 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
             <article className="b2b-expense-category-card total">
               <span className="b2b-expense-category-icon"><CircleDollarSign size={20} /></span>
               <span className="b2b-expense-category-name">Всего за период</span>
-              <strong>{money(totals.gross)}</strong>
+              <strong>{money(totalAmount)}</strong>
               <small>{periodRows.length} {periodRows.length === 1 ? 'операция' : 'операций'}</small>
             </article>
             {categories.map(key => {
               const meta = categoryMeta(key);
               const Icon = meta.icon;
-              const categoryTotal = categoryTotals[key] ?? { amount: 0, tax: 0, net: 0, count: 0 };
+              const categoryTotal = categoryTotals[key] ?? { amount: 0, count: 0 };
               return (
                 <button key={key} type="button" className="b2b-expense-category-card" onClick={() => setSelectedCategory(key)}>
                   <span className="b2b-expense-category-icon" style={{ background: meta.soft, color: meta.color }}><Icon size={20} /></span>
@@ -275,14 +267,10 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
             })}
           </div>
         ) : (
-          <div className="b2b-expenses-summary">
-            <article><span>Начислено</span><strong>{money(categoryTotals[selectedCategory]?.amount ?? 0)}</strong></article>
-            <article className="tax"><span>Удержано налога</span><strong>{money(categoryTotals[selectedCategory]?.tax ?? 0)}</strong></article>
-            <article className="net"><span>К перечислению</span><strong>{money(categoryTotals[selectedCategory]?.net ?? 0)}</strong></article>
-          </div>
+          <div className="b2b-expenses-summary"><article><span>Сумма расходов</span><strong>{money(categoryTotals[selectedCategory]?.amount ?? 0)}</strong></article></div>
         )}
 
-        <div className="b2b-expenses-tax-note"><Percent size={18} /><div><strong>Налог удерживается автоматически</strong><span>Для способа «АйКай Мбанк — юрлицо» система удерживает 4% из начисленной суммы и показывает сумму к перечислению.</span></div></div>
+        <div className="b2b-expenses-tax-note"><Percent size={18} /><div><strong>Расходы налогом не облагаются</strong><span>Налог 4% создаётся автоматически только с подтверждённой оплаты клиента на юрсчёт.</span></div></div>
       </div>
 
       <div className="b2b-expenses-panel">
@@ -293,12 +281,12 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
             <button type="button" className="b2b-primary-button" onClick={openNewExpense}><Plus size={16} />Новый расход</button>
           </div>
         </div>
-        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th>№ платёжного поручения</th><th className="number">Начислено</th><th className="number">Налог 4%</th><th className="number">К перечислению</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={11} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
+        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th>№ платёжного поручения</th><th className="number">Сумма</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={9} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
           const meta = categoryMeta(normalizedCategory(row.category));
           const Icon = meta.icon;
           const canOpenOrder = Boolean(onOpenOrder && row.orderNumber !== '—' && orders.some(order => order.number === row.orderNumber));
-          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td>{row.paymentOrderNumber || '—'}</td><td className="number">{money(row.amount)}</td><td className={`number ${row.taxAmount > 0 ? 'tax' : ''}`}>{money(row.taxAmount)}</td><td className="number net">{money(row.netAmount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions">{!isAutomaticExpense(row) ? <button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title="Редактировать расход"><Pencil size={14} /></button> : <span className="b2b-expense-auto" title="Автоматическая запись редактируется в исходной оплате"><LockKeyhole size={12} />Авто</span>}</td></tr>;
-        }) : <tr><td colSpan={11} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
+          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td>{row.paymentOrderNumber || '—'}</td><td className="number">{money(row.amount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions">{!isAutomaticExpense(row) ? <button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title="Редактировать расход"><Pencil size={14} /></button> : <span className="b2b-expense-auto" title="Автоматическая запись редактируется в исходной оплате"><LockKeyhole size={12} />Авто</span>}</td></tr>;
+        }) : <tr><td colSpan={9} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
       </div>
 
       {showCreate && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeExpenseEditor(); }}>
@@ -321,7 +309,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
               <div className="b2b-expense-form-grid single">
                 <label><span>Заказ</span><select value={form.orderId} onChange={event => setForm(current => ({ ...current, orderId: event.target.value }))}><option value="">Без привязки к заказу</option>{orders.map(order => <option key={order.id} value={order.id}>{order.number} · {order.client}</option>)}</select></label>
                 <label><span>Комментарий</span><textarea value={form.comment} onChange={event => setForm(current => ({ ...current, comment: event.target.value }))} placeholder="Дополнительная информация" /></label>
-                <div className="b2b-expense-live-total"><span>Начислено<strong>{money(taxPreview.grossAmount)}</strong></span><span>Налог 4%<strong>{money(taxPreview.taxAmount)}</strong></span><span>К перечислению<strong>{money(taxPreview.netAmount)}</strong></span></div>
+                <div className="b2b-expense-live-total"><span>Сумма расхода<strong>{money(Number(form.amount) || 0)}</strong></span></div>
               </div>
             </section>
             {formError && <div className="b2b-form-error">{formError}</div>}

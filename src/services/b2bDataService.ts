@@ -295,6 +295,24 @@ export async function createB2BDriverPayout(order: B2BOrderRecord, amount: numbe
   assert(error);
 }
 
+async function callB2BPayoutApi(sessionToken: string | undefined, body: Record<string, unknown>) {
+  if (!sessionToken) throw new Error('Сессия устарела. Выйдите и войдите в CRM снова.');
+  const { data, error } = await supabase.functions.invoke('b2b-payout-api', {
+    body,
+    headers: { 'x-employee-session': sessionToken },
+  });
+  if (error) throw new Error(data?.error || error.message || 'Ошибка управления выплатой.');
+  if (!data?.ok) throw new Error(data?.error || 'Ошибка управления выплатой.');
+}
+
+export async function updateB2BDriverPayout(id: string, patch: { amount: number; method: B2BPaymentMethod; paymentDate: string; purpose: string; paymentOrderNumber?: string }, sessionToken?: string) {
+  await callB2BPayoutApi(sessionToken, { action: 'update', payoutId: id, payout: patch });
+}
+
+export async function deleteB2BDriverPayout(id: string, sessionToken?: string) {
+  await callB2BPayoutApi(sessionToken, { action: 'delete', payoutId: id });
+}
+
 export async function createB2BClientPayment(record: Omit<B2BPaymentRecord, 'id' | 'status' | 'createdAt'>) {
   const { error } = await supabase.from('v2_b2b_client_payments').insert({
     order_id: record.orderId, payment_type: 'final', amount: record.amount, payment_date: record.paymentDate,
