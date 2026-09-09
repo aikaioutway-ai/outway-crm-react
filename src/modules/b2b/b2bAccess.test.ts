@@ -24,10 +24,12 @@ test('only admin and cashier can manage existing driver payouts', () => {
   expect(b2bAccess('senior_logist').manageDriverPayouts).toBe(false);
 });
 
-test('cashier can open linked order cards without getting order editing access', () => {
+test('cashier has full working access to orders and payment review', () => {
   expect(b2bAccess('cashier')).toMatchObject({
+    tabs: ['cashier', 'orders', 'clients', 'expenses', 'cashflow'],
     openOrders: true,
-    editOrder: false,
-    orderTabs: ['main', 'driver'],
+    editOrder: true,
+    reviewPayments: true,
+    orderTabs: ['main', 'payment', 'driver', 'pnl', 'documents'],
   });
 });

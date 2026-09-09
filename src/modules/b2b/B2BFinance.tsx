@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, BanknoteArrowDown, BanknoteArrowUp, Calculator, CircleDollarSign, Search, ShoppingCart, Truck, WalletCards, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowUp, ArrowUpDown, BanknoteArrowDown, BanknoteArrowUp, Calculator, CircleDollarSign, Search, ShoppingCart, Truck, WalletCards } from 'lucide-react';
 import { useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { B2B_ORDER_STATUSES } from './B2BOrders';
@@ -20,9 +20,11 @@ function isoDate(value: string) {
 
 interface B2BFinanceProps {
   onOpenOrder?: (orderId: string) => void;
+  selectedMonthNumber: number | null;
+  onSelectedMonthChange: (month: number | null) => void;
 }
 
-export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
+export default function B2BFinance({ onOpenOrder, selectedMonthNumber, onSelectedMonthChange }: B2BFinanceProps) {
   const { data: orders = [], isLoading } = useB2BOrders();
   const { data: expenses = [] } = useB2BExpenses();
   const { data: payouts = [] } = useB2BDriverPayouts();
@@ -33,7 +35,6 @@ export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
   const [clientId, setClientId] = useState('all');
   const [status, setStatus] = useState('all');
   const [search, setSearch] = useState('');
-  const [selectedMonthNumber, setSelectedMonthNumber] = useState<number | null>(null);
   const [monthSort, setMonthSort] = useState<{ key: FinanceSortKey; direction: SortDirection }>({ key: 'month', direction: 'asc' });
   const [orderSort, setOrderSort] = useState<{ key: FinanceSortKey; direction: SortDirection }>({ key: 'number', direction: 'asc' });
 
@@ -123,11 +124,32 @@ export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
   const monthHead = (label: string, key: FinanceSortKey) => <button type="button" className={monthSort.key === key ? 'active' : ''} onClick={() => toggleMonthSort(key)}>{label}{sortIcon(monthSort.key === key, monthSort.direction)}</button>;
   const orderHead = (label: string, key: FinanceSortKey) => <button type="button" className={orderSort.key === key ? 'active' : ''} onClick={() => toggleOrderSort(key)}>{label}{sortIcon(orderSort.key === key, orderSort.direction)}</button>;
 
+  if (selectedMonth) return <section className="b2b-finance b2b-finance-month-page">
+    <header className="b2b-finance-month-page-head">
+      <button type="button" className="b2b-finance-back" onClick={() => onSelectedMonthChange(null)}><ArrowLeft size={17} />Назад к году</button>
+      <div><small>Детализация P&amp;L</small><h2>{selectedMonth.label} {year}</h2><p>{selectedMonth.rows.length} заказов · финансовый результат за месяц</p></div>
+    </header>
+
+    <div className="b2b-finance-equation b2b-finance-result-cards">
+      <article><span><ShoppingCart size={17} />Продано</span><strong>{money(selectedMonth.sold)}</strong></article>
+      <article><span><BanknoteArrowDown size={17} />Поступило</span><strong>{money(selectedMonth.received)}</strong></article>
+      <article><span><Truck size={17} />Водители</span><strong>{money(selectedMonth.driverCost)}</strong></article>
+      <article><span><Calculator size={17} />Налог 4%</span><strong>{money(selectedMonth.taxCost)}</strong></article>
+      <article><span><WalletCards size={17} />Прочие расходы</span><strong>{money(selectedMonth.otherCost)}</strong></article>
+      <article className={selectedMonth.balance < 0 ? 'negative' : 'result'}><span><CircleDollarSign size={17} />Остаток</span><strong>{money(selectedMonth.balance)}</strong></article>
+      <article className="margin"><span>Маржа</span><strong>{percent(selectedMonth.margin)}</strong></article>
+    </div>
+
+    <div className="b2b-finance-debts"><article><span><BanknoteArrowDown size={18} /><b>Дебиторская задолженность</b><small>Клиенты должны нам</small></span><strong>{money(selectedMonth.receivable)}</strong></article><article><span><BanknoteArrowUp size={18} /><b>Кредиторская задолженность</b><small>Мы должны водителям</small></span><strong>{money(selectedMonth.payable)}</strong></article></div>
+
+    <div className="b2b-finance-month-body"><div className="b2b-finance-orders-wrap"><table><thead><tr><th>{orderHead('Заказ', 'number')}</th><th>{orderHead('Клиент / маршрут', 'client')}</th><th className="number">{orderHead('Продано', 'sold')}</th><th className="number">{orderHead('Поступило', 'received')}</th><th className="number">{orderHead('Водитель', 'driverCost')}</th><th className="number">{orderHead('Налог', 'taxCost')}</th><th className="number">{orderHead('Прочие', 'otherCost')}</th><th className="number">{orderHead('Остаток', 'balance')}</th><th className="number">{orderHead('Нам должны', 'receivable')}</th><th className="number">{orderHead('Мы должны', 'payable')}</th><th className="number">{orderHead('Маржа', 'margin')}</th></tr></thead><tbody>{sortedOrderRows.length ? sortedOrderRows.map(row => <tr key={row.order.id} onClick={() => onOpenOrder?.(row.order.id)}><td><button type="button">{row.order.number}</button><small>{row.order.departureDate || row.order.requestDate}</small></td><td><b>{row.order.client}</b><small>{row.order.routeFrom} → {row.order.routeTo}</small></td><td className="number sold">{money(row.sold)}</td><td className="number received">{money(row.received)}</td><td className="number costs">{money(row.driverCost)}</td><td className="number costs">{money(row.taxCost)}</td><td className="number costs">{money(row.otherCost)}</td><td className={`number balance${row.balance < 0 ? ' negative' : ''}`}>{money(row.balance)}</td><td className="number receivable">{money(row.receivable)}</td><td className="number payable">{money(row.payable)}</td><td className={`number margin${row.margin < 0 ? ' negative' : ''}`}>{percent(row.margin)}</td></tr>) : <tr><td colSpan={11} className="empty">В этом месяце заказов нет</td></tr>}</tbody></table></div></div>
+  </section>;
+
   return <section className="b2b-finance">
     <header className="b2b-finance-head"><div><h2>P&amp;L по заказам</h2><p>Финансовый результат по каждому заказу · {year} год</p></div><span>{filteredOrders.length} заказов</span></header>
 
     <div className="b2b-finance-filters">
-      <label><span>Год</span><select value={year} onChange={event => { setYear(Number(event.target.value)); setSelectedMonthNumber(null); }}>{years.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
+      <label><span>Год</span><select value={year} onChange={event => { setYear(Number(event.target.value)); onSelectedMonthChange(null); }}>{years.map(item => <option key={item} value={item}>{item}</option>)}</select></label>
       <label><span>Клиент</span><select value={clientId} onChange={event => setClientId(event.target.value)}><option value="all">Все клиенты</option>{clients.map(client => <option key={client.id} value={client.id}>{client.companyName || client.contactName}</option>)}</select></label>
       <label><span>Статус</span><select value={status} onChange={event => setStatus(event.target.value)}><option value="all">Все статусы</option>{B2B_ORDER_STATUSES.filter(item => item.key !== 'cancelled').map(item => <option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
       <label className="search"><Search size={15} /><input value={search} onChange={event => setSearch(event.target.value)} placeholder="Заказ, клиент, маршрут, водитель..." /></label>
@@ -146,13 +168,6 @@ export default function B2BFinance({ onOpenOrder }: B2BFinanceProps) {
 
     <div className="b2b-finance-debts"><article><span><BanknoteArrowDown size={18} /><b>Дебиторская задолженность</b><small>Клиенты должны нам</small></span><strong>{money(totals.receivable)}</strong></article><article><span><BanknoteArrowUp size={18} /><b>Кредиторская задолженность</b><small>Мы должны водителям</small></span><strong>{money(totals.payable)}</strong></article></div>
 
-    <div className="b2b-finance-table-wrap"><table><thead><tr><th>{monthHead('Период', 'month')}</th><th>{monthHead('Продано', 'sold')}</th><th>{monthHead('Поступило', 'received')}</th><th>{monthHead('Водители', 'driverCost')}</th><th>{monthHead('Налог', 'taxCost')}</th><th>{monthHead('Прочие', 'otherCost')}</th><th>{monthHead('Остаток', 'balance')}</th><th>{monthHead('Должны нам', 'receivable')}</th><th>{monthHead('Должны мы', 'payable')}</th><th>{monthHead('Маржа', 'margin')}</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={10} className="empty">Загрузка…</td></tr> : sortedMonths.map(month => <tr key={month.month} onClick={() => { setSelectedMonthNumber(month.month); setOrderSort({ key: 'number', direction: 'asc' }); }}><td><button type="button" className="month" aria-label={`Открыть заказы за ${month.label.toLocaleLowerCase('ru-RU')}`}><span><b>{month.label}</b><small>{month.rows.length} заказов</small></span></button></td><td className="sold">{money(month.sold)}</td><td className="received">{money(month.received)}</td><td className="costs">{money(month.driverCost)}</td><td className="costs">{money(month.taxCost)}</td><td className="costs">{money(month.otherCost)}</td><td className={`balance${month.balance < 0 ? ' negative' : ''}`}>{money(month.balance)}</td><td className="receivable">{money(month.receivable)}</td><td className="payable">{money(month.payable)}</td><td className={`margin${month.margin < 0 ? ' negative' : ''}`}>{percent(month.margin)}</td></tr>)}</tbody><tfoot><tr><td>Итого за {year}</td><td>{money(totals.sold)}</td><td>{money(totals.received)}</td><td>{money(totals.driverCost)}</td><td>{money(totals.taxCost)}</td><td>{money(totals.otherCost)}</td><td>{money(totals.balance)}</td><td>{money(totals.receivable)}</td><td>{money(totals.payable)}</td><td>{percent(totalMargin)}</td></tr></tfoot></table></div>
-
-    {selectedMonth && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedMonthNumber(null); }}>
-      <article className="b2b-finance-month-card" role="dialog" aria-modal="true" aria-labelledby="b2b-finance-month-title">
-        <header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><CircleDollarSign size={22} /></span><div><small>Детализация финансов</small><h2 id="b2b-finance-month-title">{selectedMonth.label} {year}</h2><p>{selectedMonth.rows.length} заказов · продано на {money(selectedMonth.sold)}</p></div></div><div className="b2b-client-profile-summary"><span>Остаток: <b>{money(selectedMonth.balance)}</b></span><span>Маржа: <b>{percent(selectedMonth.margin)}</b></span><button type="button" onClick={() => setSelectedMonthNumber(null)} aria-label="Закрыть"><X size={18} /></button></div></header>
-        <div className="b2b-finance-month-body"><div className="b2b-finance-orders-wrap"><table><thead><tr><th>{orderHead('Заказ', 'number')}</th><th>{orderHead('Клиент / маршрут', 'client')}</th><th className="number">{orderHead('Продано', 'sold')}</th><th className="number">{orderHead('Поступило', 'received')}</th><th className="number">{orderHead('Водитель', 'driverCost')}</th><th className="number">{orderHead('Налог', 'taxCost')}</th><th className="number">{orderHead('Прочие', 'otherCost')}</th><th className="number">{orderHead('Остаток', 'balance')}</th><th className="number">{orderHead('Нам должны', 'receivable')}</th><th className="number">{orderHead('Мы должны', 'payable')}</th><th className="number">{orderHead('Маржа', 'margin')}</th></tr></thead><tbody>{sortedOrderRows.length ? sortedOrderRows.map(row => <tr key={row.order.id} onClick={() => onOpenOrder?.(row.order.id)}><td><button type="button">{row.order.number}</button><small>{row.order.departureDate || row.order.requestDate}</small></td><td><b>{row.order.client}</b><small>{row.order.routeFrom} → {row.order.routeTo}</small></td><td className="number sold">{money(row.sold)}</td><td className="number received">{money(row.received)}</td><td className="number costs">{money(row.driverCost)}</td><td className="number costs">{money(row.taxCost)}</td><td className="number costs">{money(row.otherCost)}</td><td className={`number balance${row.balance < 0 ? ' negative' : ''}`}>{money(row.balance)}</td><td className="number receivable">{money(row.receivable)}</td><td className="number payable">{money(row.payable)}</td><td className={`number margin${row.margin < 0 ? ' negative' : ''}`}>{percent(row.margin)}</td></tr>) : <tr><td colSpan={11} className="empty">В этом месяце заказов нет</td></tr>}</tbody></table></div></div>
-      </article>
-    </div>}
+    <div className="b2b-finance-table-wrap"><table><thead><tr><th>{monthHead('Период', 'month')}</th><th>{monthHead('Продано', 'sold')}</th><th>{monthHead('Поступило', 'received')}</th><th>{monthHead('Водители', 'driverCost')}</th><th>{monthHead('Налог', 'taxCost')}</th><th>{monthHead('Прочие', 'otherCost')}</th><th>{monthHead('Остаток', 'balance')}</th><th>{monthHead('Должны нам', 'receivable')}</th><th>{monthHead('Должны мы', 'payable')}</th><th>{monthHead('Маржа', 'margin')}</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={10} className="empty">Загрузка…</td></tr> : sortedMonths.map(month => <tr key={month.month} onClick={() => { onSelectedMonthChange(month.month); setOrderSort({ key: 'number', direction: 'asc' }); }}><td><button type="button" className="month" aria-label={`Открыть заказы за ${month.label.toLocaleLowerCase('ru-RU')}`}><span><b>{month.label}</b><small>{month.rows.length} заказов</small></span></button></td><td className="sold">{money(month.sold)}</td><td className="received">{money(month.received)}</td><td className="costs">{money(month.driverCost)}</td><td className="costs">{money(month.taxCost)}</td><td className="costs">{money(month.otherCost)}</td><td className={`balance${month.balance < 0 ? ' negative' : ''}`}>{money(month.balance)}</td><td className="receivable">{money(month.receivable)}</td><td className="payable">{money(month.payable)}</td><td className={`margin${month.margin < 0 ? ' negative' : ''}`}>{percent(month.margin)}</td></tr>)}</tbody><tfoot><tr><td>Итого за {year}</td><td>{money(totals.sold)}</td><td>{money(totals.received)}</td><td>{money(totals.driverCost)}</td><td>{money(totals.taxCost)}</td><td>{money(totals.otherCost)}</td><td>{money(totals.balance)}</td><td>{money(totals.receivable)}</td><td>{money(totals.payable)}</td><td>{percent(totalMargin)}</td></tr></tfoot></table></div>
   </section>;
 }

@@ -33,6 +33,7 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
   const [activeTab, setActiveTab] = useState<B2BTab>(userRole === 'cashier' ? 'cashier' : 'orders');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
   const [returnTabAfterOrder, setReturnTabAfterOrder] = useState<B2BTab | null>(null);
+  const [financeMonth, setFinanceMonth] = useState<number | null>(null);
   const visibleTab = allowedTabs.some(tab => tab.key === activeTab) ? activeTab : allowedTabs[0].key;
   const currentTab = B2B_TABS.find(tab => tab.key === visibleTab) ?? B2B_TABS[0];
   const CurrentIcon = currentTab.icon;
@@ -98,7 +99,7 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
       ) : visibleTab === 'expenses' ? (
         <B2BExpenses onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'finance' ? (
-        <B2BFinance onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+        <B2BFinance selectedMonthNumber={financeMonth} onSelectedMonthChange={setFinanceMonth} onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'cashflow' ? (
         <B2BCashflow onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : (

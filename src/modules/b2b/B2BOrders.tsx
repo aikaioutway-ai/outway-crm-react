@@ -6,7 +6,7 @@ import useB2BPayments from '../../hooks/useB2BPayments';
 import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
-import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, deleteB2BDriverPayout, saveB2BAssignment, updateB2BClientPayment, updateB2BDriverPayout, updateB2BOrder } from '../../services/b2bDataService';
+import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, deleteB2BDriverPayout, saveB2BAssignment, updateB2BClientPayment, updateB2BDriverPayout, updateB2BOrder, updateB2BPaymentStatus } from '../../services/b2bDataService';
 import { queryClient } from '../../services/queryClient';
 import B2BOrderDocuments from './B2BOrderDocuments';
 import { calculateB2BOrderProfit } from './b2bProfitCalculations';
@@ -96,6 +96,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const [editingPaymentId, setEditingPaymentId] = useState<string | null>(null);
   const [paymentForm, setPaymentForm] = useState({ ...EMPTY_PAYMENT_FORM });
   const [paymentFormError, setPaymentFormError] = useState('');
+  const [reviewingPaymentId, setReviewingPaymentId] = useState<string | null>(null);
   const [driverPayoutFormOpen, setDriverPayoutFormOpen] = useState(false);
   const [editingDriverPayoutId, setEditingDriverPayoutId] = useState<string | null>(null);
   const [driverPayoutForm, setDriverPayoutForm] = useState({ ...EMPTY_DRIVER_PAYOUT_FORM });
@@ -300,6 +301,23 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     } catch (submitError) { setPaymentFormError(submitError instanceof Error ? submitError.message : 'Не удалось сохранить оплату.'); }
   };
 
+  const reviewPayment = async (id: string, status: 'confirmed' | 'rejected') => {
+    if (!access.reviewPayments) return;
+    setReviewingPaymentId(id);
+    setPaymentFormError('');
+    try {
+      await updateB2BPaymentStatus(id, status);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payments }),
+        queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses }),
+      ]);
+    } catch (reviewError) {
+      setPaymentFormError(reviewError instanceof Error ? reviewError.message : 'Не удалось изменить статус оплаты.');
+    } finally {
+      setReviewingPaymentId(null);
+    }
+  };
+
   const selectDriver = async (driverId: string) => {
     if (!selectedOrder) return;
     const driver = drivers.find(item => item.driverId === driverId);
@@ -480,6 +498,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
 
             {access.orderTabs.includes('payment') && orderCardTab === 'payment' && (
               <div className="b2b-order-tab-panel">
+                {paymentFormError && !paymentFormOpen && <p className="b2b-form-error" role="alert">{paymentFormError}</p>}
                 <div className="b2b-payment-panel-head">
                   <div className="b2b-payment-summary">
                     <div><span>Итого по заказу</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></div>
@@ -500,6 +519,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                         <strong>{payment.amount.toLocaleString()} сом</strong>
                         <span className={`b2b-payment-state ${payment.status}`}>{payment.status === 'pending' ? 'На проверке' : payment.status === 'confirmed' ? 'Подтверждено' : 'Отклонено'}</span>
                         <button className="b2b-history-edit" type="button" onClick={() => openPaymentForm(payment)} aria-label={`Редактировать оплату ${payment.amount.toLocaleString()} сом`}><Pencil size={14} /></button>
+                        {access.reviewPayments && payment.status === 'pending' && <div className="b2b-payment-review-actions"><button type="button" disabled={reviewingPaymentId === payment.id} onClick={() => void reviewPayment(payment.id, 'confirmed')}>Подтвердить</button><button type="button" disabled={reviewingPaymentId === payment.id} onClick={() => void reviewPayment(payment.id, 'rejected')}>Отклонить</button></div>}
                       </div>
                     ))}
                   </div>

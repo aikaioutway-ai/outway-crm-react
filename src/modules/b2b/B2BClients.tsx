@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Building2, CircleDollarSign, ClipboardList, CreditCard, FileCheck2, FileText, Landmark, Mail, MapPin, Pencil, Phone, Plus, School, Search, UserRound, X } from 'lucide-react';
+import { ArrowUpDown, Building2, CircleDollarSign, ClipboardList, CreditCard, FileCheck2, FileText, Landmark, Mail, MapPin, Pencil, Phone, Plus, School, Search, UserRound, X } from 'lucide-react';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import { B2BOrderRecord, createB2BClient, updateB2BClient } from '../../services/b2bDataService';
 import useB2BPayments from '../../hooks/useB2BPayments';
@@ -14,6 +14,7 @@ import { calculateB2BOrderProfit } from './b2bProfitCalculations';
 
 type ClientType = 'individual' | 'company' | 'school';
 type ClientFilter = 'all' | ClientType;
+type ClientSort = 'name-asc' | 'name-desc';
 
 interface B2BClientForm {
   clientType: ClientType;
@@ -72,6 +73,7 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientCardTab, setClientCardTab] = useState<ClientCardTab>('main');
   const [clientFilter, setClientFilter] = useState<ClientFilter>('all');
+  const [clientSort, setClientSort] = useState<ClientSort>('name-asc');
   const [searchQuery, setSearchQuery] = useState('');
   const { data: orders = [] } = useB2BOrders();
   const { data: expenses = [] } = useB2BExpenses();
@@ -103,6 +105,12 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
       CLIENT_TYPE_LABELS[client.clientType],
     ].map(normalizeSearch);
     return searchTokens.every(token => searchableFields.some(value => value.includes(token)));
+  }).sort((left, right) => {
+    const name = (client: B2BClient) => client.clientType === 'individual'
+      ? client.contactName
+      : client.companyName || client.orgName || client.contactName;
+    const result = normalizeSearch(name(left)).localeCompare(normalizeSearch(name(right)), 'ru-RU', { numeric: true, sensitivity: 'base' });
+    return clientSort === 'name-asc' ? result : -result;
   });
   const clientCount = (type: ClientFilter) => type === 'all' ? clients.length : clients.filter(client => client.clientType === type).length;
 
@@ -195,11 +203,14 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
             </button>
           ))}
         </div>
-        <label className="b2b-client-search">
-          <Search size={16} />
-          <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Имя, компания, телефон, ИНН…" aria-label="Поиск клиентов" />
-          {searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Очистить поиск"><X size={15} /></button>}
-        </label>
+        <div className="b2b-client-search-tools">
+          <label className="b2b-client-sort"><ArrowUpDown size={15} /><select value={clientSort} onChange={event => setClientSort(event.target.value as ClientSort)} aria-label="Сортировка клиентов"><option value="name-asc">По имени: А–Я</option><option value="name-desc">По имени: Я–А</option></select></label>
+          <label className="b2b-client-search">
+            <Search size={16} />
+            <input type="search" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Имя, компания, телефон, ИНН…" aria-label="Поиск клиентов" />
+            {searchQuery && <button type="button" onClick={() => setSearchQuery('')} aria-label="Очистить поиск"><X size={15} /></button>}
+          </label>
+        </div>
       </div>}
 
       {isLoading ? <div className="b2b-clients-empty"><strong>Загрузка клиентов…</strong></div> : clients.length === 0 ? (
