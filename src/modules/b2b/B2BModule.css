@@ -460,6 +460,9 @@
 .b2b-finance-table-wrap tbody tr { cursor: pointer; }
 .b2b-finance-table-wrap tbody tr:hover td,
 .b2b-finance-table-wrap tbody tr.expanded td { background: #f0f9f8; }
+.b2b-finance-table-wrap tbody tr.all-periods td { border-top: 2px solid #b9ddda; background: #eef8f7; font-weight: 900; }
+.b2b-finance-table-wrap tbody tr.all-periods:hover td { background: #e2f4f2; }
+.b2b-finance-table-wrap tbody tr.all-periods button.month b { color: #287f82; }
 .b2b-finance-table-wrap td { height: 49px; padding: 0 10px; border-top: 1px solid #edf2f3; color: #52636e; text-align: right; font-size: 10px; white-space: nowrap; }
 .b2b-finance-table-wrap td:first-child { text-align: left; }
 .b2b-finance-table-wrap td > button:not(.month) { padding: 7px 5px; border: 0; border-radius: 7px; background: transparent; color: inherit; font: inherit; font-weight: 800; cursor: pointer; }

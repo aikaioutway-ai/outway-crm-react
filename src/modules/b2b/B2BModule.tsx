@@ -8,7 +8,7 @@ import B2BOrders from './B2BOrders';
 import B2BCalendar from './B2BCalendar';
 import B2BLogistics from './B2BLogistics';
 import B2BExpenses from './B2BExpenses';
-import B2BFinance from './B2BFinance';
+import B2BFinance, { type B2BFinancePeriod } from './B2BFinance';
 import B2BCashflow from './B2BCashflow';
 import B2BCashier from './B2BCashier';
 import './B2BModule.css';
@@ -33,7 +33,7 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
   const [activeTab, setActiveTab] = useState<B2BTab>(userRole === 'cashier' ? 'cashier' : 'orders');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
   const [returnTabAfterOrder, setReturnTabAfterOrder] = useState<B2BTab | null>(null);
-  const [financeMonth, setFinanceMonth] = useState<number | null>(null);
+  const [financeMonth, setFinanceMonth] = useState<B2BFinancePeriod | null>(null);
   const visibleTab = allowedTabs.some(tab => tab.key === activeTab) ? activeTab : allowedTabs[0].key;
   const currentTab = B2B_TABS.find(tab => tab.key === visibleTab) ?? B2B_TABS[0];
   const CurrentIcon = currentTab.icon;

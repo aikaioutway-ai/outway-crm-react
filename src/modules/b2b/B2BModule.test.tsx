@@ -6,7 +6,7 @@ jest.mock('./B2BOrders', () => ({ onCloseOrder }: { onCloseOrder?: () => void })
 jest.mock('./B2BCalendar', () => () => <div>Calendar content</div>);
 jest.mock('./B2BLogistics', () => () => <div>Logistics content</div>);
 jest.mock('./B2BExpenses', () => () => <div>Expenses content</div>);
-jest.mock('./B2BFinance', () => ({ selectedMonthNumber, onSelectedMonthChange, onOpenOrder }: { selectedMonthNumber: number | null; onSelectedMonthChange: (month: number | null) => void; onOpenOrder?: (id: string) => void }) => <div>Finance content · month {selectedMonthNumber ?? 'none'}<button onClick={() => onSelectedMonthChange(1)}>Open January</button>{onOpenOrder && <button onClick={() => onOpenOrder('order')}>Open finance order</button>}</div>);
+jest.mock('./B2BFinance', () => ({ selectedMonthNumber, onSelectedMonthChange, onOpenOrder }: { selectedMonthNumber: number | 'all' | null; onSelectedMonthChange: (month: number | 'all' | null) => void; onOpenOrder?: (id: string) => void }) => <div>Finance content · month {selectedMonthNumber ?? 'none'}<button onClick={() => onSelectedMonthChange(1)}>Open January</button><button onClick={() => onSelectedMonthChange('all')}>Open all periods</button>{onOpenOrder && <button onClick={() => onOpenOrder('order')}>Open finance order</button>}</div>);
 jest.mock('./B2BCashflow', () => () => <div>Cashflow content</div>);
 jest.mock('./B2BCashier', () => ({ onOpenOrder }: { onOpenOrder?: (id: string) => void }) => <div>Cashier content{onOpenOrder && <button onClick={() => onOpenOrder('order')}>Open linked order</button>}</div>);
 
@@ -42,4 +42,14 @@ test('returning from an order keeps the selected P&L month open', () => {
   fireEvent.click(screen.getByRole('button', { name: 'Open finance order' }));
   fireEvent.click(screen.getByRole('button', { name: 'Close linked order' }));
   expect(screen.getByText('Finance content · month 1')).toBeInTheDocument();
+});
+
+test('all P&L periods remain selected after opening an order', () => {
+  render(<B2BModule userRole="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: 'P&L по заказам' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open all periods' }));
+  expect(screen.getByText('Finance content · month all')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Open finance order' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Close linked order' }));
+  expect(screen.getByText('Finance content · month all')).toBeInTheDocument();
 });
