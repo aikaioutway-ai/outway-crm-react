@@ -338,9 +338,9 @@ export async function createB2BClientPayment(record: Omit<B2BPaymentRecord, 'id'
   assert(error);
 }
 
-export async function updateB2BClientPayment(id: string, patch: Pick<B2BPaymentRecord, 'amount' | 'method' | 'paymentDate' | 'comment' | 'paymentOrderNumber'>) {
+export async function updateB2BClientPayment(id: string, patch: Pick<B2BPaymentRecord, 'amount' | 'method' | 'paymentDate' | 'comment' | 'paymentOrderNumber'> & Partial<Pick<B2BPaymentRecord, 'status'>>) {
   const paymentOrderNumber = normalizeB2BPaymentOrderNumber(patch.method, patch.paymentOrderNumber);
-  const { error } = await supabase.from('v2_b2b_client_payments').update({ amount: patch.amount, payment_method: patch.method, payment_date: patch.paymentDate, comment: patch.comment, payment_order_number: paymentOrderNumber || null }).eq('id', id);
+  const { error } = await supabase.from('v2_b2b_client_payments').update({ amount: patch.amount, payment_method: patch.method, payment_date: patch.paymentDate, comment: patch.comment, payment_order_number: paymentOrderNumber || null, ...(patch.status ? { status: patch.status } : {}) }).eq('id', id);
   assert(error);
 }
 

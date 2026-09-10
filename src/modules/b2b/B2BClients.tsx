@@ -3,14 +3,13 @@ import { ArrowUpDown, Building2, CircleDollarSign, ClipboardList, CreditCard, Fi
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import { B2BOrderRecord, createB2BClient, updateB2BClient } from '../../services/b2bDataService';
 import useB2BPayments from '../../hooks/useB2BPayments';
-import { formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 import { downloadB2BGeneratedDocument, generatedDocumentNumber } from '../../services/b2bDocumentService';
 import { B2B_ORDER_STATUSES } from './B2BOrders';
 import { queryClient } from '../../services/queryClient';
 import B2BClientDocumentsTab from './B2BClientDocumentsTab';
-import { B2BClientOrderEditModal, B2BClientPaymentEditModal } from './B2BClientEditModals';
-import { B2BPaymentRecord } from '../../services/b2bPaymentService';
+import { B2BClientOrderEditModal } from './B2BClientEditModals';
 import { calculateB2BOrderProfit } from './b2bProfitCalculations';
+import B2BClientPaymentsTable from './B2BClientPaymentsTable';
 
 type ClientType = 'individual' | 'company' | 'school';
 type ClientFilter = 'all' | ClientType;
@@ -61,15 +60,15 @@ const normalizeSearch = (value: string) => value
 
 interface B2BClientsProps {
   canViewFinance?: boolean;
+  canEditPaymentStatus?: boolean;
   onOpenOrder?: (orderId: string) => void;
 }
 
-export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BClientsProps) {
+export default function B2BClients({ onOpenOrder, canViewFinance = true, canEditPaymentStatus = false }: B2BClientsProps) {
   const { data: clients = [], isLoading } = useB2BClients();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
   const [editingOrder, setEditingOrder] = useState<B2BOrderRecord | null>(null);
-  const [editingPayment, setEditingPayment] = useState<B2BPaymentRecord | null>(null);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [clientCardTab, setClientCardTab] = useState<ClientCardTab>('main');
   const [clientFilter, setClientFilter] = useState<ClientFilter>('all');
@@ -296,7 +295,7 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
 
               {clientCardTab === 'payments' && <div className="b2b-client-payments-panel">
                 <div className="b2b-client-money-summary"><article><span>Заказы</span><strong>{clientOrdersTotal.toLocaleString()} сом</strong></article><article className="paid"><span>Подтверждено</span><strong>{clientPaidTotal.toLocaleString()} сом</strong></article><article className="debt"><span>Остаток</span><strong>{Math.max(0, clientOrdersTotal - clientPaidTotal).toLocaleString()} сом</strong></article></div>
-                {selectedClientPayments.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Способ</th><th className="number">Сумма</th><th>Статус</th><th>Комментарий</th><th></th></tr></thead><tbody>{selectedClientPayments.map(payment => <tr key={payment.id}><td>{payment.paymentDate}</td><td className="order-number"><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(payment.orderId)} aria-label={`Открыть карточку заказа ${payment.orderNumber}`}>{payment.orderNumber}</button></td><td>{formatB2BPaymentMethod(payment.method)}</td><td className="number">{payment.amount.toLocaleString()} сом</td><td><span className={`b2b-client-payment-status ${payment.status}`}>{payment.status === 'confirmed' ? 'Подтверждено' : payment.status === 'pending' ? 'На проверке' : 'Отклонено'}</span></td><td>{payment.comment || '—'}</td><td><button className="b2b-client-edit-button" type="button" onClick={() => setEditingPayment(payment)} title="Редактировать оплату"><Pencil size={14} /></button></td></tr>)}</tbody></table></div> : <div className="b2b-client-tab-empty"><CreditCard size={28} /><strong>Оплат пока нет</strong><span>Платежи по заказам клиента появятся здесь.</span></div>}
+                {selectedClientPayments.length ? <B2BClientPaymentsTable payments={selectedClientPayments} canEditStatus={canEditPaymentStatus} onOpenOrder={onOpenOrder} /> : <div className="b2b-client-tab-empty"><CreditCard size={28} /><strong>Оплат пока нет</strong><span>Платежи по заказам клиента появятся здесь.</span></div>}
               </div>}
 
               {canViewFinance && clientCardTab === 'finance' && <div className="b2b-client-finance-panel">
@@ -377,7 +376,6 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true }: B2BCl
         </div>
       )}
       {editingOrder && <B2BClientOrderEditModal order={editingOrder} onClose={() => setEditingOrder(null)} />}
-      {editingPayment && <B2BClientPaymentEditModal payment={editingPayment} onClose={() => setEditingPayment(null)} />}
     </div>
   );
 }
