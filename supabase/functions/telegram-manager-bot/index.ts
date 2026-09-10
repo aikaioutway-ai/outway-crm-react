@@ -14,7 +14,7 @@ const ADMIN_IDS = new Set(
     .map((value) => Number(value.trim()))
     .filter(Number.isSafeInteger),
 );
-const CRM_ADMIN_ROLES = new Set(['admin', 'manager', 'logist', 'senior_logist']);
+const CRM_ADMIN_ROLES = new Set(['admin', 'gen_director', 'manager', 'logist', 'senior_logist']);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',

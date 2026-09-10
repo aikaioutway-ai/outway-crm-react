@@ -7,7 +7,7 @@ const SUPABASE_SERVICE_KEY = requiredEnv('SUPABASE_SERVICE_ROLE_KEY');
 const BOT_USERNAME = (Deno.env.get('TELEGRAM_DRIVER_BOT_USERNAME') ?? 'outway_driver_bot')
   .replace(/^@/, '')
   .trim();
-const CRM_ADMIN_ROLES = new Set(['admin', 'manager', 'logist', 'senior_logist']);
+const CRM_ADMIN_ROLES = new Set(['admin', 'gen_director', 'manager', 'logist', 'senior_logist']);
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },

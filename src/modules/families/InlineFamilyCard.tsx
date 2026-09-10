@@ -132,10 +132,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
         .order('created_at', { ascending: false }).limit(50);
       if (data) {
-        const filtered = userRole === 'gen_director'
-          ? data.filter((r: any) => (r.actor_role ?? '') !== 'admin')
-          : data;
-        setAudit(filtered.map((r: any) => ({
+        setAudit(data.map((r: any) => ({
           id: String(r.id), familyId: String(r.entity_id),
           userName: r.actor_name ?? 'Система', action: r.action ?? '',
           field: r.entity_type ?? '', oldValue: JSON.stringify(r.old_value ?? ''),

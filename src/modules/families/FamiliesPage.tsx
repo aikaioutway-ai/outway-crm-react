@@ -675,6 +675,7 @@ function rowToFamily(row: ChildRow): Family {
 }
 
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
+  const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
@@ -802,7 +803,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     },
     {
       key: 'paymentMethod', label: 'Вид оплаты', type: 'select', category: 'Платёж', width: 100, sortable: false, filterable: false,
-      editable: userRole === 'admin',
+      editable: hasAdminAccess,
       editOptions: PAYMENT_METHOD_OPTIONS,
       render: (val) => {
         if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
@@ -816,7 +817,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       render: (val) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} />,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [cashierDates, cashierConfirmingId, cashierEditingId, userRole, cashierView]);
+  ], [cashierDates, cashierConfirmingId, cashierEditingId, hasAdminAccess, cashierView]);
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
@@ -1032,13 +1033,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const paymentTableColumns = useMemo(() => (
     PAYMENT_TABLE_COLUMNS.map(column => (
       column.key === 'paymentMethod'
-        ? { ...column, editable: userRole === 'admin' }
+        ? { ...column, editable: hasAdminAccess }
         : column
     ))
-  ), [userRole]);
+  ), [hasAdminAccess]);
 
   async function handlePaymentMethodCellSave(row: PaymentTableRow | CashierPaymentRow, key: string, value: any): Promise<boolean> {
-    if (userRole !== 'admin') {
+    if (!hasAdminAccess) {
       alert('Менять вид оплаты может только админ');
       return false;
     }
@@ -1881,7 +1882,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
-  const canManageDriverTelegram = ['admin', 'manager', 'logist', 'senior_logist'].includes(userRole);
+  const canManageDriverTelegram = ['admin', 'gen_director', 'manager', 'logist', 'senior_logist'].includes(userRole);
   const refreshDriverTelegramGroups = useCallback(async () => {
     if (!selectedDriverId || !canManageDriverTelegram) return;
     if (!authToken) {
@@ -2973,7 +2974,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               loading={cashierView === 'confirmed' ? loadingCashierConfirmed : loadingCashier}
               emptyText={cashierView === 'confirmed' ? 'Подтвержденных платежей нет' : 'Платежей на проверке нет'}
               canManageProperties={false}
-              onCellSave={userRole === 'admin' ? handlePaymentMethodCellSave : undefined}
+              onCellSave={hasAdminAccess ? handlePaymentMethodCellSave : undefined}
               showProperties={columnsOpen ?? false}
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => {
@@ -3012,7 +3013,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               loading={loadingPayments}
               emptyText="Платежей не найдено"
               canManageProperties={false}
-              onCellSave={userRole === 'admin' ? handlePaymentMethodCellSave : undefined}
+              onCellSave={hasAdminAccess ? handlePaymentMethodCellSave : undefined}
               onRowOpen={(row) => {
                 const childRow = rows.find(r => r.familyId === row.familyId);
                 if (childRow) toggleExpandedFamily(row.familyId, childRow, 'finance');
@@ -3034,7 +3035,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               showProperties={columnsOpen ?? false}
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
-              onRowDelete={userRole === 'admin' ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
+              onRowDelete={hasAdminAccess ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
               onCellSave={handleCellSave}
               onExport={mode === 'logistics' ? exportLogisticsRouteSheet : undefined}
               hideToolbar={tableBarsCollapsed}

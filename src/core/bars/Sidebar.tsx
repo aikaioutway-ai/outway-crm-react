@@ -36,7 +36,7 @@ export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
 export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
   let sections: NavSection[];
   if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
-  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
+  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b', 'market'];
   else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
   else if (role === 'manager')      sections = ['families'];
   else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
@@ -44,7 +44,7 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
   else if (role === 'cashier')       sections = ['cashier', 'expenses', 'b2b'];
   else sections = ['families'];
-  return userId === MARKET_OWNER_EMPLOYEE_ID ? [...sections, 'market'] : sections;
+  return userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
