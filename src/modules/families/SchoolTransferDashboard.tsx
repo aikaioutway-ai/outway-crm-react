@@ -32,12 +32,8 @@ function debtSumOf(rows: FamilyListRow[]): number {
   return uniqueByFamily(rows).reduce((sum, row) => sum + Math.max(0, row.debtAmount), 0);
 }
 
-function compactMoney(value: number): string {
-  const amount = Math.round(value);
-  if (Math.abs(amount) >= 1_000_000) return `${(amount / 1_000_000).toLocaleString('ru-RU', { maximumFractionDigits: 1 })}м`;
-  if (Math.abs(amount) >= 10_000) return `${Math.round(amount / 1000)}к`;
-  if (Math.abs(amount) >= 1000) return `${(amount / 1000).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}к`;
-  return amount.toLocaleString('ru-RU');
+function childCountOf(rows: FamilyListRow[]): number {
+  return rows.length;
 }
 
 export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools }: SchoolTransferDashboardProps) {
@@ -50,18 +46,20 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
 
   const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, i) => {
     const number = String(i + 1);
+    const assignedRows = schoolRows.filter(r => r.transferNumber === number);
     return {
       filterKey: number,
       label: `#${number}`,
-      debtSum: debtSumOf(schoolRows.filter(r => r.transferNumber === number)),
+      debtSum: debtSumOf(assignedRows),
+      childCount: childCountOf(assignedRows),
       tone: null as string | null,
     };
   });
 
   const statusCells = [
-    { filterKey: 'new', label: '?', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'new')), tone: STATUS_CELL_TONE.new },
-    { filterKey: 'rejected', label: '×', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
-    { filterKey: '', label: '≡', debtSum: debtSumOf(allSchoolRows), tone: STATUS_CELL_TONE.all },
+    { filterKey: 'new', label: '?', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'new')), childCount: childCountOf(allSchoolRows.filter(r => r.status === 'new')), tone: STATUS_CELL_TONE.new },
+    { filterKey: 'rejected', label: '×', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'rejected')), childCount: childCountOf(allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
+    { filterKey: '', label: '≡', debtSum: debtSumOf(allSchoolRows), childCount: childCountOf(allSchoolRows), tone: STATUS_CELL_TONE.all },
   ];
 
   const cells = [...transferCells, ...statusCells];
@@ -76,7 +74,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
       transition: 'padding-right .18s ease',
     }}>
       {cells.map(cell => {
-        const active = cell.debtSum > 0;
+        const active = cell.childCount > 0;
         const isSelected = selectedKey === cell.filterKey;
         const activeColor = cell.tone ?? '#2DD4BF';
         return (
@@ -84,7 +82,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
             className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            title={active ? `Долг: ${cell.debtSum.toLocaleString('ru-RU')} сом` : undefined}
+            title={active ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')} сом` : undefined}
             style={{
               flex: 1,
               minWidth: 0,
@@ -114,7 +112,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
               textOverflow: 'ellipsis',
               maxWidth: '100%',
             }}>
-              {active ? compactMoney(cell.debtSum) : ''}
+              {active ? cell.childCount : ''}
             </span>
             <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
               {cell.label}

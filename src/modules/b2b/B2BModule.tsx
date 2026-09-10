@@ -33,7 +33,6 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
   const allowedTabs = B2B_TABS.filter(tab => access.tabs.includes(tab.key));
   const [activeTab, setActiveTab] = useState<B2BTab>(userRole === 'cashier' ? 'cashier' : 'orders');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
-  const [returnTabAfterOrder, setReturnTabAfterOrder] = useState<B2BTab | null>(null);
   const [financeMonth, setFinanceMonth] = useState<B2BFinancePeriod | null>(null);
   const visibleTab = allowedTabs.some(tab => tab.key === activeTab) ? activeTab : allowedTabs[0].key;
   const currentTab = B2B_TABS.find(tab => tab.key === visibleTab) ?? B2B_TABS[0];
@@ -41,15 +40,11 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
 
   const openOrderCard = (orderId: string) => {
     if (!canOpenOrders) return;
-    setReturnTabAfterOrder(activeTab === 'orders' ? null : activeTab);
     setOrderToOpenId(orderId);
-    setActiveTab('orders');
   };
 
   const closeLinkedOrderCard = () => {
     setOrderToOpenId(null);
-    if (returnTabAfterOrder) setActiveTab(returnTabAfterOrder);
-    setReturnTabAfterOrder(null);
   };
 
   return (
@@ -75,7 +70,6 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
               aria-current={active ? 'page' : undefined}
               onClick={() => {
                 setOrderToOpenId(null);
-                setReturnTabAfterOrder(null);
                 setActiveTab(tab.key);
               }}
             >
@@ -86,9 +80,7 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
         })}
       </nav>
 
-      {orderToOpenId && canOpenOrders ? (
-        <B2BOrders userRole={userRole} sessionToken={sessionToken} cardOnly openOrderId={orderToOpenId} onCloseOrder={closeLinkedOrderCard} />
-      ) : visibleTab === 'cashier' ? (
+      {visibleTab === 'cashier' ? (
         <B2BCashier onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'orders' ? (
         <B2BOrders userRole={userRole} sessionToken={sessionToken} openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
@@ -110,6 +102,15 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
           <h2>{currentTab.label}</h2>
           <p>Раздел готов к наполнению.</p>
         </div>
+      )}
+      {orderToOpenId && canOpenOrders && visibleTab !== 'orders' && (
+        <B2BOrders
+          userRole={userRole}
+          sessionToken={sessionToken}
+          cardOnly
+          openOrderId={orderToOpenId}
+          onCloseOrder={closeLinkedOrderCard}
+        />
       )}
     </section>
   );

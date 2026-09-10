@@ -222,3 +222,62 @@ a { color: var(--accent); text-decoration: none; }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+/* Parent Telegram roster --------------------------------------------------- */
+.parent-telegram-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(15, 23, 42, .38);
+  backdrop-filter: blur(2px);
+}
+
+.parent-telegram-panel {
+  width: min(1180px, 96vw);
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 28px 80px rgba(15, 23, 42, .25);
+}
+
+.parent-telegram-header,
+.parent-telegram-settings {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.parent-telegram-header { justify-content: space-between; }
+.parent-telegram-header h2 { margin: 0; display: flex; align-items: center; gap: 8px; font-size: 18px; }
+.parent-telegram-header p { margin: 4px 0 0; color: var(--text-2); font-size: 12px; }
+.parent-telegram-settings { flex-wrap: wrap; background: #f8fbfb; }
+.parent-telegram-settings label { display: grid; gap: 5px; min-width: 230px; color: var(--text-2); font-size: 11px; font-weight: 700; }
+.parent-telegram-settings input,
+.parent-telegram-table select { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; background: #fff; color: var(--text); font: inherit; }
+.parent-telegram-save,
+.parent-telegram-icon-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 0; border-radius: 9px; cursor: pointer; }
+.parent-telegram-save { align-self: end; min-height: 34px; padding: 8px 13px; background: #31a4a5; color: #fff; font-weight: 700; }
+.parent-telegram-icon-button { width: 34px; height: 34px; align-self: end; background: #edf6f6; color: #258c8d; }
+.parent-telegram-save:disabled,
+.parent-telegram-icon-button:disabled { cursor: default; opacity: .55; }
+.parent-telegram-note { margin: 12px 20px 0; padding: 10px 12px; border-radius: 9px; background: #eff9f9; color: #45646a; font-size: 12px; }
+.parent-telegram-error { margin: 10px 20px 0; padding: 9px 12px; border-radius: 8px; background: #fef2f2; color: #b91c1c; font-size: 12px; }
+.parent-telegram-table-wrap { overflow: auto; padding: 14px 20px 20px; }
+.parent-telegram-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.parent-telegram-table th { position: sticky; top: 0; padding: 9px 10px; text-align: left; background: #f3f8f8; color: var(--text-2); }
+.parent-telegram-table td { padding: 10px; border-bottom: 1px solid #edf1f2; color: var(--text); }
+.parent-telegram-table select { min-width: 165px; padding: 6px 8px; }
+
+@media (max-width: 760px) {
+  .parent-telegram-backdrop { padding: 8px; }
+  .parent-telegram-settings { align-items: end; }
+  .parent-telegram-settings label { min-width: 100%; }
+}

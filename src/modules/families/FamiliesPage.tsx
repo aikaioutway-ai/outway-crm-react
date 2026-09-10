@@ -4,10 +4,11 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
+import ParentTelegramGroupPanel from './ParentTelegramGroupPanel';
 import NewDriverModal from '../drivers/NewDriverModal';
 import { B2B_ORDER_STATUSES, B2BOrder } from '../b2b/B2BOrders';
 import { useB2BOrders } from '../../hooks/useB2BData';
@@ -705,6 +706,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const expandedFamilyRequestRef = useRef<string | null>(null);
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
+  const [parentTelegramOpen, setParentTelegramOpen] = useState(false);
   const [showNewDriver, setShowNewDriver]       = useState(false);
   const [driverBranches, setDriverBranches]     = useState<V2BranchOption[]>([]);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
@@ -939,6 +941,22 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     load(!familiesRowsCache);
     // This transition loader deliberately follows the active module only. `load`
     // reads the latest cache and filters when the effect runs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isRequestsModule, mode]);
+
+  useEffect(() => {
+    if (isRequestsModule || mode === 'directory') return;
+    let timer: number | undefined;
+    const refresh = () => {
+      window.clearTimeout(timer);
+      timer = window.setTimeout(() => { void load(false); }, 80);
+    };
+    window.addEventListener(FAMILIES_CHANGED_EVENT, refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener(FAMILIES_CHANGED_EVENT, refresh);
+    };
+    // Realtime refresh intentionally uses the current module's loader.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRequestsModule, mode]);
 
@@ -1724,6 +1742,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
   }, [filtered, isChargesMode, chargesPeriodKey, periodStats]);
+
+  const parentTelegramTransfer = useMemo(() => {
+    if (!/^\d+$/.test(quickTransfer)) return null;
+    return filteredSorted.find(row => row.transferNumber === quickTransfer && row.branchId)
+      ?? rows.find(row => row.transferNumber === quickTransfer && row.branchId && matchesSchool(row))
+      ?? null;
+  }, [filteredSorted, matchesSchool, quickTransfer, rows]);
 
   const transferVehicleType = useCallback((transfer: string) => {
     if (!transfer || transfer === 'empty') return 'empty';
@@ -3029,6 +3054,17 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       >›</button>
                     </div>
                   )}
+                  {isDirectoryMode && /^\d+$/.test(quickTransfer) && (
+                    <button
+                      type="button"
+                      onClick={() => setParentTelegramOpen(true)}
+                      disabled={!parentTelegramTransfer || !authToken}
+                      title={parentTelegramTransfer ? `Родительская Telegram-группа трансфера #${quickTransfer}` : 'В трансфере пока нет родителей'}
+                      style={{ height: 28, display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid #8BD3D4', borderRadius: 8, padding: '0 10px', background: '#EFF9F9', color: '#258C8D', fontSize: 12, fontWeight: 750, cursor: parentTelegramTransfer && authToken ? 'pointer' : 'default', opacity: parentTelegramTransfer && authToken ? 1 : 0.5 }}
+                    >
+                      <MessageCircle size={14} /> Группа Telegram
+                    </button>
+                  )}
                 </div>
               )}
               toolbarRightExtra={(
@@ -4255,6 +4291,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             )}
           </div>
         </div>
+      )}
+
+      {parentTelegramTransfer?.branchId && (
+        <ParentTelegramGroupPanel
+          open={parentTelegramOpen}
+          sessionToken={authToken}
+          branchId={parentTelegramTransfer.branchId}
+          transferNumber={Number(quickTransfer)}
+          onClose={() => setParentTelegramOpen(false)}
+        />
       )}
 
     </div>

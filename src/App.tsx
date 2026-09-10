@@ -29,6 +29,8 @@ import { useFamiliesTable } from './hooks/useCrmQueries';
 import { CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
 import { UserRole } from './types';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
+import { supabase } from './services/supabase';
+import { invalidateFamiliesCache } from './services/crmV2Service';
 import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
@@ -180,6 +182,16 @@ export default function App() {
       window.removeEventListener(EMPLOYEE_SESSION_EXPIRED_EVENT, expireSession);
       if (timer !== undefined) window.clearTimeout(timer);
     };
+  }, [currentUser]);
+
+  useEffect(() => {
+    if (!currentUser) return;
+    const channel = supabase
+      .channel('crm-transfer-allocation-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_children' }, invalidateFamiliesCache)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_transfers' }, invalidateFamiliesCache)
+      .subscribe();
+    return () => { void supabase.removeChannel(channel); };
   }, [currentUser]);
 
   useEffect(() => {
@@ -588,6 +600,7 @@ export default function App() {
                   mode={managerSchoolMode}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
+                  authToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
                   initialQuickFilter={{ activeTab: managerSchoolKey }}
                   onSchoolKeyChange={handleManagerSelectSchool}

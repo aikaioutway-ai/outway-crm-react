@@ -5,6 +5,8 @@ import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, 
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone } from '../utils/format';
 
+export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
+
 /** Точечный сброс кэша семей/детей после мутации — вызывается вместо
  * полной перезагрузки CRM. React Query сам решит, кому из подписанных
  * компонентов сейчас нужен повторный запрос. */
@@ -12,6 +14,7 @@ export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
 }
 
 function derivePaymentStatus(totalCharged: number, totalPaid: number, debtAmount: number): 'no_charges' | 'paid' | 'partial' | 'debt' {

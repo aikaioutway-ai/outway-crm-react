@@ -14,6 +14,12 @@ const ADMIN_IDS = new Set(
     .map((value) => Number(value.trim()))
     .filter(Number.isSafeInteger),
 );
+const CRM_ADMIN_ROLES = new Set(['admin', 'manager', 'logist', 'senior_logist']);
+
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info',
+};
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -86,6 +92,13 @@ type PrivateIdentity = {
   depositBalance: number | null;
 };
 
+type EmployeeSession = {
+  sub: string;
+  role: string;
+  schools: string[];
+  exp: number;
+};
+
 function requiredEnv(name: string): string {
   const value = Deno.env.get(name)?.trim();
   if (!value) throw new Error(`Missing environment variable: ${name}`);
@@ -114,6 +127,130 @@ function normalizePhone(phone: string): string {
   const digits = phone.replace(/\D/g, '');
   const local = digits.startsWith('996') ? digits.slice(-9) : digits.startsWith('0') ? digits.slice(1) : digits.slice(-9);
   return local.length === 9 ? `996${local}` : digits;
+}
+
+function decodeBase64Url(value: string): Uint8Array {
+  const base64 = value.replaceAll('-', '+').replaceAll('_', '/')
+    + '='.repeat((4 - value.length % 4) % 4);
+  const binary = atob(base64);
+  return Uint8Array.from(binary, character => character.charCodeAt(0));
+}
+
+async function verifyEmployeeSession(request: Request): Promise<EmployeeSession | null> {
+  const token = (request.headers.get('authorization') ?? '').replace(/^Bearer\s+/i, '').trim();
+  const [payloadPart, signaturePart, ...extra] = token.split('.');
+  if (!payloadPart || !signaturePart || extra.length) return null;
+  try {
+    const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SUPABASE_SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
+    const valid = await crypto.subtle.verify('HMAC', key, decodeBase64Url(signaturePart), new TextEncoder().encode(payloadPart));
+    if (!valid) return null;
+    const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(payloadPart))) as EmployeeSession;
+    if (!payload.sub || !CRM_ADMIN_ROLES.has(payload.role) || !Number.isFinite(payload.exp) || payload.exp <= Math.floor(Date.now() / 1000)) return null;
+    return { ...payload, schools: Array.isArray(payload.schools) ? payload.schools.map(String) : ['ALL'] };
+  } catch {
+    return null;
+  }
+}
+
+function canAccessBranch(session: EmployeeSession, branchCode: string): boolean {
+  const allowed = new Set(session.schools.map(value => value.toUpperCase()));
+  const code = branchCode.toUpperCase();
+  if (allowed.has('ALL') || allowed.has(code)) return true;
+  const aliases: Record<string, string> = { ING_A: 'ING', ELLIPSE: 'ELS', SANARIP: 'SNP' };
+  if (aliases[code] && allowed.has(aliases[code])) return true;
+  const groups: Record<string, string[]> = {
+    ABL: ['ABL1', 'ABL2'],
+    GENIUS: ['GEN2', 'GEN4'],
+    INDIGO: ['ING', 'ING_A', 'ING_P', 'ING_W'],
+    BILIM: ['BKG', 'BJ'],
+    LIGHT: ['LA', 'LA_P'],
+  };
+  return Object.entries(groups).some(([group, children]) => allowed.has(group) && children.includes(code));
+}
+
+async function loadAuthorizedTransfer(session: EmployeeSession, transferId: string) {
+  const { data: transfer, error } = await supabase.from('v2_transfers').select('id,branch_id,transfer_number').eq('id', transferId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!transfer?.branch_id) return null;
+  const { data: branch, error: branchError } = await supabase.from('v2_school_branches').select('id,code,short_name,name').eq('id', transfer.branch_id).maybeSingle();
+  if (branchError) throw new Error(branchError.message);
+  if (!branch || !canAccessBranch(session, String(branch.code))) return null;
+  return { transfer, branch };
+}
+
+async function handleCrmAdmin(request: Request): Promise<Response> {
+  const session = await verifyEmployeeSession(request);
+  if (!session) return Response.json({ ok: false, error: 'Сессия истекла. Войдите в CRM заново.' }, { status: 401, headers: corsHeaders });
+  const body = await request.json() as Record<string, unknown>;
+  const action = String(body.action ?? '');
+
+  if (action === 'get_transfer_group') {
+    const branchId = String(body.branch_id ?? '').trim();
+    const transferNumber = Number(body.transfer_number);
+    const { data: transfer, error: transferError } = await supabase.from('v2_transfers').select('id,branch_id,transfer_number').eq('branch_id', branchId).eq('transfer_number', transferNumber).maybeSingle();
+    if (transferError) throw new Error(transferError.message);
+    if (!transfer) return Response.json({ ok: false, error: 'Трансфер не найден.' }, { status: 404, headers: corsHeaders });
+    const authorized = await loadAuthorizedTransfer(session, String(transfer.id));
+    if (!authorized) return Response.json({ ok: false, error: 'Нет доступа к этой школе.' }, { status: 403, headers: corsHeaders });
+
+    const { data: children, error: childrenError } = await supabase.from('v2_children').select('family_id,child_name,address,v2_families!inner(id,parent_name,phone)').eq('transfer_id', transfer.id).neq('status', 'rejected').order('stop_order', { ascending: true });
+    if (childrenError) throw new Error(childrenError.message);
+    const familyIds = [...new Set((children ?? []).map(row => String(row.family_id)))];
+    const [{ data: settings, error: settingsError }, { data: verified, error: verifiedError }, { data: overrides, error: overridesError }] = await Promise.all([
+      supabase.from('v2_parent_telegram_transfer_groups').select('title,admin_phone').eq('transfer_id', transfer.id).maybeSingle(),
+      familyIds.length ? supabase.from('v2_telegram_users').select('family_id,verified_at').in('family_id', familyIds).not('verified_at', 'is', null) : Promise.resolve({ data: [], error: null }),
+      familyIds.length ? supabase.from('v2_parent_telegram_member_overrides').select('family_id,status').eq('transfer_id', transfer.id).in('family_id', familyIds) : Promise.resolve({ data: [], error: null }),
+    ]);
+    if (settingsError || verifiedError || overridesError) throw new Error(settingsError?.message ?? verifiedError?.message ?? overridesError?.message ?? 'Telegram data lookup failed');
+    const verifiedIds = new Set((verified ?? []).map(row => String(row.family_id)));
+    const overrideMap = new Map((overrides ?? []).map(row => [String(row.family_id), String(row.status)]));
+    const members = new Map<string, { familyId: string; parentName: string; phone: string; children: string[]; addresses: string[] }>();
+    for (const child of children ?? []) {
+      const familyRaw = child.v2_families as unknown;
+      const family = (Array.isArray(familyRaw) ? familyRaw[0] : familyRaw) as { parent_name?: string; phone?: string } | null;
+      const familyId = String(child.family_id);
+      const current = members.get(familyId) ?? { familyId, parentName: family?.parent_name ?? '', phone: family?.phone ?? '', children: [], addresses: [] };
+      if (child.child_name) current.children.push(String(child.child_name));
+      if (child.address && !current.addresses.includes(String(child.address))) current.addresses.push(String(child.address));
+      members.set(familyId, current);
+    }
+    const memberRows = [...members.values()].map(member => {
+      const automaticStatus = verifiedIds.has(member.familyId) ? 'connected' : 'not_connected';
+      const override = overrideMap.get(member.familyId);
+      return { familyId: member.familyId, parentName: member.parentName, phone: member.phone, childrenNames: member.children.join(', '), address: member.addresses.join('; '), automaticStatus, status: override ?? automaticStatus, manual: Boolean(override) };
+    });
+    const defaultTitle = `${authorized.branch.short_name || authorized.branch.name} · трансфер #${transferNumber}`;
+    return Response.json({ ok: true, group: { transferId: transfer.id, transferNumber, branchId: authorized.branch.id, branchName: authorized.branch.name, branchCode: authorized.branch.code, title: settings?.title ?? defaultTitle, adminPhone: settings?.admin_phone ?? '', members: memberRows } }, { headers: corsHeaders });
+  }
+
+  if (action === 'save_transfer_group') {
+    const transferId = String(body.transfer_id ?? '').trim();
+    const title = String(body.title ?? '').trim().slice(0, 160);
+    const adminPhone = String(body.admin_phone ?? '').trim().slice(0, 40);
+    if (!title) return Response.json({ ok: false, error: 'Укажите название группы.' }, { status: 400, headers: corsHeaders });
+    if (!await loadAuthorizedTransfer(session, transferId)) return Response.json({ ok: false, error: 'Трансфер не найден или нет доступа.' }, { status: 403, headers: corsHeaders });
+    const { error } = await supabase.from('v2_parent_telegram_transfer_groups').upsert({ transfer_id: transferId, title, admin_phone: adminPhone, created_by_employee_id: session.sub });
+    if (error) throw new Error(error.message);
+    return Response.json({ ok: true }, { headers: corsHeaders });
+  }
+
+  if (action === 'set_member_status') {
+    const transferId = String(body.transfer_id ?? '').trim();
+    const familyId = String(body.family_id ?? '').trim();
+    const status = body.status === null ? null : String(body.status ?? '');
+    const allowed = new Set(['not_connected', 'connected', 'invited', 'no_telegram', 'declined']);
+    if (status !== null && !allowed.has(status)) return Response.json({ ok: false, error: 'Некорректный статус.' }, { status: 400, headers: corsHeaders });
+    if (!await loadAuthorizedTransfer(session, transferId)) return Response.json({ ok: false, error: 'Трансфер не найден или нет доступа.' }, { status: 403, headers: corsHeaders });
+    const { data: child } = await supabase.from('v2_children').select('id').eq('transfer_id', transferId).eq('family_id', familyId).limit(1).maybeSingle();
+    if (!child) return Response.json({ ok: false, error: 'Родитель не относится к этому трансферу.' }, { status: 400, headers: corsHeaders });
+    const result = status === null
+      ? await supabase.from('v2_parent_telegram_member_overrides').delete().eq('transfer_id', transferId).eq('family_id', familyId)
+      : await supabase.from('v2_parent_telegram_member_overrides').upsert({ transfer_id: transferId, family_id: familyId, status, updated_by_employee_id: session.sub });
+    if (result.error) throw new Error(result.error.message);
+    return Response.json({ ok: true }, { headers: corsHeaders });
+  }
+
+  return Response.json({ ok: false, error: 'Неизвестное действие.' }, { status: 400, headers: corsHeaders });
 }
 
 async function telegram(method: string, payload: Record<string, unknown>) {
@@ -689,8 +826,18 @@ async function handleUpdate(update: TelegramUpdate) {
 }
 
 Deno.serve(async (request) => {
-  if (request.method === 'GET') return new Response('telegram-manager-bot: ok');
+  if (request.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
+  if (request.method === 'GET') return new Response('telegram-manager-bot: ok', { headers: corsHeaders });
   if (request.method !== 'POST') return new Response('Method not allowed', { status: 405 });
+
+  if (new URL(request.url).pathname.endsWith('/admin/crm')) {
+    try {
+      return await handleCrmAdmin(request);
+    } catch (error) {
+      console.error('telegram-manager-bot crm error', error);
+      return Response.json({ ok: false, error: error instanceof Error ? error.message : 'Внутренняя ошибка.' }, { status: 500, headers: corsHeaders });
+    }
+  }
 
   const secret = request.headers.get('x-telegram-bot-api-secret-token');
   if (secret !== WEBHOOK_SECRET) return new Response('Unauthorized', { status: 401 });
