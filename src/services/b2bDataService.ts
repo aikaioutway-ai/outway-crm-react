@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import type { B2BPaymentMethod, B2BPaymentRecord, B2BPaymentStatus } from './b2bPaymentService';
+import { normalizeB2BPaymentOrderNumber, type B2BPaymentMethod, type B2BPaymentRecord, type B2BPaymentStatus } from './b2bPaymentService';
 
 export type B2BOrderStatus = 'new' | 'in_progress' | 'completed' | 'cancelled' | 'driver_assigned' | 'trip_completed' | 'ready_to_close' | 'success';
 
@@ -199,12 +199,13 @@ export async function fetchB2BExpenses(): Promise<B2BExpenseRecord[]> {
 }
 
 export async function createB2BExpense(expense: NewB2BExpenseRecord): Promise<void> {
+  const paymentOrderNumber = normalizeB2BPaymentOrderNumber(expense.method, expense.paymentOrderNumber);
   const { error } = await supabase.from('v2_b2b_expenses').insert({
     expense_date: expense.expenseDate,
     category: expense.category,
     amount: expense.amount,
     payment_method: expense.method,
-    payment_order_number: expense.paymentOrderNumber || null,
+    payment_order_number: paymentOrderNumber || null,
     purpose: expense.purpose,
     order_id: expense.orderId || null,
     comment: expense.comment || null,
@@ -214,12 +215,13 @@ export async function createB2BExpense(expense: NewB2BExpenseRecord): Promise<vo
 }
 
 export async function updateB2BExpense(id: string, expense: NewB2BExpenseRecord): Promise<void> {
+  const paymentOrderNumber = normalizeB2BPaymentOrderNumber(expense.method, expense.paymentOrderNumber);
   const { error } = await supabase.from('v2_b2b_expenses').update({
     expense_date: expense.expenseDate,
     category: expense.category,
     amount: expense.amount,
     payment_method: expense.method,
-    payment_order_number: expense.paymentOrderNumber || null,
+    payment_order_number: paymentOrderNumber || null,
     purpose: expense.purpose,
     order_id: expense.orderId || null,
     comment: expense.comment || null,
@@ -299,10 +301,11 @@ export async function saveB2BAssignment(order: B2BOrderRecord, driverId: string,
 
 export async function createB2BDriverPayout(order: B2BOrderRecord, amount: number, method: B2BPaymentMethod, paymentDate: string, purpose: string, paymentOrderNumber?: string) {
   if (!order.assignmentId || !order.driverId) throw new Error('У заказа нет назначения водителя.');
+  const normalizedPaymentOrderNumber = normalizeB2BPaymentOrderNumber(method, paymentOrderNumber);
   const { error } = await supabase.from('v2_b2b_driver_payments').insert({
     order_id: order.id, assignment_id: order.assignmentId, driver_id: order.driverId,
     amount, payment_method: method, payment_date: paymentDate, purpose,
-    payment_order_number: paymentOrderNumber || null,
+    payment_order_number: normalizedPaymentOrderNumber || null,
   });
   assert(error);
 }
@@ -318,7 +321,8 @@ async function callB2BPayoutApi(sessionToken: string | undefined, body: Record<s
 }
 
 export async function updateB2BDriverPayout(id: string, patch: { amount: number; method: B2BPaymentMethod; paymentDate: string; purpose: string; paymentOrderNumber?: string }, sessionToken?: string) {
-  await callB2BPayoutApi(sessionToken, { action: 'update', payoutId: id, payout: patch });
+  const paymentOrderNumber = normalizeB2BPaymentOrderNumber(patch.method, patch.paymentOrderNumber);
+  await callB2BPayoutApi(sessionToken, { action: 'update', payoutId: id, payout: { ...patch, paymentOrderNumber } });
 }
 
 export async function deleteB2BDriverPayout(id: string, sessionToken?: string) {
@@ -326,15 +330,17 @@ export async function deleteB2BDriverPayout(id: string, sessionToken?: string) {
 }
 
 export async function createB2BClientPayment(record: Omit<B2BPaymentRecord, 'id' | 'status' | 'createdAt'>) {
+  const paymentOrderNumber = normalizeB2BPaymentOrderNumber(record.method, record.paymentOrderNumber);
   const { error } = await supabase.from('v2_b2b_client_payments').insert({
     order_id: record.orderId, payment_type: 'final', amount: record.amount, payment_date: record.paymentDate,
-    payment_method: record.method, payment_order_number: record.paymentOrderNumber || null, status: 'pending', comment: record.comment,
+    payment_method: record.method, payment_order_number: paymentOrderNumber || null, status: 'pending', comment: record.comment,
   });
   assert(error);
 }
 
 export async function updateB2BClientPayment(id: string, patch: Pick<B2BPaymentRecord, 'amount' | 'method' | 'paymentDate' | 'comment' | 'paymentOrderNumber'>) {
-  const { error } = await supabase.from('v2_b2b_client_payments').update({ amount: patch.amount, payment_method: patch.method, payment_date: patch.paymentDate, comment: patch.comment, payment_order_number: patch.paymentOrderNumber || null }).eq('id', id);
+  const paymentOrderNumber = normalizeB2BPaymentOrderNumber(patch.method, patch.paymentOrderNumber);
+  const { error } = await supabase.from('v2_b2b_client_payments').update({ amount: patch.amount, payment_method: patch.method, payment_date: patch.paymentDate, comment: patch.comment, payment_order_number: paymentOrderNumber || null }).eq('id', id);
   assert(error);
 }
 

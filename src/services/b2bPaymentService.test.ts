@@ -1,4 +1,4 @@
-import { calculateB2BRevenueTax, normalizeB2BPaymentMethod } from './b2bPaymentService';
+import { calculateB2BRevenueTax, normalizeB2BPaymentMethod, normalizeB2BPaymentOrderNumber, requiresB2BPaymentOrder } from './b2bPaymentService';
 
 describe('B2B revenue tax', () => {
   test('calculates 4% for legal-account client revenue', () => {
@@ -24,5 +24,22 @@ describe('B2B revenue tax', () => {
   test('maps Lovable accounts to the new payment names', () => {
     expect(normalizeB2BPaymentMethod('osu')).toBe('legal_account');
     expect(normalizeB2BPaymentMethod('bank_account')).toBe('personal_account');
+  });
+});
+
+describe('B2B payment order number', () => {
+  test('requires a payment order number for both bank accounts', () => {
+    expect(requiresB2BPaymentOrder('legal_account')).toBe(true);
+    expect(requiresB2BPaymentOrder('personal_account')).toBe(true);
+    expect(() => normalizeB2BPaymentOrderNumber('legal_account', '  ')).toThrow('номер платёжного поручения');
+  });
+
+  test('keeps a trimmed payment order number', () => {
+    expect(normalizeB2BPaymentOrderNumber('personal_account', '  № 123  ')).toBe('№ 123');
+  });
+
+  test('allows cash without a payment order number', () => {
+    expect(requiresB2BPaymentOrder('cash')).toBe(false);
+    expect(normalizeB2BPaymentOrderNumber('cash')).toBeUndefined();
   });
 });

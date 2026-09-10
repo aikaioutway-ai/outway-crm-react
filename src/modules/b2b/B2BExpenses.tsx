@@ -15,7 +15,7 @@ import {
   Search,
   X,
 } from 'lucide-react';
-import { B2B_PAYMENT_METHODS, B2BPaymentMethod, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
+import { B2B_PAYMENT_METHODS, B2BPaymentMethod, formatB2BPaymentMethod, requiresB2BPaymentOrder } from '../../services/b2bPaymentService';
 import { createB2BExpense, updateB2BExpense, type B2BExpenseRecord } from '../../services/b2bDataService';
 import { B2B_QUERY_KEYS, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
@@ -170,6 +170,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
       setFormError('Заполните дату, категорию, назначение и сумму больше нуля.');
       return;
     }
+    if (requiresB2BPaymentOrder(form.method) && !form.paymentOrderNumber.trim()) return setFormError('Укажите номер платёжного поручения.');
     setIsSaving(true);
     setFormError('');
     try {
@@ -301,7 +302,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
                 <label className="full"><span>Назначение *</span><input autoFocus value={form.purpose} onChange={event => setForm(current => ({ ...current, purpose: event.target.value }))} placeholder="Например: премия сотруднику" /></label>
                 <label><span>Сумма, сом *</span><input type="number" min="0.01" step="0.01" value={form.amount} onChange={event => setForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
                 <label><span>Способ оплаты *</span><select value={form.method} onChange={event => setForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
-                <label><span>№ платёжного поручения</span><input value={form.paymentOrderNumber} onChange={event => setForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder="Необязательно" /></label>
+                <label><span>№ платёжного поручения{requiresB2BPaymentOrder(form.method) ? ' *' : ''}</span><input required={requiresB2BPaymentOrder(form.method)} value={form.paymentOrderNumber} onChange={event => setForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder={requiresB2BPaymentOrder(form.method) ? 'Обязательно' : 'Для наличных необязательно'} /></label>
               </div>
             </section>
             <section>

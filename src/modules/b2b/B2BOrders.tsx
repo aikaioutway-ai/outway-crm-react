@@ -3,7 +3,7 @@ import { b2bAccess } from './b2bAccess';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
 import useB2BPayments from '../../hooks/useB2BPayments';
-import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, formatB2BPaymentMethod } from '../../services/b2bPaymentService';
+import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, formatB2BPaymentMethod, requiresB2BPaymentOrder } from '../../services/b2bPaymentService';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, deleteB2BDriverPayout, saveB2BAssignment, updateB2BClientPayment, updateB2BDriverPayout, updateB2BOrder, updateB2BPaymentStatus } from '../../services/b2bDataService';
@@ -299,6 +299,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     if (!selectedOrder) return;
     const amount = Number(paymentForm.amount);
     if (!Number.isFinite(amount) || amount <= 0) return setPaymentFormError('Укажите сумму оплаты больше нуля.');
+    if (requiresB2BPaymentOrder(paymentForm.method) && !paymentForm.paymentOrderNumber.trim()) return setPaymentFormError('Укажите номер платёжного поручения.');
     const values = { amount, method: paymentForm.method, paymentOrderNumber: paymentForm.paymentOrderNumber.trim() || undefined, paymentDate: paymentForm.paymentDate, comment: paymentForm.comment.trim() };
     try {
       if (editingPaymentId) await updateB2BClientPayment(editingPaymentId, values);
@@ -402,6 +403,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     if (!selectedOrder?.driverId || !selectedOrder.driverName) return setDriverPayoutFormError('Сначала выберите водителя.');
     const amount = Number(driverPayoutForm.amount);
     if (!Number.isFinite(amount) || amount <= 0) return setDriverPayoutFormError('Укажите сумму выплаты больше нуля.');
+    if (requiresB2BPaymentOrder(driverPayoutForm.method) && !driverPayoutForm.paymentOrderNumber.trim()) return setDriverPayoutFormError('Укажите номер платёжного поручения.');
     const existingAmount = editingDriverPayoutId ? driverPayouts.find(payout => payout.id === editingDriverPayoutId)?.amount ?? 0 : 0;
     const available = selectedDriverDebt + existingAmount;
     if (amount > available) return setDriverPayoutFormError(`Сумма превышает доступный остаток ${available.toLocaleString()} сом.`);
@@ -700,7 +702,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
               <div className="b2b-payment-notice"><CircleDollarSign size={18} /><div><strong>{editingPaymentId ? 'Изменение оплаты' : 'Оплата будет отправлена кассиру'}</strong><span>{editingPaymentId ? 'Текущий статус проверки оплаты будет сохранён.' : 'Сумма попадёт в «Оплачено» только после подтверждения.'}</span></div></div>
               <label><span>Сумма, сом *</span><input autoFocus type="number" min="1" value={paymentForm.amount} onChange={event => setPaymentForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
               <label><span>Способ оплаты *</span><select value={paymentForm.method} onChange={event => setPaymentForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
-              <label><span>№ платёжного поручения</span><input value={paymentForm.paymentOrderNumber} onChange={event => setPaymentForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder="Необязательно" /></label>
+              <label><span>№ платёжного поручения{requiresB2BPaymentOrder(paymentForm.method) ? ' *' : ''}</span><input required={requiresB2BPaymentOrder(paymentForm.method)} value={paymentForm.paymentOrderNumber} onChange={event => setPaymentForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder={requiresB2BPaymentOrder(paymentForm.method) ? 'Обязательно' : 'Для наличных необязательно'} /></label>
               <label><span>Дата оплаты *</span><input type="date" value={paymentForm.paymentDate} onChange={event => setPaymentForm(current => ({ ...current, paymentDate: event.target.value }))} /></label>
               <label className="full"><span>Комментарий</span><textarea value={paymentForm.comment} onChange={event => setPaymentForm(current => ({ ...current, comment: event.target.value }))} placeholder="Назначение платежа или примечание" /></label>
               {paymentFormError && <div className="b2b-form-error">{paymentFormError}</div>}
@@ -722,7 +724,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
               <label><span>Сумма выплаты, сом *</span><input autoFocus type="number" min="1" max={selectedDriverDebt + (editingDriverPayoutId ? driverPayouts.find(payout => payout.id === editingDriverPayoutId)?.amount ?? 0 : 0)} value={driverPayoutForm.amount} onChange={event => setDriverPayoutForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
               <label><span>Как оплатили *</span><select value={driverPayoutForm.method} onChange={event => setDriverPayoutForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
               <div className="b2b-tax-preview"><span>Водителю будет перечислена вся сумма <strong>{(Number(driverPayoutForm.amount) || 0).toLocaleString()} сом</strong></span><span>Налог с выплаты не удерживается</span></div>
-              <label><span>№ платёжного поручения</span><input value={driverPayoutForm.paymentOrderNumber} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder="Необязательно" /></label>
+              <label><span>№ платёжного поручения{requiresB2BPaymentOrder(driverPayoutForm.method) ? ' *' : ''}</span><input required={requiresB2BPaymentOrder(driverPayoutForm.method)} value={driverPayoutForm.paymentOrderNumber} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder={requiresB2BPaymentOrder(driverPayoutForm.method) ? 'Обязательно' : 'Для наличных необязательно'} /></label>
               <label><span>Когда оплатили *</span><input type="date" value={driverPayoutForm.paymentDate} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentDate: event.target.value }))} /></label>
               <label className="full"><span>Комментарий</span><textarea value={driverPayoutForm.comment} onChange={event => setDriverPayoutForm(current => ({ ...current, comment: event.target.value }))} placeholder="Примечание к выплате" /></label>
               {driverPayoutFormError && <div className="b2b-form-error">{driverPayoutFormError}</div>}

@@ -9,6 +9,7 @@ jest.mock('./B2BExpenses', () => () => <div>Expenses content</div>);
 jest.mock('./B2BFinance', () => ({ selectedMonthNumber, onSelectedMonthChange, onOpenOrder }: { selectedMonthNumber: number | 'all' | null; onSelectedMonthChange: (month: number | 'all' | null) => void; onOpenOrder?: (id: string) => void }) => <div>Finance content · month {selectedMonthNumber ?? 'none'}<button onClick={() => onSelectedMonthChange(1)}>Open January</button><button onClick={() => onSelectedMonthChange('all')}>Open all periods</button>{onOpenOrder && <button onClick={() => onOpenOrder('order')}>Open finance order</button>}</div>);
 jest.mock('./B2BCashflow', () => () => <div>Cashflow content</div>);
 jest.mock('./B2BCashier', () => ({ onOpenOrder }: { onOpenOrder?: (id: string) => void }) => <div>Cashier content{onOpenOrder && <button onClick={() => onOpenOrder('order')}>Open linked order</button>}</div>);
+jest.mock('./B2BExcelExport', () => () => <button type="button">Excel export</button>);
 
 test('cashier sees orders while operational sections stay restricted', () => {
   render(<B2BModule userRole="cashier" />);

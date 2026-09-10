@@ -25,6 +25,24 @@
 .b2b-header h1 { font-size: 20px; }
 .b2b-header p,
 .b2b-empty p { margin: 4px 0 0; color: #7a859d; }
+.b2b-header-copy { min-width: 0; }
+.b2b-export-button { margin-left: auto; min-height: 38px; padding: 0 14px; border: 1px solid #b9d8da; border-radius: 11px; background: #eef8f7; color: #287f82; display: inline-flex; align-items: center; justify-content: center; gap: 7px; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+.b2b-export-button:hover { border-color: #7fc3c4; background: #e4f5f3; }
+.b2b-export-overlay { z-index: 110; }
+.b2b-export-modal { width: min(560px, 100%); border-radius: 20px; background: #fff; box-shadow: 0 24px 72px rgba(23,34,47,.28); overflow: hidden; }
+.b2b-export-body { padding: 18px 20px 20px; display: grid; gap: 14px; }
+.b2b-export-period { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.b2b-export-period label { display: grid; gap: 6px; }
+.b2b-export-period label > span { color: #626c8b; font-size: 11px; font-weight: 800; }
+.b2b-export-period input { width: 100%; box-sizing: border-box; padding: 10px 11px; border: 1px solid #d4e3e7; border-radius: 12px; outline: none; background: #fff; color: #17222f; font: inherit; }
+.b2b-export-period input:focus { border-color: #7fc3c4; box-shadow: 0 0 0 3px rgba(49,164,165,.12); }
+.b2b-export-preview { padding: 14px; border: 1px solid #cce5e3; border-radius: 14px; background: #eef8f7; color: #31a4a5; display: flex; align-items: center; gap: 11px; }
+.b2b-export-preview > div { display: grid; gap: 3px; }
+.b2b-export-preview strong { color: #287f82; font-size: 13px; }
+.b2b-export-preview span { color: #6f8489; font-size: 11px; line-height: 1.45; }
+.b2b-export-note { padding: 12px 13px; border-radius: 13px; background: #fff8e8; display: grid; gap: 3px; }
+.b2b-export-note strong { color: #9b6b16; font-size: 11px; }
+.b2b-export-note span { color: #8b7b5d; font-size: 10px; }
 
 .b2b-icon {
   width: 42px;
@@ -1200,6 +1218,9 @@
 .b2b-form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 9px; padding-top: 3px; }
 
 @media (max-width: 720px) {
+  .b2b-header { flex-wrap: wrap; }
+  .b2b-export-button { width: 100%; margin-left: 0; }
+  .b2b-export-period { grid-template-columns: 1fr; }
   .b2b-panel-head { align-items: flex-start; flex-direction: column; }
   .b2b-client-tools { align-items: stretch; flex-direction: column; }
   .b2b-client-search-tools { align-items: stretch; flex-direction: column; }

@@ -11,6 +11,7 @@ import B2BExpenses from './B2BExpenses';
 import B2BFinance, { type B2BFinancePeriod } from './B2BFinance';
 import B2BCashflow from './B2BCashflow';
 import B2BCashier from './B2BCashier';
+import B2BExcelExport from './B2BExcelExport';
 import './B2BModule.css';
 
 const B2B_TABS = [
@@ -55,10 +56,11 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
     <section className="b2b-module">
       <header className="b2b-header">
         <span className="b2b-icon"><B2BIcon size={30} /></span>
-        <div>
+        <div className="b2b-header-copy">
           <h1>B2B</h1>
           <p>Корпоративные перевозки</p>
         </div>
+        <B2BExcelExport activeTab={visibleTab} label={currentTab.label} />
       </header>
 
       <nav className="b2b-tabs" aria-label="Разделы B2B">

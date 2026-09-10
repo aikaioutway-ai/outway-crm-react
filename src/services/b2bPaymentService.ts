@@ -18,6 +18,18 @@ export function formatB2BPaymentMethod(value: unknown): string {
   return B2B_PAYMENT_METHODS.find(method => method.value === normalized)?.label ?? 'Наличные';
 }
 
+export function requiresB2BPaymentOrder(value: unknown): boolean {
+  return normalizeB2BPaymentMethod(value) !== 'cash';
+}
+
+export function normalizeB2BPaymentOrderNumber(method: unknown, value?: string): string | undefined {
+  const normalized = value?.trim() || '';
+  if (requiresB2BPaymentOrder(method) && !normalized) {
+    throw new Error('Укажите номер платёжного поручения для безналичной оплаты.');
+  }
+  return normalized || undefined;
+}
+
 export const B2B_LEGAL_ACCOUNT_TAX_RATE = 0.04;
 
 /** Tax is charged only on confirmed client revenue received to the legal account. */
