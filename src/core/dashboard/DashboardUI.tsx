@@ -47,6 +47,18 @@ export function SchoolAvatar({ logo, label, color, size = 26, radius = 7, fontSi
   );
 }
 
+export function SchoolApplicationCount({ count }: { count?: number }) {
+  if (count === undefined) return null;
+  return (
+    <span
+      title={`${count.toLocaleString('ru-RU')} заявок без отказов`}
+      style={{ color: 'var(--text-2)', fontSize: 10, fontWeight: 550, opacity: 0.72, whiteSpace: 'nowrap', flexShrink: 0 }}
+    >
+      · {count.toLocaleString('ru-RU')} заявок
+    </span>
+  );
+}
+
 export function KpiChip({ icon, label, value, color }: {
   icon: React.ReactNode;
   label: string;

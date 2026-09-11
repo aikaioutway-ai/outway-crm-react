@@ -18,6 +18,7 @@ export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
  * компонентов сейчас нужен повторный запрос. */
 export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
+  queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
@@ -902,6 +903,27 @@ export async function fetchBranchStats(): Promise<BranchStat[]> {
     debtSum: Number(row.debt_sum ?? 0),
     balance: Number(row.balance ?? 0),
   }));
+}
+
+/** Minimal application counter for overview school rows; financial data is not loaded. */
+export async function fetchSchoolApplicationCounts(): Promise<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (let from = 0; ; from += 1000) {
+    const { data, error } = await supabase
+      .from('v2_children')
+      .select('status, v2_school_branches(code, name)')
+      .range(from, from + 999);
+    if (error) throw new Error(error.message);
+
+    (data ?? []).forEach((row: any) => {
+      if (row.status === 'rejected') return;
+      const branch = Array.isArray(row.v2_school_branches) ? row.v2_school_branches[0] : row.v2_school_branches;
+      if (!branch) return;
+      const schoolKey = getBranchFilter(branch.name ?? '', branch.code ?? '');
+      counts[schoolKey] = (counts[schoolKey] ?? 0) + 1;
+    });
+    if ((data?.length ?? 0) < 1000) return counts;
+  }
 }
 
 /** Схлопывает статистику по филиалам (BranchStat[]) в статистику по вкладкам

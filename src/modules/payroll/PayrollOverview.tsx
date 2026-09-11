@@ -1,8 +1,8 @@
 import { useEmployeeAdvances } from '../../hooks/useCrmQueries';
 import { useEffect, useMemo, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, ReceiptText, School, ShieldCheck, WalletCards } from 'lucide-react';
-import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApprovalsForPeriod, usePayrollEntriesForPeriod } from '../../hooks/useCrmQueries';
-import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApprovalsForPeriod, usePayrollEntriesForPeriod, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
+import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
 import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_TIER_2_KEYS } from '../families/constants';
@@ -49,6 +49,7 @@ function sortValue(stat: PayrollOverviewStat, key: SortKey): number | string {
 export default function PayrollOverview({ view, userRole, sessionToken, periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const { data: employees = null } = useEmployees();
+  const applicationCounts = useSchoolApplicationCounts();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -183,6 +184,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
               >
                 <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                 <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                {!row.isGroup && row.key !== PAYROLL_OFFICE_KEY && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
                 {row.isGroup ? (
                   row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
                 ) : (
