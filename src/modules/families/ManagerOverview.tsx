@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, ChevronDown, ChevronRight, Inbox, Landmark, Plus, Receipt, Search, Users, Wallet, X } from 'lucide-react';
 import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, useBranchStats, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
 import { ALL_PERIODS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
 import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
@@ -9,7 +9,7 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewFamilyModal from './NewFamilyModal';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { formatName } from '../../utils/format';
 import { isNewUnassignedRow } from './familiesRowHelpers';
 
@@ -304,6 +304,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
 
   // Стандартный вид («За всё время») — лёгкий RPC-агрегат по филиалам.
   const branchStatsQuery = useBranchStats();
+  const applicationCounts = useSchoolApplicationCounts();
   // Полная таблица семей нужна только для разбивки по конкретному периоду
   // (charged/paid по месяцу привязаны к семье, а не к филиалу) — грузим её
   // лениво, только когда period выбран, а не всегда при заходе на экран.
@@ -451,6 +452,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
                   >
                     <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                     <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                    {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
                     {row.isGroup ? (
                       row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
                     ) : (

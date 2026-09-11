@@ -1,10 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, QrCode, ReceiptText, RotateCcw, Search, X } from 'lucide-react';
 import { PaymentTableRow, RefundTableRow } from '../../services/crmV2Service';
-import { usePaymentsTable, useRefundsTable } from '../../hooks/useCrmQueries';
+import { usePaymentsTable, useRefundsTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
 import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
@@ -213,6 +213,7 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
 export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
   const { data: refundRows = [] } = useRefundsTable();
+  const applicationCounts = useSchoolApplicationCounts();
   const searchablePayments = useMemo(
     () => (rows ?? []).filter(row => isSchoolAllowed(getBranchFilter(row.branchShort, row.branchShort), allowedSchools)),
     [allowedSchools, rows],
@@ -330,6 +331,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
                 >
                   <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                   <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                  {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
                   {row.isGroup ? (
                     row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
                   ) : (

@@ -8,6 +8,7 @@ import {
   fetchCashierPaymentsTable,
   fetchRefundsTable,
   fetchBranchStats,
+  fetchSchoolApplicationCounts,
   fetchV2PayrollEntriesForPeriod,
   fetchV2PayrollApproval,
   fetchV2PayrollApprovalsForPeriod,
@@ -93,6 +94,14 @@ export function useBranchStats(): UseQueryResult<BranchStat[]> {
     queryKey: QK.branchStats,
     queryFn: fetchBranchStats,
   });
+}
+
+export function useSchoolApplicationCounts(): Record<string, number> | undefined {
+  const { data } = useQuery({
+    queryKey: QK.schoolApplicationCounts,
+    queryFn: fetchSchoolApplicationCounts,
+  });
+  return data;
 }
 
 export function useEmployees(): UseQueryResult<Employee[]> {

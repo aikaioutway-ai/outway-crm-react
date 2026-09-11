@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, FileWarning, School, UserCheck, UserX } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
-import { useDriversTable } from '../../hooks/useCrmQueries';
+import { useDriversTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
 import SchoolTierTabs, { SchoolTier } from '../families/SchoolTierTabs';
@@ -114,6 +114,7 @@ function computeDriverStats(rows: V2DriverTableRow[], allowedSchools: string[] |
 
 export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools }: DriversOverviewProps) {
   const { data: rows = null } = useDriversTable();
+  const applicationCounts = useSchoolApplicationCounts();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -208,6 +209,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
                 >
                   <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                   <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                  {!row.isGroup && row.key !== DRIVER_RESERVE_KEY && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
                   {row.isGroup ? (
                     row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
                   ) : (

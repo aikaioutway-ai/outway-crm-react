@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, Inbox, School } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
@@ -104,6 +104,7 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier): Logisti
 
 export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange }: LogisticsOverviewProps) {
   const { data: rows = null } = useFamiliesTable(false);
+  const applicationCounts = useSchoolApplicationCounts();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -186,6 +187,7 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
               >
                 <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                 <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
+                {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
                 {row.isGroup ? (
                   row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
                 ) : (
