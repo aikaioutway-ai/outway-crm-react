@@ -274,6 +274,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
               transferNumber: transferValue ? Number(transferValue) : undefined,
               stopNumber: stopValue ? Number(stopValue) : undefined,
               timeMorning: row.timeMorning ?? undefined,
+              source: 'map',
             });
             queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable(false), (prev: FamilyListRow[] | undefined) => prev?.map((r: FamilyListRow) => (
               r.rowId === childId ? { ...r, transferNumber: transferValue || null, stopNumber: stopValue || null } : r

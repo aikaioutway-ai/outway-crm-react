@@ -67,6 +67,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
           branchId: vehicleMenu.branchId,
           transferNumber: Number(vehicleMenu.transferNumber),
           vehicleType: value,
+          source: 'logistics',
         });
       }
     } catch (error) {

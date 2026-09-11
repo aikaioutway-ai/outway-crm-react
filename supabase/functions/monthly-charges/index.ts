@@ -67,6 +67,7 @@ Deno.serve(async (req) => {
     original_amount: Number(c.final_price ?? 0),
     amount:          Number(c.final_price ?? 0),
     paid_amount:     0,
+    pricing_managed: true,
     status:          'unpaid',
   }));
 

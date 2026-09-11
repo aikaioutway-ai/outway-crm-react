@@ -4,6 +4,12 @@ import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../ty
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone } from '../utils/format';
+import {
+  buildTransferRepricingPlan,
+  PricingManagedChargeSnapshot,
+  TransferRepricingChildSnapshot,
+  TransferRepricingSource,
+} from './transferRepricing';
 
 export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
 
@@ -423,6 +429,7 @@ export function mapV2Child(row: any, family: Family): Child {
     class: row.class_name ?? '',
     selfExitAllowed: Boolean(row.self_exit_allowed),
     routeSource: undefined,
+    transferId: row.transfer_id ?? undefined,
     transferNumber: row.v2_transfers?.transfer_number ?? undefined,
     stopNumber: row.stop_order ?? undefined,
     timeMorning: row.time_morning ?? undefined,
@@ -441,6 +448,9 @@ export function mapV2Child(row: any, family: Family): Child {
     branchShort: branch?.short_name ?? branch?.code,
     zone: normalizeZone(row.zone, family.zone) as Zone,
     vehicleType: normalizeVehicle(row.v2_transfers?.vehicle_type ?? row.vehicle_type) as VehicleType,
+    requestedVehicleType: row.requested_vehicle_type
+      ? normalizeVehicle(row.requested_vehicle_type) as VehicleType
+      : undefined,
     basePrice: Number(row.base_price ?? 0),
     siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
     manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
@@ -973,6 +983,7 @@ export async function createV2Child(family: Family, input: Partial<Child> & { ch
       distance_km: input.distanceKm ?? family.distanceKm ?? null,
       zone: input.zone ?? family.zone ?? 'A',
       vehicle_type: input.vehicleType ?? family.vehicleType ?? 'microbus',
+      requested_vehicle_type: input.requestedVehicleType ?? input.vehicleType ?? family.vehicleType ?? 'microbus',
       base_price: input.basePrice ?? input.finalPrice ?? 0,
       sibling_discount_percent: input.siblingDiscountPercent ?? 0,
       manual_discount_percent: input.manualDiscountPercent ?? 0,
@@ -1031,52 +1042,178 @@ export async function ensureV2Transfer(params: {
   return String(data.id);
 }
 
+function createOperationId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, char => {
+    const random = Math.floor(Math.random() * 16);
+    return (char === 'x' ? random : (random & 0x3) | 0x8).toString(16);
+  });
+}
+
+async function fetchTransferRepricingChildren(
+  transferId: string,
+  childIds?: string[],
+): Promise<TransferRepricingChildSnapshot[]> {
+  let query = supabase
+    .from('v2_children')
+    .select(`
+      id, family_id, child_name, branch_id, zone, requested_vehicle_type, vehicle_type,
+      base_price, final_price, sibling_discount_percent, manual_discount_percent,
+      manual_discount_amount, transfer_id, status,
+      v2_school_branches(code),
+      v2_charges(id, charge_type, original_amount, amount, paid_amount, pricing_managed, status)
+    `)
+    .neq('status', 'rejected');
+  query = childIds?.length ? query.in('id', childIds) : query.eq('transfer_id', transferId);
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row: any) => ({
+    id: String(row.id),
+    familyId: String(row.family_id),
+    childName: row.child_name ?? '',
+    schoolCode: toSchoolCode(row.v2_school_branches?.code),
+    zone: normalizeZone(row.zone, 'A') as Zone,
+    requestedVehicleType: row.requested_vehicle_type
+      ? normalizeVehicle(row.requested_vehicle_type) as VehicleType
+      : null,
+    vehicleType: normalizeVehicle(row.vehicle_type) as VehicleType,
+    basePrice: Number(row.base_price ?? 0),
+    finalPrice: Number(row.final_price ?? 0),
+    siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
+    manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
+    manualDiscountAmount: Number(row.manual_discount_amount ?? 0),
+    transferId: row.transfer_id ? String(row.transfer_id) : null,
+    charges: (row.v2_charges ?? []).map((charge: any): PricingManagedChargeSnapshot => ({
+      id: String(charge.id),
+      chargeType: charge.charge_type,
+      originalAmount: Number(charge.original_amount ?? 0),
+      amount: Number(charge.amount ?? 0),
+      paidAmount: Number(charge.paid_amount ?? 0),
+      pricingManaged: Boolean(charge.pricing_managed),
+      status: charge.status ?? 'unpaid',
+    })),
+  }));
+}
+
+async function repriceV2ChildrenForTransfer(params: {
+  transferId: string;
+  transferNumber: number;
+  previousTransferVehicleType: VehicleType | null;
+  newVehicleType: VehicleType;
+  childIds?: string[];
+  updateTransferType?: boolean;
+  force?: boolean;
+  source: TransferRepricingSource;
+  actorId?: string | null;
+  actorName?: string | null;
+}): Promise<void> {
+  const children = await fetchTransferRepricingChildren(params.transferId, params.childIds);
+  const plan = buildTransferRepricingPlan({
+    operationId: createOperationId(),
+    transferId: params.transferId,
+    transferNumber: params.transferNumber,
+    previousTransferVehicleType: params.previousTransferVehicleType,
+    newVehicleType: params.newVehicleType,
+    source: params.source,
+    actorId: params.actorId,
+    actorName: params.actorName,
+    children,
+    updateTransferType: params.updateTransferType,
+    force: params.force,
+  });
+  if (!plan) return;
+  const { error } = await supabase.rpc('v2_apply_transfer_repricing', { p_plan: plan });
+  if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
+}
+
 export async function updateV2ChildRoute(params: {
   child: Child;
   vehicleType: VehicleType;
   transferNumber?: number;
   stopNumber?: number;
   timeMorning?: string;
+  source?: TransferRepricingSource;
+  actorId?: string | null;
+  actorName?: string | null;
 }): Promise<void> {
-  let existingTransferVehicleType: string | null = null;
-  if (params.transferNumber && params.child.branchId) {
-    const { data: existingTransfer } = await supabase
-      .from('v2_transfers')
-      .select('vehicle_type')
-      .eq('branch_id', params.child.branchId)
-      .eq('transfer_number', params.transferNumber)
-      .maybeSingle();
-    existingTransferVehicleType = existingTransfer?.vehicle_type ?? null;
+  if (!params.transferNumber) {
+    await updateV2Child(params.child.id, {
+      transfer_id: null,
+      stop_order: params.stopNumber ?? null,
+      time_morning: params.timeMorning || null,
+    });
+    return;
   }
 
-  const transferId = params.transferNumber
-    ? await ensureV2Transfer({
-      schoolId: params.child.schoolId,
-      branchId: params.child.branchId,
+  const transferId = await ensureV2Transfer({
+    schoolId: params.child.schoolId,
+    branchId: params.child.branchId,
+    transferNumber: params.transferNumber,
+    vehicleType: params.vehicleType,
+  });
+  const { data: transfer, error: transferError } = await supabase
+    .from('v2_transfers')
+    .select('vehicle_type')
+    .eq('id', transferId)
+    .single();
+  if (transferError) throw new Error(transferError.message);
+  let actualType = normalizeVehicle(transfer.vehicle_type ?? params.vehicleType) as VehicleType;
+  if (!transfer.vehicle_type) {
+    await repriceV2ChildrenForTransfer({
+      transferId,
       transferNumber: params.transferNumber,
-      vehicleType: params.vehicleType,
-    })
-    : null;
+      previousTransferVehicleType: null,
+      newVehicleType: params.vehicleType,
+      updateTransferType: true,
+      source: params.source ?? 'transfer_move',
+      actorId: params.actorId,
+      actorName: params.actorName,
+    });
+    actualType = params.vehicleType;
+  }
+
+  const { data: currentChild, error: currentChildError } = await supabase
+    .from('v2_children')
+    .select('transfer_id, vehicle_type')
+    .eq('id', params.child.id)
+    .single();
+  if (currentChildError) throw new Error(currentChildError.message);
+
+  if (currentChild.transfer_id === transferId && params.vehicleType !== actualType) {
+    await repriceV2ChildrenForTransfer({
+      transferId,
+      transferNumber: params.transferNumber,
+      previousTransferVehicleType: actualType,
+      newVehicleType: params.vehicleType,
+      updateTransferType: true,
+      source: params.source ?? 'family_card',
+      actorId: params.actorId,
+      actorName: params.actorName,
+    });
+    actualType = params.vehicleType;
+  }
+
+  if (currentChild.transfer_id !== transferId || normalizeVehicle(currentChild.vehicle_type) !== actualType) {
+    await repriceV2ChildrenForTransfer({
+      transferId,
+      transferNumber: params.transferNumber,
+      previousTransferVehicleType: actualType,
+      newVehicleType: actualType,
+      childIds: [params.child.id],
+      updateTransferType: false,
+      force: true,
+      source: params.source ?? 'transfer_move',
+      actorId: params.actorId,
+      actorName: params.actorName,
+    });
+  }
 
   await updateV2Child(params.child.id, {
-    vehicle_type: params.vehicleType,
-    transfer_id: transferId,
     stop_order: params.stopNumber ?? null,
     time_morning: params.timeMorning || null,
   });
-
-  if (existingTransferVehicleType && normalizeVehicle(existingTransferVehicleType) !== normalizeVehicle(params.vehicleType)) {
-    try {
-      await addV2Audit({
-        action: 'vehicle_change',
-        entityType: 'vehicle_type',
-        entityId: params.child.familyId,
-        oldValue: params.vehicleType,
-        newValue: normalizeVehicle(existingTransferVehicleType),
-        comment: `Клиент запрашивал ${VT_LABEL[normalizeVehicle(params.vehicleType)] ?? params.vehicleType}, назначен на трансфер №${params.transferNumber} (${VT_LABEL[normalizeVehicle(existingTransferVehicleType)] ?? existingTransferVehicleType})`,
-      });
-    } catch { /* audit failure must not block the assignment */ }
-  }
 }
 
 export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRow[]> {
@@ -1299,11 +1436,18 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
         .update({
           driver_id: driverId,
           vehicle_id: vehicleId,
-          vehicle_type: input.vehicleType,
           status: 'active',
         })
         .eq('id', transferId);
       if (transferError) throw new Error(transferError.message);
+      await updateV2TransferVehicleType({
+        schoolId: input.schoolId,
+        branchId: input.branchId,
+        transferNumber: input.transferNumber,
+        vehicleType: input.vehicleType,
+        source: 'vehicle_assignment',
+        actorName: 'CRM',
+      });
     }
 
     return driverId;
@@ -1352,7 +1496,7 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
 
   const { data: existingVehicle, error: vehicleLookupError } = await supabase
     .from('v2_vehicles')
-    .select('id')
+    .select('id, vehicle_type')
     .eq('driver_id', driverId)
     .order('created_at', { ascending: true })
     .limit(1)
@@ -1378,6 +1522,27 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
       .update(vehiclePayload)
       .eq('id', existingVehicle.id);
     if (error) throw new Error(error.message);
+    if (input.vehicleType && normalizeVehicle(existingVehicle.vehicle_type) !== input.vehicleType) {
+      const { data: transfers, error: transfersError } = await supabase
+        .from('v2_transfers')
+        .select('id, transfer_number, vehicle_type')
+        .or(`vehicle_id.eq.${existingVehicle.id},driver_id.eq.${driverId}`)
+        .neq('status', 'archive');
+      if (transfersError) throw new Error(transfersError.message);
+      for (const transfer of transfers ?? []) {
+        await repriceV2ChildrenForTransfer({
+          transferId: String(transfer.id),
+          transferNumber: Number(transfer.transfer_number),
+          previousTransferVehicleType: transfer.vehicle_type
+            ? normalizeVehicle(transfer.vehicle_type) as VehicleType
+            : null,
+          newVehicleType: input.vehicleType,
+          updateTransferType: true,
+          source: 'vehicle_assignment',
+          actorName: 'CRM',
+        });
+      }
+    }
     return;
   }
 
@@ -1742,6 +1907,9 @@ export async function updateV2TransferVehicleType(params: {
   branchId?: string | null;
   transferNumber: number;
   vehicleType: VehicleType;
+  source?: TransferRepricingSource;
+  actorId?: string | null;
+  actorName?: string | null;
 }): Promise<string> {
   if (!params.branchId) throw new Error('Не указан филиал трансфера');
 
@@ -1752,20 +1920,25 @@ export async function updateV2TransferVehicleType(params: {
     vehicleType: params.vehicleType,
   });
 
-  const { error: transferError } = await supabase
+  const { data: transfer, error: transferError } = await supabase
     .from('v2_transfers')
-    .update({ vehicle_type: params.vehicleType })
-    .eq('id', transferId);
+    .select('vehicle_type')
+    .eq('id', transferId)
+    .single();
   if (transferError) throw new Error(transferError.message);
-
-  const { error: childrenError } = await supabase
-    .from('v2_children')
-    .update({ vehicle_type: params.vehicleType })
-    .eq('transfer_id', transferId)
-    .neq('status', 'rejected');
-  if (childrenError) throw new Error(childrenError.message);
-
-  invalidateFamiliesCache();
+  const previousType = transfer?.vehicle_type
+    ? normalizeVehicle(transfer.vehicle_type) as VehicleType
+    : null;
+  await repriceV2ChildrenForTransfer({
+    transferId,
+    transferNumber: params.transferNumber,
+    previousTransferVehicleType: previousType,
+    newVehicleType: params.vehicleType,
+    updateTransferType: true,
+    source: params.source ?? 'logistics',
+    actorId: params.actorId,
+    actorName: params.actorName,
+  });
   return transferId;
 }
 

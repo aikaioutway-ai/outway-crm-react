@@ -1268,6 +1268,18 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           return next;
         });
       } else {
+        if (key === 'vehicleLabel' && row.transferNumber) {
+          await updateV2TransferVehicleType({
+            schoolId: row.schoolId,
+            branchId: row.branchId,
+            transferNumber: Number(row.transferNumber),
+            vehicleType: value as VehicleType,
+            source: mode === 'logistics' ? 'logistics' : 'family_card',
+            actorName: userName,
+          });
+          await load(false);
+          return true;
+        }
         const updates: Record<string, unknown> = {};
         const rowPatch: Partial<ChildRow> = {};
         if (key === 'childName') {
@@ -1320,8 +1332,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             transferNumber: value ? Number(value) : undefined,
             stopNumber: row.stopNumber ? Number(row.stopNumber) : undefined,
             timeMorning: row.timeMorning ?? undefined,
+            source: 'transfer_move',
+            actorName: userName,
           });
-          rowPatch.transferNumber = value || null;
+          await load(false);
+          return true;
         } else {
           await updateV2Child(row.rowId, updates);
         }
@@ -1461,6 +1476,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         branchId,
         transferNumber: Number(transferTypeMenu.transferNumber),
         vehicleType,
+        source: 'logistics',
+        actorName: userName,
       });
       setDashboardTransfers(prev => {
         const exists = prev.some(item => item.branchId === branchId && item.transferNumber === transferTypeMenu.transferNumber);

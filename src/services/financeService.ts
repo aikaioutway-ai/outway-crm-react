@@ -208,6 +208,7 @@ export async function createChargesForPeriod(
       original_amount: amount,
       amount,
       paid_amount: 0,
+      pricing_managed: true,
       status: 'unpaid',
     };
   });
@@ -467,6 +468,7 @@ async function createDepositCharge(familyId: string, children: Child[]): Promise
     original_amount: Number(child.finalPrice ?? 0),
     amount: Number(child.finalPrice ?? 0),
     paid_amount: 0,
+    pricing_managed: true,
     status: 'unpaid',
   }));
   const { error } = await supabase

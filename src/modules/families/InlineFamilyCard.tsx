@@ -468,17 +468,27 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           transferNumber: nextChild.transferNumber,
           stopNumber: nextChild.stopNumber,
           timeMorning: nextChild.timeMorning,
+          source: 'family_card',
+          actorName: userName,
         });
         delete dbPatch.vehicle_type;
+        delete dbPatch.base_price;
+        delete dbPatch.final_price;
+        delete dbPatch.manual_discount_percent;
+        delete dbPatch.manual_discount_amount;
       }
 
       if (Object.keys(dbPatch).length > 0) {
         await updateV2Child(child.id, dbPatch);
       }
 
-      setChildren(prev => prev.map(item => item.id === child.id ? nextChild : item));
+      const routeChanged = 'vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch;
+      const savedChildren = routeChanged
+        ? await fetchV2Children(family.id)
+        : children.map(item => item.id === child.id ? nextChild : item);
+      setChildren(savedChildren);
       await addAudit('Редактирование ребёнка', 'child', JSON.stringify(child), JSON.stringify(nextChild));
-      await loadFinance(children.map(item => item.id === child.id ? nextChild : item));
+      await loadFinance(savedChildren);
       onUpdated?.();
       return true;
     } catch {
