@@ -29,7 +29,7 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type Sc
 import {
   childDebtAmount, compactMoney,
   downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort,
-  logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod,
+  isNewUnassignedRow, logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod,
   uniqueFamilyRows, vehicleTypeShortLabel, XLSX_BRAND,
 } from './familiesRowHelpers';
 
@@ -1594,7 +1594,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   // непусто), а не значение колонки status в базе; переводим его отдельно в
   // hasTransfer, не путая с реальными статусами ('new'/'rejected'/...).
   const pagedChildStatus = (quickChildStatus && quickChildStatus !== 'transfered') ? quickChildStatus : null;
-  const pagedHasTransfer = quickTransfer === 'empty' ? false : (quickChildStatus === 'transfered' ? true : null);
+  const pagedHasTransfer = quickTransfer === 'empty' || quickChildStatus === 'new'
+    ? false
+    : (quickChildStatus === 'transfered' ? true : null);
   const pagedTransferNumber = quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive'
     ? Number(quickTransfer) : null;
 
@@ -1723,7 +1725,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       if (!hasAny) return false;
     }
     if (mode === 'charges') {
-      if (dashboardMetric === 'count' && r.status !== 'new') return false;
+      if (dashboardMetric === 'count' && !isNewUnassignedRow(r)) return false;
       if (dashboardMetric === 'chargedSum' && Number(r.totalCharged || 0) <= 0) return false;
       if (dashboardMetric === 'paidSum' || dashboardMetric === 'paidCount') {
         if (periodStatsFiltered?.paidFamilyIds) {
@@ -1743,7 +1745,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (quickTransfer === 'empty' && r.transferNumber) return false;
     if (quickTransfer && quickTransfer !== 'empty' && r.transferNumber !== quickTransfer) return false;
     if (quickChildStatus === 'transfered' && !r.transferNumber) return false;
-    if (quickChildStatus && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
+    if (quickChildStatus === 'new' && !isNewUnassignedRow(r)) return false;
+    if (quickChildStatus && quickChildStatus !== 'new' && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }), [dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
@@ -1778,7 +1781,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         key: 'new',
         label: '?',
         title: 'Новые',
-        count: rows.filter(row => row.status === 'new' && matchesSchool(row) && matchesSearch(row)).length,
+        count: rows.filter(row => isNewUnassignedRow(row) && matchesSchool(row) && matchesSearch(row)).length,
         tone: '#31A4A5',
       },
     ];

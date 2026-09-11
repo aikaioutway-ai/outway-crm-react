@@ -7,6 +7,7 @@ import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolA
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
+import { isNewUnassignedRow } from './familiesRowHelpers';
 
 type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 'microbusCount' | 'lightVehicleCount';
 
@@ -92,7 +93,7 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier): Logisti
       label: tab.label,
       color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
       logo: tab.logo,
-      newRequests: schoolRows.filter(row => row.status === 'new').length,
+      newRequests: schoolRows.filter(isNewUnassignedRow).length,
       microbusAverage: transfers.microbusAverage,
       transferCount: transfers.transferCount,
       microbusCount: transfers.microbusCount,
