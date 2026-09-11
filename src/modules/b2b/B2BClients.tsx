@@ -267,7 +267,7 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
               <div className="b2b-client-profile-summary">
                 <span><b>{selectedClientOrders.length}</b> заказов</span>
                 <span><b>{clientOrdersTotal.toLocaleString()}</b> сом</span>
-                {canCreateOrder && <button className="b2b-primary-button" type="button" onClick={() => setCreatingOrderForClient(true)}><Plus size={16} /> Создать заказ</button>}
+                {canCreateOrder && <button type="button" onClick={() => setCreatingOrderForClient(true)} title="Создать заказ" aria-label="Создать заказ"><Plus size={16} /></button>}
                 <button type="button" onClick={openClientEdit} aria-label="Редактировать клиента"><Pencil size={16} /></button>
                 <button type="button" onClick={() => setSelectedClientId(null)} aria-label="Закрыть"><X size={18} /></button>
               </div>
