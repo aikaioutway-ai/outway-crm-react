@@ -61,6 +61,7 @@ export interface DataTableProps<T = any> {
   loading?: boolean;
   emptyText?: string;
   groupColorKey?: string;
+  groupByKey?: keyof T;
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
   toolbarExtra?: React.ReactNode;
   toolbarRightExtra?: React.ReactNode;
@@ -80,6 +81,87 @@ export interface DataTableProps<T = any> {
 function getCellValue<T>(row: T, col: ColumnDef<T>): any {
   if (col.getValue) return col.getValue(row);
   return (row as any)[col.key];
+}
+
+function compareRows<T>(a: T, b: T, sorts: SortConfig[], columns: ColumnDef<T>[]): number {
+  for (const sort of sorts) {
+    const column = columns.find(item => item.key === sort.key);
+    if (!column) continue;
+    const left = getCellValue(a, column);
+    const right = getCellValue(b, column);
+    const leftNumber = parseFloat(left);
+    const rightNumber = parseFloat(right);
+    const comparison = !isNaN(leftNumber) && !isNaN(rightNumber)
+      ? leftNumber - rightNumber
+      : String(left ?? '').localeCompare(String(right ?? ''), 'ru');
+    if (comparison !== 0) return sort.dir === 'asc' ? comparison : -comparison;
+  }
+  return 0;
+}
+
+function sortRowsInGroups<T extends Record<string, any>>(
+  rows: T[],
+  sorts: SortConfig[],
+  columns: ColumnDef<T>[],
+  groupByKey?: keyof T,
+): T[] {
+  if (!sorts.length) return rows;
+  if (!groupByKey) return [...rows].sort((left, right) => compareRows(left, right, sorts, columns));
+
+  const groups = new Map<unknown, { rows: T[]; firstIndex: number }>();
+  rows.forEach((row, index) => {
+    const rawKey = row[groupByKey];
+    const key = rawKey == null || rawKey === '' ? Symbol(index) : rawKey;
+    const group = groups.get(key);
+    if (group) group.rows.push(row);
+    else groups.set(key, { rows: [row], firstIndex: index });
+  });
+
+  return Array.from(groups.values())
+    .sort((left, right) => {
+      const leftFirst = left.rows.find(row => row.isFirstChild === true) ?? left.rows[0];
+      const rightFirst = right.rows.find(row => row.isFirstChild === true) ?? right.rows[0];
+      return compareRows(leftFirst, rightFirst, sorts, columns) || left.firstIndex - right.firstIndex;
+    })
+    .flatMap(group => [...group.rows].sort((left, right) => {
+      const leftIndex = Number(left.familyIndex);
+      const rightIndex = Number(right.familyIndex);
+      return Number.isFinite(leftIndex) && Number.isFinite(rightIndex) ? leftIndex - rightIndex : 0;
+    }));
+}
+
+function paginateRowsInGroups<T extends Record<string, any>>(
+  rows: T[],
+  pageSize: number,
+  groupByKey?: keyof T,
+): T[][] {
+  if (!groupByKey) {
+    return Array.from({ length: Math.max(1, Math.ceil(rows.length / pageSize)) }, (_, index) =>
+      rows.slice(index * pageSize, (index + 1) * pageSize));
+  }
+
+  const pages: T[][] = [];
+  let page: T[] = [];
+  let index = 0;
+  while (index < rows.length) {
+    const first = rows[index];
+    const rawKey = first[groupByKey];
+    const group = [first];
+    index += 1;
+    if (rawKey != null && rawKey !== '') {
+      while (index < rows.length && rows[index][groupByKey] === rawKey) {
+        group.push(rows[index]);
+        index += 1;
+      }
+    }
+    if (page.length && page.length + group.length > pageSize) {
+      pages.push(page);
+      page = [];
+    }
+    page.push(...group);
+  }
+  if (page.length) pages.push(page);
+  return pages.length ? pages : [[]];
 }
 
 function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined): boolean {
@@ -253,6 +335,7 @@ export function DataTable<T extends Record<string, any>>({
   loading = false,
   emptyText = 'Нет данных',
   groupColorKey: _groupColorKey,
+  groupByKey,
   toolbarExtra,
   toolbarRightExtra,
   hideToolbar = false,
@@ -356,24 +439,8 @@ export function DataTable<T extends Record<string, any>>({
         return result;
       });
     }
-    if (sorts.length > 0) {
-      rows.sort((a, b) => {
-        for (const s of sorts) {
-          const col = cols.find(c => c.key === s.key);
-          if (!col) continue;
-          const av = getCellValue(a, col);
-          const bv = getCellValue(b, col);
-          const an = parseFloat(av); const bn = parseFloat(bv);
-          let cmp = 0;
-          if (!isNaN(an) && !isNaN(bn)) { cmp = an - bn; }
-          else { cmp = String(av ?? '').localeCompare(String(bv ?? ''), 'ru'); }
-          if (cmp !== 0) return s.dir === 'asc' ? cmp : -cmp;
-        }
-        return 0;
-      });
-    }
-    return rows;
-  }, [data, filters, sorts, cols]);
+    return sortRowsInGroups(rows, sorts, cols, groupByKey);
+  }, [data, filters, sorts, cols, groupByKey]);
 
   const calcResults = useMemo(() => {
     const result: Record<string, string> = {};
@@ -386,10 +453,14 @@ export function DataTable<T extends Record<string, any>>({
     return result;
   }, [visibleCols, calcModes, processedData]);
 
-  const totalPages = Math.max(1, Math.ceil(processedData.length / PAGE_SIZE));
+  const pagedRows = useMemo(
+    () => paginateRowsInGroups(processedData, PAGE_SIZE, groupByKey),
+    [processedData, groupByKey],
+  );
+  const totalPages = pagedRows.length;
   const pageSafe = Math.min(page, totalPages);
-  const pageStart = (pageSafe - 1) * PAGE_SIZE;
-  const pageRows = processedData.slice(pageStart, pageStart + PAGE_SIZE);
+  const pageStart = pagedRows.slice(0, pageSafe - 1).reduce((count, rows) => count + rows.length, 0);
+  const pageRows = pagedRows[pageSafe - 1] ?? [];
 
   useEffect(() => {
     setPage(1);

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { DataTable, type ColumnDef } from './DataTable';
 
 jest.mock('../../services/supabase', () => ({
@@ -49,5 +49,44 @@ test('passes the selected payment method to the cell save handler', async () => 
       'paymentMethod',
       'transfer',
     );
+  });
+});
+
+test('sorts families by the first child and keeps siblings together', async () => {
+  type ChildRow = {
+    id: string;
+    familyId: string;
+    childName: string;
+    isFirstChild: boolean;
+  };
+  const childColumns: ColumnDef<ChildRow>[] = [
+    { key: 'childName', label: 'Ребёнок', type: 'text' },
+  ];
+
+  render(
+    <DataTable
+      columns={childColumns}
+      data={[
+        { id: 'a-1', familyId: 'family-a', childName: 'Зара', isFirstChild: true },
+        { id: 'a-2', familyId: 'family-a', childName: 'Алина', isFirstChild: false },
+        { id: 'b-1', familyId: 'family-b', childName: 'Борис', isFirstChild: true },
+      ]}
+      rowKey="id"
+      groupByKey="familyId"
+      storageKey="family-sort-test"
+    />,
+  );
+
+  const table = screen.getAllByRole('table').at(-1)!;
+  expect(within(table).getByText('Зара')).toBeInTheDocument();
+  fireEvent.click(within(table).getByText('Ребёнок'));
+
+  await waitFor(() => {
+    const names = within(table).getAllByRole('row')
+      .slice(1)
+      .map(row => row.textContent ?? '');
+    expect(names[0]).toContain('Борис');
+    expect(names[1]).toContain('Зара');
+    expect(names[2]).toContain('Алина');
   });
 });
