@@ -1,16 +1,6 @@
--- Aggregated per-branch KPI stats, computed in Postgres instead of pulling
--- every family/child row to the client and reducing there.
---
--- Mirrors computeSchoolStats() in src/modules/families/ManagerOverview.tsx:
--- - children_count / new_requests are counted per CHILD row (all statuses,
---   including rejected — computeSchoolStats does not filter status except
---   for new_requests).
--- - charged / paid / pending_count / pending_sum / debt_sum / balance are
---   FAMILY-level totals, summed once per distinct family that has at least
---   one child in the branch (not once per child — a family with 2 children
---   in the same branch must not double its charged/paid/debt amounts).
---
--- Safe to run multiple times in Supabase SQL Editor (create or replace).
+-- A new application is a child that still has the `new` status and has not
+-- yet been assigned to a transfer. Keep the server-side KPI aligned with the
+-- quick filter used by all family/logistics dashboards.
 
 create or replace function public.get_branch_stats()
 returns table (
@@ -98,8 +88,3 @@ as $$
 $$;
 
 grant execute on function public.get_branch_stats() to anon, authenticated;
-
--- family_id is the join key for every per-branch aggregate above; without
--- this index the family_money CTE does a seq scan per branch at 3000+ rows.
-create index if not exists idx_v2_families_summary_family_id
-  on public.v2_families_summary(family_id);

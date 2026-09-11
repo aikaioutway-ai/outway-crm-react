@@ -2,6 +2,7 @@ import React from 'react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
+import { isNewUnassignedRow } from './familiesRowHelpers';
 
 interface SchoolTransferDashboardProps {
   schoolKey: string;
@@ -57,7 +58,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
   });
 
   const statusCells = [
-    { filterKey: 'new', label: '?', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'new')), childCount: childCountOf(allSchoolRows.filter(r => r.status === 'new')), tone: STATUS_CELL_TONE.new },
+    { filterKey: 'new', label: '?', debtSum: debtSumOf(allSchoolRows.filter(isNewUnassignedRow)), childCount: childCountOf(allSchoolRows.filter(isNewUnassignedRow)), tone: STATUS_CELL_TONE.new },
     { filterKey: 'rejected', label: '×', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'rejected')), childCount: childCountOf(allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
     { filterKey: '', label: '≡', debtSum: debtSumOf(allSchoolRows), childCount: childCountOf(allSchoolRows), tone: STATUS_CELL_TONE.all },
   ];

@@ -11,6 +11,7 @@ import ManagerPeriodBar from './ManagerPeriodBar';
 import NewFamilyModal from './NewFamilyModal';
 import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { formatName } from '../../utils/format';
+import { isNewUnassignedRow } from './familiesRowHelpers';
 
 export interface SchoolStat {
   key: string;
@@ -82,7 +83,7 @@ export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
       color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
       logo: tab.logo,
       childrenCount: schoolRows.length,
-      newRequests: schoolRows.filter(r => r.status === 'new').length,
+      newRequests: schoolRows.filter(isNewUnassignedRow).length,
       charged: families.reduce((sum, f) => sum + f.totalCharged, 0),
       paid: families.reduce((sum, f) => sum + f.totalPaid, 0),
       pendingCount: families.reduce((sum, f) => sum + f.pendingPaymentCount, 0),

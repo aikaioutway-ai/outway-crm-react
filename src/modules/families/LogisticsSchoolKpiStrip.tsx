@@ -4,6 +4,7 @@ import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { isNewUnassignedRow } from './familiesRowHelpers';
 
 interface LogisticsSchoolKpiStripProps {
   schoolKey: string;
@@ -54,7 +55,7 @@ export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth =
   const stats = useMemo(() => {
     const schoolRows = (rows ?? []).filter(row => row.branchFilter === schoolKey);
     return {
-      newRequests: schoolRows.filter(row => row.status === 'new').length,
+      newRequests: schoolRows.filter(isNewUnassignedRow).length,
       ...transferStats(schoolRows),
     };
   }, [rows, schoolKey]);

@@ -74,6 +74,10 @@ export function logisticsWorkRows(rows: ChildRow[]): ChildRow[] {
   return rows.filter(row => row.status !== 'rejected');
 }
 
+export function isNewUnassignedRow(row: Pick<ChildRow, 'status' | 'transferNumber'>): boolean {
+  return row.status === 'new' && !row.transferNumber;
+}
+
 export function transferVehicleSummary(rows: ChildRow[]) {
   const transferMap = new Map<string, { vehicleType?: string; studentCount: number }>();
 
