@@ -2580,10 +2580,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     const FIRST_DATA_ROW = HEADER_BOTTOM + 1;
     routeRows.forEach((row, index) => {
       const contacts = [
-        row.parentName && `Родитель: ${row.parentName}`,
         row.phone,
         row.secondPhone,
-        row.contactName && `Контакт: ${row.contactName}`,
         row.contactPhone,
       ].filter(Boolean).join(' / ');
       const rowIndex = FIRST_DATA_ROW + index;

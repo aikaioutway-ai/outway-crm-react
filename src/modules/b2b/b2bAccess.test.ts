@@ -33,3 +33,12 @@ test('cashier has full working access to orders and payment review', () => {
     orderTabs: ['main', 'payment', 'driver', 'pnl', 'documents'],
   });
 });
+
+test('only cashier, b2b manager, logistics head and executive admins can create orders from a client card', () => {
+  expect(b2bAccess('cashier').createOrderFromClient).toBe(true);
+  expect(b2bAccess('b2b_manager').createOrderFromClient).toBe(true);
+  expect(b2bAccess('senior_logist').createOrderFromClient).toBe(true);
+  expect(b2bAccess('admin').createOrderFromClient).toBe(true);
+  expect(b2bAccess('gen_director').createOrderFromClient).toBe(true);
+  expect(b2bAccess('b2b_logist').createOrderFromClient).toBe(false);
+});

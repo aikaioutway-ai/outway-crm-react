@@ -41,7 +41,7 @@ const B2B_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 
 const EMPTY_ORDER_FORM = {
   client: '', routeFrom: '', routeTo: '', requestDate: new Date().toISOString().slice(0, 10), departureDate: '',
-  transport: 'Минивэн', transportCount: '1', pricePerUnit: '', paid: '', status: 'new' as OrderStatus,
+  transport: 'Минивэн', transportCount: '1', pricePerUnit: '', paid: '', status: 'new' as OrderStatus, driver: '',
 };
 
 const EMPTY_PAYMENT_FORM = {
@@ -231,7 +231,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
       client: order.clientId, routeFrom: order.routeFrom, routeTo: order.routeTo,
       requestDate: toDateInput(order.requestDate), departureDate: toDateTimeInput(order.departureDate),
       transport: order.transport, transportCount: String(order.transportCount), pricePerUnit: String(order.pricePerUnit),
-      paid: String(order.paid), status: order.status,
+      paid: String(order.paid), status: order.status, driver: '',
     });
     setOrderFormError('');
     setOrderFormOpen(true);
@@ -262,7 +262,12 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
       return;
       }
     const createdIdentity = await createB2BOrder({ ...values, category: 'b2b' });
-    const created: B2BOrder = { ...createdIdentity, ...values, category: 'b2b', driverName: '' };
+    let created: B2BOrder = { ...createdIdentity, ...values, category: 'b2b', driverName: '' };
+    if (orderForm.driver) {
+      const driver = drivers.find(item => item.driverId === orderForm.driver);
+      const assignment = await saveB2BAssignment(created, orderForm.driver, 0);
+      created = { ...created, assignmentId: assignment.id, driverId: orderForm.driver, driverName: driver?.fullName ?? '', driverPricePerUnit: assignment.driverPricePerUnit, driverTotal: assignment.driverTotal, status: 'driver_assigned' };
+    }
     setOrders(current => [created, ...current]);
     closeOrderForm();
     openOrderCard(created.id);
@@ -498,7 +503,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                     {B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
                   </select>
                 </td>
-                <td><span className={`b2b-order-driver${order.driverName ? ' assigned' : ''}`}>{order.driverName || 'Не назначен'}</span></td>
+                <td><span className={`b2b-order-driver${order.driverName ? ' assigned' : ''}`}>{order.driverName || 'Назначить водителя !!!'}</span></td>
               </tr>
             );})}
           </tbody>
@@ -682,6 +687,9 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
               <label><span>Количество транспорта *</span><input type="number" min="1" value={orderForm.transportCount} onChange={event => setOrderForm(current => ({ ...current, transportCount: event.target.value }))} /></label>
               <label><span>Цена за единицу, сом</span><input type="number" min="0" value={orderForm.pricePerUnit} onChange={event => setOrderForm(current => ({ ...current, pricePerUnit: event.target.value }))} placeholder="0" /></label>
               <label><span>Оплачено, сом</span><input type="number" min="0" value={orderForm.paid} onChange={event => setOrderForm(current => ({ ...current, paid: event.target.value }))} placeholder="0" /></label>
+              {!editingOrderId && access.orderTabs.includes('driver') && (
+                <label className="full"><span>Водитель</span><select value={orderForm.driver} onChange={event => setOrderForm(current => ({ ...current, driver: event.target.value }))} disabled={driversLoading}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Назначить водителя !!!'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
+              )}
               <label className="full"><span>Статус</span><select value={orderForm.status} onChange={event => setOrderForm(current => ({ ...current, status: event.target.value as OrderStatus }))}>{B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></label>
               <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(orderForm.transportCount) || 0) * (Number(orderForm.pricePerUnit) || 0)).toLocaleString()} сом</strong></div>
               {orderFormError && <div className="b2b-form-error">{orderFormError}</div>}

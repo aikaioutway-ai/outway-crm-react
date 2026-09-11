@@ -3,6 +3,7 @@ export function b2bAccess(role: UserRole) {
   const manager = role === 'b2b_manager';
   const logist = role === 'b2b_logist';
   const cashier = role === 'cashier';
+  const seniorLogist = role === 'senior_logist';
   const executiveAdmin = role === 'admin' || role === 'gen_director';
   return {
     tabs: manager ? ['orders', 'calendar', 'clients'] : logist ? ['logistics', 'calendar'] : cashier ? ['cashier', 'orders', 'clients', 'expenses', 'cashflow'] : ['cashier', 'orders', 'logistics', 'calendar', 'clients', 'expenses', 'finance', 'cashflow'],
@@ -15,5 +16,6 @@ export function b2bAccess(role: UserRole) {
     manageDriverPayouts: executiveAdmin || cashier,
     reviewPayments: executiveAdmin || cashier,
     editOrder: !logist,
+    createOrderFromClient: manager || cashier || seniorLogist || executiveAdmin,
   };
 }
