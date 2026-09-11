@@ -66,6 +66,7 @@ export interface Child {
   class: string;
   selfExitAllowed: boolean;
   routeSource?: string;
+  transferId?: string;
   transferNumber?: number;
   stopNumber?: number;
   timeMorning?: string;
@@ -84,6 +85,7 @@ export interface Child {
   branchShort?: string;
   zone: Zone;
   vehicleType: VehicleType;
+  requestedVehicleType?: VehicleType;
   basePrice?: number;
   siblingDiscountPercent?: number;
   manualDiscountPercent?: number;
