@@ -675,6 +675,7 @@ function rowToFamily(row: ChildRow): Family {
 
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
+  const canDeleteFamilies = hasAdminAccess || userRole === 'manager';
   const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
@@ -3045,7 +3046,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               showProperties={columnsOpen ?? false}
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
-              onRowDelete={hasAdminAccess ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
+              onRowDelete={canDeleteFamilies ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
               onCellSave={handleCellSave}
               onExport={mode === 'logistics' ? exportLogisticsRouteSheet : undefined}
               hideToolbar={tableBarsCollapsed}
