@@ -49,6 +49,7 @@ export async function createParentForum({ school, transfer }) {
 
   const forum = forumFromUpdates(updates);
   const inputChannel = await client.getInputEntity(forum);
+  const inputPeer = await client.getInputEntity(forum);
   const bot = await client.getEntity(`@${config.botUsername}`);
   const inputBot = await client.getInputEntity(bot);
 
@@ -81,7 +82,34 @@ export async function createParentForum({ school, transfer }) {
     })
   );
 
+  // Hide Telegram's system "General" topic. The five OUTWAY topics remain.
+  try {
+    await client.invoke(
+      new Api.messages.EditForumTopic({
+        peer: inputPeer,
+        topicId: 1,
+        hidden: true,
+      })
+    );
+  } catch (error) {
+    // Some clients/accounts may report TOPIC_NOT_MODIFIED or a temporary
+    // Telegram-side error. Group creation should still succeed in that case.
+    console.warn("Could not hide General topic:", error?.message || error);
+  }
+
   // Telegram uses -100<channel_id> in Bot API for supergroups/channels.
   const chatId = Number(`-100${forum.id.toString()}`);
-  return { chatId, title };
+  return { chatId, title, inputPeer };
+}
+
+export async function pinAndOrderForumTopics(inputPeer, topicIds) {
+  if (!topicIds.length) return;
+  const client = await getClient();
+  await client.invoke(
+    new Api.messages.ReorderPinnedForumTopics({
+      peer: inputPeer,
+      force: true,
+      order: topicIds,
+    })
+  );
 }
