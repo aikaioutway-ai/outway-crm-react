@@ -4,6 +4,7 @@ import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../ty
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone } from '../utils/format';
+import { isTeacherPriced } from '../utils/pricing';
 import {
   buildTransferRepricingPlan,
   PricingManagedChargeSnapshot,
@@ -423,6 +424,13 @@ export function mapV2Family(row: any, children: any[] = []): Family {
 
 export function mapV2Child(row: any, family: Family): Child {
   const branch = row.v2_school_branches;
+  const storedPrice = {
+    basePrice: Number(row.base_price ?? 0),
+    siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
+    manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
+    manualDiscountAmount: Number(row.manual_discount_amount ?? 0),
+    finalPrice: Number(row.final_price ?? 0),
+  };
   return {
     id: String(row.id),
     familyId: String(row.family_id),
@@ -452,11 +460,8 @@ export function mapV2Child(row: any, family: Family): Child {
     requestedVehicleType: row.requested_vehicle_type
       ? normalizeVehicle(row.requested_vehicle_type) as VehicleType
       : undefined,
-    basePrice: Number(row.base_price ?? 0),
-    siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
-    manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
-    manualDiscountAmount: Number(row.manual_discount_amount ?? 0),
-    finalPrice: Number(row.final_price ?? 0),
+    ...storedPrice,
+    teacherPrice: isTeacherPriced(storedPrice),
   };
 }
 
@@ -978,7 +983,7 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
     contact_phone: updated.contactPhone || null,
     comment: updated.comment || null,
     status: updated.status,
-  }).eq('id', familyId);
+  }).eq('id', familyId).select('id').single();
   if (error) throw new Error(error.message);
   invalidateFamiliesCache();
 }

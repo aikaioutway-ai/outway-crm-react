@@ -1,4 +1,6 @@
-import { SchoolCode, Zone, VehicleType } from '../types';
+import { Child, SchoolCode, Zone, VehicleType } from '../types';
+
+export const TEACHER_MONTHLY_PRICE = 4800;
 
 // ─── ТАРИФЫ ──────────────────────────────────────────────────────────────────
 
@@ -90,6 +92,7 @@ export interface RepriceChildInput {
   siblingDiscountPercent: number;
   manualDiscountPercent: number;
   manualDiscountAmount: number;
+  fixedFinalPrice?: number;
 }
 
 export interface RepriceChildResult {
@@ -107,14 +110,93 @@ export interface RepriceChildResult {
  */
 export function repriceChild(input: RepriceChildInput): RepriceChildResult {
   const basePrice = Math.max(0, input.basePrice);
-  const manualPercent = roundToStep(input.manualDiscountPercent || 0, 0, 100, 5);
+  const hasFixedFinalPrice = input.fixedFinalPrice !== undefined;
+  const manualPercent = hasFixedFinalPrice ? 0 : roundToStep(input.manualDiscountPercent || 0, 0, 100, 5);
   const siblingPercent = input.siblingDiscountPercent || 0;
   const effectivePercent = manualPercent || siblingPercent;
   const percentAmount = Math.round(basePrice * effectivePercent / 100);
   const maxManualAmount = Math.max(0, basePrice - percentAmount);
-  const manualAmount = roundToStep(input.manualDiscountAmount || 0, 0, maxManualAmount, 100);
+  const manualAmount = hasFixedFinalPrice
+    ? Math.max(0, maxManualAmount - Math.max(0, Math.min(maxManualAmount, Number(input.fixedFinalPrice))))
+    : roundToStep(input.manualDiscountAmount || 0, 0, maxManualAmount, 100);
   const finalPrice = Math.max(0, basePrice - percentAmount - manualAmount);
   return { basePrice, manualDiscountPercent: manualPercent, manualDiscountAmount: manualAmount, finalPrice };
+}
+
+type StoredChildPrice = Pick<Child, 'basePrice' | 'siblingDiscountPercent' | 'manualDiscountPercent' | 'manualDiscountAmount' | 'finalPrice'>;
+
+export function supportsTeacherPrice(input: Pick<Child, 'schoolCode' | 'branchCode' | 'branchShort'>): boolean {
+  return input.schoolCode === 'TENSAY'
+    || String(input.branchCode || '').toUpperCase() === 'TIS'
+    || String(input.branchShort || '').toUpperCase() === 'TIS';
+}
+
+export function isTeacherPriced(input: StoredChildPrice): boolean {
+  const expected = repriceChild({
+    basePrice: Number(input.basePrice || 0),
+    siblingDiscountPercent: Number(input.siblingDiscountPercent || 0),
+    manualDiscountPercent: 0,
+    manualDiscountAmount: 0,
+    fixedFinalPrice: TEACHER_MONTHLY_PRICE,
+  });
+  return Number(input.manualDiscountPercent || 0) === 0
+    && Number(input.manualDiscountAmount || 0) === expected.manualDiscountAmount
+    && Number(input.finalPrice || 0) === expected.finalPrice;
+}
+
+/** Applies an edit to a child and recalculates the displayed price immediately. */
+export function applyChildPricingPatch(child: Child, patch: Partial<Child>): Child {
+  const next: Child = { ...child, ...patch };
+  const manualPercentChanged = 'manualDiscountPercent' in patch;
+  const manualAmountChanged = 'manualDiscountAmount' in patch;
+  const teacherWasActive = Boolean(child.teacherPrice ?? isTeacherPriced(child));
+  const requestedTeacherPrice = 'teacherPrice' in patch
+    ? Boolean(patch.teacherPrice)
+    : (manualPercentChanged || manualAmountChanged) ? false : teacherWasActive;
+  const teacherPrice = requestedTeacherPrice && supportsTeacherPrice(next);
+
+  if ('teacherPrice' in patch) {
+    next.manualDiscountPercent = 0;
+    next.manualDiscountAmount = 0;
+  } else if (teacherWasActive && manualPercentChanged) {
+    next.manualDiscountAmount = 0;
+  } else if (teacherWasActive && manualAmountChanged) {
+    next.manualDiscountPercent = 0;
+  } else if (teacherWasActive && !teacherPrice) {
+    next.manualDiscountPercent = 0;
+    next.manualDiscountAmount = 0;
+  }
+
+  const shouldReprice = teacherPrice !== teacherWasActive
+    || 'schoolCode' in patch
+    || 'zone' in patch
+    || 'vehicleType' in patch
+    || 'basePrice' in patch
+    || manualPercentChanged
+    || manualAmountChanged;
+  if (!shouldReprice) return { ...next, teacherPrice };
+
+  const tariffChanged = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch;
+  const basePrice = tariffChanged
+    ? getPriceByZone(next.schoolCode, next.zone, next.vehicleType)
+    : Math.max(0, Number(next.basePrice || 0));
+  const repriced = repriceChild({
+    basePrice,
+    siblingDiscountPercent: Number(next.siblingDiscountPercent || 0),
+    manualDiscountPercent: Number(next.manualDiscountPercent || 0),
+    manualDiscountAmount: Number(next.manualDiscountAmount || 0),
+    fixedFinalPrice: teacherPrice ? TEACHER_MONTHLY_PRICE : undefined,
+  });
+  return { ...next, ...repriced, teacherPrice };
+}
+
+/** Returns only fields changed in the edit form, so unrelated route logic cannot overwrite pricing. */
+export function changedChildPatch(original: Child, draft: Child): Partial<Child> {
+  const patch: Partial<Child> = {};
+  (Object.keys(draft) as Array<keyof Child>).forEach(key => {
+    if (original[key] !== draft[key]) (patch as Record<keyof Child, unknown>)[key] = draft[key];
+  });
+  return patch;
 }
 
 // ─── ФОРМАТИРОВАНИЕ ──────────────────────────────────────────────────────────

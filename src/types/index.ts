@@ -90,6 +90,7 @@ export interface Child {
   siblingDiscountPercent?: number;
   manualDiscountPercent?: number;
   manualDiscountAmount?: number;
+  teacherPrice?: boolean;
   finalPrice?: number;
 }
 

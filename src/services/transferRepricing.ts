@@ -1,5 +1,5 @@
 import { Child, SchoolCode, VehicleType, Zone } from '../types';
-import { getPriceByZone, repriceChild } from '../utils/pricing';
+import { getPriceByZone, isTeacherPriced, repriceChild, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
 
 export type TransferRepricingSource =
   | 'logistics'
@@ -109,11 +109,13 @@ export function buildTransferRepricingPlan(input: TransferRepricingPlanInput): T
 
   const children = input.children.map<TransferRepricingChildPlan>(child => {
     const newBasePrice = getPriceByZone(child.schoolCode, child.zone, input.newVehicleType);
+    const teacherPrice = isTeacherPriced(child);
     const repriced = repriceChild({
       basePrice: newBasePrice,
       siblingDiscountPercent: child.siblingDiscountPercent,
       manualDiscountPercent: child.manualDiscountPercent,
       manualDiscountAmount: child.manualDiscountAmount,
+      fixedFinalPrice: teacherPrice ? TEACHER_MONTHLY_PRICE : undefined,
     });
     const charges = child.charges
       .filter(charge => charge.pricingManaged && charge.status !== 'cancelled')
