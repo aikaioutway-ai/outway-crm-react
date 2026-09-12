@@ -1,4 +1,5 @@
-import { getPriceByZone, getChildPrice, getFamilyPrice, getSiblingDiscountPercent, getZoneByDistance, money, repriceChild } from '../utils/pricing';
+import { applyChildPricingPatch, changedChildPatch, getPriceByZone, getChildPrice, getFamilyPrice, getSiblingDiscountPercent, getZoneByDistance, isTeacherPriced, money, repriceChild, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
+import { Child } from '../types';
 
 // ─── getSiblingDiscountPercent ─────────────────────────────────────────────────
 
@@ -247,5 +248,66 @@ describe('repriceChild', () => {
     expect(result.manualDiscountPercent).toBe(0);
     expect(result.manualDiscountAmount).toBe(300);
     expect(result.finalPrice).toBe(5400); // 6000 - 5% (300) - 300 = 5400
+  });
+
+  test('фиксированная цена учителя всегда равна 4 800 сом', () => {
+    const result = repriceChild({ basePrice: 6800, siblingDiscountPercent: 0, manualDiscountPercent: 0, manualDiscountAmount: 0, fixedFinalPrice: TEACHER_MONTHLY_PRICE });
+    expect(result.finalPrice).toBe(4800);
+    expect(result.manualDiscountAmount).toBe(2000);
+    expect(isTeacherPriced({ ...result, siblingDiscountPercent: 0 })).toBe(true);
+  });
+
+  test('цена учителя остаётся 4 800 после смены тарифа', () => {
+    const child = {
+      id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
+      schoolCode: 'TENSAY', zone: 'B', vehicleType: 'microbus', basePrice: 6800,
+      siblingDiscountPercent: 0, manualDiscountPercent: 0, manualDiscountAmount: 2000,
+      finalPrice: 4800, teacherPrice: true,
+    } as Child;
+    const repriced = applyChildPricingPatch(child, { vehicleType: 'minivan' });
+    expect(repriced.basePrice).toBe(9500);
+    expect(repriced.finalPrice).toBe(4800);
+    expect(repriced.teacherPrice).toBe(true);
+  });
+
+  test('цена учителя доступна только школе Tensay / TIS', () => {
+    expect(supportsTeacherPrice({ schoolCode: 'TENSAY', branchCode: 'TENSAY', branchShort: 'TIS' })).toBe(true);
+    expect(supportsTeacherPrice({ schoolCode: 'AES', branchCode: 'AES', branchShort: 'AES' })).toBe(false);
+  });
+
+  test('режим учителя нельзя применить к другой школе', () => {
+    const child = {
+      id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
+      schoolCode: 'AES', zone: 'B', vehicleType: 'microbus', basePrice: 6100,
+      siblingDiscountPercent: 0, manualDiscountPercent: 0, manualDiscountAmount: 0, finalPrice: 6100,
+    } as Child;
+    const repriced = applyChildPricingPatch(child, { teacherPrice: true });
+    expect(repriced.teacherPrice).toBe(false);
+    expect(repriced.finalPrice).toBe(6100);
+  });
+
+  test('ручная скидка пересчитывает цену сразу и отключает режим учителя', () => {
+    const child = {
+      id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
+      schoolCode: 'TENSAY', zone: 'B', vehicleType: 'microbus', basePrice: 6800,
+      siblingDiscountPercent: 0, manualDiscountPercent: 0, manualDiscountAmount: 2000,
+      finalPrice: 4800, teacherPrice: true,
+    } as Child;
+    const repriced = applyChildPricingPatch(child, { manualDiscountPercent: 10 });
+    expect(repriced.manualDiscountAmount).toBe(0);
+    expect(repriced.finalPrice).toBe(6120);
+    expect(repriced.teacherPrice).toBe(false);
+  });
+
+  test('общое сохранение передаёт только изменённые поля ребёнка', () => {
+    const original = {
+      id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
+      schoolCode: 'TENSAY', zone: 'B', vehicleType: 'microbus', basePrice: 6800,
+      siblingDiscountPercent: 0, manualDiscountPercent: 0, manualDiscountAmount: 0, finalPrice: 6800,
+    } as Child;
+    expect(changedChildPatch(original, { ...original, manualDiscountPercent: 10, finalPrice: 6120 })).toEqual({
+      manualDiscountPercent: 10,
+      finalPrice: 6120,
+    });
   });
 });

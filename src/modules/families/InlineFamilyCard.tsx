@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CreditCard, ExternalLink, FileText, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
+import { Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
-import { getPriceByZone, getSiblingDiscountPercent, money, repriceChild } from '../../utils/pricing';
+import { applyChildPricingPatch, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, isTeacherPriced, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
@@ -180,8 +180,22 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
 
   function patchDraftChild(child: Child, patch: Partial<Child>): Promise<boolean> {
-    setDraftChildren(current => current.map(item => item.id === child.id ? { ...item, ...patch } : item));
+    setDraftChildren(current => current.map(item => item.id === child.id ? applyChildPricingPatch(item, patch) : item));
     return Promise.resolve(true);
+  }
+
+  function toggleTeacherPricing() {
+    const sourceChildren = editing ? draftChildren : children;
+    const active = sourceChildren.length > 0 && sourceChildren.every(child => Boolean(child.teacherPrice ?? isTeacherPriced(child)));
+    const nextChildren = sourceChildren.map(child => applyChildPricingPatch(child, { teacherPrice: !active }));
+    if (!editing) {
+      setDraftFamily({ ...savedFamily });
+      setDeletedChildIds(new Set());
+      setDraftDocuments(savedDocuments.map(document => ({ ...document, scanFile: null })));
+      setEditing(true);
+    }
+    setDraftChildren(nextChildren);
+    setSaveMsg('');
   }
 
   function addDraftChild() {
@@ -268,7 +282,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         }
         const original = children.find(child => child.id === draft.id);
         if (!original || JSON.stringify(original) === JSON.stringify(draft)) continue;
-        const ok = await handleSaveChild(original, draft);
+        const ok = await handleSaveChild(original, changedChildPatch(original, draft));
         if (!ok) throw new Error('child-save-failed');
       }
 
@@ -424,9 +438,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
   async function handleSaveChild(child: Child, patch: Partial<Child>): Promise<boolean> {
     try {
-      const nextChild = { ...child, ...patch };
+      const nextChild = applyChildPricingPatch(child, patch);
       const dbPatch: Record<string, unknown> = {};
-      const shouldReprice = 'zone' in patch || 'vehicleType' in patch || 'basePrice' in patch || 'manualDiscountPercent' in patch || 'manualDiscountAmount' in patch;
+      const shouldReprice = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch || 'basePrice' in patch || 'manualDiscountPercent' in patch || 'manualDiscountAmount' in patch || 'teacherPrice' in patch;
 
       if ('childName' in patch) dbPatch.child_name = nextChild.childName;
       if ('class' in patch) dbPatch.class_name = nextChild.class;
@@ -438,24 +452,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if ('status' in patch) dbPatch.status = nextChild.status ?? 'new';
 
       if (shouldReprice) {
-        const basePriceForZoneOrVehicle = ('zone' in patch || 'vehicleType' in patch)
-          ? getPriceByZone(nextChild.schoolCode, nextChild.zone as Zone, nextChild.vehicleType as VehicleType)
-          : Math.max(0, Number(nextChild.basePrice || 0));
-        const repriced = repriceChild({
-          basePrice: basePriceForZoneOrVehicle,
-          siblingDiscountPercent: Number(nextChild.siblingDiscountPercent || 0),
-          manualDiscountPercent: Number(nextChild.manualDiscountPercent || 0),
-          manualDiscountAmount: Number(nextChild.manualDiscountAmount || 0),
-        });
-
-        nextChild.basePrice = repriced.basePrice;
-        nextChild.manualDiscountPercent = repriced.manualDiscountPercent;
-        nextChild.manualDiscountAmount = repriced.manualDiscountAmount;
-        nextChild.finalPrice = repriced.finalPrice;
-        dbPatch.base_price = repriced.basePrice;
-        dbPatch.manual_discount_percent = repriced.manualDiscountPercent;
-        dbPatch.manual_discount_amount = repriced.manualDiscountAmount;
-        dbPatch.final_price = repriced.finalPrice;
+        dbPatch.base_price = nextChild.basePrice;
+        dbPatch.manual_discount_percent = nextChild.manualDiscountPercent;
+        dbPatch.manual_discount_amount = nextChild.manualDiscountAmount;
+        dbPatch.final_price = nextChild.finalPrice;
       } else if ('finalPrice' in patch) {
         nextChild.finalPrice = Math.max(0, Number(nextChild.finalPrice || 0));
         dbPatch.final_price = nextChild.finalPrice;
@@ -505,6 +505,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const cardFamily = editing ? draftFamily : savedFamily;
   const cardChildren = editing ? draftChildren : children;
   const cardDocuments = editing ? draftDocuments : savedDocuments;
+  const canManageTeacherPrice = isAdmin || isManager;
+  const teacherPricingAvailable = cardChildren.length > 0 && cardChildren.every(supportsTeacherPrice);
+  const teacherPricingActive = cardChildren.length > 0 && cardChildren.every(child => Boolean(child.teacherPrice ?? isTeacherPriced(child)));
   const primaryChild = cardChildren[0];
   const familyMonthlyPrice = cardChildren.length > 0
     ? cardChildren.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
@@ -593,6 +596,11 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {canManageTeacherPrice && teacherPricingAvailable && (
+              <button type="button" onClick={toggleTeacherPricing} disabled={savingAll} style={teacherPriceButtonStyle(teacherPricingActive)} title={`Постоянная цена ${money(TEACHER_MONTHLY_PRICE)}`}>
+                <GraduationCap size={14} /> {teacherPricingActive ? `Учитель · ${money(TEACHER_MONTHLY_PRICE)}` : 'Учитель'}
+              </button>
+            )}
             {editing ? (
               <>
                 <button type="button" onClick={cancelEditing} disabled={savingAll} style={secondaryHeaderButtonStyle}>
@@ -629,7 +637,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                   <DetailInput editing={editing} label="Адрес" tone="clear" value={cardFamily.fullAddress} onCommit={value => setDraftFamily(current => ({ ...current, fullAddress: value }))} />
                   <DetailValue label="Координаты" value={coordinatesText} />
                   <DetailMapLink label="Яндекс" url={mapUrl} />
-                  <DetailInput editing={editing} label="Комментарий" tone="clear" value={cardFamily.comment ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, comment: value }))} />
+                  <DetailInput editing={editing} liveCommit label="Комментарий" tone="clear" value={cardFamily.comment ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, comment: value }))} />
                 </DetailPanel>
               </div>
 
@@ -779,7 +787,7 @@ function DetailPanel({ title, children, accent }: { title: string; children: Rea
   );
 }
 
-function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false, whatsapp = false }: {
+function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false, whatsapp = false, liveCommit = false }: {
   label: string;
   value: string;
   onCommit: (value: string) => void;
@@ -788,6 +796,7 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   tone?: 'soft' | 'clear';
   editing?: boolean;
   whatsapp?: boolean;
+  liveCommit?: boolean;
 }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
@@ -801,8 +810,11 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
           type={type}
           value={local}
           placeholder={placeholder}
-          onChange={event => setLocal(event.target.value)}
-          onBlur={event => onCommit(event.currentTarget.value)}
+          onChange={event => {
+            setLocal(event.target.value);
+            if (liveCommit) onCommit(event.target.value);
+          }}
+          onBlur={event => { if (!liveCommit) onCommit(event.currentTarget.value); }}
           style={{ ...detailControlStyle, background: '#F8FAFC', borderColor: '#DDE7EB' }}
         />
       ) : waHref ? (
@@ -1373,6 +1385,16 @@ const secondaryHeaderButtonStyle: React.CSSProperties = {
   color: '#667085',
   boxShadow: 'none',
 };
+
+function teacherPriceButtonStyle(active: boolean): React.CSSProperties {
+  return {
+    ...editHeaderButtonStyle,
+    border: `1px solid ${active ? '#D29B23' : '#E6D3A4'}`,
+    background: active ? '#FFF4D6' : '#FFFBF1',
+    color: '#8A5A00',
+    boxShadow: active ? '0 4px 12px rgba(210, 155, 35, .18)' : 'none',
+  };
+}
 
 const contentBodyStyle: React.CSSProperties = {
   flex: 1,

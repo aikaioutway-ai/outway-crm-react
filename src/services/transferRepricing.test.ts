@@ -130,4 +130,27 @@ describe('buildTransferRepricingPlan', () => {
       newFinalPrice: 6460,
     });
   });
+
+  it('keeps the teacher price and updates managed charges when transport changes', () => {
+    const plan = build({
+      children: [child({
+        basePrice: 9500,
+        finalPrice: 4800,
+        manualDiscountAmount: 4700,
+        charges: [{
+          id: 'teacher-charge', chargeType: 'monthly', originalAmount: 9500, amount: 9500,
+          paidAmount: 0, pricingManaged: true, status: 'unpaid',
+        }],
+      })],
+    });
+    expect(plan?.children[0]).toMatchObject({
+      newBasePrice: 6800,
+      newFinalPrice: 4800,
+      manualDiscountAmount: 2000,
+    });
+    expect(plan?.children[0].charges[0]).toMatchObject({
+      newOriginalAmount: 4800,
+      newAmount: 4800,
+    });
+  });
 });
