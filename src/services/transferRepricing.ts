@@ -1,5 +1,5 @@
 import { Child, SchoolCode, VehicleType, Zone } from '../types';
-import { getPriceByZone, isTeacherPriced, repriceChild, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
+import { getPriceByZone, isTeacherPriced, repriceChild, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
 
 export type TransferRepricingSource =
   | 'logistics'
@@ -93,6 +93,50 @@ export interface TransferRepricingPlan {
   familyComments: Array<{ familyId: string; text: string }>;
 }
 
+function repricedValues(child: TransferRepricingChildSnapshot, newVehicleType: VehicleType) {
+  const newBasePrice = getPriceByZone(child.schoolCode, child.zone, newVehicleType);
+  const teacherPrice = supportsTeacherPrice(child) && isTeacherPriced(child);
+  return repriceChild({
+    basePrice: newBasePrice,
+    siblingDiscountPercent: child.siblingDiscountPercent,
+    manualDiscountPercent: child.manualDiscountPercent,
+    manualDiscountAmount: child.manualDiscountAmount,
+    fixedFinalPrice: teacherPrice ? TEACHER_MONTHLY_PRICE : undefined,
+  });
+}
+
+function chargeStatus(amount: number, paidAmount: number): string {
+  if (paidAmount <= 0) return 'unpaid';
+  if (paidAmount < amount) return 'partial';
+  if (paidAmount === amount) return 'paid';
+  return 'overpaid';
+}
+
+/** Detects stale stored pricing even when the transfer type itself is already correct. */
+export function hasTransferPricingMismatch(
+  child: TransferRepricingChildSnapshot,
+  newVehicleType: VehicleType,
+): boolean {
+  const repriced = repricedValues(child, newVehicleType);
+  if (
+    child.vehicleType !== newVehicleType
+    || child.basePrice !== repriced.basePrice
+    || child.finalPrice !== repriced.finalPrice
+    || child.manualDiscountPercent !== repriced.manualDiscountPercent
+    || child.manualDiscountAmount !== repriced.manualDiscountAmount
+  ) return true;
+
+  return child.charges.some(charge => (
+    charge.pricingManaged
+    && charge.status !== 'cancelled'
+    && (
+      charge.originalAmount !== repriced.finalPrice
+      || charge.amount !== repriced.finalPrice
+      || charge.status !== chargeStatus(repriced.finalPrice, charge.paidAmount)
+    )
+  ));
+}
+
 function money(value: number): string {
   return Math.round(value).toLocaleString('ru-RU');
 }
@@ -105,18 +149,9 @@ const VEHICLE_NAME: Record<VehicleType, string> = {
 
 export function buildTransferRepricingPlan(input: TransferRepricingPlanInput): TransferRepricingPlan | null {
   const updateTransferType = input.updateTransferType !== false;
-  if (!input.force && updateTransferType && input.previousTransferVehicleType === input.newVehicleType) return null;
 
   const children = input.children.map<TransferRepricingChildPlan>(child => {
-    const newBasePrice = getPriceByZone(child.schoolCode, child.zone, input.newVehicleType);
-    const teacherPrice = isTeacherPriced(child);
-    const repriced = repriceChild({
-      basePrice: newBasePrice,
-      siblingDiscountPercent: child.siblingDiscountPercent,
-      manualDiscountPercent: child.manualDiscountPercent,
-      manualDiscountAmount: child.manualDiscountAmount,
-      fixedFinalPrice: teacherPrice ? TEACHER_MONTHLY_PRICE : undefined,
-    });
+    const repriced = repricedValues(child, input.newVehicleType);
     const charges = child.charges
       .filter(charge => charge.pricingManaged && charge.status !== 'cancelled')
       .map<TransferRepricingChargePlan>(charge => {
@@ -154,9 +189,11 @@ export function buildTransferRepricingPlan(input: TransferRepricingPlanInput): T
     };
   });
 
-  const changedChildren = children.filter(child => (
-    child.previousVehicleType !== child.newVehicleType || child.oldFinalPrice !== child.newFinalPrice
+  const changedChildren = children.filter((_, index) => (
+    hasTransferPricingMismatch(input.children[index], input.newVehicleType)
   ));
+  const transferTypeChanged = input.previousTransferVehicleType !== input.newVehicleType;
+  if (!input.force && !transferTypeChanged && changedChildren.length === 0) return null;
   const familyComments = Array.from(new Set(changedChildren.map(child => child.familyId))).map(familyId => {
     const familyChildren = changedChildren.filter(child => child.familyId === familyId);
     const details = familyChildren.map(child => (

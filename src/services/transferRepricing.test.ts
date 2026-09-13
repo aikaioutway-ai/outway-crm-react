@@ -53,8 +53,48 @@ describe('buildTransferRepricingPlan', () => {
     expect(plan?.children[0]).toMatchObject({ oldFinalPrice: 10500, newFinalPrice: 6800 });
   });
 
-  it('does not reprice when the actual transfer type did not change', () => {
-    expect(build({ previousTransferVehicleType: 'microbus', newVehicleType: 'microbus' })).toBeNull();
+  it('does not reprice when the actual transfer type and stored price are already correct', () => {
+    expect(build({
+      previousTransferVehicleType: 'microbus',
+      newVehicleType: 'microbus',
+      children: [child({ vehicleType: 'microbus', basePrice: 6800, finalPrice: 6800 })],
+    })).toBeNull();
+  });
+
+  it('repairs a stale Sedan price when the transfer is already Microbus', () => {
+    const plan = build({
+      previousTransferVehicleType: 'microbus',
+      newVehicleType: 'microbus',
+      children: [child({
+        schoolCode: 'ABL1', zone: 'B', requestedVehicleType: 'sedan', vehicleType: 'microbus',
+        basePrice: 10500, finalPrice: 9975, siblingDiscountPercent: 5,
+      })],
+    });
+    expect(plan?.children[0]).toMatchObject({
+      requestedVehicleType: 'sedan',
+      previousVehicleType: 'microbus',
+      newVehicleType: 'microbus',
+      oldBasePrice: 10500,
+      newBasePrice: 6500,
+      oldFinalPrice: 9975,
+      newFinalPrice: 6175,
+    });
+  });
+
+  it('does not mistake a zero-priced child from another school for the teacher tariff', () => {
+    const plan = build({
+      previousTransferVehicleType: 'microbus',
+      newVehicleType: 'microbus',
+      children: [child({
+        schoolCode: 'GENIUS4', zone: 'B', requestedVehicleType: 'microbus', vehicleType: 'microbus',
+        basePrice: 0, finalPrice: 0, manualDiscountAmount: 0,
+      })],
+    });
+    expect(plan?.children[0]).toMatchObject({
+      newBasePrice: 6000,
+      newFinalPrice: 6000,
+      manualDiscountAmount: 0,
+    });
   });
 
   it('uses the target transfer type when moving an existing child', () => {

@@ -52,6 +52,7 @@ export interface V2TransferDashboardRow {
   transferNumber: string;
   vehicleType: VehicleType;
   driverId: string | null;
+  telegramChatId: number | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -843,7 +844,9 @@ export async function fetchV2Children(family: Family): Promise<Child[]> {
     .from('v2_children')
     .select(CHILD_SELECT)
     .eq('family_id', family.id)
-    .order('created_at', { ascending: true });
+    .order('created_at', { ascending: true })
+    .order('sibling_discount_percent', { ascending: true })
+    .order('id', { ascending: true });
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: any) => mapV2Child(row, family));
 }
@@ -1246,7 +1249,7 @@ export async function updateV2ChildRoute(params: {
 export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRow[]> {
   const data = await fetchAllRows<any>((from, to) => supabase
       .from('v2_transfers')
-      .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, created_at, updated_at, v2_school_branches(id, code, short_name, name)')
+      .select('id, school_id, branch_id, transfer_number, vehicle_type, driver_id, telegram_chat_id, created_at, updated_at, v2_school_branches(id, code, short_name, name)')
       .neq('status', 'archive')
       .order('transfer_number', { ascending: true })
       .range(from, to));
@@ -1263,6 +1266,7 @@ export async function fetchV2TransfersDashboard(): Promise<V2TransferDashboardRo
       transferNumber: row.transfer_number ? String(row.transfer_number) : '',
       vehicleType: normalizeVehicle(row.vehicle_type) as VehicleType,
       driverId: row.driver_id ? String(row.driver_id) : null,
+      telegramChatId: row.telegram_chat_id == null ? null : Number(row.telegram_chat_id),
       createdAt: row.created_at ?? '',
       updatedAt: row.updated_at ?? '',
     };

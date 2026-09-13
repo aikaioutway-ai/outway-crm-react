@@ -219,10 +219,15 @@ async function verifyEmployeeSession(request: Request): Promise<EmployeeSession 
       false,
       ['verify'],
     );
+    const signature = decodeBase64Url(signaturePart);
+    const signatureBuffer = signature.buffer.slice(
+      signature.byteOffset,
+      signature.byteOffset + signature.byteLength,
+    ) as ArrayBuffer;
     const valid = await crypto.subtle.verify(
       'HMAC',
       key,
-      decodeBase64Url(signaturePart),
+      signatureBuffer,
       new TextEncoder().encode(payloadPart),
     );
     if (!valid) return null;
@@ -269,6 +274,25 @@ async function telegram(method: string, payload: Record<string, unknown>): Promi
     throw new Error(`Telegram ${method}: ${data.description ?? response.status}`);
   }
   return data.result;
+}
+
+function telegramGroupLookup(reference: string): number | string | null {
+  const value = reference.trim();
+  if (/^-\d+$/.test(value)) {
+    const chatId = Number(value);
+    return Number.isSafeInteger(chatId) ? chatId : null;
+  }
+  const username = value.match(/^@([A-Za-z0-9_]{5,})$/)?.[1]
+    ?? value.match(/^https?:\/\/(?:www\.)?t\.me\/([A-Za-z0-9_]{5,})\/?(?:\?.*)?$/i)?.[1];
+  return username ? `@${username}` : null;
+}
+
+function isTelegramPrivateInvite(reference: string): boolean {
+  return /^https?:\/\/(?:www\.)?t\.me\/(?:\+|joinchat\/)[A-Za-z0-9_-]+\/?(?:\?.*)?$/i.test(reference.trim());
+}
+
+function normalizedTelegramTitle(title: string): string {
+  return title.trim().replace(/\s+/g, ' ').toLocaleLowerCase('ru');
 }
 
 async function sendMessage(
@@ -364,10 +388,116 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
     return Response.json({ ok: true, groups: data ?? [] }, { headers: corsHeaders });
   }
 
-  if (action === 'link_group' || action === 'resend_invite') {
-    const chatId = Number(body.chat_id);
+  if (action === 'link_group' || action === 'connect_group' || action === 'resend_invite') {
+    let chatId = Number(body.chat_id);
     let transferId = String(body.transfer_id ?? '').trim();
     let driverId = String(body.driver_id ?? '').trim();
+    if (action === 'connect_group') {
+      const groupName = String(body.group_name ?? '').trim();
+      const groupReference = String(body.group_reference ?? '').trim();
+      const lookup = telegramGroupLookup(groupReference);
+      const isPrivateInvite = isTelegramPrivateInvite(groupReference);
+      if (!groupName || (lookup == null && !isPrivateInvite)) {
+        return Response.json(
+          { ok: false, error: 'Укажите название и корректный ID, @username, публичную или приватную ссылку группы.' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      let telegramChat: TelegramChat;
+      if (isPrivateInvite) {
+        // Telegram Bot API cannot resolve an invite token. The bot registers the chat
+        // when it is added, so resolve a private link against that trusted registry.
+        const { data: registeredGroups, error: registeredGroupsError } = await supabase
+          .from('v2_driver_telegram_groups')
+          .select('chat_id,title,status,transfer_id,updated_at')
+          .neq('status', 'disabled')
+          .order('updated_at', { ascending: false });
+        if (registeredGroupsError) {
+          throw new Error(`Telegram private group lookup failed: ${registeredGroupsError.message}`);
+        }
+        const expectedTitle = normalizedTelegramTitle(groupName);
+        const candidates = (registeredGroups ?? []).filter((group) =>
+          normalizedTelegramTitle(String(group.title ?? '')) === expectedTitle
+          && (group.status === 'pending' || String(group.transfer_id ?? '') === transferId)
+        );
+        const visibleCandidates: TelegramChat[] = [];
+        for (const candidate of candidates) {
+          try {
+            const candidateChat = await telegram('getChat', { chat_id: Number(candidate.chat_id) }) as TelegramChat;
+            if (
+              ['group', 'supergroup'].includes(candidateChat.type)
+              && Number.isSafeInteger(candidateChat.id)
+              && candidateChat.id < 0
+            ) {
+              visibleCandidates.push(candidateChat);
+            }
+          } catch {
+            // Old group IDs remain after Telegram upgrades a group to a supergroup.
+          }
+        }
+        const supergroups = visibleCandidates.filter((chat) => chat.type === 'supergroup');
+        if (supergroups.length === 1) {
+          telegramChat = supergroups[0];
+        } else if (visibleCandidates.length === 1) {
+          telegramChat = visibleCandidates[0];
+        } else if (visibleCandidates.length > 1) {
+          return Response.json(
+            { ok: false, error: 'Найдено несколько групп с таким названием. Укажите числовой ID нужной группы.' },
+            { status: 400, headers: corsHeaders },
+          );
+        } else {
+          return Response.json(
+            { ok: false, error: 'Группа не найдена. Сначала добавьте @outway_driver_bot администратором и укажите точное название группы.' },
+            { status: 400, headers: corsHeaders },
+          );
+        }
+      } else {
+        try {
+          telegramChat = await telegram('getChat', { chat_id: lookup }) as TelegramChat;
+        } catch {
+          return Response.json(
+            { ok: false, error: 'Бот не видит эту группу. Добавьте @outway_driver_bot администратором.' },
+            { status: 400, headers: corsHeaders },
+          );
+        }
+      }
+      if (!['group', 'supergroup'].includes(telegramChat.type) || !Number.isSafeInteger(telegramChat.id) || telegramChat.id >= 0) {
+        return Response.json(
+          { ok: false, error: 'Указана не Telegram-группа.' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      chatId = telegramChat.id;
+      const bot = await telegram('getMe', {}) as TelegramUser;
+      const botMembership = await telegram('getChatMember', {
+        chat_id: chatId,
+        user_id: bot.id,
+      }) as TelegramChatMember;
+      if (!['creator', 'administrator'].includes(botMembership.status)) {
+        return Response.json(
+          { ok: false, error: 'Сначала назначьте @outway_driver_bot администратором этой группы.' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const { data: existingGroup, error: existingGroupError } = await supabase
+        .from('v2_driver_telegram_groups')
+        .select('chat_id,status,transfer_id')
+        .eq('chat_id', chatId)
+        .maybeSingle();
+      if (existingGroupError) throw new Error(`Telegram group lookup failed: ${existingGroupError.message}`);
+      if (!existingGroup) {
+        const { error: insertGroupError } = await supabase
+          .from('v2_driver_telegram_groups')
+          .insert({ chat_id: chatId, title: groupName, status: 'pending' });
+        if (insertGroupError) throw new Error(`Telegram group registration failed: ${insertGroupError.message}`);
+      } else if (existingGroup.status === 'pending' || existingGroup.transfer_id === transferId) {
+        const { error: titleUpdateError } = await supabase
+          .from('v2_driver_telegram_groups')
+          .update({ title: groupName, updated_at: new Date().toISOString() })
+          .eq('chat_id', chatId);
+        if (titleUpdateError) throw new Error(`Telegram group title update failed: ${titleUpdateError.message}`);
+      }
+    }
     if (!Number.isSafeInteger(chatId) || chatId >= 0) {
       return Response.json(
         { ok: false, error: 'Не выбраны группа, трансфер или водитель.' },
@@ -1472,9 +1602,13 @@ async function registerTransferGroup(message: TelegramMessage): Promise<void> {
     .maybeSingle();
   if (chatLookupError) throw new Error(`Group lookup failed: ${chatLookupError.message}`);
   if (chatTransfer) {
-    const existingBranch = Array.isArray(chatTransfer.v2_school_branches)
-      ? chatTransfer.v2_school_branches[0]?.code
-      : chatTransfer.v2_school_branches?.code;
+    const chatTransferBranches = chatTransfer.v2_school_branches as unknown as
+      | { code?: string | null }
+      | Array<{ code?: string | null }>
+      | null;
+    const existingBranch = Array.isArray(chatTransferBranches)
+      ? chatTransferBranches[0]?.code
+      : chatTransferBranches?.code;
     await sendMessage(
       message.chat.id,
       `Эта группа уже связана с трансфером <b>${escapeHtml(existingBranch ?? '—')} №${chatTransfer.transfer_number}</b>.`,

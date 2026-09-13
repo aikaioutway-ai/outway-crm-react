@@ -14,6 +14,7 @@ import { useB2BOrders } from '../../hooks/useB2BData';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
 import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import {
+  connectDriverTelegramGroup,
   DriverTelegramGroup,
   fetchDriverTelegramGroups,
   linkDriverTelegramGroup,
@@ -22,7 +23,7 @@ import {
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2 } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
@@ -676,6 +677,7 @@ function rowToFamily(row: ChildRow): Family {
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const canDeleteFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
+  const canManageChildStops = ['admin', 'gen_director', 'manager', 'logist', 'senior_logist'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [financeLoaded, setFinanceLoaded] = useState(false);
@@ -833,6 +835,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [selectedTelegramTransferId, setSelectedTelegramTransferId] = useState('');
   const [linkingDriverTelegram, setLinkingDriverTelegram] = useState(false);
   const [resendingDriverTelegramChatId, setResendingDriverTelegramChatId] = useState<number | null>(null);
+  const [telegramTransferId, setTelegramTransferId] = useState<string | null>(null);
+  const [telegramGroupReference, setTelegramGroupReference] = useState('');
+  const [telegramGroupName, setTelegramGroupName] = useState('');
+  const [telegramTransferError, setTelegramTransferError] = useState('');
+  const [savingTelegramTransfer, setSavingTelegramTransfer] = useState(false);
   const [driverAdvances, setDriverAdvances] = useState<V2DriverAdvance[]>([]);
   const [loadingAdvances, setLoadingAdvances] = useState(false);
   const [tabDefaultFilters, setTabDefaultFilters] = useState<Record<string, { metric: LogisticsDashboardMetric; vehicleFilter: LogisticsVehicleFilter }>>({});
@@ -943,6 +950,22 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     // reads the latest cache and filters when the effect runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRequestsModule, mode]);
+
+  useEffect(() => {
+    if (!isDirectoryMode) return;
+    let cancelled = false;
+    Promise.all([
+      fetchV2TransfersDashboard(),
+      fetchV2DriversTable(),
+    ]).then(([transfers, drivers]) => {
+      if (cancelled) return;
+      setDashboardTransfers(transfers);
+      setDriverRows(drivers);
+    }).catch(error => {
+      console.error('Directory transport metadata load failed', error);
+    });
+    return () => { cancelled = true; };
+  }, [isDirectoryMode]);
 
   useEffect(() => {
     if (isRequestsModule || mode === 'directory') return;
@@ -1153,7 +1176,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (showSpinner) setLoading(true);
     setFinanceLoaded(false);
     try {
-      const shouldLoadTransportMeta = mode === 'logistics' || isDriversModule;
+      const shouldLoadTransportMeta = mode === 'logistics' || isDirectoryMode || isDriversModule;
       const [families, transfers, drivers] = await Promise.all([
         fetchV2FamiliesTableCached(),
         shouldLoadTransportMeta ? fetchV2TransfersDashboard().catch(() => []) : Promise.resolve([]),
@@ -1280,6 +1303,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           });
           await load(false);
           return true;
+        }
+        if (key === 'stopNumber' && !canManageChildStops) {
+          alert('Ставить остановки могут менеджер и логисты');
+          return false;
         }
         const updates: Record<string, unknown> = {};
         const rowPatch: Partial<ChildRow> = {};
@@ -1501,6 +1528,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             transferNumber: transferTypeMenu.transferNumber,
             vehicleType,
             driverId: null,
+            telegramChatId: null,
             createdAt: '',
             updatedAt: '',
           },
@@ -1843,6 +1871,21 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       ? rows.filter(row => rowMatchesSchoolTab(row, selectedDashboardSchool))
       : []
   ), [rowMatchesSchoolTab, rows, selectedDashboardSchool]);
+  const activeDirectoryTransfer = useMemo(() => {
+    if (!isDirectoryMode || !/^\d+$/.test(quickTransfer) || !selectedDashboardSchool || selectedDashboardSchool.key === 'ALL') {
+      return null;
+    }
+    const sampleRow = dashboardSchoolRows.find(row => row.transferNumber === quickTransfer);
+    return dashboardTransfers.find(transfer => (
+      transfer.transferNumber === quickTransfer
+      && (sampleRow?.branchId
+        ? transfer.branchId === sampleRow.branchId
+        : transfer.branchCode === selectedDashboardSchool.key || transfer.branchShort === selectedDashboardSchool.label)
+    )) ?? null;
+  }, [dashboardSchoolRows, dashboardTransfers, isDirectoryMode, quickTransfer, selectedDashboardSchool]);
+  const activeDirectoryDriver = activeDirectoryTransfer?.driverId
+    ? driverRows.find(driver => driver.driverId === activeDirectoryTransfer.driverId) ?? null
+    : null;
   const dashboardWorkRows = logisticsWorkRows(dashboardSchoolRows);
   const filteredDriverRows = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -1895,6 +1938,68 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
   const canManageDriverTelegram = ['admin', 'gen_director', 'manager', 'logist', 'senior_logist'].includes(userRole);
+  const telegramTransfer = telegramTransferId
+    ? dashboardTransfers.find(transfer => transfer.id === telegramTransferId) ?? null
+    : null;
+  const telegramTransferDriver = telegramTransfer?.driverId
+    ? driverRows.find(driver => driver.driverId === telegramTransfer.driverId) ?? null
+    : null;
+
+  const openDirectoryDriver = () => {
+    if (!activeDirectoryDriver) return;
+    setSelectedDriverTab('main');
+    setSelectedDriverId(activeDirectoryDriver.driverId);
+  };
+
+  const openDirectoryTelegram = async () => {
+    if (!activeDirectoryTransfer?.driverId) return;
+    setTelegramTransferId(activeDirectoryTransfer.id);
+    setTelegramGroupReference(activeDirectoryTransfer.telegramChatId ? String(activeDirectoryTransfer.telegramChatId) : '');
+    setTelegramGroupName('');
+    setTelegramTransferError('');
+    if (!authToken || !activeDirectoryTransfer.telegramChatId) return;
+    try {
+      const groups = await fetchDriverTelegramGroups(authToken);
+      const currentGroup = groups.find(group => group.chatId === activeDirectoryTransfer.telegramChatId);
+      if (currentGroup) setTelegramGroupName(currentGroup.title);
+    } catch (error) {
+      setTelegramTransferError(error instanceof Error ? error.message : 'Не удалось загрузить Telegram-группу.');
+    }
+  };
+
+  const saveDirectoryTelegram = async () => {
+    if (!telegramTransfer || !telegramTransferDriver || !authToken) return;
+    setSavingTelegramTransfer(true);
+    setTelegramTransferError('');
+    try {
+      const group = await connectDriverTelegramGroup({
+        sessionToken: authToken,
+        groupReference: telegramGroupReference,
+        groupName: telegramGroupName,
+        transferId: telegramTransfer.id,
+        driverId: telegramTransferDriver.driverId,
+      });
+      setDashboardTransfers(previous => previous.map(transfer => (
+        transfer.id === telegramTransfer.id ? { ...transfer, telegramChatId: group.chatId } : transfer
+      )));
+      setDriverRows(previous => previous.map(driver => (
+        driver.driverId !== telegramTransferDriver.driverId
+          ? driver
+          : {
+              ...driver,
+              telegramUserId: null,
+              transfers: driver.transfers.map(transfer => (
+                transfer.id === telegramTransfer.id ? { ...transfer, telegramChatId: group.chatId } : transfer
+              )),
+            }
+      )));
+      setTelegramTransferId(null);
+    } catch (error) {
+      setTelegramTransferError(error instanceof Error ? error.message : 'Не удалось подключить Telegram-группу.');
+    } finally {
+      setSavingTelegramTransfer(false);
+    }
+  };
   const refreshDriverTelegramGroups = useCallback(async () => {
     if (!selectedDriverId || !canManageDriverTelegram) return;
     if (!authToken) {
@@ -2197,6 +2302,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       transferNumber: transferCardNumber,
       vehicleType: (sampleRow?.vehicleType || 'microbus') as VehicleType,
       driverId: sampleRow?.driverId ?? null,
+      telegramChatId: null,
       createdAt: '',
       updatedAt: '',
     };
@@ -2454,12 +2560,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               } : {}),
             }
           : column
+    )).map(column => (
+      column.key === 'stopNumber'
+        ? { ...column, editable: canManageChildStops }
+        : column
     ));
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isChargesMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, periodStatsByFamily]);
+  }, [canManageChildStops, isChargesMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, periodStatsByFamily]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows
@@ -3071,13 +3181,39 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 </div>
               )}
               toolbarRightExtra={(
-                <button
-                  onClick={() => setShowNewFamily(true)}
-                  title="Новая заявка"
-                  style={{ width: 30, height: 30, border: 'none', borderRadius: 10, background: '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                >
-                  <Plus size={16} />
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {isDirectoryMode && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={openDirectoryDriver}
+                        disabled={!activeDirectoryDriver}
+                        title={activeDirectoryDriver ? `Открыть водителя: ${activeDirectoryDriver.fullName}` : activeDirectoryTransfer ? 'Водитель не назначен' : 'Выберите конкретный трансфер'}
+                        style={{ height: 30, padding: '0 10px', border: `1px solid ${activeDirectoryDriver ? '#31A4A5' : '#D4E3E7'}`, borderRadius: 10, background: activeDirectoryDriver ? '#31A4A5' : '#F5FAFB', color: activeDirectoryDriver ? '#fff' : '#A4B0B7', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, fontWeight: 850, cursor: activeDirectoryDriver ? 'pointer' : 'default', flexShrink: 0 }}
+                      >
+                        <UserRound size={14} />
+                        Водитель
+                      </button>
+                      <button
+                        type="button"
+                        onClick={openDirectoryTelegram}
+                        disabled={!activeDirectoryTransfer?.driverId || !canManageDriverTelegram}
+                        title={!activeDirectoryTransfer ? 'Выберите конкретный трансфер' : !activeDirectoryTransfer.driverId ? 'Сначала назначьте водителя' : 'Подключить Telegram-группу'}
+                        style={{ height: 30, padding: '0 10px', border: `1px solid ${activeDirectoryTransfer?.telegramChatId ? '#31A4A5' : '#D4E3E7'}`, borderRadius: 10, background: activeDirectoryTransfer?.telegramChatId ? '#31A4A5' : '#F5FAFB', color: activeDirectoryTransfer?.telegramChatId ? '#fff' : '#84939B', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, fontWeight: 850, cursor: activeDirectoryTransfer?.driverId && canManageDriverTelegram ? 'pointer' : 'default', opacity: activeDirectoryTransfer?.driverId && canManageDriverTelegram ? 1 : 0.58, flexShrink: 0 }}
+                      >
+                        <MessageCircle size={14} />
+                        Telegram
+                      </button>
+                    </>
+                  )}
+                  <button
+                    onClick={() => setShowNewFamily(true)}
+                    title="Новая заявка"
+                    style={{ width: 30, height: 30, border: 'none', borderRadius: 10, background: '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                  >
+                    <Plus size={16} />
+                  </button>
+                </div>
               )}
             />
           ))}
@@ -3114,6 +3250,65 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           setDashboardMetric(currentMetric);
         }}
       />
+
+      {telegramTransfer && telegramTransferDriver && (
+        <div
+          onClick={() => !savingTelegramTransfer && setTelegramTransferId(null)}
+          style={{ position: 'fixed', inset: 0, zIndex: 1260, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: 'rgba(23, 34, 47, 0.20)', backdropFilter: 'blur(2px)' }}
+        >
+          <section
+            onClick={event => event.stopPropagation()}
+            style={{ width: 'min(520px, calc(100vw - 32px))', borderRadius: 18, background: '#fff', boxShadow: '0 24px 60px rgba(30, 56, 75, 0.22)', border: '1px solid #D4E3E7', overflow: 'hidden' }}
+          >
+            <header style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '16px 18px', borderBottom: '1px solid #E5EEF1' }}>
+              <div>
+                <div style={{ fontSize: 15, fontWeight: 950, color: '#17222F' }}>Telegram-группа трансфера №{telegramTransfer.transferNumber}</div>
+                <div style={{ marginTop: 3, fontSize: 12, fontWeight: 700, color: '#7A859D' }}>{telegramTransfer.branchShort} · {telegramTransferDriver.fullName}</div>
+              </div>
+              <button type="button" onClick={() => setTelegramTransferId(null)} disabled={savingTelegramTransfer} title="Закрыть" style={{ width: 32, height: 32, border: '1px solid #D4E3E7', borderRadius: 10, background: '#fff', color: '#626C8B', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+                <X size={17} />
+              </button>
+            </header>
+            <div style={{ padding: 18 }}>
+              <label style={{ display: 'grid', gap: 6, marginBottom: 13, fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
+                Название группы
+                <input
+                  value={telegramGroupName}
+                  onChange={event => setTelegramGroupName(event.target.value)}
+                  placeholder={`Например: ${telegramTransfer.branchShort} · Трансфер №${telegramTransfer.transferNumber}`}
+                  style={{ height: 40, border: '1px solid #D4E3E7', borderRadius: 11, padding: '0 12px', background: '#fff', color: '#17222F', fontSize: 13, fontWeight: 750, outline: 'none' }}
+                />
+              </label>
+              <label style={{ display: 'grid', gap: 6, fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
+                ID или ссылка на группу
+                <input
+                  value={telegramGroupReference}
+                  onChange={event => setTelegramGroupReference(event.target.value)}
+                  placeholder="-1001234567890 или https://t.me/group_name"
+                  style={{ height: 40, border: '1px solid #D4E3E7', borderRadius: 11, padding: '0 12px', background: '#fff', color: '#17222F', fontSize: 13, fontWeight: 750, outline: 'none' }}
+                />
+              </label>
+              <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 11, background: '#F5FAFB', color: '#667085', fontSize: 12, fontWeight: 700, lineHeight: 1.45 }}>
+                Сначала добавьте <b>@outway_driver_bot</b> администратором группы. Для приватной ссылки укажите точное название группы — бот найдёт её среди групп, куда он уже добавлен.
+              </div>
+              {telegramTransferError && (
+                <div style={{ marginTop: 10, padding: '9px 11px', borderRadius: 10, background: '#FFF1F0', border: '1px solid #F2C6C3', color: '#B23A32', fontSize: 11, fontWeight: 800 }}>
+                  {telegramTransferError}
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 16 }}>
+                <button type="button" onClick={() => setTelegramTransferId(null)} disabled={savingTelegramTransfer} style={{ height: 36, padding: '0 14px', border: '1px solid #D4E3E7', borderRadius: 11, background: '#fff', color: '#52606F', fontSize: 12, fontWeight: 850, cursor: 'pointer' }}>
+                  Отмена
+                </button>
+                <button type="button" onClick={saveDirectoryTelegram} disabled={savingTelegramTransfer || !telegramGroupName.trim() || !telegramGroupReference.trim()} style={{ height: 36, padding: '0 15px', border: 'none', borderRadius: 11, background: savingTelegramTransfer || !telegramGroupName.trim() || !telegramGroupReference.trim() ? '#A7CFCF' : '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 12, fontWeight: 900, cursor: savingTelegramTransfer ? 'default' : 'pointer' }}>
+                  <Link2 size={15} />
+                  {savingTelegramTransfer ? 'Подключаю…' : 'Подключить'}
+                </button>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
 
       {selectedDriver && (
         <div

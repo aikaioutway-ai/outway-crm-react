@@ -1,6 +1,6 @@
 import { supabase } from '../src/services/supabase';
 import { normalizeSchoolCode, normalizeVehicle, normalizeZone } from '../src/modules/families/constants';
-import { buildTransferRepricingPlan, PricingManagedChargeSnapshot, TransferRepricingChildSnapshot } from '../src/services/transferRepricing';
+import { buildTransferRepricingPlan, hasTransferPricingMismatch, PricingManagedChargeSnapshot, TransferRepricingChildSnapshot } from '../src/services/transferRepricing';
 import { SchoolCode, VehicleType, Zone } from '../src/types';
 
 type RawChild = Record<string, any>;
@@ -79,10 +79,14 @@ async function main(): Promise<void> {
     throw new Error('Apply requires an explicit --child-ids=id1,id2 allowlist and matching --confirm-count=N');
   }
 
-  const rows = await loadRows(apply);
+  const rows = await loadRows(true);
   const mismatches = rows.filter(row => {
     const transfer = relation(row.v2_transfers);
-    return transfer?.vehicle_type && normalizeVehicle(row.vehicle_type) !== normalizeVehicle(transfer.vehicle_type);
+    if (!transfer?.vehicle_type) return false;
+    return hasTransferPricingMismatch(
+      snapshot(row),
+      normalizeVehicle(transfer.vehicle_type) as VehicleType,
+    );
   });
   const selected = apply ? mismatches.filter(row => allowedIds.has(String(row.id))) : mismatches;
   if (apply && selected.length !== allowedIds.size) {
@@ -117,7 +121,7 @@ async function main(): Promise<void> {
     return;
   }
 
-  console.log(`# Dry-run рассинхронизации транспорта\n\nНайдено: ${plans.size}. Изменения не применялись.\n`);
+  console.log(`# Dry-run рассинхронизации транспорта и цены\n\nНайдено: ${plans.size}. Изменения не применялись.\n`);
   console.log('| № | Child ID | Семья | Телефон | Ребёнок | Школа | Трансфер | Тип old → new | Цена old → new |');
   console.log('|---:|---|---|---|---|---|---:|---|---:|');
   let index = 0;
