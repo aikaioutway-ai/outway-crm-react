@@ -79,7 +79,8 @@ export async function fetchDriverTelegramGroups(
 
 export async function linkDriverTelegramGroup(params: {
   sessionToken: string;
-  chatId: number;
+  chatRef: string;
+  title?: string;
   transferId: string;
   driverId: string;
 }): Promise<DriverTelegramGroup> {
@@ -87,7 +88,8 @@ export async function linkDriverTelegramGroup(params: {
     params.sessionToken,
     {
       action: 'link_group',
-      chat_id: params.chatId,
+      chat_id: params.chatRef,
+      title: params.title,
       transfer_id: params.transferId,
       driver_id: params.driverId,
     },

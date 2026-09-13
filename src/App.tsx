@@ -15,6 +15,10 @@ import ManagerPeriodBar from './modules/families/ManagerPeriodBar';
 import DriversOverview from './modules/drivers/DriversOverview';
 import DriversSchoolKpiStrip from './modules/drivers/DriversSchoolKpiStrip';
 import DriversTransferDashboard from './modules/drivers/DriversTransferDashboard';
+import DispatchOverview from './modules/dispatch/DispatchOverview';
+import DispatchSchoolDetail from './modules/dispatch/DispatchSchoolDetail';
+import DispatchMapView from './modules/dispatch/DispatchMapView';
+import DispatchPeriodDashboard from './modules/dispatch/DispatchPeriodDashboard';
 import LoginPage from './modules/auth/LoginPage';
 import {
   AuthenticatedUser,
@@ -26,7 +30,7 @@ import {
   isEmployeeSessionActive,
 } from './services/employeeSession';
 import { useFamiliesTable } from './hooks/useCrmQueries';
-import { CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
+import { CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, SCHOOL_TABS } from './modules/families/constants';
 import { UserRole } from './types';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
@@ -52,7 +56,6 @@ function SectionLoading() {
 }
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
-  dispatch: 'Диспетчер — в разработке',
   settings:  'Настройки — в разработке',
 };
 
@@ -96,6 +99,9 @@ export default function App() {
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
+  const [dispatchView, setDispatchView] = useState<'today' | 'period'>('today');
+  const [dispatchSchoolKey, setDispatchSchoolKey] = useState<string | null>(null);
+  const [dispatchMapRun, setDispatchMapRun] = useState<{ runId: string; transferNumber: number } | null>(null);
   const [payrollSchoolKey, setPayrollSchoolKey] = useState<string | null>(null);
   const [payrollTransferFilter, setPayrollTransferFilter] = useState('');
   const [payrollSearch, setPayrollSearch] = useState('');
@@ -676,12 +682,50 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Диспетчер')}
+                {dispatchView === 'today' && (dispatchSchoolKey || dispatchMapRun) && (
+                  <button
+                    onClick={() => { setDispatchMapRun(null); setDispatchSchoolKey(null); }}
+                    style={managerModeTabStyle(false)}
+                  >
+                    ← Все школы
+                  </button>
+                )}
+                {dispatchView === 'today' && dispatchSchoolKey && dispatchMapRun && (
+                  <button onClick={() => setDispatchMapRun(null)} style={managerModeTabStyle(false)}>
+                    ← К рейсам школы
+                  </button>
+                )}
+                <button
+                  onClick={() => { setDispatchView('today'); setDispatchSchoolKey(null); setDispatchMapRun(null); }}
+                  style={managerModeTabStyle(dispatchView === 'today')}
+                >
+                  Сегодня
+                </button>
+                <button
+                  onClick={() => { setDispatchView('period'); setDispatchSchoolKey(null); setDispatchMapRun(null); }}
+                  style={managerModeTabStyle(dispatchView === 'period')}
+                >
+                  Статистика
+                </button>
                 {extraTabs(true)}
               </div>
             </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
-              {PLACEHOLDERS.dispatch}
-            </div>
+            {dispatchView === 'period' ? (
+              <DispatchPeriodDashboard />
+            ) : dispatchMapRun ? (
+              <DispatchMapView runId={dispatchMapRun.runId} transferNumber={dispatchMapRun.transferNumber} />
+            ) : dispatchSchoolKey ? (
+              <DispatchSchoolDetail
+                schoolKey={dispatchSchoolKey}
+                schoolLabel={SCHOOL_TABS.find(tab => tab.key === dispatchSchoolKey)?.label ?? dispatchSchoolKey}
+                onOpenMap={(runId, transferNumber) => setDispatchMapRun({ runId, transferNumber })}
+              />
+            ) : (
+              <DispatchOverview
+                onSelectSchool={setDispatchSchoolKey}
+                allowedSchools={currentUser?.schoolKeys}
+              />
+            )}
           </div>
         ) : section === 'expenses' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
