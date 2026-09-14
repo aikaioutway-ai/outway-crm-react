@@ -219,10 +219,15 @@ async function verifyEmployeeSession(request: Request): Promise<EmployeeSession 
       false,
       ['verify'],
     );
+    const signature = decodeBase64Url(signaturePart);
+    const signatureBuffer = signature.buffer.slice(
+      signature.byteOffset,
+      signature.byteOffset + signature.byteLength,
+    ) as ArrayBuffer;
     const valid = await crypto.subtle.verify(
       'HMAC',
       key,
-      decodeBase64Url(signaturePart),
+      signatureBuffer,
       new TextEncoder().encode(payloadPart),
     );
     if (!valid) return null;
@@ -365,25 +370,74 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
   }
 
   if (action === 'link_group' || action === 'resend_invite') {
-    const chatId = Number(body.chat_id);
+    const rawChatId = body.chat_id;
+    let chatId: number | null = null;
+    if (typeof rawChatId === 'number' && Number.isSafeInteger(rawChatId) && rawChatId < 0) {
+      chatId = rawChatId;
+    } else if (typeof rawChatId === 'string' && /^-?\d+$/.test(rawChatId.trim())) {
+      chatId = Number(rawChatId.trim());
+    }
     let transferId = String(body.transfer_id ?? '').trim();
     let driverId = String(body.driver_id ?? '').trim();
-    if (!Number.isSafeInteger(chatId) || chatId >= 0) {
-      return Response.json(
-        { ok: false, error: 'Не выбраны группа, трансфер или водитель.' },
-        { status: 400, headers: corsHeaders },
-      );
+
+    let group: {
+      chat_id: number;
+      title: string;
+      status: string;
+      transfer_id: string | null;
+      driver_id: string | null;
+      control_message_id: number | null;
+      created_at: string;
+      updated_at: string;
+    } | null = null;
+
+    if (chatId !== null) {
+      const { data, error: groupError } = await supabase
+        .from('v2_driver_telegram_groups')
+        .select('chat_id,title,status,transfer_id,driver_id,control_message_id,created_at,updated_at')
+        .eq('chat_id', chatId)
+        .maybeSingle();
+      if (groupError) throw new Error(`Telegram group lookup failed: ${groupError.message}`);
+      group = data;
     }
 
-    const { data: group, error: groupError } = await supabase
-      .from('v2_driver_telegram_groups')
-      .select('chat_id,title,status,transfer_id,driver_id,control_message_id,created_at,updated_at')
-      .eq('chat_id', chatId)
-      .maybeSingle();
-    if (groupError) throw new Error(`Telegram group lookup failed: ${groupError.message}`);
-    if (!group || group.status === 'disabled') {
+    if (!group && action === 'link_group') {
+      const ref = chatId !== null ? chatId : normalizeTelegramRef(String(rawChatId ?? ''));
+      if (ref === null) {
+        return Response.json(
+          { ok: false, error: 'Укажите числовой ID группы или публичную ссылку (t.me/username). Приватную invite-ссылку бот проверить не может.' },
+          { status: 400, headers: corsHeaders },
+        );
+      }
+      const chat = await telegram('getChat', { chat_id: ref }).catch(() => null) as { id: number; type?: string; title?: string } | null;
+      if (!chat || (chat.type !== 'group' && chat.type !== 'supergroup')) {
+        return Response.json(
+          { ok: false, error: 'Группа не найдена. Сначала добавьте @outway_driver_bot администратором группы.' },
+          { status: 404, headers: corsHeaders },
+        );
+      }
+      const botId = await getBotId();
+      const member = await telegram('getChatMember', { chat_id: chat.id, user_id: botId }).catch(() => null) as TelegramChatMember | null;
+      if (!member || (member.status !== 'administrator' && member.status !== 'creator')) {
+        return Response.json(
+          { ok: false, error: 'Бот добавлен в группу, но не администратор. Выдайте ему права администратора.' },
+          { status: 409, headers: corsHeaders },
+        );
+      }
+      const title = typeof body.title === 'string' && body.title.trim() ? body.title.trim() : (chat.title ?? String(chat.id));
+      const { data: created, error: insertError } = await supabase
+        .from('v2_driver_telegram_groups')
+        .insert({ chat_id: chat.id, title, status: 'pending' })
+        .select('chat_id,title,status,transfer_id,driver_id,control_message_id,created_at,updated_at')
+        .single();
+      if (insertError) throw new Error(`Telegram group registration failed: ${insertError.message}`);
+      group = created;
+      chatId = chat.id;
+    }
+
+    if (!group || !chatId || group.status === 'disabled') {
       return Response.json(
-        { ok: false, error: 'Добавьте бота администратором в Telegram-группу и обновите список.' },
+        { ok: false, error: 'Добавьте бота администратором в Telegram-группу и попробуйте снова.' },
         { status: 404, headers: corsHeaders },
       );
     }
@@ -491,12 +545,10 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
       .eq('chat_id', chatId);
     if (groupUpdateError) throw new Error(`Telegram group link failed: ${groupUpdateError.message}`);
 
-    const branchName = String(branch?.short_name || branch?.name || branchCode);
     await upsertControlMessage(
       chatId,
       group.control_message_id,
-      inviteText({ branchName, transferNumber: transferData.transfer_number, driverName: driver.full_name }),
-      inviteButtonMarkup(inviteToken),
+      readyToDriveText({ branchCode, transferNumber: transferData.transfer_number, driverName: driver.full_name }),
     );
 
     return Response.json({
@@ -512,6 +564,76 @@ async function handleCrmAdmin(request: Request): Promise<Response> {
         updated_at: new Date().toISOString(),
       },
     }, { headers: corsHeaders });
+  }
+
+  if (action === 'unlink_group') {
+    const chatId = Number(body.chat_id);
+    if (!Number.isSafeInteger(chatId) || chatId >= 0) {
+      return Response.json(
+        { ok: false, error: 'Некорректная группа.' },
+        { status: 400, headers: corsHeaders },
+      );
+    }
+
+    const { data: group, error: groupError } = await supabase
+      .from('v2_driver_telegram_groups')
+      .select('chat_id,title,status,transfer_id,driver_id')
+      .eq('chat_id', chatId)
+      .maybeSingle();
+    if (groupError) throw new Error(`Telegram group lookup failed: ${groupError.message}`);
+    if (!group) {
+      return Response.json(
+        { ok: false, error: 'Группа не найдена.' },
+        { status: 404, headers: corsHeaders },
+      );
+    }
+
+    if (group.transfer_id) {
+      const { data: transferData, error: transferError } = await supabase
+        .from('v2_transfers')
+        .select('id,v2_school_branches(code)')
+        .eq('id', group.transfer_id)
+        .maybeSingle();
+      if (transferError) throw new Error(`Transfer lookup failed: ${transferError.message}`);
+      const branch = Array.isArray(transferData?.v2_school_branches)
+        ? transferData?.v2_school_branches[0]
+        : transferData?.v2_school_branches;
+      const branchCode = String(branch?.code ?? '');
+      if (!session.schools.includes('ALL') && !session.schools.includes(branchCode)) {
+        return Response.json(
+          { ok: false, error: 'У вас нет доступа к филиалу этого трансфера.' },
+          { status: 403, headers: corsHeaders },
+        );
+      }
+      const { error: transferUpdateError } = await supabase
+        .from('v2_transfers')
+        .update({ telegram_chat_id: null, updated_at: new Date().toISOString() })
+        .eq('id', group.transfer_id)
+        .eq('telegram_chat_id', chatId);
+      if (transferUpdateError) throw new Error(`Transfer unlink failed: ${transferUpdateError.message}`);
+    }
+
+    const { error: groupUpdateError } = await supabase
+      .from('v2_driver_telegram_groups')
+      .update({
+        status: 'pending',
+        transfer_id: null,
+        driver_id: null,
+        linked_by_employee_id: null,
+        invite_token_hash: null,
+        invite_expires_at: null,
+        driver_confirmed_at: null,
+      })
+      .eq('chat_id', chatId);
+    if (groupUpdateError) throw new Error(`Telegram group unlink failed: ${groupUpdateError.message}`);
+
+    try {
+      await sendMessage(chatId, 'ℹ️ <b>Группа отключена от трансфера.</b>\n\nЛогист может подключить её заново или к другому трансферу.');
+    } catch (error) {
+      console.error('unlink notice failed', error);
+    }
+
+    return Response.json({ ok: true }, { headers: corsHeaders });
   }
 
   return Response.json(
@@ -668,6 +790,29 @@ async function isGroupAdmin(chatId: number, userId: number): Promise<boolean> {
   return member.status === 'creator' || member.status === 'administrator';
 }
 
+let cachedBotId: number | null = null;
+
+async function getBotId(): Promise<number> {
+  if (cachedBotId !== null) return cachedBotId;
+  const me = await telegram('getMe', {}) as { id: number };
+  cachedBotId = me.id;
+  return cachedBotId;
+}
+
+// Принимает то, что ввёл логист вручную: числовой chat_id, @username, t.me/username
+// или ссылку. Приватные invite-ссылки (t.me/+xxx, t.me/joinchat/xxx) Telegram Bot API
+// резолвить не умеет — возвращаем null, чтобы явно сообщить об этом пользователю.
+function normalizeTelegramRef(raw: string): string | number | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+  if (/^-?\d+$/.test(trimmed)) return Number(trimmed);
+
+  let value = trimmed.replace(/^https?:\/\//i, '').replace(/^t\.me\//i, '');
+  if (value.startsWith('+') || value.toLowerCase().startsWith('joinchat/')) return null;
+  value = value.replace(/^@/, '').split(/[/?]/)[0];
+  return value ? `@${value}` : null;
+}
+
 async function authorizeTransferDriver(
   chatId: number,
   telegramUserId: number,
@@ -706,24 +851,46 @@ async function authorizeTransferDriver(
   return { context: { transfer, driver }, error: null };
 }
 
-function startRunButtonMarkup(): Record<string, unknown> {
+// Доступ теперь решается по тому, админ ли человек в Telegram-группе трансфера
+// (isGroupAdmin), а не по тому, чей телефон подтверждён как "водитель" — эта
+// функция даёт трансфер по chat_id без проверки конкретного водителя.
+async function lookupActiveTransferForChat(chatId: number): Promise<{ transfer: Transfer | null; error: string | null }> {
+  const { data: transferData, error: transferError } = await supabase
+    .from('v2_transfers')
+    .select('id,transfer_number,driver_id,status,telegram_chat_id,v2_school_branches(code,short_name,name)')
+    .eq('telegram_chat_id', chatId)
+    .maybeSingle();
+  if (transferError) throw new Error(`Registered transfer lookup failed: ${transferError.message}`);
+  if (!transferData) {
+    return { transfer: null, error: 'Эта группа ещё не зарегистрирована за трансфером.' };
+  }
+  const transfer = transferData as unknown as Transfer;
+  if (transfer.status !== 'active') {
+    return { transfer: null, error: 'Этот трансфер сейчас не активен.' };
+  }
+  return { transfer, error: null };
+}
+
+function finishRunButtonMarkup(): Record<string, unknown> {
   return {
     inline_keyboard: [[{
-      text: '▶️ НАЧАТЬ РЕЙС',
-      callback_data: 'run:start',
-      style: 'success',
+      text: '⏹ ЗАВЕРШИТЬ РЕЙС',
+      callback_data: 'run:finish',
+      style: 'danger',
     }]],
   };
 }
 
-function liveLocationHelpMarkup(): Record<string, unknown> {
-  return {
-    inline_keyboard: [[{
-      text: '📍 Как включить Live Location',
-      callback_data: 'run:location_help',
-      style: 'primary',
-    }]],
-  };
+function clearInlineKeyboardMarkup(): Record<string, unknown> {
+  return { inline_keyboard: [] };
+}
+
+function departedText(_direction: 'morning' | 'evening'): string {
+  return '🟢 <b>Рейс идёт</b>\n\nLive Location подключена, геоданные поступают в CRM.';
+}
+
+function finishedText(_direction: 'morning' | 'evening'): string {
+  return '🏁 <b>Рейс завершён</b>\n\nДля нового рейса отправьте Live Location.';
 }
 
 function inviteButtonMarkup(token: string): Record<string, unknown> {
@@ -755,8 +922,7 @@ function readyToDriveText(params: {
 }): string {
   return `🚌 <b>OutWay · ${escapeHtml(params.branchCode)} №${params.transferNumber}</b>\n\n` +
     `Водитель: <b>${escapeHtml(params.driverName)}</b>\n` +
-    'Статус: <b>готов к рейсу</b>\n\n' +
-    'Перед выездом нажмите одну кнопку:';
+    'Для начала рейса отправьте в эту группу Live Location.';
 }
 
 async function confirmDriverInvite(message: TelegramMessage, token: string): Promise<void> {
@@ -1026,7 +1192,6 @@ async function confirmDriverContact(message: TelegramMessage): Promise<void> {
       transferNumber: Number(transferData.transfer_number),
       driverName: driver.full_name,
     }),
-    startRunButtonMarkup(),
   );
 
   await sendMessage(
@@ -1103,14 +1268,6 @@ async function handleMyChatMember(update: TelegramChatMemberUpdated): Promise<vo
       control_message_id: null,
     });
   if (upsertError) throw new Error(`Telegram group registration failed: ${upsertError.message}`);
-
-  await upsertControlMessage(
-    chat.id,
-    null,
-    '✅ <b>OutWay Driver подключён</b>\n\n' +
-      'Группа появилась в CRM со статусом «Ожидает подключения».\n' +
-      'Дальше логист выберет водителя и трансфер — команды в группе вводить не нужно.',
-  );
 }
 
 async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): Promise<void> {
@@ -1128,35 +1285,87 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
     return;
   }
 
-  const { context, error } = await authorizeTransferDriver(message.chat.id, user.id);
-  if (!context) {
+  const { transfer, error } = await lookupActiveTransferForChat(message.chat.id);
+  if (!transfer) {
     if (!isEdited) {
       await sendMessage(message.chat.id, error ?? 'Доступ запрещён.', message.message_id);
     }
     return;
   }
-
-  const { data: run, error: runError } = await supabase
-    .from('v2_transfer_runs')
-    .select('id,next_stop_order,last_location_at,location_message_id')
-    .eq('transfer_id', context.transfer.id)
-    .eq('status', 'active')
-    .order('started_at', { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (runError) throw new Error(`Active run lookup failed: ${runError.message}`);
-  if (!run) {
+  if (!(await isGroupAdmin(message.chat.id, user.id))) {
     if (!isEdited) {
-      await sendMessage(
-        message.chat.id,
-        'Сначала запустите рейс через кнопку «На линии».',
-        message.message_id,
-      );
+      await sendMessage(message.chat.id, 'Доступно только администраторам группы.', message.message_id);
     }
     return;
   }
 
   const isInitialLiveLocation = Number(location.live_period ?? 0) > 0;
+  if (!isInitialLiveLocation && !isEdited) {
+    await sendMessage(
+      message.chat.id,
+      'Отправлена обычная точка. Выберите в Telegram «Геопозиция» → «Транслировать геопозицию».',
+      message.message_id,
+    );
+    return;
+  }
+
+  const { data: activeRun, error: runError } = await supabase
+    .from('v2_transfer_runs')
+    .select('id,direction,last_location_at,location_message_id,confirmed_by')
+    .eq('transfer_id', transfer.id)
+    .eq('status', 'active')
+    .order('started_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (runError) throw new Error(`Active run lookup failed: ${runError.message}`);
+
+  let run = activeRun;
+  if (!run) {
+    if (isEdited || !isInitialLiveLocation) return;
+    if (!transfer.driver_id) {
+      await sendMessage(
+        message.chat.id,
+        'За трансфером не назначен водитель в CRM.',
+        message.message_id,
+      );
+      return;
+    }
+
+    const { data: startData, error: startError } = await supabase.rpc('v2_start_transfer_run', {
+      p_transfer_id: transfer.id,
+      p_driver_id: transfer.driver_id,
+      p_direction: currentRunDirection(),
+      p_confirmed_by: user.id,
+    });
+    if (startError) {
+      console.error('automatic transfer run start error', startError);
+      await sendMessage(message.chat.id, 'Не удалось принять геоданные. Попробуйте ещё раз.', message.message_id);
+      return;
+    }
+    const started = (startData as StartRunResult[] | null)?.[0];
+    if (!started || started.run_status !== 'active') {
+      await sendMessage(message.chat.id, 'Этот рейс уже завершён.', message.message_id);
+      return;
+    }
+
+    const { data: startedRun, error: startedRunError } = await supabase
+      .from('v2_transfer_runs')
+      .select('id,direction,last_location_at,location_message_id,confirmed_by')
+      .eq('id', started.run_id)
+      .maybeSingle();
+    if (startedRunError) throw new Error(`Started run lookup failed: ${startedRunError.message}`);
+    if (!startedRun) throw new Error('Started run not found');
+    run = startedRun;
+  }
+  // Рейс "закреплён" за тем админом, кто его начал (v2_transfer_runs.confirmed_by) —
+  // геолокация от другого админа той же группы игнорируется, чтобы не путать трек.
+  if (run.confirmed_by && run.confirmed_by !== user.id) {
+    if (!isEdited) {
+      await sendMessage(message.chat.id, 'Геолокацию для этого рейса уже передаёт другой администратор.', message.message_id);
+    }
+    return;
+  }
+
   const isKnownLiveMessage = run.location_message_id === message.message_id;
   if (!isInitialLiveLocation && !isKnownLiveMessage) {
     if (!isEdited) {
@@ -1190,14 +1399,6 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
   if (updateError) throw new Error(`Live location update failed: ${updateError.message}`);
 
   if (!isEdited && !isKnownLiveMessage) {
-    const { data: nextStop, error: stopError } = await supabase
-      .from('v2_transfer_run_stops')
-      .select('child_name,stop_order')
-      .eq('run_id', run.id)
-      .eq('stop_order', run.next_stop_order ?? 1)
-      .maybeSingle();
-    if (stopError) throw new Error(`Next stop lookup failed: ${stopError.message}`);
-
     const { data: group, error: groupError } = await supabase
       .from('v2_driver_telegram_groups')
       .select('control_message_id')
@@ -1208,52 +1409,9 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
     await upsertControlMessage(
       message.chat.id,
       group?.control_message_id ?? null,
-      `🟢 <b>В пути</b>\n\n` +
-        `Live Location подключена, координаты поступают в CRM.` +
-        (nextStop ? `\nСледующая остановка: <b>${escapeHtml(nextStop.child_name)}</b>.` : ''),
+      departedText(run.direction as 'morning' | 'evening'),
+      finishRunButtonMarkup(),
     );
-  }
-}
-
-function scheduleLiveLocationReminder(params: {
-  runId: string;
-  chatId: number;
-  driverName: string;
-}): void {
-  const reminderTask = new Promise(resolve => setTimeout(resolve, 90_000))
-    .then(async () => {
-      const { data: run, error } = await supabase
-        .from('v2_transfer_runs')
-        .select('status,last_location_at')
-        .eq('id', params.runId)
-        .maybeSingle();
-      if (error || !run || run.status !== 'active' || run.last_location_at) return;
-
-      const { data: group, error: groupError } = await supabase
-        .from('v2_driver_telegram_groups')
-        .select('control_message_id')
-        .eq('chat_id', params.chatId)
-        .maybeSingle();
-      if (groupError) console.error('control message lookup failed', groupError);
-
-      await upsertControlMessage(
-        params.chatId,
-        group?.control_message_id ?? null,
-        `⏰ <b>${escapeHtml(params.driverName)}, включите Live Location</b>\n\n` +
-          'Без неё родители и логист не увидят машину на карте.\n' +
-          'Скрепка → «Геопозиция» → «Транслировать геопозицию» → «8 часов».',
-        liveLocationHelpMarkup(),
-      );
-    })
-    .catch(error => console.error('live location reminder error', error));
-
-  const edgeRuntime = (globalThis as unknown as {
-    EdgeRuntime?: { waitUntil?: (promise: Promise<unknown>) => void };
-  }).EdgeRuntime;
-  if (edgeRuntime?.waitUntil) {
-    edgeRuntime.waitUntil(reminderTask);
-  } else {
-    void reminderTask;
   }
 }
 
@@ -1265,87 +1423,51 @@ async function handleRunCallback(callback: TelegramCallbackQuery): Promise<void>
     return;
   }
 
-  const { context, error } = await authorizeTransferDriver(message.chat.id, callback.from.id);
-  if (!context) {
+  const { transfer, error } = await lookupActiveTransferForChat(message.chat.id);
+  if (!transfer) {
     await answerCallback(callback.id, error ?? 'Доступ запрещён.', true);
     return;
   }
 
-  if (data === 'run:location_help') {
-    await answerCallback(
-      callback.id,
-      'Нажмите скрепку → Геопозиция → Транслировать геопозицию → 8 часов.',
-      true,
-    );
-    return;
-  }
+  if (data === 'run:finish') {
+    if (!(await isGroupAdmin(message.chat.id, callback.from.id))) {
+      await answerCallback(callback.id, 'Завершить рейс может только администратор группы.', true);
+      return;
+    }
+    if (!transfer.driver_id) {
+      await answerCallback(callback.id, 'За трансфером не назначен водитель в CRM.', true);
+      return;
+    }
+    await answerCallback(callback.id, 'Завершаю рейс…');
+    const { data: finishData, error: finishError } = await supabase.rpc('v2_finish_transfer_run', {
+      p_transfer_id: transfer.id,
+      p_driver_id: transfer.driver_id,
+      p_confirmed_by: callback.from.id,
+    });
+    if (finishError) {
+      console.error('finish transfer run error', finishError);
+      await answerCallback(callback.id, escapeHtml(finishError.message), true);
+      return;
+    }
+    const finished = (finishData as { run_id: string; run_direction: 'morning' | 'evening' }[] | null)?.[0];
+    if (!finished) throw new Error('Finish run RPC returned no result');
 
-  if (data !== 'run:start') {
-    await answerCallback(callback.id, 'Неизвестная команда.', true);
-    return;
-  }
-
-  const direction = currentRunDirection();
-  await answerCallback(callback.id, 'Запускаю рейс…');
-  const { data: runData, error: runError } = await supabase.rpc('v2_start_transfer_run', {
-    p_transfer_id: context.transfer.id,
-    p_driver_id: context.driver.id,
-    p_direction: direction,
-    p_confirmed_by: callback.from.id,
-  });
-  if (runError) {
-    console.error('start transfer run error', runError);
     await upsertControlMessage(
       message.chat.id,
       message.message_id,
-      `<b>Не удалось запустить рейс</b>\n\n${escapeHtml(runError.message)}`,
-      startRunButtonMarkup(),
+      finishedText(finished.run_direction),
+      clearInlineKeyboardMarkup(),
     );
     return;
   }
 
-  const run = (runData as StartRunResult[] | null)?.[0];
-  if (!run) throw new Error('Start run RPC returned no result');
-
-  const { error: messageIdError } = await supabase
-    .from('v2_transfer_runs')
-    .update({ status_message_id: message.message_id })
-    .eq('id', run.run_id)
-    .is('status_message_id', null);
-  if (messageIdError) {
-    console.error('status message id update error', messageIdError);
-  }
-
-  const directionLabel = direction === 'morning' ? 'Утро · дома → школа' : 'Вечер · школа → дома';
-  if (!run.created && run.run_status !== 'active') {
-    await upsertControlMessage(
-      message.chat.id,
-      message.message_id,
-      `<b>Рейс уже существует</b>\n\n` +
-        `Направление: ${directionLabel}\n` +
-        `Статус: ${escapeHtml(run.run_status)}\n\n` +
-        'Повторный рейс на эту дату не создаётся.',
-    );
-    return;
-  }
-
+  await answerCallback(callback.id, 'Отправьте Live Location — рейс начнётся автоматически.', true);
   await upsertControlMessage(
     message.chat.id,
     message.message_id,
-    `${run.created ? '✅ <b>Рейс запущен</b>' : 'ℹ️ <b>Рейс уже активен</b>'}\n\n` +
-      `<b>Направление:</b> ${directionLabel}\n` +
-      `<b>Остановок:</b> ${run.stop_count}\n` +
-      `<b>Водитель:</b> ${escapeHtml(context.driver.full_name)}\n\n` +
-      '📍 <b>Остался один шаг</b>\n' +
-      'Нажмите скрепку → «Геопозиция» → «Транслировать геопозицию» → «8 часов».\n\n' +
-      'Telegram не разрешает боту включать геолокацию без подтверждения водителя.',
-    liveLocationHelpMarkup(),
+    'Отправьте Live Location — рейс начнётся автоматически.',
+    clearInlineKeyboardMarkup(),
   );
-  scheduleLiveLocationReminder({
-    runId: run.run_id,
-    chatId: message.chat.id,
-    driverName: context.driver.full_name,
-  });
 }
 
 async function registerTransferGroup(message: TelegramMessage): Promise<void> {
@@ -1450,9 +1572,9 @@ async function registerTransferGroup(message: TelegramMessage): Promise<void> {
   if (transfer.telegram_chat_id === message.chat.id) {
     await sendMessage(
       message.chat.id,
-      `✅ Эта группа уже зарегистрирована за трансфером <b>${escapeHtml(branchCode)} №${transferNumber}</b>.`,
+      `✅ Эта группа уже зарегистрирована за трансфером <b>${escapeHtml(branchCode)} №${transferNumber}</b>.\n\n` +
+        'Для начала рейса отправьте Live Location.',
       message.message_id,
-      startRunButtonMarkup(),
     );
     return;
   }
@@ -1472,9 +1594,13 @@ async function registerTransferGroup(message: TelegramMessage): Promise<void> {
     .maybeSingle();
   if (chatLookupError) throw new Error(`Group lookup failed: ${chatLookupError.message}`);
   if (chatTransfer) {
-    const existingBranch = Array.isArray(chatTransfer.v2_school_branches)
-      ? chatTransfer.v2_school_branches[0]?.code
-      : chatTransfer.v2_school_branches?.code;
+    const chatTransferBranches = chatTransfer.v2_school_branches as unknown as
+      | { code?: string | null }
+      | Array<{ code?: string | null }>
+      | null;
+    const existingBranch = Array.isArray(chatTransferBranches)
+      ? chatTransferBranches[0]?.code
+      : chatTransferBranches?.code;
     await sendMessage(
       message.chat.id,
       `Эта группа уже связана с трансфером <b>${escapeHtml(existingBranch ?? '—')} №${chatTransfer.transfer_number}</b>.`,
@@ -1511,9 +1637,9 @@ async function registerTransferGroup(message: TelegramMessage): Promise<void> {
     `✅ Группа зарегистрирована.\n\n` +
       `<b>Филиал:</b> ${escapeHtml(branchName)} (${escapeHtml(branchCode)})\n` +
       `<b>Трансфер:</b> №${transferNumber}\n` +
-      `<b>Водитель:</b> ${escapeHtml(driver.full_name)}`,
+      `<b>Водитель:</b> ${escapeHtml(driver.full_name)}\n\n` +
+      'Для начала рейса отправьте Live Location.',
     message.message_id,
-    startRunButtonMarkup(),
   );
 }
 
@@ -1649,12 +1775,10 @@ async function reissueDriverInviteForChat(chatId: number): Promise<Record<string
     ? transfer.v2_school_branches[0]
     : transfer.v2_school_branches;
   const branchCode = String(branch?.code ?? '');
-  const branchName = String(branch?.short_name || branch?.name || branchCode);
   await upsertControlMessage(
     chatId,
     group.control_message_id,
-    inviteText({ branchName, transferNumber: transfer.transfer_number, driverName: driver.full_name }),
-    inviteButtonMarkup(inviteToken),
+    readyToDriveText({ branchCode, transferNumber: transfer.transfer_number, driverName: driver.full_name }),
   );
 
   return {
