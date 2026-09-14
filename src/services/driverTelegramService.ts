@@ -95,6 +95,26 @@ export async function linkDriverTelegramGroup(params: {
   return mapGroup(data.group);
 }
 
+export async function connectDriverTelegramGroup(params: {
+  sessionToken: string;
+  groupReference: string;
+  groupName: string;
+  transferId: string;
+  driverId: string;
+}): Promise<DriverTelegramGroup> {
+  const data = await callDriverTelegramAdmin<{ group: DriverTelegramGroupRow }>(
+    params.sessionToken,
+    {
+      action: 'link_group',
+      chat_id: params.groupReference,
+      title: params.groupName,
+      transfer_id: params.transferId,
+      driver_id: params.driverId,
+    },
+  );
+  return mapGroup(data.group);
+}
+
 export async function resendDriverTelegramInvite(params: {
   sessionToken: string;
   chatId: number;
