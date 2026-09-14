@@ -4,7 +4,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
@@ -823,6 +823,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedDriverTab, setSelectedDriverTab] = useState<DriverCardTab>('main');
   const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
+  const [driverTransferDraftId, setDriverTransferDraftId] = useState('');
   const [driverDocumentsDraft, setDriverDocumentsDraft] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
   const [savingDriver, setSavingDriver] = useState(false);
   const [deletingDriver, setDeletingDriver] = useState(false);
@@ -1894,6 +1895,20 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
+  const driverTransferOptions = useMemo(() => {
+    if (!selectedDriver) return [];
+    const currentBranchIds = new Set(selectedDriver.branchIds);
+    const currentTransferIds = new Set(selectedDriver.transfers.map(transfer => transfer.id));
+    const sameBranchTransfers = dashboardTransfers.filter(transfer => (
+      currentTransferIds.has(transfer.id)
+      || currentBranchIds.size === 0
+      || (transfer.branchId && currentBranchIds.has(transfer.branchId))
+    ));
+    return sameBranchTransfers.sort((left, right) => {
+      const branchOrder = (left.branchShort || left.branchCode).localeCompare(right.branchShort || right.branchCode, 'ru');
+      return branchOrder || Number(left.transferNumber) - Number(right.transferNumber);
+    });
+  }, [dashboardTransfers, selectedDriver]);
   const canManageDriverTelegram = ['admin', 'gen_director', 'manager', 'logist', 'senior_logist'].includes(userRole);
   const refreshDriverTelegramGroups = useCallback(async () => {
     if (!selectedDriverId || !canManageDriverTelegram) return;
@@ -1985,6 +2000,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   useEffect(() => {
     if (!selectedDriver) {
       setDriverDraft(null);
+      setDriverTransferDraftId('');
       setDriverDocumentsDraft(createDefaultV2DriverDocuments());
       return;
     }
@@ -2006,6 +2022,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       plateNumber: selectedDriver.plateNumber,
       seats: selectedDriver.seats == null ? '' : String(selectedDriver.seats),
     });
+    setDriverTransferDraftId(selectedDriver.transfers[0]?.id ?? '');
   }, [selectedDriver]);
   useEffect(() => {
     if (!selectedDriverId) return;
@@ -2071,11 +2088,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         plateNumber: driverDraft.plateNumber,
         seats: driverDraft.seats.trim() ? Number(driverDraft.seats) : null,
       });
+      await changeV2DriverTransfer({
+        driverId: selectedDriver.driverId,
+        previousTransferId: selectedDriver.transfers[0]?.id ?? null,
+        nextTransferId: driverTransferDraftId || null,
+      });
       await saveV2DriverDocuments(selectedDriver.driverId, driverDocumentsDraft);
       await load(false);
     } catch (error) {
       console.error('Driver save failed', error);
-      alert('Не удалось сохранить водителя');
+      alert(error instanceof Error ? `Не удалось сохранить водителя: ${error.message}` : 'Не удалось сохранить водителя');
     } finally {
       setSavingDriver(false);
     }
@@ -3301,7 +3323,25 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Школа</span>
                     <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.branchShorts.join(', ') || '-'}</span>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Трансфер</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.transferNumbers || '-'}</span>
+                    <select
+                      value={driverTransferDraftId}
+                      onChange={event => setDriverTransferDraftId(event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', background: '#fff', outline: 'none' }}
+                    >
+                      <option value="">Без трансфера · Резерв</option>
+                      {driverTransferOptions.map(transfer => {
+                        const assignedDriver = transfer.driverId
+                          ? driverRows.find(driver => driver.driverId === transfer.driverId)
+                          : null;
+                        const occupiedByAnotherDriver = Boolean(assignedDriver && assignedDriver.driverId !== selectedDriver.driverId);
+                        return (
+                          <option key={transfer.id} value={transfer.id} disabled={occupiedByAnotherDriver}>
+                            {transfer.branchShort || transfer.branchCode} · №{transfer.transferNumber}
+                            {occupiedByAnotherDriver ? ` · занят: ${assignedDriver?.fullName}` : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
                     <span style={{ color: '#7A859D', fontWeight: 800 }}>Тип ТС</span>
                     <select
                       value={driverDraft?.vehicleType ?? ''}
@@ -3439,7 +3479,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                     </div>
                   ) : (
                     <>
-                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.2fr) minmax(0, 1fr) auto', gap: 9, alignItems: 'end' }}>
+                      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 9, alignItems: 'end' }}>
                         <label style={{ display: 'grid', gap: 5, fontSize: 10, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
                           Новая Telegram-группа
                           <select
@@ -3450,21 +3490,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                             <option value="">{driverTelegramLoading ? 'Загрузка…' : 'Выберите группу'}</option>
                             {pendingDriverTelegramGroups.map(group => (
                               <option key={group.chatId} value={String(group.chatId)}>{group.title}</option>
-                            ))}
-                          </select>
-                        </label>
-                        <label style={{ display: 'grid', gap: 5, fontSize: 10, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase' }}>
-                          Трансфер
-                          <select
-                            value={selectedTelegramTransferId}
-                            onChange={event => setSelectedTelegramTransferId(event.target.value)}
-                            style={{ height: 36, border: '1px solid #D4E3E7', borderRadius: 10, padding: '0 10px', background: '#fff', color: '#17222F', fontSize: 12, fontWeight: 800 }}
-                          >
-                            <option value="">Выберите трансфер</option>
-                            {selectedDriver.transfers.map(transfer => (
-                              <option key={transfer.id} value={transfer.id}>
-                                {transfer.branchShort || transfer.branchCode} · №{transfer.transferNumber}
-                              </option>
                             ))}
                           </select>
                         </label>
