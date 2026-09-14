@@ -57,15 +57,7 @@ type TelegramUpdate = {
   update_id: number;
   message?: TelegramMessage;
   edited_message?: TelegramMessage;
-  callback_query?: TelegramCallbackQuery;
   my_chat_member?: TelegramChatMemberUpdated;
-};
-
-type TelegramCallbackQuery = {
-  id: string;
-  from: TelegramUser;
-  message?: TelegramMessage;
-  data?: string;
 };
 
 type Driver = {
@@ -333,18 +325,6 @@ async function upsertControlMessage(
     .eq('chat_id', chatId);
   if (error) console.error('control message id persist failed', error);
   return messageId;
-}
-
-async function answerCallback(
-  callbackId: string,
-  text?: string,
-  showAlert = false,
-): Promise<void> {
-  await telegram('answerCallbackQuery', {
-    callback_query_id: callbackId,
-    ...(text ? { text } : {}),
-    show_alert: showAlert,
-  });
 }
 
 async function handleCrmAdmin(request: Request): Promise<Response> {
@@ -871,16 +851,6 @@ async function lookupActiveTransferForChat(chatId: number): Promise<{ transfer: 
   return { transfer, error: null };
 }
 
-function finishRunButtonMarkup(): Record<string, unknown> {
-  return {
-    inline_keyboard: [[{
-      text: '⏹ ЗАВЕРШИТЬ РЕЙС',
-      callback_data: 'run:finish',
-      style: 'danger',
-    }]],
-  };
-}
-
 function clearInlineKeyboardMarkup(): Record<string, unknown> {
   return { inline_keyboard: [] };
 }
@@ -1367,6 +1337,42 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
   }
 
   const isKnownLiveMessage = run.location_message_id === message.message_id;
+  const eventUnix = message.edit_date ?? message.date ?? Math.floor(Date.now() / 1000);
+  const eventAt = new Date(eventUnix * 1000).toISOString();
+  const isLiveLocationStopped = isEdited && isKnownLiveMessage && location.live_period == null;
+
+  if (isLiveLocationStopped) {
+    const { error: finishError } = await supabase
+      .from('v2_transfer_runs')
+      .update({
+        status: 'finished',
+        finished_at: eventAt,
+        last_latitude: location.latitude,
+        last_longitude: location.longitude,
+        last_location_accuracy: location.horizontal_accuracy ?? null,
+        last_location_at: eventAt,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', run.id)
+      .eq('status', 'active');
+    if (finishError) throw new Error(`Automatic run finish failed: ${finishError.message}`);
+
+    const { data: group, error: groupError } = await supabase
+      .from('v2_driver_telegram_groups')
+      .select('control_message_id')
+      .eq('chat_id', message.chat.id)
+      .maybeSingle();
+    if (groupError) console.error('control message lookup failed', groupError);
+
+    await upsertControlMessage(
+      message.chat.id,
+      group?.control_message_id ?? null,
+      finishedText(run.direction as 'morning' | 'evening'),
+      clearInlineKeyboardMarkup(),
+    );
+    return;
+  }
+
   if (!isInitialLiveLocation && !isKnownLiveMessage) {
     if (!isEdited) {
       await sendMessage(
@@ -1378,8 +1384,6 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
     return;
   }
 
-  const eventUnix = message.edit_date ?? message.date ?? Math.floor(Date.now() / 1000);
-  const eventAt = new Date(eventUnix * 1000).toISOString();
   if (run.last_location_at && new Date(run.last_location_at).getTime() > eventUnix * 1000) {
     return;
   }
@@ -1410,64 +1414,9 @@ async function handleLiveLocation(message: TelegramMessage, isEdited: boolean): 
       message.chat.id,
       group?.control_message_id ?? null,
       departedText(run.direction as 'morning' | 'evening'),
-      finishRunButtonMarkup(),
-    );
-  }
-}
-
-async function handleRunCallback(callback: TelegramCallbackQuery): Promise<void> {
-  const message = callback.message;
-  const data = callback.data;
-  if (!message || !data) {
-    await answerCallback(callback.id, 'Сообщение больше недоступно.', true);
-    return;
-  }
-
-  const { transfer, error } = await lookupActiveTransferForChat(message.chat.id);
-  if (!transfer) {
-    await answerCallback(callback.id, error ?? 'Доступ запрещён.', true);
-    return;
-  }
-
-  if (data === 'run:finish') {
-    if (!(await isGroupAdmin(message.chat.id, callback.from.id))) {
-      await answerCallback(callback.id, 'Завершить рейс может только администратор группы.', true);
-      return;
-    }
-    if (!transfer.driver_id) {
-      await answerCallback(callback.id, 'За трансфером не назначен водитель в CRM.', true);
-      return;
-    }
-    await answerCallback(callback.id, 'Завершаю рейс…');
-    const { data: finishData, error: finishError } = await supabase.rpc('v2_finish_transfer_run', {
-      p_transfer_id: transfer.id,
-      p_driver_id: transfer.driver_id,
-      p_confirmed_by: callback.from.id,
-    });
-    if (finishError) {
-      console.error('finish transfer run error', finishError);
-      await answerCallback(callback.id, escapeHtml(finishError.message), true);
-      return;
-    }
-    const finished = (finishData as { run_id: string; run_direction: 'morning' | 'evening' }[] | null)?.[0];
-    if (!finished) throw new Error('Finish run RPC returned no result');
-
-    await upsertControlMessage(
-      message.chat.id,
-      message.message_id,
-      finishedText(finished.run_direction),
       clearInlineKeyboardMarkup(),
     );
-    return;
   }
-
-  await answerCallback(callback.id, 'Отправьте Live Location — рейс начнётся автоматически.', true);
-  await upsertControlMessage(
-    message.chat.id,
-    message.message_id,
-    'Отправьте Live Location — рейс начнётся автоматически.',
-    clearInlineKeyboardMarkup(),
-  );
 }
 
 async function registerTransferGroup(message: TelegramMessage): Promise<void> {
@@ -1826,7 +1775,7 @@ Deno.serve(async (request) => {
       const result = await telegram('setWebhook', {
         url: `${SUPABASE_URL}/functions/v1/telegram-driver-bot`,
         secret_token: WEBHOOK_SECRET,
-        allowed_updates: ['message', 'edited_message', 'callback_query', 'my_chat_member'],
+        allowed_updates: ['message', 'edited_message', 'my_chat_member'],
       });
       return Response.json({ ok: true, result });
     }
@@ -1839,7 +1788,6 @@ Deno.serve(async (request) => {
     if (update.my_chat_member) await handleMyChatMember(update.my_chat_member);
     if (update.message) await handleMessage(update.message);
     if (update.edited_message) await handleMessage(update.edited_message, true);
-    if (update.callback_query) await handleRunCallback(update.callback_query);
   } catch (error) {
     console.error('telegram-driver-bot error', error);
   }
