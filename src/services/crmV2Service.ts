@@ -1585,6 +1585,65 @@ export async function updateV2Driver(driverId: string, input: UpdateV2DriverInpu
   }
 }
 
+export async function changeV2DriverTransfer(params: {
+  driverId: string;
+  previousTransferId?: string | null;
+  nextTransferId?: string | null;
+}): Promise<void> {
+  const previousTransferId = params.previousTransferId || null;
+  const nextTransferId = params.nextTransferId || null;
+  if (previousTransferId === nextTransferId) return;
+
+  let vehicleId: string | null = null;
+  if (nextTransferId) {
+    const { data: targetTransfer, error: targetTransferError } = await supabase
+      .from('v2_transfers')
+      .select('driver_id')
+      .eq('id', nextTransferId)
+      .single();
+    if (targetTransferError) throw new Error(targetTransferError.message);
+    if (targetTransfer.driver_id && String(targetTransfer.driver_id) !== params.driverId) {
+      throw new Error('Этот трансфер уже назначен другому водителю');
+    }
+
+    const { data: vehicle, error: vehicleError } = await supabase
+      .from('v2_vehicles')
+      .select('id')
+      .eq('driver_id', params.driverId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    if (vehicleError) throw new Error(vehicleError.message);
+    vehicleId = vehicle?.id ? String(vehicle.id) : null;
+
+    // Сначала назначаем новый трансфер: если запрос завершится ошибкой,
+    // водитель не останется без прежнего назначения.
+    const { error: assignError } = await supabase
+      .from('v2_transfers')
+      .update({
+        driver_id: params.driverId,
+        vehicle_id: vehicleId,
+        status: 'active',
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', nextTransferId);
+    if (assignError) throw new Error(assignError.message);
+  }
+
+  if (previousTransferId) {
+    const { error: releaseError } = await supabase
+      .from('v2_transfers')
+      .update({
+        driver_id: null,
+        vehicle_id: null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', previousTransferId)
+      .eq('driver_id', params.driverId);
+    if (releaseError) throw new Error(releaseError.message);
+  }
+}
+
 export async function deleteV2Driver(driverId: string): Promise<void> {
   const { data, error } = await supabase
     .from('v2_drivers')
