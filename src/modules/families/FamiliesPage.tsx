@@ -2793,26 +2793,55 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     }
 
     const unique = (values: Array<string | null | undefined>) => Array.from(new Set(values.filter(Boolean).map(String)));
+    const groupedRows = new Map<string, ChildRow[]>();
+    routeRows.forEach(row => {
+      const schoolKey = row.branchId || row.branchFilter || row.branchShort || row.branchName || 'school';
+      const transferKey = row.transferNumber || '';
+      const key = `${schoolKey}:${transferKey}`;
+      groupedRows.set(key, [...(groupedRows.get(key) ?? []), row]);
+    });
+
+    const groups = Array.from(groupedRows.values()).sort((left, right) => {
+      const schoolDiff = (left[0]?.branchShort || left[0]?.branchName || '').localeCompare(right[0]?.branchShort || right[0]?.branchName || '', 'ru');
+      if (schoolDiff) return schoolDiff;
+      return Number(left[0]?.transferNumber || 999) - Number(right[0]?.transferNumber || 999);
+    });
     const schools = unique(routeRows.map(row => row.branchShort || row.branchName));
-    const transfers = unique(routeRows.map(row => row.transferNumber)).sort((a, b) => Number(a) - Number(b));
-    const driverIds = unique(routeRows.map(row => row.driverId));
-    const driver = driverRows.find(item => item.driverId === (driverIds.length === 1 ? driverIds[0] : activeDirectoryTransfer?.driverId));
     const schoolTitle = schools.join(', ') || '—';
-    const transferTitle = transfers.length === 1 ? `№${transfers[0]}` : transfers.length ? transfers.map(item => `№${item}`).join(', ') : 'Без трансфера';
-    const driverContacts = [driver?.phone, driver?.secondPhone].filter(Boolean).join(' / ') || '—';
-    const vehicle = [driver?.vehicleLabel || routeRows.find(row => row.vehicleLabel)?.vehicleLabel, driver?.plateNumber]
-      .filter(Boolean)
-      .join(' / ') || '—';
-    const safeName = `${schoolTitle}_${transferTitle}`.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
+    const safeName = `${schoolTitle}_${groups.length > 1 ? 'Все_трансферы' : groups[0]?.[0]?.transferNumber ? `№${groups[0][0].transferNumber}` : 'Без_трансфера'}`
+      .replace(/[\\/:*?"<>|]+/g, '_')
+      .replace(/\s+/g, '_');
 
     const { buildDirectoryRouteWorkbook } = await import('./directoryRouteWorkbook');
-    const workbook = buildDirectoryRouteWorkbook(routeRows, {
-      school: schoolTitle,
-      transfer: transferTitle,
-      driver: driver?.fullName || '—',
-      contacts: driverContacts,
-      vehicle,
-    });
+    const workbook = buildDirectoryRouteWorkbook(groups.map(groupRows => {
+      const sampleRow = groupRows[0];
+      const transferMeta = sampleRow?.transferNumber
+        ? dashboardTransfers.find(item => (
+            item.transferNumber === sampleRow.transferNumber
+            && (sampleRow.branchId
+              ? item.branchId === sampleRow.branchId
+              : item.branchCode === sampleRow.branchFilter || item.branchShort === sampleRow.branchShort)
+          ))
+        : undefined;
+      const driverIds = unique(groupRows.map(row => row.driverId));
+      const driverId = driverIds.length === 1 ? driverIds[0] : transferMeta?.driverId;
+      const driver = driverRows.find(item => item.driverId === driverId);
+      const groupSchool = unique(groupRows.map(row => row.branchShort || row.branchName)).join(', ') || '—';
+      const vehicle = [driver?.vehicleLabel || groupRows.find(row => row.vehicleLabel)?.vehicleLabel, driver?.plateNumber]
+        .filter(Boolean)
+        .join(' / ') || '—';
+
+      return {
+        rows: groupRows,
+        meta: {
+          school: groupSchool,
+          transfer: sampleRow?.transferNumber ? `№${sampleRow.transferNumber}` : 'Без трансфера',
+          driver: driver?.fullName || '—',
+          contacts: [driver?.phone, driver?.secondPhone].filter(Boolean).join(' / ') || '—',
+          vehicle,
+        },
+      };
+    }));
     const buffer = await workbook.xlsx.writeBuffer();
     downloadXlsxBuffer(`Маршрутный_лист_${safeName || 'manager'}.xlsx`, buffer as ArrayBuffer);
   };
