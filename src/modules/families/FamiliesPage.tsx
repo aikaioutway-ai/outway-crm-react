@@ -2772,6 +2772,38 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     downloadXlsxBuffer(`Маршрутный_лист_${safeName || 'logistics'}.xlsx`, buffer as ArrayBuffer);
   };
 
+  const exportDirectoryRouteSheet = async (exportRows: ChildRow[]) => {
+    const routeRows = exportRows.filter(row => row.status !== 'rejected');
+    if (!routeRows.length) {
+      window.alert('Нет данных для маршрутного листа');
+      return;
+    }
+
+    const unique = (values: Array<string | null | undefined>) => Array.from(new Set(values.filter(Boolean).map(String)));
+    const schools = unique(routeRows.map(row => row.branchShort || row.branchName));
+    const transfers = unique(routeRows.map(row => row.transferNumber)).sort((a, b) => Number(a) - Number(b));
+    const driverIds = unique(routeRows.map(row => row.driverId));
+    const driver = driverRows.find(item => item.driverId === (driverIds.length === 1 ? driverIds[0] : activeDirectoryTransfer?.driverId));
+    const schoolTitle = schools.join(', ') || '—';
+    const transferTitle = transfers.length === 1 ? `№${transfers[0]}` : transfers.length ? transfers.map(item => `№${item}`).join(', ') : 'Без трансфера';
+    const driverContacts = [driver?.phone, driver?.secondPhone].filter(Boolean).join(' / ') || '—';
+    const vehicle = [driver?.vehicleLabel || routeRows.find(row => row.vehicleLabel)?.vehicleLabel, driver?.plateNumber]
+      .filter(Boolean)
+      .join(' / ') || '—';
+    const safeName = `${schoolTitle}_${transferTitle}`.replace(/[\\/:*?"<>|]+/g, '_').replace(/\s+/g, '_');
+
+    const { buildDirectoryRouteWorkbook } = await import('./directoryRouteWorkbook');
+    const workbook = buildDirectoryRouteWorkbook(routeRows, {
+      school: schoolTitle,
+      transfer: transferTitle,
+      driver: driver?.fullName || '—',
+      contacts: driverContacts,
+      vehicle,
+    });
+    const buffer = await workbook.xlsx.writeBuffer();
+    downloadXlsxBuffer(`Маршрутный_лист_${safeName || 'manager'}.xlsx`, buffer as ArrayBuffer);
+  };
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: customTableContent ? 'hidden' : 'visible', background: 'var(--active-bg)', borderRadius: '0 0 22px 22px', display: 'flex', padding: '0 0 10px 0' }}>
 
@@ -3169,7 +3201,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
               onRowDelete={canDeleteFamilies ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
               onCellSave={handleCellSave}
-              onExport={mode === 'logistics' ? exportLogisticsRouteSheet : undefined}
+              onExport={mode === 'logistics'
+                ? exportLogisticsRouteSheet
+                : isDirectoryMode
+                  ? exportDirectoryRouteSheet
+                  : undefined}
               hideToolbar={tableBarsCollapsed}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
