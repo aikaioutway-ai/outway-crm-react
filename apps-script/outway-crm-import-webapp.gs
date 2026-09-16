@@ -80,6 +80,7 @@ const SCHOOL_CODE_TO_BRANCH = {
 
 const BRANCH_NAME_TO_CODE = {
   'Light Academy': 'LA',
+  'Light Academy Primary': 'LA_P',
   'Билим Бишкек Kg': 'BKG',
   'Билим Бишкек KG': 'BKG',
   'Билим Бишкек kg': 'BKG',
@@ -117,6 +118,7 @@ const BRANCH_NAME_TO_CODE = {
 
 const BRANCH_CODE_TO_SCHOOL_CODE = {
   LA: 'LA',
+  LA_P: 'LA',
   BKG: 'BKG',
   BJ: 'BKG',
   AES: 'AES',
