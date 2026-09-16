@@ -134,6 +134,7 @@ outway-crm-react/src/
 | Код в БД | Название | access_key (форма) |
 |----------|----------|-------------------|
 | LIGHT    | Light Academy | 1010 |
+| LIGHT    | Light Academy Primary | 1019 |
 | BILIM    | Bilim KG | 1005 |
 | AES      | American-European School | 1004 |
 | KAS      | Kyrgyz-American School | 1004 |

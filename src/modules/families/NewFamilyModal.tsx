@@ -6,10 +6,11 @@ const SCHOOL_LINKS: { name: string; code: string; url: string; logo: string }[] 
   { name: 'Эрудит-ISIT',                code: 'ERUDIT',  logo: '/school-logos/ERU.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1002' },
   { name: 'Тенсай',                     code: 'TENSAY',  logo: '/school-logos/TIS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1003' },
   { name: 'American-European School',   code: 'AES',     logo: '/school-logos/AES.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
-  { name: 'Kyrgyz-American School',     code: 'KAS',     logo: '/school-logos/KAS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1004' },
+  { name: 'Kyrgyz-American School',     code: 'KAS',     logo: '/school-logos/KAS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1021' },
   { name: 'Билим Бишкек KG',            code: 'BILIM',   logo: '/school-logos/BKG.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1005' },
   { name: 'Индиго Kids',                code: 'INDIGO',  logo: '/school-logos/ING.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1006' },
   { name: 'Nova International School',  code: 'NOVA',    logo: '/school-logos/NOVA.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1007' },
+  { name: 'Билим Жолу',                 code: 'BJ',      logo: '/school-logos/BJ.png',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1012' },
   { name: 'Эпсилон',                    code: 'EPSILON', logo: '/school-logos/EPS.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1008' },
   { name: 'Гениум Чуйкова',             code: 'GENIUS',  logo: '/school-logos/GEN.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1009' },
   { name: 'Light Academy',              code: 'LIGHT',   logo: '/school-logos/LA.png',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
@@ -19,6 +20,7 @@ const SCHOOL_LINKS: { name: string; code: string; url: string; logo: string }[] 
   { name: 'Tesla Academy',              code: 'TSL',     logo: '/school-logos/TSL.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1016' },
   { name: 'Ellipse International School', code: 'ELLIPSE', logo: '/school-logos/ELS.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1017' },
   { name: 'Международная школа Сан Арип', code: 'SANARIP', logo: '/school-logos/SNP.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1018' },
+  { name: 'Илим Кадам',                 code: 'ILIM_KADAM', logo: '/school-logos/Ilim_k.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1020' },
 ];
 
 interface Props { onClose: () => void; }
