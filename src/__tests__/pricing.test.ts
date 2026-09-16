@@ -299,6 +299,21 @@ describe('repriceChild', () => {
     expect(repriced.teacherPrice).toBe(false);
   });
 
+  test('скидку за второго ребёнка можно снять вручную', () => {
+    const child = {
+      id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
+      schoolCode: 'AES', zone: 'A', vehicleType: 'microbus', basePrice: 6000,
+      siblingDiscountPercent: 5, manualDiscountPercent: 0, manualDiscountAmount: 0, finalPrice: 5700,
+    } as Child;
+    const repriced = applyChildPricingPatch(child, {
+      siblingDiscountPercent: 0,
+      manualDiscountPercent: 0,
+    });
+    expect(repriced.siblingDiscountPercent).toBe(0);
+    expect(repriced.manualDiscountPercent).toBe(0);
+    expect(repriced.finalPrice).toBe(6000);
+  });
+
   test('общое сохранение передаёт только изменённые поля ребёнка', () => {
     const original = {
       id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,

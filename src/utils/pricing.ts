@@ -147,6 +147,7 @@ export function isTeacherPriced(input: StoredChildPrice): boolean {
 /** Applies an edit to a child and recalculates the displayed price immediately. */
 export function applyChildPricingPatch(child: Child, patch: Partial<Child>): Child {
   const next: Child = { ...child, ...patch };
+  const siblingPercentChanged = 'siblingDiscountPercent' in patch;
   const manualPercentChanged = 'manualDiscountPercent' in patch;
   const manualAmountChanged = 'manualDiscountAmount' in patch;
   const teacherWasActive = Boolean(child.teacherPrice ?? isTeacherPriced(child));
@@ -172,6 +173,7 @@ export function applyChildPricingPatch(child: Child, patch: Partial<Child>): Chi
     || 'zone' in patch
     || 'vehicleType' in patch
     || 'basePrice' in patch
+    || siblingPercentChanged
     || manualPercentChanged
     || manualAmountChanged;
   if (!shouldReprice) return { ...next, teacherPrice };

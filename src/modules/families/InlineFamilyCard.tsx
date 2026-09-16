@@ -469,7 +469,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     try {
       const nextChild = applyChildPricingPatch(child, patch);
       const dbPatch: Record<string, unknown> = {};
-      const shouldReprice = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch || 'basePrice' in patch || 'manualDiscountPercent' in patch || 'manualDiscountAmount' in patch || 'teacherPrice' in patch;
+      const shouldReprice = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch || 'basePrice' in patch || 'siblingDiscountPercent' in patch || 'manualDiscountPercent' in patch || 'manualDiscountAmount' in patch || 'teacherPrice' in patch;
 
       if ('childName' in patch) dbPatch.child_name = nextChild.childName;
       if ('class' in patch) dbPatch.class_name = nextChild.class;
@@ -485,6 +485,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
       if (shouldReprice) {
         dbPatch.base_price = nextChild.basePrice;
+        dbPatch.sibling_discount_percent = nextChild.siblingDiscountPercent;
         dbPatch.manual_discount_percent = nextChild.manualDiscountPercent;
         dbPatch.manual_discount_amount = nextChild.manualDiscountAmount;
         dbPatch.final_price = nextChild.finalPrice;
@@ -1493,7 +1494,12 @@ function ChildCard({
               },
               {
                 label: 'Скидка %',
-                content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => onSaveChild(child, { manualDiscountPercent: Number(value || 0) })} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
+                content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => {
+                  const discountPercent = Number(value || 0);
+                  return onSaveChild(child, discountPercent === 0
+                    ? { manualDiscountPercent: 0, siblingDiscountPercent: 0 }
+                    : { manualDiscountPercent: discountPercent });
+                }} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
               },
               {
                 label: 'Скидка сом',
