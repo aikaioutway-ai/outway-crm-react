@@ -66,7 +66,7 @@ describe('AddressChangeModal', () => {
     );
 
     fireEvent.change(screen.getByPlaceholderText(/Токомбаева/i), { target: { value: 'Манаса, 10' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Найти' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Найти адрес' }));
     const candidate = await screen.findByRole('button', { name: /Кыргызстан, Бишкек, улица Манаса, 10/i });
     fireEvent.click(candidate);
 

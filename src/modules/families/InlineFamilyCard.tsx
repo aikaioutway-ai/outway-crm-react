@@ -15,7 +15,7 @@ import TabFinance from './TabFinance';
 import TabHistory from './TabHistory';
 import NotionSelect from '../../core/selects/NotionSelect';
 import { createCustomFamilyDocument, createDefaultFamilyDocuments, FamilyDocument, fetchFamilyDocuments, saveFamilyDocuments } from '../../services/familyDocumentService';
-import { GeocodingCandidate, geocodeAddress, getDrivingDistanceKm, reverseGeocode } from '../../services/addressGeocoding';
+import { GeocodingCandidate, geocodeAddress, getDrivingRoute, reverseGeocode } from '../../services/addressGeocoding';
 import { loadYandexMaps } from '../../utils/yandexMaps';
 
 interface AuditEntry {
@@ -718,6 +718,11 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       {addressModalOpen && (
         <AddressChangeModal
           initialAddress={draftFamily.fullAddress}
+          initialPoint={draftFamily.latitude != null && draftFamily.longitude != null ? {
+            address: draftFamily.fullAddress,
+            latitude: Number(draftFamily.latitude),
+            longitude: Number(draftFamily.longitude),
+          } : null}
           children={draftChildren}
           branches={branches}
           onClose={() => setAddressModalOpen(false)}
@@ -736,87 +741,203 @@ export interface AddressRoutePlan {
   oldZone: Zone;
   oldPrice: number;
   distanceKm?: number;
+  durationMinutes?: number;
+  routeCoordinates?: number[][];
   zone?: Zone;
   price?: number;
   error?: string;
 }
 
-export function AddressChangeModal({ initialAddress, children, branches, onClose, onApply }: {
+const ADDRESS_TYPE_OPTIONS = ['Микрорайон', 'Жилмассив', 'Улица', 'Проспект', 'Переулок', 'ЖК', 'Село', 'Другое'];
+const BISHKEK_CENTER = [42.8746, 74.5698];
+
+interface AddressFields {
+  type: string;
+  name: string;
+  street: string;
+  house: string;
+}
+
+function buildAddressQuery(fields: AddressFields): string {
+  return [fields.house, fields.street, fields.name, 'Бишкек']
+    .map(value => value.trim())
+    .filter(Boolean)
+    .join(', ');
+}
+
+export function AddressChangeModal({ initialAddress, initialPoint, children, branches, onClose, onApply }: {
   initialAddress: string;
+  initialPoint?: GeocodingCandidate | null;
   children: Child[];
   branches: V2BranchOption[];
   onClose: () => void;
   onApply: (point: GeocodingCandidate, plans: AddressRoutePlan[]) => void;
 }) {
   const [query, setQuery] = useState(initialAddress);
+  const [addressFields, setAddressFields] = useState<AddressFields>({ type: 'Микрорайон', name: '', street: '', house: '' });
   const [candidates, setCandidates] = useState<GeocodingCandidate[]>([]);
-  const [point, setPoint] = useState<GeocodingCandidate | null>(null);
+  const [point, setPoint] = useState<GeocodingCandidate | null>(initialPoint ?? null);
   const [plans, setPlans] = useState<AddressRoutePlan[]>([]);
   const [busy, setBusy] = useState<'search' | 'route' | null>(null);
   const [error, setError] = useState('');
+  const [status, setStatus] = useState(initialPoint ? 'Текущий адрес показан на карте. Укажите новый адрес.' : 'Укажите новый адрес и выберите найденный вариант.');
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
+  const ymapsRef = useRef<any>(null);
   const placemarkRef = useRef<any>(null);
+  const routeObjectsRef = useRef<any[]>([]);
   const routeRequestRef = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    return () => {
-      routeRequestRef.current?.abort();
-      mapRef.current?.destroy?.();
-      mapRef.current = null;
-      placemarkRef.current = null;
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!point || !mapContainerRef.current) return;
     let cancelled = false;
     loadYandexMaps().then(ymaps => {
       if (cancelled || !mapContainerRef.current) return;
-      const coordinates = [point.latitude, point.longitude];
-      if (mapRef.current && placemarkRef.current) {
-        mapRef.current.setCenter(coordinates, 16);
-        placemarkRef.current.geometry.setCoordinates(coordinates);
-        return;
-      }
+      ymapsRef.current = ymaps;
+      const center = initialPoint ? [initialPoint.latitude, initialPoint.longitude] : BISHKEK_CENTER;
       const map = new ymaps.Map(mapContainerRef.current, {
-        center: coordinates,
-        zoom: 16,
+        center,
+        zoom: initialPoint ? 15 : 12,
         controls: ['zoomControl'],
       });
-      const placemark = new ymaps.Placemark(coordinates, {}, {
-        preset: 'islands#darkOrangeDotIcon',
-        draggable: true,
-      });
-      placemark.events.add('dragend', async () => {
-        const nextCoordinates = placemark.geometry.getCoordinates();
-        const latitude = Number(nextCoordinates?.[0]);
-        const longitude = Number(nextCoordinates?.[1]);
-        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
-        setBusy('route');
-        setError('');
+      mapRef.current = map;
+
+      const childBranchIds = new Set(children.map(child => child.branchId).filter(Boolean));
+      const childBranchCodes = new Set(children.map(child => child.branchCode).filter(Boolean));
+      branches
+        .filter(branch => childBranchIds.has(branch.id) || childBranchCodes.has(branch.code))
+        .filter(branch => branch.latitude != null && branch.longitude != null)
+        .forEach(branch => {
+          const schoolMarker = new ymaps.Placemark(
+            [Number(branch.latitude), Number(branch.longitude)],
+            { hintContent: branch.shortName || branch.name || 'Школа' },
+            { preset: 'islands#darkOrangeEducationIcon' },
+          );
+          map.geoObjects.add(schoolMarker);
+        });
+
+      map.events?.add?.('click', async (event: any) => {
+        const coordinates = event.get?.('coords');
+        if (!Array.isArray(coordinates)) return;
         try {
-          const nextPoint = await reverseGeocode(latitude, longitude);
-          setPoint(nextPoint);
-          setQuery(nextPoint.address);
-          setCandidates([]);
-          await calculateRoutes(nextPoint);
+          setBusy('route');
+          setError('');
+          setStatus('Проверяем выбранную точку…');
+          const nextPoint = await reverseGeocode(Number(coordinates[0]), Number(coordinates[1]));
+          await choosePoint(nextPoint);
         } catch (nextError) {
           setError(nextError instanceof Error ? nextError.message : 'Не удалось проверить точку');
-        } finally {
+          setBusy(null);
+        }
+      });
+      if (initialPoint) showPointOnMap(initialPoint, false);
+    }).catch(nextError => {
+      if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Не удалось загрузить карту');
+    });
+
+    return () => {
+      cancelled = true;
+      routeRequestRef.current?.abort();
+      mapRef.current?.destroy?.();
+      mapRef.current = null;
+      ymapsRef.current = null;
+      placemarkRef.current = null;
+      routeObjectsRef.current = [];
+    };
+  // The map lives for the lifetime of this modal; prop changes do not recreate it.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function updateAddressFields(patch: Partial<AddressFields>) {
+    setAddressFields(current => {
+      const next = { ...current, ...patch };
+      setQuery(buildAddressQuery(next));
+      return next;
+    });
+    setCandidates([]);
+    setPlans([]);
+    setError('');
+    setStatus('Нажмите «Найти адрес» и выберите точный вариант.');
+  }
+
+  function showPointOnMap(nextPoint: GeocodingCandidate, center = true) {
+    const ymaps = ymapsRef.current;
+    const map = mapRef.current;
+    if (!ymaps || !map) return;
+    const coordinates = [nextPoint.latitude, nextPoint.longitude];
+    if (!placemarkRef.current) {
+      const placemark = new ymaps.Placemark(coordinates, { hintContent: nextPoint.address }, {
+        preset: 'islands#blueHomeIcon',
+        draggable: true,
+      });
+      placemark.events?.add?.('dragend', async () => {
+        const moved = placemark.geometry.getCoordinates();
+        const latitude = Number(moved?.[0]);
+        const longitude = Number(moved?.[1]);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        try {
+          setBusy('route');
+          setError('');
+          setStatus('Проверяем новую точку…');
+          const draggedPoint = await reverseGeocode(latitude, longitude);
+          await choosePoint(draggedPoint);
+        } catch (nextError) {
+          setError(nextError instanceof Error ? nextError.message : 'Не удалось проверить точку');
           setBusy(null);
         }
       });
       map.geoObjects.add(placemark);
-      mapRef.current = map;
       placemarkRef.current = placemark;
-    }).catch(nextError => {
-      if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Не удалось загрузить карту');
+    } else {
+      placemarkRef.current.geometry.setCoordinates(coordinates);
+      placemarkRef.current.properties?.set?.('hintContent', nextPoint.address);
+    }
+    if (center) map.setCenter(coordinates, 15);
+  }
+
+  function showRoutesOnMap(nextPoint: GeocodingCandidate, nextPlans: AddressRoutePlan[]) {
+    const ymaps = ymapsRef.current;
+    const map = mapRef.current;
+    if (!ymaps || !map) return;
+    routeObjectsRef.current.forEach(route => map.geoObjects.remove(route));
+    routeObjectsRef.current = [];
+    if (ymaps.Polyline) {
+      nextPlans.forEach((plan, index) => {
+        if (!plan.routeCoordinates?.length) return;
+        const routeLine = new ymaps.Polyline(plan.routeCoordinates, {}, {
+          strokeColor: index === 0 ? '#2D8B57' : '#31A4A5',
+          strokeWidth: 6,
+          strokeOpacity: .9,
+        });
+        map.geoObjects.add(routeLine);
+        routeObjectsRef.current.push(routeLine);
+      });
+      const bounds = map.geoObjects.getBounds?.();
+      if (bounds) map.setBounds?.(bounds, { checkZoomRange: true, zoomMargin: 42 });
+      return;
+    }
+    if (!ymaps.multiRouter?.MultiRoute) return;
+    const used = new Set<string>();
+    children.forEach((child, index) => {
+      const branch = branches.find(item => item.id === child.branchId)
+        ?? branches.find(item => item.code === child.branchCode);
+      if (!branch || branch.latitude == null || branch.longitude == null || used.has(branch.id)) return;
+      used.add(branch.id);
+      const route = new ymaps.multiRouter.MultiRoute({
+        referencePoints: [
+          [nextPoint.latitude, nextPoint.longitude],
+          [Number(branch.latitude), Number(branch.longitude)],
+        ],
+        params: { routingMode: 'auto' },
+      }, {
+        boundsAutoApply: index === 0,
+        routeActiveStrokeColor: index === 0 ? '#2D8B57' : '#31A4A5',
+        routeActiveStrokeWidth: 6,
+        wayPointVisible: false,
+      });
+      map.geoObjects.add(route);
+      routeObjectsRef.current.push(route);
     });
-    return () => { cancelled = true; };
-  // Map instance is intentionally retained while only its point changes.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [point?.latitude, point?.longitude]);
+  }
 
   async function calculateRoutes(nextPoint: GeocodingCandidate) {
     routeRequestRef.current?.abort();
@@ -838,13 +959,14 @@ export function AddressChangeModal({ initialAddress, children, branches, onClose
         return { ...base, error: 'У филиала нет координат' };
       }
       try {
-        const distanceKm = await getDrivingDistanceKm(nextPoint, {
+        const route = await getDrivingRoute(nextPoint, {
           latitude: Number(branch.latitude),
           longitude: Number(branch.longitude),
         }, controller.signal);
+        const distanceKm = route.distanceKm;
         const zone = getZoneByDistance(distanceKm);
         const repriced = applyChildPricingPatch(child, { zone });
-        return { ...base, distanceKm, zone, price: Number(repriced.finalPrice || 0) };
+        return { ...base, distanceKm, durationMinutes: route.durationMinutes, routeCoordinates: route.coordinates, zone, price: Number(repriced.finalPrice || 0) };
       } catch (nextError) {
         if (controller.signal.aborted) return { ...base, error: 'Расчёт отменён' };
         return { ...base, error: nextError instanceof Error ? nextError.message : 'Маршрут не найден' };
@@ -852,23 +974,31 @@ export function AddressChangeModal({ initialAddress, children, branches, onClose
     }));
     if (!controller.signal.aborted) {
       setPlans(nextPlans);
+      showRoutesOnMap(nextPoint, nextPlans);
+      setStatus(nextPlans.every(plan => !plan.error) ? 'Адрес выбран, маршрут построен.' : 'Адрес выбран, но часть маршрутов не рассчитана.');
       setBusy(null);
     }
   }
 
   async function searchAddress(event: React.FormEvent) {
     event.preventDefault();
-    if (query.trim().length < 4) {
-      setError('Введите улицу и номер дома');
+    if (!query.trim() || query.trim().toLowerCase() === 'бишкек') {
+      setError('Заполните улицу или название адреса и дом.');
       return;
     }
     setBusy('search');
     setError('');
+    setStatus(`Ищем: ${query}`);
     setPlans([]);
     try {
       const found = await geocodeAddress(query);
       setCandidates(found);
-      if (found.length === 0) setError('Адрес не найден. Уточните улицу и дом.');
+      if (found.length === 0) {
+        setError('Адрес не найден. Уточните улицу и дом.');
+        setStatus('');
+      } else {
+        setStatus('Выберите найденный вариант.');
+      }
     } catch (nextError) {
       setError(nextError instanceof Error ? nextError.message : 'Ошибка поиска адреса');
     } finally {
@@ -876,17 +1006,23 @@ export function AddressChangeModal({ initialAddress, children, branches, onClose
     }
   }
 
-  async function chooseCandidate(candidate: GeocodingCandidate) {
+  async function choosePoint(candidate: GeocodingCandidate) {
     setPoint(candidate);
     setQuery(candidate.address);
     setCandidates([]);
     setError('');
+    setStatus('Получаем маршрут и новую стоимость…');
+    showPointOnMap(candidate);
     try {
       await calculateRoutes(candidate);
     } catch (nextError) {
       setBusy(null);
       setError(nextError instanceof Error ? nextError.message : 'Ошибка расчёта маршрута');
     }
+  }
+
+  async function chooseCandidate(candidate: GeocodingCandidate) {
+    await choosePoint(candidate);
   }
 
   const canApply = Boolean(point)
@@ -900,80 +1036,94 @@ export function AddressChangeModal({ initialAddress, children, branches, onClose
         <header style={addressModalHeaderStyle}>
           <div>
             <h2 id="address-change-title" style={{ margin: 0, fontSize: 18, color: '#111827' }}>Смена адреса</h2>
-            <p style={{ margin: '5px 0 0', fontSize: 12, color: '#667085' }}>Найдите дом, проверьте точку и новую стоимость.</p>
+            <p style={{ margin: '5px 0 0', fontSize: 12, color: '#667085' }}>Как в форме заявки: укажите адрес, выберите точку и проверьте маршрут.</p>
           </div>
           <button type="button" onClick={onClose} disabled={Boolean(busy)} aria-label="Закрыть" style={closeButtonStyle}><X size={17} /></button>
         </header>
 
-        <div style={{ padding: 18, display: 'grid', gap: 14, overflowY: 'auto' }}>
-          <form onSubmit={searchAddress} style={{ display: 'flex', gap: 8 }}>
-            <input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Например: ул. Аалы Токомбаева, 21/2" style={addressSearchInputStyle} />
-            <button type="submit" disabled={Boolean(busy)} style={addressPrimaryButtonStyle}>
-              <Search size={15} /> {busy === 'search' ? 'Поиск…' : 'Найти'}
-            </button>
-          </form>
+        <div style={addressModalBodyStyle}>
+          <div style={addressModalFormPaneStyle}>
+            <form onSubmit={searchAddress} style={{ display: 'grid', gap: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F' }}>Адрес проживания</div>
+              <div style={addressFieldGridStyle}>
+                <label style={addressFieldLabelStyle}>Тип адреса
+                  <select value={addressFields.type} onChange={event => updateAddressFields({ type: event.target.value })} style={addressSearchInputStyle}>
+                    {ADDRESS_TYPE_OPTIONS.map(option => <option key={option}>{option}</option>)}
+                  </select>
+                </label>
+                <label style={addressFieldLabelStyle}>Название
+                  <input value={addressFields.name} onChange={event => updateAddressFields({ name: event.target.value })} placeholder="Например: 7 микрорайон" style={addressSearchInputStyle} />
+                </label>
+                <label style={addressFieldLabelStyle}>Улица
+                  <input autoFocus value={addressFields.street} onChange={event => updateAddressFields({ street: event.target.value })} placeholder="Например: Аалы Токомбаева" style={addressSearchInputStyle} />
+                </label>
+                <label style={addressFieldLabelStyle}>Дом
+                  <input value={addressFields.house} onChange={event => updateAddressFields({ house: event.target.value })} placeholder="21/2" style={addressSearchInputStyle} />
+                </label>
+              </div>
+              <label style={addressFieldLabelStyle}>Строка поиска
+                <div style={addressQueryPreviewStyle}>{query || 'Бишкек'}</div>
+              </label>
+              <button type="submit" disabled={Boolean(busy)} style={{ ...addressPrimaryButtonStyle, width: '100%' }}>
+                <Search size={15} /> {busy === 'search' ? 'Ищем адрес…' : 'Найти адрес'}
+              </button>
+            </form>
 
-          {candidates.length > 0 && (
-            <div style={addressCandidatesStyle}>
-              <div style={{ padding: '9px 12px 5px', fontSize: 10, fontWeight: 850, color: '#7B8491', textTransform: 'uppercase' }}>Выберите точный адрес</div>
-              {candidates.map((candidate, index) => (
-                <button key={`${candidate.latitude}-${candidate.longitude}-${index}`} type="button" onClick={() => chooseCandidate(candidate)} style={addressCandidateButtonStyle}>
-                  <MapPin size={15} color="#31A4A5" />
-                  <span>{candidate.address}</span>
-                </button>
-              ))}
-            </div>
-          )}
+            {status && <div style={addressStatusStyle}>{busy === 'route' ? 'Считаем маршрут…' : status}</div>}
+            {error && <div style={addressErrorStyle}><AlertTriangle size={15} /> {error}</div>}
 
-          {error && <div style={addressErrorStyle}><AlertTriangle size={15} /> {error}</div>}
+            {candidates.length > 0 && (
+              <div style={addressCandidatesStyle}>
+                <div style={{ padding: '9px 12px 5px', fontSize: 10, fontWeight: 850, color: '#7B8491', textTransform: 'uppercase' }}>Выберите точный адрес</div>
+                {candidates.map((candidate, index) => (
+                  <button key={`${candidate.latitude}-${candidate.longitude}-${index}`} type="button" onClick={() => chooseCandidate(candidate)} style={addressCandidateButtonStyle}>
+                    <MapPin size={15} color="#31A4A5" />
+                    <span>{candidate.address}</span>
+                  </button>
+                ))}
+              </div>
+            )}
 
-          {point && (
-            <>
-              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(280px, .75fr)', gap: 14 }}>
-                <div ref={mapContainerRef} style={addressMapStyle} />
-                <div style={addressPointSummaryStyle}>
-                  <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                    <MapPin size={18} color="#31A4A5" style={{ flexShrink: 0, marginTop: 2 }} />
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 850, color: '#1F2937', lineHeight: 1.45 }}>{point.address}</div>
-                      <div style={{ marginTop: 6, fontSize: 11, color: '#667085' }}>{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</div>
+            {point && (
+              <div style={addressPointSummaryStyle}>
+                <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                  <MapPin size={18} color="#31A4A5" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 850, color: '#1F2937', lineHeight: 1.45 }}>{point.address}</div>
+                    <div style={{ marginTop: 5, fontSize: 11, color: '#667085' }}>{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</div>
+                  </div>
+                </div>
+                <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid #E5ECEF', fontSize: 10, lineHeight: 1.45, color: '#667085' }}>
+                  Точку можно выбрать кликом по карте или перетащить маркер.
+                </div>
+              </div>
+            )}
+
+            {plans.length > 0 && (
+              <div style={{ display: 'grid', gap: 8 }}>
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#17222F' }}>Расчёт стоимости</div>
+                {plans.map(plan => (
+                  <article key={plan.childId} style={addressPlanCardStyle}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
+                      <b>{plan.childName}</b><span style={{ color: '#667085' }}>{plan.branchName}</span>
                     </div>
-                  </div>
-                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5ECEF', fontSize: 11, lineHeight: 1.5, color: '#667085' }}>
-                    Если точка неточная, перетащите маркер к нужному дому. Маршруты пересчитаются автоматически.
-                  </div>
-                </div>
+                    {plan.error ? <div style={{ marginTop: 8, color: '#B42318' }}>{plan.error}</div> : (
+                      <div style={addressPlanMetricsStyle}>
+                        <span>Расстояние<b>{plan.oldDistanceKm != null ? `${plan.oldDistanceKm} → ` : ''}{plan.distanceKm} км</b></span>
+                        <span>В пути<b>{plan.durationMinutes ? `${plan.durationMinutes} мин` : '—'}</b></span>
+                        <span>Зона<b>{plan.oldZone} → {plan.zone}</b></span>
+                        <span>Стоимость<b style={{ color: plan.price !== plan.oldPrice ? '#B45309' : '#237F81' }}>{money(plan.oldPrice)} → {money(plan.price ?? 0)}</b></span>
+                      </div>
+                    )}
+                  </article>
+                ))}
               </div>
-
-              <div style={{ border: '1px solid #E3EAED', borderRadius: 13, overflow: 'hidden' }}>
-                <div style={{ padding: '10px 12px', background: '#F7FAFA', fontSize: 11, fontWeight: 900, color: '#344054' }}>
-                  {busy === 'route' ? 'Считаем маршруты…' : 'Предварительный пересчёт'}
-                </div>
-                <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
-                    <thead><tr style={{ color: '#7B8491', textAlign: 'left' }}>
-                      <th style={addressTableCellStyle}>Ребёнок</th><th style={addressTableCellStyle}>Школа</th><th style={addressTableCellStyle}>Расстояние</th><th style={addressTableCellStyle}>Зона</th><th style={addressTableCellStyle}>Цена</th>
-                    </tr></thead>
-                    <tbody>{plans.map(plan => (
-                      <tr key={plan.childId} style={{ borderTop: '1px solid #EEF2F3' }}>
-                        <td style={addressTableCellStyle}><b>{plan.childName}</b></td>
-                        <td style={addressTableCellStyle}>{plan.branchName}</td>
-                        {plan.error ? (
-                          <td colSpan={3} style={{ ...addressTableCellStyle, color: '#C62828' }}>{plan.error}</td>
-                        ) : (
-                          <>
-                            <td style={addressTableCellStyle}>{plan.oldDistanceKm != null ? `${plan.oldDistanceKm} → ` : ''}<b>{plan.distanceKm} км</b></td>
-                            <td style={addressTableCellStyle}>{plan.oldZone} → <b>{plan.zone}</b></td>
-                            <td style={addressTableCellStyle}>{money(plan.oldPrice)} → <b style={{ color: plan.price !== plan.oldPrice ? '#B45309' : '#237F81' }}>{money(plan.price ?? 0)}</b></td>
-                          </>
-                        )}
-                      </tr>
-                    ))}</tbody>
-                  </table>
-                </div>
-              </div>
-            </>
-          )}
+            )}
+          </div>
+          <div style={{ position: 'relative', minWidth: 0, minHeight: 360 }}>
+            <div ref={mapContainerRef} style={addressMapStyle} />
+            <div style={addressMapHintStyle}>Кликните по карте или перетащите маркер</div>
+          </div>
         </div>
 
         <footer style={addressModalFooterStyle}>
@@ -1723,7 +1873,8 @@ const addressModalOverlayStyle: React.CSSProperties = {
 };
 
 const addressModalCardStyle: React.CSSProperties = {
-  width: 'min(920px, 100%)',
+  width: 'min(1160px, 100%)',
+  height: 'min(760px, calc(100vh - 48px))',
   maxHeight: 'calc(100vh - 48px)',
   display: 'grid',
   gridTemplateRows: 'auto minmax(0, 1fr) auto',
@@ -1744,6 +1895,7 @@ const addressModalHeaderStyle: React.CSSProperties = {
 
 const addressSearchInputStyle: React.CSSProperties = {
   flex: 1,
+  width: '100%',
   minWidth: 0,
   height: 40,
   border: '1px solid #CDD7DB',
@@ -1753,6 +1905,54 @@ const addressSearchInputStyle: React.CSSProperties = {
   color: '#111827',
   fontSize: 13,
   fontWeight: 650,
+};
+
+const addressModalBodyStyle: React.CSSProperties = {
+  minHeight: 0,
+  display: 'grid',
+  gridTemplateColumns: '420px minmax(0, 1fr)',
+  overflow: 'hidden',
+  background: '#F3F8F8',
+};
+
+const addressModalFormPaneStyle: React.CSSProperties = {
+  minWidth: 0,
+  overflowY: 'auto',
+  padding: 18,
+  display: 'grid',
+  alignContent: 'start',
+  gap: 12,
+  borderRight: '1px solid #DDE7E9',
+  background: '#F1F8F7',
+};
+
+const addressFieldGridStyle: React.CSSProperties = {
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 10,
+};
+
+const addressFieldLabelStyle: React.CSSProperties = {
+  minWidth: 0,
+  display: 'grid',
+  gap: 6,
+  color: '#475467',
+  fontSize: 10,
+  fontWeight: 850,
+};
+
+const addressQueryPreviewStyle: React.CSSProperties = {
+  minHeight: 40,
+  padding: '9px 12px',
+  display: 'flex',
+  alignItems: 'center',
+  border: '1px solid #DCE6E8',
+  borderRadius: 10,
+  background: '#fff',
+  color: '#1F2937',
+  fontSize: 12,
+  fontWeight: 750,
+  lineHeight: 1.35,
 };
 
 const addressPrimaryButtonStyle: React.CSSProperties = {
@@ -1816,20 +2016,62 @@ const addressErrorStyle: React.CSSProperties = {
   fontWeight: 750,
 };
 
+const addressStatusStyle: React.CSSProperties = {
+  minHeight: 34,
+  padding: '8px 11px',
+  border: '1px solid #CDE5E2',
+  borderRadius: 9,
+  background: '#F4FBFA',
+  color: '#237F81',
+  fontSize: 11,
+  fontWeight: 750,
+};
+
 const addressMapStyle: React.CSSProperties = {
-  height: 270,
+  width: '100%',
+  height: '100%',
+  minHeight: 360,
   overflow: 'hidden',
-  border: '1px solid #DCE5E8',
-  borderRadius: 13,
   background: '#EEF3F4',
 };
 
+const addressMapHintStyle: React.CSSProperties = {
+  position: 'absolute',
+  left: 14,
+  bottom: 14,
+  zIndex: 2,
+  padding: '8px 11px',
+  border: '1px solid rgba(255,255,255,.8)',
+  borderRadius: 10,
+  background: 'rgba(255,255,255,.92)',
+  boxShadow: '0 6px 18px rgba(15, 23, 42, .12)',
+  color: '#475467',
+  fontSize: 10,
+  fontWeight: 800,
+  pointerEvents: 'none',
+};
+
 const addressPointSummaryStyle: React.CSSProperties = {
-  minHeight: 140,
-  padding: 14,
+  padding: 12,
   border: '1px solid #DCE5E8',
   borderRadius: 13,
   background: '#F8FBFB',
+};
+
+const addressPlanCardStyle: React.CSSProperties = {
+  padding: 11,
+  border: '1px solid #DCE6E8',
+  borderRadius: 11,
+  background: '#fff',
+  color: '#344054',
+  fontSize: 11,
+};
+
+const addressPlanMetricsStyle: React.CSSProperties = {
+  marginTop: 9,
+  display: 'grid',
+  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+  gap: 8,
 };
 
 const addressTableCellStyle: React.CSSProperties = {

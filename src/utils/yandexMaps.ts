@@ -6,11 +6,12 @@ export function loadYandexMaps(): Promise<any> {
   if (loadPromise) return loadPromise;
 
   const apiKey = import.meta.env.VITE_YANDEX_MAPS_API_KEY;
-  if (!apiKey) return Promise.reject(new Error('VITE_YANDEX_MAPS_API_KEY не задан в .env'));
 
   loadPromise = new Promise((resolve, reject) => {
     const script = document.createElement('script');
-    script.src = `https://api-maps.yandex.ru/2.1/?apikey=${apiKey}&lang=ru_RU`;
+    const params = new URLSearchParams({ lang: 'ru_RU', load: 'package.full' });
+    if (apiKey) params.set('apikey', apiKey);
+    script.src = `https://api-maps.yandex.ru/2.1/?${params.toString()}`;
     script.async = true;
     script.onload = () => w.ymaps.ready(() => resolve(w.ymaps));
     script.onerror = () => {
