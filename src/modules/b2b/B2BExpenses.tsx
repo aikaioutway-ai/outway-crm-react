@@ -6,7 +6,6 @@ import {
   ChevronRight,
   CircleDollarSign,
   Gift,
-  LockKeyhole,
   Pencil,
   Percent,
   Plus,
@@ -16,7 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { B2B_PAYMENT_METHODS, B2BPaymentMethod, formatB2BPaymentMethod, requiresB2BPaymentOrder } from '../../services/b2bPaymentService';
-import { createB2BExpense, updateB2BExpense, type B2BExpenseRecord } from '../../services/b2bDataService';
+import { addB2BAudit, createB2BExpense, updateB2BExpense, type B2BExpenseRecord } from '../../services/b2bDataService';
 import { B2B_QUERY_KEYS, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { queryClient } from '../../services/queryClient';
@@ -89,10 +88,11 @@ const emptyExpenseForm = () => ({
 });
 
 interface B2BExpensesProps {
-  onOpenOrder?: (orderId: string) => void;
+  onOpenOrder?: (orderId: string, tab?: 'main' | 'payment' | 'driver' | 'pnl') => void;
+  userName?: string;
 }
 
-export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
+export default function B2BExpenses({ onOpenOrder, userName = 'CRM' }: B2BExpensesProps) {
   const [selectedYear, setSelectedYear] = useState(CURRENT_YEAR);
   const [periodKey, setPeriodKey] = useState(String(new Date().getMonth() + 1));
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
@@ -177,6 +177,8 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
       const payload = { ...form, amount, purpose: form.purpose.trim(), comment: form.comment.trim() };
       if (editingExpenseId) await updateB2BExpense(editingExpenseId, payload);
       else await createB2BExpense(payload);
+      const linkedOrder = orders.find(order => order.id === form.orderId);
+      await addB2BAudit({ entityId: linkedOrder?.id ?? editingExpenseId ?? 'b2b-expenses', entityType: 'b2b_expense', action: editingExpenseId ? 'expense_update' : 'expense_create', actorName: userName, newValue: payload });
       await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses });
       const expenseDate = new Date(`${form.expenseDate}T00:00:00`);
       setSelectedYear(expenseDate.getFullYear());
@@ -199,7 +201,10 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   };
 
   const openExpenseEdit = (row: B2BExpenseRecord) => {
-    if (isAutomaticExpense(row)) return;
+    if (isAutomaticExpense(row)) {
+      openOrder(row);
+      return;
+    }
     const orderId = orders.find(order => order.number === row.orderNumber)?.id ?? '';
     setEditingExpenseId(row.id);
     setForm({
@@ -221,7 +226,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
   const openOrder = (row: B2BExpenseRecord) => {
     if (!onOpenOrder || row.orderNumber === '—') return;
     const order = orders.find(item => item.number === row.orderNumber);
-    if (order) onOpenOrder(order.id);
+    if (order) onOpenOrder(order.id, row.source === 'driver_payment' ? 'driver' : row.source === 'tax_4pct' ? 'payment' : 'pnl');
   };
 
   return (
@@ -286,7 +291,7 @@ export default function B2BExpenses({ onOpenOrder }: B2BExpensesProps) {
           const meta = categoryMeta(normalizedCategory(row.category));
           const Icon = meta.icon;
           const canOpenOrder = Boolean(onOpenOrder && row.orderNumber !== '—' && orders.some(order => order.number === row.orderNumber));
-          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td>{row.paymentOrderNumber || '—'}</td><td className="number">{money(row.amount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions">{!isAutomaticExpense(row) ? <button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title="Редактировать расход"><Pencil size={14} /></button> : <span className="b2b-expense-auto" title="Автоматическая запись редактируется в исходной оплате"><LockKeyhole size={12} />Авто</span>}</td></tr>;
+          return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td>{row.paymentOrderNumber || '—'}</td><td className="number">{money(row.amount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions"><button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title={isAutomaticExpense(row) ? 'Открыть исходную запись в заказе' : 'Редактировать расход'}><Pencil size={14} /><span>{isAutomaticExpense(row) ? 'Источник' : 'Изменить'}</span></button></td></tr>;
         }) : <tr><td colSpan={9} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
       </div>
 

@@ -1,15 +1,16 @@
 import type { UserRole } from '../../types';
 import { b2bAccess } from './b2bAccess';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleDollarSign, ClipboardList, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, CalendarDays, Check, CircleDollarSign, ClipboardList, Clock3, CreditCard, Eye, FileText, MapPin, Pencil, Plus, Save, Search, Trash2, Truck, UserRound, X } from 'lucide-react';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { B2B_PAYMENT_METHODS, B2BPaymentMethod, B2BPaymentRecord, formatB2BPaymentMethod, requiresB2BPaymentOrder } from '../../services/b2bPaymentService';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
-import { B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, deleteB2BDriverPayout, saveB2BAssignment, updateB2BClientPayment, updateB2BDriverPayout, updateB2BOrder, updateB2BPaymentStatus } from '../../services/b2bDataService';
+import { addB2BAudit, B2BDriverPayoutRecord, B2BOrderRecord, B2BOrderStatus, createB2BClientPayment, createB2BDriverPayout, createB2BOrder, deleteB2BDriverPayout, saveB2BAssignment, updateB2BClientPayment, updateB2BDriverPayout, updateB2BOrder, updateB2BPaymentStatus } from '../../services/b2bDataService';
 import { queryClient } from '../../services/queryClient';
 import B2BOrderDocuments from './B2BOrderDocuments';
 import { calculateB2BOrderProfit } from './b2bProfitCalculations';
+import B2BAuditHistory from './B2BAuditHistory';
 
 export type OrderStatus = B2BOrderStatus;
 export type B2BOrder = B2BOrderRecord;
@@ -17,7 +18,7 @@ export type B2BDriverPayout = B2BDriverPayoutRecord;
 
 type SortKey = 'number' | 'client' | 'requestDate' | 'departureDate' | 'transport' | 'transportCount' | 'pricePerUnit' | 'total' | 'paid' | 'status' | 'driverName' | 'route' | 'remaining';
 type SortDirection = 'asc' | 'desc';
-type OrderCardTab = 'main' | 'payment' | 'driver' | 'pnl' | 'documents';
+export type B2BOrderCardTab = 'main' | 'payment' | 'driver' | 'pnl' | 'documents' | 'history';
 
 export const B2B_ORDER_STATUSES: { key: OrderStatus; label: string }[] = [
   { key: 'new', label: 'Новый' },
@@ -41,6 +42,7 @@ const B2B_EXPENSE_CATEGORY_LABELS: Record<string, string> = {
 
 const EMPTY_ORDER_FORM = {
   client: '', routeFrom: '', routeTo: '', requestDate: new Date().toISOString().slice(0, 10), departureDate: '',
+  departureTime: '',
   transport: 'Минивэн', transportCount: '1', pricePerUnit: '', paid: '', status: 'new' as OrderStatus, driver: '',
 };
 
@@ -58,21 +60,19 @@ function toDateInput(value: string): string {
   return match ? `${match[3]}-${match[2]}-${match[1]}` : '';
 }
 
-function toDateTimeInput(value: string): string {
-  if (/^\d{4}-\d{2}-\d{2}/.test(value)) return value.replace(', ', 'T').slice(0, 16);
-  const match = value.match(/^(\d{2})\.(\d{2})\.(\d{4}),?\s*(\d{2}):(\d{2})/);
-  return match ? `${match[3]}-${match[2]}-${match[1]}T${match[4]}:${match[5]}` : '';
-}
-
 interface B2BOrdersProps {
   userRole?: UserRole;
   sessionToken?: string;
   cardOnly?: boolean;
   openOrderId?: string | null;
+  openOrderTab?: B2BOrderCardTab;
   onCloseOrder?: () => void;
+  createOrderForClientId?: string | null;
+  onCreateOrderFormOpened?: () => void;
+  userName?: string;
 }
 
-export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole = 'admin', sessionToken, cardOnly = false }: B2BOrdersProps) {
+export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', onCloseOrder, userRole = 'admin', sessionToken, cardOnly = false, createOrderForClientId = null, onCreateOrderFormOpened, userName = 'CRM' }: B2BOrdersProps) {
   const access = b2bAccess(userRole);
   const { data: storedOrders } = useB2BOrders();
   const { data: storedPayouts } = useB2BDriverPayouts();
@@ -87,7 +87,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const [sortKey, setSortKey] = useState<SortKey>('requestDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
-  const [orderCardTab, setOrderCardTab] = useState<OrderCardTab>('main');
+  const [orderCardTab, setOrderCardTab] = useState<B2BOrderCardTab>('main');
   const [orderFormOpen, setOrderFormOpen] = useState(false);
   const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
   const [orderForm, setOrderForm] = useState({ ...EMPTY_ORDER_FORM });
@@ -106,6 +106,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   const [driverAssignmentError, setDriverAssignmentError] = useState('');
   const [driverAssignmentSaved, setDriverAssignmentSaved] = useState(false);
   const [relatedProfile, setRelatedProfile] = useState<'client' | 'driver' | null>(null);
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
   const selectedOrder = orders.find(order => order.id === selectedOrderId) ?? null;
   const selectedClient = selectedOrder ? clients.find(client => client.id === selectedOrder.clientId) ?? null : null;
   const selectedDriver = selectedOrder?.driverId ? drivers.find(driver => driver.driverId === selectedOrder.driverId) ?? null : null;
@@ -114,9 +115,17 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
   useEffect(() => { if (storedPayouts) setDriverPayouts(storedPayouts); }, [storedPayouts]);
   useEffect(() => {
     if (!openOrderId) return;
-    setOrderCardTab('main');
+    setOrderCardTab(openOrderTab);
     setSelectedOrderId(openOrderId);
-  }, [openOrderId]);
+  }, [openOrderId, openOrderTab]);
+  useEffect(() => {
+    if (!createOrderForClientId) return;
+    setEditingOrderId(null);
+    setOrderForm({ ...EMPTY_ORDER_FORM, client: createOrderForClientId, requestDate: new Date().toISOString().slice(0, 10) });
+    setOrderFormError('');
+    setOrderFormOpen(true);
+    onCreateOrderFormOpened?.();
+  }, [createOrderForClientId, onCreateOrderFormOpened]);
   useEffect(() => {
     setDriverAssignmentError('');
     setDriverAssignmentSaved(false);
@@ -195,9 +204,22 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     );
   };
 
-  const changeStatus = (id: string, status: OrderStatus) => {
+  const changeStatus = async (id: string, status: OrderStatus) => {
+    const previous = orders.find(order => order.id === id)?.status;
     setOrders(current => current.map(order => order.id === id ? { ...order, status } : order));
-    void updateB2BOrder(id, { status });
+    queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, current => (current ?? []).map(order => order.id === id ? { ...order, status } : order));
+    try {
+      await updateB2BOrder(id, { status });
+      await addB2BAudit({ entityId: id, entityType: 'b2b_order', action: 'status_change', actorName: userName, oldValue: { status: previous }, newValue: { status } });
+      setAuditRefreshKey(value => value + 1);
+      await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.orders });
+    } catch (statusError) {
+      if (previous) {
+        setOrders(current => current.map(order => order.id === id ? { ...order, status: previous } : order));
+        queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, current => (current ?? []).map(order => order.id === id ? { ...order, status: previous } : order));
+      }
+      setOrderFormError(statusError instanceof Error ? statusError.message : 'Не удалось изменить статус.');
+    }
   };
 
   const openOrderCard = (id: string) => {
@@ -229,7 +251,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     setEditingOrderId(order.id);
     setOrderForm({
       client: order.clientId, routeFrom: order.routeFrom, routeTo: order.routeTo,
-      requestDate: toDateInput(order.requestDate), departureDate: toDateTimeInput(order.departureDate),
+      requestDate: toDateInput(order.requestDate), departureDate: toDateInput(order.departureDate), departureTime: order.departureTime ?? '',
       transport: order.transport, transportCount: String(order.transportCount), pricePerUnit: String(order.pricePerUnit),
       paid: String(order.paid), status: order.status, driver: '',
     });
@@ -242,7 +264,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     const selectedClient = clients.find(client => client.id === orderForm.client);
     if (!selectedClient) return setOrderFormError('Выберите клиента из справочника.');
     if (!orderForm.routeFrom.trim() || !orderForm.routeTo.trim()) return setOrderFormError('Укажите полный маршрут.');
-    if (!orderForm.departureDate) return setOrderFormError('Укажите дату и время выезда.');
+    if (!orderForm.departureDate) return setOrderFormError('Укажите дату выезда.');
 
     const transportCount = Math.max(1, Number(orderForm.transportCount) || 1);
     const pricePerUnit = Math.max(0, Number(orderForm.pricePerUnit) || 0);
@@ -251,13 +273,17 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     const values = {
       clientId: selectedClient.id, client: selectedClient.companyName || selectedClient.contactName,
       routeFrom: orderForm.routeFrom.trim(), routeTo: orderForm.routeTo.trim(),
-      requestDate: orderForm.requestDate, departureDate: orderForm.departureDate.slice(0, 10),
+      requestDate: orderForm.requestDate, departureDate: orderForm.departureDate, departureTime: orderForm.departureTime,
       transport: orderForm.transport, transportCount, pricePerUnit, total, paid, status: orderForm.status,
     };
     try {
       if (editingOrderId) {
+      const previous = orders.find(order => order.id === editingOrderId);
       await updateB2BOrder(editingOrderId, values);
       setOrders(current => current.map(order => order.id === editingOrderId ? { ...order, ...values } : order));
+      queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, current => (current ?? []).map(order => order.id === editingOrderId ? { ...order, ...values } : order));
+      await addB2BAudit({ entityId: editingOrderId, entityType: 'b2b_order', action: 'update', actorName: userName, oldValue: previous, newValue: values });
+      setAuditRefreshKey(value => value + 1);
       closeOrderForm();
       return;
       }
@@ -269,6 +295,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
       created = { ...created, assignmentId: assignment.id, driverId: orderForm.driver, driverName: driver?.fullName ?? '', driverPricePerUnit: assignment.driverPricePerUnit, driverTotal: assignment.driverTotal, status: 'driver_assigned' };
     }
     setOrders(current => [created, ...current]);
+    await addB2BAudit({ entityId: created.id, entityType: 'b2b_order', action: 'create', actorName: userName, newValue: values });
+    await addB2BAudit({ entityId: selectedClient.id, entityType: 'b2b_client_order', action: 'create', actorName: userName, newValue: { order: created.number } });
     closeOrderForm();
     openOrderCard(created.id);
     } catch (submitError) {
@@ -309,6 +337,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     try {
       if (editingPaymentId) await updateB2BClientPayment(editingPaymentId, values);
       else await createB2BClientPayment({ orderId: selectedOrder.id, orderNumber: selectedOrder.number, clientName: selectedOrder.client, ...values });
+      await addB2BAudit({ entityId: selectedOrder.id, entityType: 'b2b_payment', action: editingPaymentId ? 'payment_update' : 'payment_create', actorName: userName, newValue: values });
+      setAuditRefreshKey(value => value + 1);
       await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payments });
       closePaymentForm();
     } catch (submitError) { setPaymentFormError(submitError instanceof Error ? submitError.message : 'Не удалось сохранить оплату.'); }
@@ -320,6 +350,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
     setPaymentFormError('');
     try {
       await updateB2BPaymentStatus(id, status);
+      if (selectedOrder) await addB2BAudit({ entityId: selectedOrder.id, entityType: 'b2b_payment', action: 'payment_status', actorName: userName, newValue: { status } });
+      setAuditRefreshKey(value => value + 1);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payments }),
         queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses }),
@@ -343,6 +375,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
         ? { ...order, assignmentId: assignment.id, driverId, driverName: driver?.fullName ?? '', driverPricePerUnit: assignment.driverPricePerUnit, driverTotal: assignment.driverTotal, status: 'driver_assigned' }
         : order));
       setDriverAssignmentSaved(true);
+      await addB2BAudit({ entityId: selectedOrder.id, entityType: 'b2b_driver', action: 'assignment_update', actorName: userName, newValue: { driver: driver?.fullName ?? '', amount: assignment.driverTotal } });
+      setAuditRefreshKey(value => value + 1);
       await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.orders });
     } catch (assignmentError) {
       setDriverAssignmentError(assignmentError instanceof Error ? assignmentError.message : 'Не удалось сохранить водителя.');
@@ -419,6 +453,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
       } else {
         await createB2BDriverPayout(selectedOrder, amount, driverPayoutForm.method, driverPayoutForm.paymentDate, driverPayoutForm.comment.trim(), driverPayoutForm.paymentOrderNumber.trim() || undefined);
       }
+      await addB2BAudit({ entityId: selectedOrder.id, entityType: 'b2b_driver_payout', action: editingDriverPayoutId ? 'payout_update' : 'payout_create', actorName: userName, newValue: { amount, method: driverPayoutForm.method, date: driverPayoutForm.paymentDate } });
+      setAuditRefreshKey(value => value + 1);
       await Promise.all([queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payouts }), queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.expenses })]);
       closeDriverPayoutForm();
     } catch (submitError) { setDriverPayoutFormError(submitError instanceof Error ? submitError.message : 'Не удалось сохранить выплату.'); }
@@ -499,7 +535,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                 <td className="number">{order.transportCount}</td><td className="number">{order.total.toLocaleString()} сом</td>
                 <td className="number paid">{effectivePaid.toLocaleString()} сом</td><td className="number debt">{Math.max(0, order.total - effectivePaid).toLocaleString()} сом</td>
                 <td>
-                  <select className={`b2b-order-status status-${order.status}`} value={order.status} onClick={event => event.stopPropagation()} onChange={event => changeStatus(order.id, event.target.value as OrderStatus)}>
+                  <select className={`b2b-order-status status-${order.status}`} value={order.status} onClick={event => event.stopPropagation()} onChange={event => void changeStatus(order.id, event.target.value as OrderStatus)}>
                     {B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
                   </select>
                 </td>
@@ -517,7 +553,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
             <header className="b2b-order-card-head">
               <div><span>Карточка заказа</span><h2 id="b2b-order-card-title">{selectedOrder.number}</h2></div>
               <div className="b2b-order-card-head-actions">
-                <select className={`b2b-order-status status-${selectedOrder.status}`} value={selectedOrder.status} onChange={event => changeStatus(selectedOrder.id, event.target.value as OrderStatus)}>
+                <select className={`b2b-order-status status-${selectedOrder.status}`} value={selectedOrder.status} onChange={event => void changeStatus(selectedOrder.id, event.target.value as OrderStatus)}>
                   {B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
                 </select>
                 {access.editOrder && <button type="button" onClick={() => openEditOrderForm(selectedOrder)} aria-label="Редактировать заказ"><Pencil size={16} /></button>}
@@ -529,7 +565,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
               {([
                 ['main', 'Основной', ClipboardList], ['payment', 'Оплата', CreditCard],
                 ['driver', 'Водитель', Truck], ['pnl', 'P&L', CircleDollarSign], ['documents', 'Документы', FileText],
-              ] as const).filter(([key]) => access.orderTabs.includes(key)).map(([key, label, Icon]) => (
+                ['history', 'История', Clock3],
+              ] as const).filter(([key]) => key === 'history' || access.orderTabs.includes(key)).map(([key, label, Icon]) => (
                 <button key={key} type="button" className={orderCardTab === key ? 'active' : ''} onClick={() => setOrderCardTab(key)}><Icon size={15} />{label}</button>
               ))}
             </nav>
@@ -537,7 +574,7 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
             {access.orderTabs.includes('main') && orderCardTab === 'main' && (
               <div className="b2b-order-card-grid">
                 <section><h3><UserRound size={16} /> Клиент</h3>{selectedClient && access.openClient ? <button type="button" className="b2b-related-record-link" onClick={() => setRelatedProfile('client')}>{selectedOrder.client}</button> : <strong>{selectedOrder.client}</strong>}<span>{selectedClient && access.openClient ? 'Открыть карточку клиента' : 'Корпоративный заказчик'}</span></section>
-                <section><h3><CalendarDays size={16} /> Даты</h3><div><span>Заявка</span><strong>{selectedOrder.requestDate}</strong></div><div><span>Выезд</span><strong>{selectedOrder.departureDate || 'Не указан'}</strong></div></section>
+                <section><h3><CalendarDays size={16} /> Даты</h3><div><span>Заявка</span><strong>{selectedOrder.requestDate}</strong></div><div><span>Дата выезда</span><strong>{selectedOrder.departureDate || 'Не указана'}</strong></div><div><span>Время выезда</span><strong>{selectedOrder.departureTime || 'Не указано'}</strong></div></section>
                 <section className="wide"><h3><MapPin size={16} /> Маршрут</h3><div className="b2b-order-card-route"><span><i>A</i>{selectedOrder.routeFrom}</span><b /><span><i>B</i>{selectedOrder.routeTo}</span></div></section>
                 <section className="wide"><h3><Truck size={16} /> Транспорт</h3><div><span>Вид транспорта</span><strong>{selectedOrder.transport}</strong></div><div><span>Количество</span><strong>{selectedOrder.transportCount}</strong></div><div><span>Цена за единицу</span><strong>{selectedOrder.pricePerUnit.toLocaleString()} сом</strong></div><div><span>Общая сумма</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></div></section>
               </div>
@@ -620,9 +657,9 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
                 <div className="b2b-order-pnl-summary">
                   <article><span>Продано</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></article>
                   <article className="received"><span>Поступило</span><strong>{selectedPaid.toLocaleString()} сом</strong></article>
-                  <article className="costs"><span>Водитель</span><strong>{selectedDriverCost.toLocaleString()} сом</strong></article>
-                  <article className="costs"><span>Налог 4%</span><strong>{selectedTaxCost.toLocaleString()} сом</strong></article>
-                  <article className="costs"><span>Прочие расходы</span><strong>{selectedOtherCost.toLocaleString()} сом</strong></article>
+                  <article className="costs"><span>Водитель</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('driver')}>{selectedDriverCost.toLocaleString()} сом <Pencil size={12} /></button></article>
+                  <article className="costs"><span>Налог 4%</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('payment')}>{selectedTaxCost.toLocaleString()} сом <Pencil size={12} /></button></article>
+                  <article className="costs"><span>Прочие расходы</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('pnl')}>{selectedOtherCost.toLocaleString()} сом <Pencil size={12} /></button></article>
                   <article className={selectedOrderBalance < 0 ? 'balance negative' : 'balance'}><span>Остаток</span><strong>{selectedOrderBalance.toLocaleString()} сом</strong></article>
                 </div>
                 <div className="b2b-order-pnl-secondary">
@@ -648,6 +685,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
             {access.orderTabs.includes('documents') && orderCardTab === 'documents' && (
               <div className="b2b-order-tab-panel"><B2BOrderDocuments order={selectedOrder} /></div>
             )}
+
+            {orderCardTab === 'history' && <div className="b2b-order-tab-panel"><B2BAuditHistory entityId={selectedOrder.id} refreshKey={auditRefreshKey} /></div>}
           </article>
         </div>
       )}
@@ -682,7 +721,8 @@ export default function B2BOrders({ openOrderId = null, onCloseOrder, userRole =
               <label><span>Откуда *</span><input value={orderForm.routeFrom} onChange={event => setOrderForm(current => ({ ...current, routeFrom: event.target.value }))} placeholder="Адрес отправления" /></label>
               <label><span>Куда *</span><input value={orderForm.routeTo} onChange={event => setOrderForm(current => ({ ...current, routeTo: event.target.value }))} placeholder="Адрес назначения" /></label>
               <label><span>Дата заявки *</span><input type="date" value={orderForm.requestDate} onChange={event => setOrderForm(current => ({ ...current, requestDate: event.target.value }))} /></label>
-              <label><span>Дата и время выезда *</span><input type="datetime-local" value={orderForm.departureDate} onChange={event => setOrderForm(current => ({ ...current, departureDate: event.target.value }))} /></label>
+              <label><span>Дата выезда *</span><input type="date" value={orderForm.departureDate} onChange={event => setOrderForm(current => ({ ...current, departureDate: event.target.value }))} /></label>
+              <label><span>Время выезда (необязательно)</span><input type="time" value={orderForm.departureTime} onChange={event => setOrderForm(current => ({ ...current, departureTime: event.target.value }))} /></label>
               <label><span>Вид транспорта *</span><select value={orderForm.transport} onChange={event => setOrderForm(current => ({ ...current, transport: event.target.value }))}><option>Легковое</option><option>Комфорт</option><option>Минивэн</option><option>Микроавтобус</option></select></label>
               <label><span>Количество транспорта *</span><input type="number" min="1" value={orderForm.transportCount} onChange={event => setOrderForm(current => ({ ...current, transportCount: event.target.value }))} /></label>
               <label><span>Цена за единицу, сом</span><input type="number" min="0" value={orderForm.pricePerUnit} onChange={event => setOrderForm(current => ({ ...current, pricePerUnit: event.target.value }))} placeholder="0" /></label>

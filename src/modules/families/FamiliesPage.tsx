@@ -4,7 +4,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
@@ -23,7 +23,7 @@ import {
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, Copy, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
 import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
@@ -33,6 +33,7 @@ import {
   isNewUnassignedRow, logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod,
   uniqueFamilyRows, vehicleTypeShortLabel, XLSX_BRAND,
 } from './familiesRowHelpers';
+import { buildDriverParentCardLines, buildDriverParentCardText } from './driverParentCard';
 
 function cashierRowMatchesSelectedPeriod(row: CashierPaymentRow | PaymentTableRow, periodKey: string): boolean {
   if (periodKey === 'ALL') {
@@ -48,6 +49,28 @@ function isConfirmedPaymentStatus(status: string): boolean {
 
 function toCashierPaymentRow(row: PaymentTableRow): CashierPaymentRow {
   return { ...row, comment: '' };
+}
+
+async function copyTextToClipboard(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // В некоторых встроенных браузерах доступ к Clipboard API запрещён.
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  const copied = document.execCommand('copy');
+  textarea.remove();
+  return copied;
 }
 
 export interface ChildRow {
@@ -347,7 +370,7 @@ type TransferCardData = {
     status: string;
   }[];
 };
-type DriverCardTab = 'main' | 'documents' | 'finance' | 'b2b' | 'advances';
+type DriverCardTab = 'main' | 'parentCard' | 'documents' | 'finance' | 'b2b' | 'advances';
 type DriverFinanceRow = {
   month: string;
   days: number;
@@ -823,6 +846,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
   const [selectedDriverTab, setSelectedDriverTab] = useState<DriverCardTab>('main');
+  const [driverParentCardCopied, setDriverParentCardCopied] = useState(false);
   const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
   const [driverTransferDraftId, setDriverTransferDraftId] = useState('');
   const [driverDocumentsDraft, setDriverDocumentsDraft] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
@@ -1624,15 +1648,19 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const pagedTransferNumber = quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive'
     ? Number(quickTransfer) : null;
 
-  const familiesPageQuery = useFamiliesPage({
+  const familiesPageParams = useMemo(() => ({
     branchIds: branchIdsForPage,
     search: search || undefined,
     childStatus: pagedChildStatus,
     hasTransfer: pagedHasTransfer,
     transferNumber: pagedTransferNumber,
     excludeRejectedChildren: isDirectoryMode,
-    page: familiesPageNumber,
     pageSize: FAMILIES_PAGE_SIZE,
+  }), [branchIdsForPage, search, pagedChildStatus, pagedHasTransfer, pagedTransferNumber, isDirectoryMode]);
+
+  const familiesPageQuery = useFamiliesPage({
+    ...familiesPageParams,
+    page: familiesPageNumber,
   }, { enabled: isPagedMode && branchesReadyForPaging });
 
   useEffect(() => {
@@ -2236,6 +2264,40 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           .sort((a, b) => Number(a.stopNumber ?? 999) - Number(b.stopNumber ?? 999))
       : []
   ), [rows, selectedDriverId]);
+  const selectedDriverTransfer = useMemo(() => (
+    dashboardTransfers.find(transfer => transfer.id === driverTransferDraftId)
+      ?? (selectedDriver?.transfers.length === 1
+        ? dashboardTransfers.find(transfer => transfer.id === selectedDriver.transfers[0].id)
+        : undefined)
+  ), [dashboardTransfers, driverTransferDraftId, selectedDriver]);
+  const driverParentCardLines = useMemo(() => buildDriverParentCardLines({
+    school: selectedDriverTransfer?.branchShort || selectedDriver?.branchShorts.join(', '),
+    transferNumber: selectedDriverTransfer?.transferNumber || (selectedDriver?.transfers.length === 1 ? selectedDriver.transfers[0].transferNumber : ''),
+    driverName: driverDraft?.fullName,
+    phone: driverDraft?.phone,
+    secondPhone: driverDraft?.secondPhone,
+    brand: driverDraft?.brand,
+    model: driverDraft?.model,
+    plateNumber: driverDraft?.plateNumber,
+    seats: driverDraft?.seats,
+  }), [driverDraft, selectedDriver, selectedDriverTransfer]);
+  const copyDriverParentCard = async () => {
+    const text = buildDriverParentCardText({
+      school: selectedDriverTransfer?.branchShort || selectedDriver?.branchShorts.join(', '),
+      transferNumber: selectedDriverTransfer?.transferNumber || (selectedDriver?.transfers.length === 1 ? selectedDriver.transfers[0].transferNumber : ''),
+      driverName: driverDraft?.fullName,
+      phone: driverDraft?.phone,
+      secondPhone: driverDraft?.secondPhone,
+      brand: driverDraft?.brand,
+      model: driverDraft?.model,
+      plateNumber: driverDraft?.plateNumber,
+      seats: driverDraft?.seats,
+    });
+    if (await copyTextToClipboard(text)) {
+      setDriverParentCardCopied(true);
+      window.setTimeout(() => setDriverParentCardCopied(false), 1800);
+    }
+  };
   const selectedDriverB2BOrders = useMemo<B2BOrder[]>(() => (
     selectedDriverId
       ? b2bOrders
@@ -2833,6 +2895,16 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     downloadXlsxBuffer(`Маршрутный_лист_${safeName || 'manager'}.xlsx`, buffer as ArrayBuffer);
   };
 
+  const exportAllDirectoryRouteRows = async (_visibleRows: ChildRow[]) => {
+    try {
+      const result = await fetchAllV2FamiliesPages(familiesPageParams);
+      await exportDirectoryRouteSheet(result.rows);
+    } catch (error) {
+      console.error('Directory route export failed', error);
+      window.alert('Не удалось загрузить полный список для выгрузки');
+    }
+  };
+
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: customTableContent ? 'hidden' : 'visible', background: 'var(--active-bg)', borderRadius: '0 0 22px 22px', display: 'flex', padding: '0 0 10px 0' }}>
 
@@ -3233,7 +3305,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               onExport={mode === 'logistics'
                 ? exportLogisticsRouteSheet
                 : isDirectoryMode
-                  ? exportDirectoryRouteSheet
+                  ? exportAllDirectoryRouteRows
                   : undefined}
               hideToolbar={tableBarsCollapsed}
               toolbarExtra={(
@@ -3529,6 +3601,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             }}>
               {[
                 { key: 'main' as DriverCardTab, label: 'Основная' },
+                { key: 'parentCard' as DriverCardTab, label: 'Для родителей' },
                 { key: 'documents' as DriverCardTab, label: 'Документы' },
                 { key: 'finance' as DriverCardTab, label: 'Финансы' },
                 { key: 'b2b' as DriverCardTab, label: `B2B${selectedDriverB2BOrders.length ? ` (${selectedDriverB2BOrders.length})` : ''}` },
@@ -3868,6 +3941,33 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 </div>
               </section>
               </>
+              ) : selectedDriverTab === 'parentCard' ? (
+                <section style={{ maxWidth: 620, margin: '0 auto', borderRadius: 16, background: '#fff', border: '1px solid #CFE5E7', overflow: 'hidden' }}>
+                  <div style={{ minHeight: 54, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 950, color: '#17222F' }}>Краткая карточка для родителей</div>
+                      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 700, color: '#7A859D' }}>Готовый текст для отправки в Telegram или WhatsApp</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => void copyDriverParentCard()}
+                      style={{ height: 34, padding: '0 12px', border: 'none', borderRadius: 10, background: driverParentCardCopied ? '#EAF7EF' : '#31A4A5', color: driverParentCardCopied ? '#2B8952' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 11, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      {driverParentCardCopied ? <Check size={15} /> : <Copy size={15} />}
+                      {driverParentCardCopied ? 'Скопировано' : 'Скопировать'}
+                    </button>
+                  </div>
+                  <div style={{ padding: 18, background: '#F5FAFB' }}>
+                    <div style={{ padding: '16px 18px', borderRadius: 14, background: '#fff', border: '1px solid #DDE9EC', boxShadow: '0 6px 18px rgba(30, 56, 75, 0.06)', color: '#17222F', fontSize: 14, lineHeight: 1.7 }}>
+                      {driverParentCardLines.map((line, index) => (
+                        <div key={line} style={{ fontWeight: index === 0 ? 950 : 750, marginBottom: index === 0 && driverParentCardLines.length > 1 ? 8 : 0 }}>{line}</div>
+                      ))}
+                    </div>
+                    <div style={{ marginTop: 10, color: '#7A859D', fontSize: 11, fontWeight: 700, lineHeight: 1.45 }}>
+                      Пустые поля автоматически не добавляются в сообщение.
+                    </div>
+                  </div>
+                </section>
               ) : selectedDriverTab === 'documents' ? (
               <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                 <div style={{

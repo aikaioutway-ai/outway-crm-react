@@ -1095,6 +1095,61 @@
 .b2b-client-payments-table input:focus,
 .b2b-client-payments-table select:focus { border-color: #6dbabc; box-shadow: 0 0 0 3px rgba(49,164,165,.11); }
 .b2b-client-payments-table .number-input { min-width: 90px; max-width: 110px; text-align: right; }
+
+/* Compact card tables stay inside one desktop viewport, including inline edit mode. */
+@media (min-width: 900px) {
+  .b2b-client-profile { width: min(1240px, calc(100vw - 32px)); }
+  .b2b-client-orders-wrap { overflow-x: hidden; }
+  .b2b-client-orders-table,
+  .b2b-client-payments-table,
+  .b2b-client-finance-table,
+  .b2b-compact-table { min-width: 0; table-layout: fixed; }
+  .b2b-client-orders-table th,
+  .b2b-client-orders-table td { padding-left: 7px; padding-right: 7px; overflow: hidden; text-overflow: ellipsis; }
+  .b2b-client-payments-table th:nth-child(1) { width: 90px; }
+  .b2b-client-payments-table th:nth-child(2) { width: 105px; }
+  .b2b-client-payments-table th:nth-child(3) { width: 130px; }
+  .b2b-client-payments-table th:nth-child(4) { width: 145px; }
+  .b2b-client-payments-table th:nth-child(5) { width: 105px; }
+  .b2b-client-payments-table th:nth-child(6) { width: 115px; }
+  .b2b-client-payments-table th:last-child { width: 82px; }
+  .b2b-client-payments-table input,
+  .b2b-client-payments-table select { width: 100%; min-width: 0; max-width: none; padding: 0 5px; font-size: 10px; }
+  .b2b-client-payments-table .number-input { width: 100%; min-width: 0; max-width: none; }
+}
+
+.b2b-openable-row { cursor: pointer; }
+.b2b-openable-row:hover td { background: #f0f9f8; }
+.b2b-inline-value-edit { padding: 0; border: 0; background: transparent; color: inherit; display: inline-flex; align-items: center; gap: 5px; font: inherit; font-weight: inherit; cursor: pointer; }
+.b2b-inline-value-edit:hover { color: #287f82; }
+.b2b-expense-edit-button { width: auto; min-width: 34px; padding: 0 8px; display: inline-flex; align-items: center; gap: 5px; }
+.b2b-expense-edit-button span { font-size: 9px; font-weight: 800; }
+.b2b-client-new-order { background: #e8f7f5 !important; color: #287f82 !important; }
+
+.b2b-audit-list { display: grid; gap: 8px; }
+.b2b-audit-list article { padding: 11px 12px; border: 1px solid #e2ebed; border-radius: 13px; background: #fbfdfd; display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; }
+.b2b-audit-icon { width: 32px; height: 32px; border-radius: 10px; background: #e8f7f5; color: #287f82; display: grid; place-items: center; }
+.b2b-audit-list article > div { min-width: 0; display: grid; gap: 4px; }
+.b2b-audit-list header { display: flex; justify-content: space-between; gap: 12px; }
+.b2b-audit-list header strong { color: #354052; font-size: 11px; }
+.b2b-audit-list time,
+.b2b-audit-list small,
+.b2b-audit-list footer { color: #8b96a9; font-size: 9px; }
+.b2b-audit-list p { margin: 2px 0; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 10px; }
+.b2b-audit-list del,
+.b2b-audit-list ins { max-width: 100%; padding: 3px 6px; border-radius: 6px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-decoration: none; }
+.b2b-audit-list del { background: #fff0ef; color: #b55353; }
+.b2b-audit-list ins { background: #eaf7f1; color: #307c62; }
+.b2b-audit-list p b { color: #91a3a8; }
+.b2b-audit-empty { min-height: 260px; border: 1px dashed #ccdcdf; border-radius: 14px; color: #91a3a8; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; text-align: center; font-size: 11px; }
+.b2b-audit-empty strong { color: #52636e; font-size: 13px; }
+
+@media (min-height: 760px) {
+  .b2b-order-form-modal { overflow: hidden; }
+  .b2b-new-order-form { gap: 10px 14px; padding-top: 14px; }
+  .b2b-new-order-form input,
+  .b2b-new-order-form select { padding-top: 8px; padding-bottom: 8px; }
+}
 .b2b-payment-inline-actions { width: 70px; white-space: nowrap; }
 .b2b-payment-inline-actions button { width: 29px; height: 29px; margin-left: 4px; border: 1px solid #cbe0e2; border-radius: 8px; background: #fff; color: #287f82; display: inline-grid; place-items: center; cursor: pointer; }
 .b2b-payment-inline-actions button.save { border-color: #a8dac0; background: #edf9f2; color: #287b4c; }

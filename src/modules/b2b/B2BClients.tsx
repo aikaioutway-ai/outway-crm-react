@@ -1,7 +1,7 @@
 import { FormEvent, useState } from 'react';
-import { ArrowUpDown, Building2, CircleDollarSign, ClipboardList, CreditCard, FileCheck2, FileText, Landmark, Mail, MapPin, Pencil, Phone, Plus, School, Search, UserRound, X } from 'lucide-react';
+import { ArrowUpDown, Building2, CircleDollarSign, ClipboardList, Clock3, CreditCard, FileCheck2, FileText, Landmark, Mail, MapPin, Pencil, Percent, Phone, Plus, School, Search, Truck, UserRound, X } from 'lucide-react';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
-import { B2BOrderRecord, createB2BClient, updateB2BClient } from '../../services/b2bDataService';
+import { addB2BAudit, B2BOrderRecord, createB2BClient, updateB2BClient } from '../../services/b2bDataService';
 import useB2BPayments from '../../hooks/useB2BPayments';
 import { downloadB2BGeneratedDocument, generatedDocumentNumber } from '../../services/b2bDocumentService';
 import { B2B_ORDER_STATUSES } from './B2BOrders';
@@ -10,6 +10,8 @@ import B2BClientDocumentsTab from './B2BClientDocumentsTab';
 import { B2BClientOrderCreateModal, B2BClientOrderEditModal } from './B2BClientEditModals';
 import { calculateB2BOrderProfit } from './b2bProfitCalculations';
 import B2BClientPaymentsTable from './B2BClientPaymentsTable';
+import B2BAuditHistory from './B2BAuditHistory';
+import { formatB2BPaymentMethod } from '../../services/b2bPaymentService';
 
 type ClientType = 'individual' | 'company' | 'school';
 type ClientFilter = 'all' | ClientType;
@@ -35,7 +37,7 @@ interface B2BClientForm {
 }
 
 interface B2BClient extends B2BClientForm { id: string; }
-type ClientCardTab = 'main' | 'orders' | 'payments' | 'finance' | 'documents';
+type ClientCardTab = 'main' | 'orders' | 'payments' | 'payouts' | 'taxes' | 'finance' | 'documents' | 'history';
 
 const CLIENT_TYPE_LABELS: Record<ClientType, string> = {
   individual: 'Частный', company: 'Юр. лицо', school: 'Школа',
@@ -62,10 +64,11 @@ interface B2BClientsProps {
   canViewFinance?: boolean;
   canEditPaymentStatus?: boolean;
   canCreateOrder?: boolean;
-  onOpenOrder?: (orderId: string) => void;
+  onOpenOrder?: (orderId: string, tab?: 'main' | 'payment' | 'driver' | 'pnl') => void;
+  userName?: string;
 }
 
-export default function B2BClients({ onOpenOrder, canViewFinance = true, canEditPaymentStatus = false, canCreateOrder = false }: B2BClientsProps) {
+export default function B2BClients({ onOpenOrder, userName = 'CRM', canViewFinance = true, canEditPaymentStatus = false, canCreateOrder = false }: B2BClientsProps) {
   const { data: clients = [], isLoading } = useB2BClients();
   const [modalOpen, setModalOpen] = useState(false);
   const [editingClientId, setEditingClientId] = useState<string | null>(null);
@@ -82,11 +85,14 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
   const payments = useB2BPayments();
   const [form, setForm] = useState<B2BClientForm>({ ...EMPTY_CLIENT });
   const [error, setError] = useState('');
+  const [auditRefreshKey, setAuditRefreshKey] = useState(0);
   const showRequisites = form.clientType === 'company' || form.clientType === 'school';
   const selectedClient = clients.find(client => client.id === selectedClientId) ?? null;
   const selectedClientOrders = selectedClient ? orders.filter(order => order.clientId === selectedClient.id) : [];
   const selectedOrderIds = new Set(selectedClientOrders.map(order => order.id));
   const selectedClientPayments = payments.filter(payment => selectedOrderIds.has(payment.orderId));
+  const selectedClientPayouts = payouts.filter(payout => selectedOrderIds.has(payout.orderId));
+  const selectedClientTaxes = expenses.filter(expense => expense.source === 'tax_4pct' && selectedClientOrders.some(order => order.number === expense.orderNumber));
   const clientOrdersTotal = selectedClientOrders.reduce((sum, order) => sum + order.total, 0);
   const clientPaidTotal = selectedClientPayments.filter(payment => payment.status === 'confirmed').reduce((sum, payment) => sum + payment.amount, 0);
   const clientFinanceRows = selectedClientOrders.map(order => {
@@ -177,11 +183,15 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
     };
     try {
       if (editingClientId) {
+        const previous = clients.find(client => client.id === editingClientId);
         await updateB2BClient(editingClientId, values);
         queryClient.setQueryData<B2BClient[]>(B2B_QUERY_KEYS.clients, (current: B2BClient[] | undefined) => (current ?? []).map(client => client.id === editingClientId ? { ...values, id: editingClientId } : client));
+        await addB2BAudit({ entityId: editingClientId, entityType: 'b2b_client', action: 'update', actorName: userName, oldValue: previous, newValue: values });
+        setAuditRefreshKey(value => value + 1);
       } else {
         const created = await createB2BClient(values);
         queryClient.setQueryData<B2BClient[]>(B2B_QUERY_KEYS.clients, (current: B2BClient[] | undefined) => [created, ...(current ?? [])]);
+        await addB2BAudit({ entityId: created.id, entityType: 'b2b_client', action: 'create', actorName: userName, newValue: values });
       }
       closeModal();
     } catch (submitError) {
@@ -278,8 +288,11 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
                 ['main', 'Основной', UserRound],
                 ['orders', `Заказы (${selectedClientOrders.length})`, ClipboardList],
                 ['payments', `Оплаты (${selectedClientPayments.length})`, CreditCard],
+                ['payouts', `Выплаты (${selectedClientPayouts.length})`, Truck],
+                ['taxes', `Налоги (${selectedClientTaxes.length})`, Percent],
                 ['finance', 'Финансы', CircleDollarSign],
                 ['documents', 'Документы', FileText],
+                ['history', 'История', Clock3],
               ] as const).filter(([key]) => canViewFinance || key !== 'finance').map(([key, label, Icon]) => <button key={key} type="button" className={clientCardTab === key ? 'active' : ''} onClick={() => setClientCardTab(key)}><Icon size={15} />{label}</button>)}
             </nav>
 
@@ -298,8 +311,18 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
 
               {clientCardTab === 'payments' && <div className="b2b-client-payments-panel">
                 <div className="b2b-client-money-summary"><article><span>Заказы</span><strong>{clientOrdersTotal.toLocaleString()} сом</strong></article><article className="paid"><span>Подтверждено</span><strong>{clientPaidTotal.toLocaleString()} сом</strong></article><article className="debt"><span>Остаток</span><strong>{Math.max(0, clientOrdersTotal - clientPaidTotal).toLocaleString()} сом</strong></article></div>
-                {selectedClientPayments.length ? <B2BClientPaymentsTable payments={selectedClientPayments} canEditStatus={canEditPaymentStatus} onOpenOrder={onOpenOrder} /> : <div className="b2b-client-tab-empty"><CreditCard size={28} /><strong>Оплат пока нет</strong><span>Платежи по заказам клиента появятся здесь.</span></div>}
+                {selectedClientPayments.length ? <B2BClientPaymentsTable payments={selectedClientPayments} canEditStatus={canEditPaymentStatus} onOpenOrder={onOpenOrder} userName={userName} /> : <div className="b2b-client-tab-empty"><CreditCard size={28} /><strong>Оплат пока нет</strong><span>Платежи по заказам клиента появятся здесь.</span></div>}
               </div>}
+
+              {clientCardTab === 'payouts' && (selectedClientPayouts.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Водитель</th><th>Способ</th><th className="number">Сумма</th><th>Комментарий</th></tr></thead><tbody>{selectedClientPayouts.map(payout => {
+                const order = selectedClientOrders.find(item => item.id === payout.orderId);
+                return <tr key={payout.id}><td>{payout.paymentDate}</td><td className="order-number"><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(payout.orderId, 'driver')}>{order?.number ?? '—'}</button></td><td>{payout.driverName}</td><td>{formatB2BPaymentMethod(payout.method)}</td><td className="number">{payout.amount.toLocaleString()} сом</td><td>{payout.comment || '—'}</td></tr>;
+              })}</tbody></table></div> : <div className="b2b-client-tab-empty"><Truck size={28} /><strong>Выплат водителям пока нет</strong><span>Выплаты по заказам клиента появятся здесь.</span></div>)}
+
+              {clientCardTab === 'taxes' && (selectedClientTaxes.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Основание</th><th>Способ</th><th className="number">Сумма</th></tr></thead><tbody>{selectedClientTaxes.map(tax => {
+                const order = selectedClientOrders.find(item => item.number === tax.orderNumber);
+                return <tr key={tax.id}><td>{tax.expenseDate}</td><td className="order-number">{order ? <button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(order.id, 'payment')}>{tax.orderNumber}</button> : tax.orderNumber}</td><td>{tax.purpose || 'Налог 4% с подтверждённой оплаты'}</td><td>{formatB2BPaymentMethod(tax.method)}</td><td className="number">{tax.amount.toLocaleString()} сом</td></tr>;
+              })}</tbody></table></div> : <div className="b2b-client-tab-empty"><Percent size={28} /><strong>Налогов пока нет</strong><span>Начисления 4% появятся после подтверждённых безналичных оплат.</span></div>)}
 
               {canViewFinance && clientCardTab === 'finance' && <div className="b2b-client-finance-panel">
                 <div className="b2b-client-finance-summary">
@@ -310,8 +333,8 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
                 </div>
                 {clientFinanceRows.length ? <div className="b2b-client-finance-table-wrap"><table className="b2b-client-finance-table">
                   <thead><tr><th>Заказ</th><th>Водитель</th><th className="number">Выручка</th><th className="number">Водителю</th><th className="number">Налог</th><th className="number">Прочие</th><th className="number">Все расходы</th><th className="number">Остаток</th></tr></thead>
-                  <tbody>{clientFinanceRows.map(({ order, revenue, driverCost, taxCost, otherCost, totalExpenses, balance }) => <tr key={order.id}>
-                    <td><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(order.id)} aria-label={`Открыть карточку заказа ${order.number}`}>{order.number}</button><span>{order.departureDate || order.requestDate} · {order.routeFrom} → {order.routeTo}</span></td>
+                  <tbody>{clientFinanceRows.map(({ order, revenue, driverCost, taxCost, otherCost, totalExpenses, balance }) => <tr key={order.id} className="b2b-openable-row" onClick={() => onOpenOrder?.(order.id, 'pnl')} title="Открыть P&L заказа и редактирование">
+                    <td><button className="b2b-client-order-link" type="button" onClick={event => { event.stopPropagation(); onOpenOrder?.(order.id, 'pnl'); }} aria-label={`Открыть карточку заказа ${order.number}`}>{order.number}</button><span>{order.departureDate || order.requestDate} · {order.routeFrom} → {order.routeTo}</span></td>
                     <td className="driver">{order.driverName || 'Не назначен'}</td>
                     <td className="number revenue">{revenue.toLocaleString()} сом</td>
                     <td className="number driver-cost">{driverCost.toLocaleString()} сом</td>
@@ -324,6 +347,7 @@ export default function B2BClients({ onOpenOrder, canViewFinance = true, canEdit
               </div>}
 
               {clientCardTab === 'documents' && <B2BClientDocumentsTab client={selectedClient} orders={selectedClientOrders} payments={selectedClientPayments} onOpenOrder={onOpenOrder} />}
+              {clientCardTab === 'history' && <B2BAuditHistory entityId={selectedClient.id} refreshKey={auditRefreshKey} />}
             </div>
           </article>
         </div>
