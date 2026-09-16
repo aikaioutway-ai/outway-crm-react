@@ -4,7 +4,7 @@ import type { UserRole } from '../../types';
 import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList, WalletCards, BadgeDollarSign } from 'lucide-react';
 import B2BIcon from '../../core/icons/B2BIcon';
 import B2BClients from './B2BClients';
-import B2BOrders from './B2BOrders';
+import B2BOrders, { type B2BOrderCardTab } from './B2BOrders';
 import B2BCalendar from './B2BCalendar';
 import B2BLogistics from './B2BLogistics';
 import B2BExpenses from './B2BExpenses';
@@ -27,19 +27,22 @@ const B2B_TABS = [
 
 type B2BTab = typeof B2B_TABS[number]['key'];
 
-export default function B2BModule({ userRole, sessionToken }: { userRole: UserRole; sessionToken?: string }) {
+export default function B2BModule({ userRole, sessionToken, userName }: { userRole: UserRole; sessionToken?: string; userName?: string }) {
   const access = b2bAccess(userRole);
   const canOpenOrders = access.openOrders;
   const allowedTabs = B2B_TABS.filter(tab => access.tabs.includes(tab.key));
   const [activeTab, setActiveTab] = useState<B2BTab>(userRole === 'cashier' ? 'cashier' : 'orders');
   const [orderToOpenId, setOrderToOpenId] = useState<string | null>(null);
+  const [orderToOpenTab, setOrderToOpenTab] = useState<B2BOrderCardTab>('main');
   const [financeMonth, setFinanceMonth] = useState<B2BFinancePeriod | null>(null);
+  const [createOrderForClientId, setCreateOrderForClientId] = useState<string | null>(null);
   const visibleTab = allowedTabs.some(tab => tab.key === activeTab) ? activeTab : allowedTabs[0].key;
   const currentTab = B2B_TABS.find(tab => tab.key === visibleTab) ?? B2B_TABS[0];
   const CurrentIcon = currentTab.icon;
 
-  const openOrderCard = (orderId: string) => {
+  const openOrderCard = (orderId: string, tab: B2BOrderCardTab = 'main') => {
     if (!canOpenOrders) return;
+    setOrderToOpenTab(tab);
     setOrderToOpenId(orderId);
   };
 
@@ -83,15 +86,15 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
       {visibleTab === 'cashier' ? (
         <B2BCashier onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'orders' ? (
-        <B2BOrders userRole={userRole} sessionToken={sessionToken} openOrderId={orderToOpenId} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} />
+        <B2BOrders userRole={userRole} userName={userName} sessionToken={sessionToken} openOrderId={orderToOpenId} openOrderTab={orderToOpenTab} onCloseOrder={orderToOpenId ? closeLinkedOrderCard : undefined} createOrderForClientId={createOrderForClientId} onCreateOrderFormOpened={() => setCreateOrderForClientId(null)} />
       ) : visibleTab === 'logistics' ? (
         <B2BLogistics canPay={access.driverPay} onOpenOrder={openOrderCard} />
       ) : visibleTab === 'calendar' ? (
         <B2BCalendar onOpenOrder={openOrderCard} />
       ) : visibleTab === 'clients' ? (
-        <B2BClients canViewFinance={access.clientFinance} canEditPaymentStatus={access.reviewPayments} onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+        <B2BClients userName={userName} canViewFinance={access.clientFinance} canEditPaymentStatus={access.reviewPayments} onOpenOrder={canOpenOrders ? openOrderCard : undefined} onCreateOrder={clientId => { setCreateOrderForClientId(clientId); setOrderToOpenId(null); setActiveTab('orders'); }} />
       ) : visibleTab === 'expenses' ? (
-        <B2BExpenses onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
+        <B2BExpenses userName={userName} onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'finance' ? (
         <B2BFinance selectedMonthNumber={financeMonth} onSelectedMonthChange={setFinanceMonth} onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'cashflow' ? (
@@ -106,9 +109,11 @@ export default function B2BModule({ userRole, sessionToken }: { userRole: UserRo
       {orderToOpenId && canOpenOrders && visibleTab !== 'orders' && (
         <B2BOrders
           userRole={userRole}
+          userName={userName}
           sessionToken={sessionToken}
           cardOnly
           openOrderId={orderToOpenId}
+          openOrderTab={orderToOpenTab}
           onCloseOrder={closeLinkedOrderCard}
         />
       )}

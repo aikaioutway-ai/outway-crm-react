@@ -377,7 +377,7 @@ export default function App() {
       >
         <Suspense fallback={<SectionLoading />}>
         {section === 'b2b' ? (
-          <B2BModule userRole={currentUserRole} sessionToken={currentUser.sessionToken} />
+          <B2BModule userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} />
         ) : section === 'cashier' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>

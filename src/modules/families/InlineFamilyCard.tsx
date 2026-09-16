@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
-import { applyChildPricingPatch, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, isTeacherPriced, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
+import { applyChildPricingPatch, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, isTeacherPriced, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
@@ -15,6 +15,8 @@ import TabFinance from './TabFinance';
 import TabHistory from './TabHistory';
 import NotionSelect from '../../core/selects/NotionSelect';
 import { createCustomFamilyDocument, createDefaultFamilyDocuments, FamilyDocument, fetchFamilyDocuments, saveFamilyDocuments } from '../../services/familyDocumentService';
+import { GeocodingCandidate, geocodeAddress, getDrivingDistanceKm, reverseGeocode } from '../../services/addressGeocoding';
+import { loadYandexMaps } from '../../utils/yandexMaps';
 
 interface AuditEntry {
   id: string; familyId: string; userName: string;
@@ -69,6 +71,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [savedDocuments, setSavedDocuments] = useState<FamilyDocument[]>(createDefaultFamilyDocuments());
   const [draftDocuments, setDraftDocuments] = useState<FamilyDocument[]>(createDefaultFamilyDocuments());
   const [loadingDocuments, setLoadingDocuments] = useState(true);
+  const [addressModalOpen, setAddressModalOpen] = useState(false);
 
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
@@ -182,6 +185,32 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   function patchDraftChild(child: Child, patch: Partial<Child>): Promise<boolean> {
     setDraftChildren(current => current.map(item => item.id === child.id ? applyChildPricingPatch(item, patch) : item));
     return Promise.resolve(true);
+  }
+
+  function applyAddressPlan(point: GeocodingCandidate, plans: AddressRoutePlan[]) {
+    const byChildId = new Map(plans.map(plan => [plan.childId, plan]));
+    setDraftChildren(current => current.map(child => {
+      const plan = byChildId.get(child.id);
+      if (!plan || plan.distanceKm == null || !plan.zone) return child;
+      return applyChildPricingPatch(child, {
+        address: point.address,
+        latitude: point.latitude,
+        longitude: point.longitude,
+        distanceKm: plan.distanceKm,
+        zone: plan.zone,
+      });
+    }));
+    const primaryPlan = plans.find(plan => plan.childId === draftChildren[0]?.id) ?? plans[0];
+    setDraftFamily(current => ({
+      ...current,
+      fullAddress: point.address,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      distanceKm: primaryPlan?.distanceKm,
+      zone: primaryPlan?.zone ?? current.zone,
+    }));
+    setAddressModalOpen(false);
+    setSaveMsg('Адрес пересчитан · нажмите «Сохранить»');
   }
 
   function toggleTeacherPricing() {
@@ -446,6 +475,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if ('class' in patch) dbPatch.class_name = nextChild.class;
       if ('branchId' in patch) dbPatch.branch_id = nextChild.branchId ?? null;
       if ('schoolId' in patch) dbPatch.school_id = nextChild.schoolId ?? null;
+      if ('address' in patch) dbPatch.address = nextChild.address?.trim() || null;
+      if ('latitude' in patch) dbPatch.latitude = nextChild.latitude ?? null;
+      if ('longitude' in patch) dbPatch.longitude = nextChild.longitude ?? null;
       if ('zone' in patch) dbPatch.zone = nextChild.zone;
       if ('distanceKm' in patch) dbPatch.distance_km = nextChild.distanceKm ?? null;
       if ('selfExitAllowed' in patch) dbPatch.self_exit_allowed = Boolean(nextChild.selfExitAllowed);
@@ -634,9 +666,14 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                   <DetailInput editing={editing} label="Телефон" tone="soft" whatsapp value={cardFamily.contactPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactPhone: formatPhone(value) }))} />
                 </DetailPanel>
                 <DetailPanel title="Адрес" accent="var(--success)">
-                  <DetailInput editing={editing} label="Адрес" tone="clear" value={cardFamily.fullAddress} onCommit={value => setDraftFamily(current => ({ ...current, fullAddress: value }))} />
+                  <DetailValue label="Адрес" value={cardFamily.fullAddress || '-'} />
                   <DetailValue label="Координаты" value={coordinatesText} />
                   <DetailMapLink label="Яндекс" url={mapUrl} />
+                  {editing && (
+                    <button type="button" onClick={() => setAddressModalOpen(true)} style={addressChangeButtonStyle}>
+                      <MapPin size={13} /> Изменить и пересчитать
+                    </button>
+                  )}
                   <DetailInput editing={editing} liveCommit label="Комментарий" tone="clear" value={cardFamily.comment ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, comment: value }))} />
                 </DetailPanel>
               </div>
@@ -677,6 +714,277 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <TabHistoryLazy loaded={auditLoaded} onLoad={loadAudit} audit={audit} />
           )}
         </div>
+      </section>
+      {addressModalOpen && (
+        <AddressChangeModal
+          initialAddress={draftFamily.fullAddress}
+          children={draftChildren}
+          branches={branches}
+          onClose={() => setAddressModalOpen(false)}
+          onApply={applyAddressPlan}
+        />
+      )}
+    </div>
+  );
+}
+
+export interface AddressRoutePlan {
+  childId: string;
+  childName: string;
+  branchName: string;
+  oldDistanceKm?: number;
+  oldZone: Zone;
+  oldPrice: number;
+  distanceKm?: number;
+  zone?: Zone;
+  price?: number;
+  error?: string;
+}
+
+export function AddressChangeModal({ initialAddress, children, branches, onClose, onApply }: {
+  initialAddress: string;
+  children: Child[];
+  branches: V2BranchOption[];
+  onClose: () => void;
+  onApply: (point: GeocodingCandidate, plans: AddressRoutePlan[]) => void;
+}) {
+  const [query, setQuery] = useState(initialAddress);
+  const [candidates, setCandidates] = useState<GeocodingCandidate[]>([]);
+  const [point, setPoint] = useState<GeocodingCandidate | null>(null);
+  const [plans, setPlans] = useState<AddressRoutePlan[]>([]);
+  const [busy, setBusy] = useState<'search' | 'route' | null>(null);
+  const [error, setError] = useState('');
+  const mapContainerRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<any>(null);
+  const placemarkRef = useRef<any>(null);
+  const routeRequestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => {
+    return () => {
+      routeRequestRef.current?.abort();
+      mapRef.current?.destroy?.();
+      mapRef.current = null;
+      placemarkRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!point || !mapContainerRef.current) return;
+    let cancelled = false;
+    loadYandexMaps().then(ymaps => {
+      if (cancelled || !mapContainerRef.current) return;
+      const coordinates = [point.latitude, point.longitude];
+      if (mapRef.current && placemarkRef.current) {
+        mapRef.current.setCenter(coordinates, 16);
+        placemarkRef.current.geometry.setCoordinates(coordinates);
+        return;
+      }
+      const map = new ymaps.Map(mapContainerRef.current, {
+        center: coordinates,
+        zoom: 16,
+        controls: ['zoomControl'],
+      });
+      const placemark = new ymaps.Placemark(coordinates, {}, {
+        preset: 'islands#darkOrangeDotIcon',
+        draggable: true,
+      });
+      placemark.events.add('dragend', async () => {
+        const nextCoordinates = placemark.geometry.getCoordinates();
+        const latitude = Number(nextCoordinates?.[0]);
+        const longitude = Number(nextCoordinates?.[1]);
+        if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return;
+        setBusy('route');
+        setError('');
+        try {
+          const nextPoint = await reverseGeocode(latitude, longitude);
+          setPoint(nextPoint);
+          setQuery(nextPoint.address);
+          setCandidates([]);
+          await calculateRoutes(nextPoint);
+        } catch (nextError) {
+          setError(nextError instanceof Error ? nextError.message : 'Не удалось проверить точку');
+        } finally {
+          setBusy(null);
+        }
+      });
+      map.geoObjects.add(placemark);
+      mapRef.current = map;
+      placemarkRef.current = placemark;
+    }).catch(nextError => {
+      if (!cancelled) setError(nextError instanceof Error ? nextError.message : 'Не удалось загрузить карту');
+    });
+    return () => { cancelled = true; };
+  // Map instance is intentionally retained while only its point changes.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [point?.latitude, point?.longitude]);
+
+  async function calculateRoutes(nextPoint: GeocodingCandidate) {
+    routeRequestRef.current?.abort();
+    const controller = new AbortController();
+    routeRequestRef.current = controller;
+    setBusy('route');
+    const nextPlans = await Promise.all(children.map(async child => {
+      const branch = branches.find(item => item.id === child.branchId)
+        ?? branches.find(item => item.code === child.branchCode);
+      const base: AddressRoutePlan = {
+        childId: child.id,
+        childName: child.childName,
+        branchName: branch?.shortName || branch?.name || child.branchShort || child.branchName || 'Школа не указана',
+        oldDistanceKm: child.distanceKm,
+        oldZone: child.zone,
+        oldPrice: Number(child.finalPrice || 0),
+      };
+      if (branch?.latitude == null || branch?.longitude == null) {
+        return { ...base, error: 'У филиала нет координат' };
+      }
+      try {
+        const distanceKm = await getDrivingDistanceKm(nextPoint, {
+          latitude: Number(branch.latitude),
+          longitude: Number(branch.longitude),
+        }, controller.signal);
+        const zone = getZoneByDistance(distanceKm);
+        const repriced = applyChildPricingPatch(child, { zone });
+        return { ...base, distanceKm, zone, price: Number(repriced.finalPrice || 0) };
+      } catch (nextError) {
+        if (controller.signal.aborted) return { ...base, error: 'Расчёт отменён' };
+        return { ...base, error: nextError instanceof Error ? nextError.message : 'Маршрут не найден' };
+      }
+    }));
+    if (!controller.signal.aborted) {
+      setPlans(nextPlans);
+      setBusy(null);
+    }
+  }
+
+  async function searchAddress(event: React.FormEvent) {
+    event.preventDefault();
+    if (query.trim().length < 4) {
+      setError('Введите улицу и номер дома');
+      return;
+    }
+    setBusy('search');
+    setError('');
+    setPlans([]);
+    try {
+      const found = await geocodeAddress(query);
+      setCandidates(found);
+      if (found.length === 0) setError('Адрес не найден. Уточните улицу и дом.');
+    } catch (nextError) {
+      setError(nextError instanceof Error ? nextError.message : 'Ошибка поиска адреса');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function chooseCandidate(candidate: GeocodingCandidate) {
+    setPoint(candidate);
+    setQuery(candidate.address);
+    setCandidates([]);
+    setError('');
+    try {
+      await calculateRoutes(candidate);
+    } catch (nextError) {
+      setBusy(null);
+      setError(nextError instanceof Error ? nextError.message : 'Ошибка расчёта маршрута');
+    }
+  }
+
+  const canApply = Boolean(point)
+    && plans.length === children.length
+    && plans.length > 0
+    && plans.every(plan => !plan.error && plan.distanceKm != null && plan.zone);
+
+  return (
+    <div onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }} style={addressModalOverlayStyle}>
+      <section role="dialog" aria-modal="true" aria-labelledby="address-change-title" style={addressModalCardStyle}>
+        <header style={addressModalHeaderStyle}>
+          <div>
+            <h2 id="address-change-title" style={{ margin: 0, fontSize: 18, color: '#111827' }}>Смена адреса</h2>
+            <p style={{ margin: '5px 0 0', fontSize: 12, color: '#667085' }}>Найдите дом, проверьте точку и новую стоимость.</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={Boolean(busy)} aria-label="Закрыть" style={closeButtonStyle}><X size={17} /></button>
+        </header>
+
+        <div style={{ padding: 18, display: 'grid', gap: 14, overflowY: 'auto' }}>
+          <form onSubmit={searchAddress} style={{ display: 'flex', gap: 8 }}>
+            <input autoFocus value={query} onChange={event => setQuery(event.target.value)} placeholder="Например: ул. Аалы Токомбаева, 21/2" style={addressSearchInputStyle} />
+            <button type="submit" disabled={Boolean(busy)} style={addressPrimaryButtonStyle}>
+              <Search size={15} /> {busy === 'search' ? 'Поиск…' : 'Найти'}
+            </button>
+          </form>
+
+          {candidates.length > 0 && (
+            <div style={addressCandidatesStyle}>
+              <div style={{ padding: '9px 12px 5px', fontSize: 10, fontWeight: 850, color: '#7B8491', textTransform: 'uppercase' }}>Выберите точный адрес</div>
+              {candidates.map((candidate, index) => (
+                <button key={`${candidate.latitude}-${candidate.longitude}-${index}`} type="button" onClick={() => chooseCandidate(candidate)} style={addressCandidateButtonStyle}>
+                  <MapPin size={15} color="#31A4A5" />
+                  <span>{candidate.address}</span>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {error && <div style={addressErrorStyle}><AlertTriangle size={15} /> {error}</div>}
+
+          {point && (
+            <>
+              <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1.25fr) minmax(280px, .75fr)', gap: 14 }}>
+                <div ref={mapContainerRef} style={addressMapStyle} />
+                <div style={addressPointSummaryStyle}>
+                  <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
+                    <MapPin size={18} color="#31A4A5" style={{ flexShrink: 0, marginTop: 2 }} />
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 850, color: '#1F2937', lineHeight: 1.45 }}>{point.address}</div>
+                      <div style={{ marginTop: 6, fontSize: 11, color: '#667085' }}>{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</div>
+                    </div>
+                  </div>
+                  <div style={{ marginTop: 14, paddingTop: 12, borderTop: '1px solid #E5ECEF', fontSize: 11, lineHeight: 1.5, color: '#667085' }}>
+                    Если точка неточная, перетащите маркер к нужному дому. Маршруты пересчитаются автоматически.
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ border: '1px solid #E3EAED', borderRadius: 13, overflow: 'hidden' }}>
+                <div style={{ padding: '10px 12px', background: '#F7FAFA', fontSize: 11, fontWeight: 900, color: '#344054' }}>
+                  {busy === 'route' ? 'Считаем маршруты…' : 'Предварительный пересчёт'}
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 11 }}>
+                    <thead><tr style={{ color: '#7B8491', textAlign: 'left' }}>
+                      <th style={addressTableCellStyle}>Ребёнок</th><th style={addressTableCellStyle}>Школа</th><th style={addressTableCellStyle}>Расстояние</th><th style={addressTableCellStyle}>Зона</th><th style={addressTableCellStyle}>Цена</th>
+                    </tr></thead>
+                    <tbody>{plans.map(plan => (
+                      <tr key={plan.childId} style={{ borderTop: '1px solid #EEF2F3' }}>
+                        <td style={addressTableCellStyle}><b>{plan.childName}</b></td>
+                        <td style={addressTableCellStyle}>{plan.branchName}</td>
+                        {plan.error ? (
+                          <td colSpan={3} style={{ ...addressTableCellStyle, color: '#C62828' }}>{plan.error}</td>
+                        ) : (
+                          <>
+                            <td style={addressTableCellStyle}>{plan.oldDistanceKm != null ? `${plan.oldDistanceKm} → ` : ''}<b>{plan.distanceKm} км</b></td>
+                            <td style={addressTableCellStyle}>{plan.oldZone} → <b>{plan.zone}</b></td>
+                            <td style={addressTableCellStyle}>{money(plan.oldPrice)} → <b style={{ color: plan.price !== plan.oldPrice ? '#B45309' : '#237F81' }}>{money(plan.price ?? 0)}</b></td>
+                          </>
+                        )}
+                      </tr>
+                    ))}</tbody>
+                  </table>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <footer style={addressModalFooterStyle}>
+          <span style={{ fontSize: 11, color: '#667085' }}>Старые оплаты и начисления не изменяются.</span>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" onClick={onClose} disabled={Boolean(busy)} style={addressSecondaryButtonStyle}>Отмена</button>
+            <button type="button" onClick={() => point && onApply(point, plans)} disabled={!canApply || Boolean(busy)} style={{ ...addressPrimaryButtonStyle, opacity: canApply && !busy ? 1 : .5 }}>
+              <Check size={15} /> Применить к карточке
+            </button>
+          </div>
+        </footer>
       </section>
     </div>
   );
@@ -1384,6 +1692,160 @@ const secondaryHeaderButtonStyle: React.CSSProperties = {
   background: '#F4F7F8',
   color: '#667085',
   boxShadow: 'none',
+};
+
+const addressChangeButtonStyle: React.CSSProperties = {
+  minHeight: 30,
+  margin: '4px 8px',
+  border: '1px solid #B9DDDD',
+  borderRadius: 8,
+  background: '#F0FAFA',
+  color: '#237F81',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 6,
+  fontSize: 11,
+  fontWeight: 850,
+  cursor: 'pointer',
+};
+
+const addressModalOverlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  zIndex: 1800,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  padding: 24,
+  background: 'rgba(23, 34, 47, .32)',
+  backdropFilter: 'blur(2px)',
+};
+
+const addressModalCardStyle: React.CSSProperties = {
+  width: 'min(920px, 100%)',
+  maxHeight: 'calc(100vh - 48px)',
+  display: 'grid',
+  gridTemplateRows: 'auto minmax(0, 1fr) auto',
+  overflow: 'hidden',
+  borderRadius: 18,
+  background: '#fff',
+  boxShadow: '0 28px 80px rgba(15, 23, 42, .24)',
+};
+
+const addressModalHeaderStyle: React.CSSProperties = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  padding: '17px 18px',
+  borderBottom: '1px solid #E5ECEF',
+};
+
+const addressSearchInputStyle: React.CSSProperties = {
+  flex: 1,
+  minWidth: 0,
+  height: 40,
+  border: '1px solid #CDD7DB',
+  borderRadius: 10,
+  padding: '0 12px',
+  outline: 'none',
+  color: '#111827',
+  fontSize: 13,
+  fontWeight: 650,
+};
+
+const addressPrimaryButtonStyle: React.CSSProperties = {
+  minHeight: 40,
+  border: 'none',
+  borderRadius: 10,
+  padding: '0 15px',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: 7,
+  background: '#31A4A5',
+  color: '#fff',
+  fontSize: 12,
+  fontWeight: 850,
+  cursor: 'pointer',
+};
+
+const addressSecondaryButtonStyle: React.CSSProperties = {
+  ...addressPrimaryButtonStyle,
+  border: '1px solid #DCE4E7',
+  background: '#fff',
+  color: '#667085',
+};
+
+const addressCandidatesStyle: React.CSSProperties = {
+  display: 'grid',
+  overflow: 'hidden',
+  border: '1px solid #DDE6E8',
+  borderRadius: 11,
+  background: '#fff',
+};
+
+const addressCandidateButtonStyle: React.CSSProperties = {
+  width: '100%',
+  minHeight: 38,
+  border: 'none',
+  borderTop: '1px solid #EEF2F3',
+  padding: '8px 12px',
+  display: 'flex',
+  alignItems: 'center',
+  gap: 9,
+  background: '#fff',
+  color: '#344054',
+  textAlign: 'left',
+  fontSize: 12,
+  cursor: 'pointer',
+};
+
+const addressErrorStyle: React.CSSProperties = {
+  minHeight: 36,
+  padding: '8px 11px',
+  border: '1px solid #F5C2C2',
+  borderRadius: 9,
+  display: 'flex',
+  alignItems: 'center',
+  gap: 8,
+  background: '#FFF5F5',
+  color: '#B42318',
+  fontSize: 11,
+  fontWeight: 750,
+};
+
+const addressMapStyle: React.CSSProperties = {
+  height: 270,
+  overflow: 'hidden',
+  border: '1px solid #DCE5E8',
+  borderRadius: 13,
+  background: '#EEF3F4',
+};
+
+const addressPointSummaryStyle: React.CSSProperties = {
+  minHeight: 140,
+  padding: 14,
+  border: '1px solid #DCE5E8',
+  borderRadius: 13,
+  background: '#F8FBFB',
+};
+
+const addressTableCellStyle: React.CSSProperties = {
+  padding: '9px 12px',
+  whiteSpace: 'nowrap',
+};
+
+const addressModalFooterStyle: React.CSSProperties = {
+  minHeight: 64,
+  padding: '11px 18px',
+  borderTop: '1px solid #E5ECEF',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 16,
+  background: '#FBFCFC',
 };
 
 function teacherPriceButtonStyle(active: boolean): React.CSSProperties {

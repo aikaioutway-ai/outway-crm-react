@@ -829,6 +829,38 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
   return { rows, totalFamilies, totalChildren, totalWithTransfer, totalWithoutTransfer };
 }
 
+/** Загружает полный отфильтрованный набор семей для операций, которые не
+ * должны зависеть от текущей страницы интерфейса (например, Excel-экспорт). */
+export async function fetchAllV2FamiliesPages(params: Omit<FamiliesPageParams, 'page'> = {}): Promise<FamiliesPageResult> {
+  const pageSize = params.pageSize ?? FAMILIES_PAGE_SIZE_DEFAULT;
+  const rows: FamilyListRow[] = [];
+  let page = 0;
+  let totals: Omit<FamiliesPageResult, 'rows'> = {
+    totalFamilies: 0,
+    totalChildren: 0,
+    totalWithTransfer: 0,
+    totalWithoutTransfer: 0,
+  };
+
+  while (true) {
+    const result = await fetchV2FamiliesPage({ ...params, pageSize, page });
+    if (page === 0) {
+      totals = {
+        totalFamilies: result.totalFamilies,
+        totalChildren: result.totalChildren,
+        totalWithTransfer: result.totalWithTransfer,
+        totalWithoutTransfer: result.totalWithoutTransfer,
+      };
+    }
+    rows.push(...result.rows);
+    page += 1;
+
+    if (!result.rows.length || page * pageSize >= result.totalFamilies) break;
+  }
+
+  return { rows, ...totals };
+}
+
 export async function fetchV2Family(familyId: string): Promise<Family | null> {
   const [familyRes, childRes] = await Promise.all([
     supabase.from('v2_families').select('*').eq('id', familyId).single(),

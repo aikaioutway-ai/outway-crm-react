@@ -24,10 +24,11 @@ interface CashflowTransaction {
   orderNumber: string;
   orderId?: string;
   amount: number;
+  editTab: 'payment' | 'driver' | 'pnl';
 }
 
 interface B2BCashflowProps {
-  onOpenOrder?: (orderId: string) => void;
+  onOpenOrder?: (orderId: string, tab?: 'payment' | 'driver' | 'pnl') => void;
 }
 
 export default function B2BCashflow({ onOpenOrder }: B2BCashflowProps) {
@@ -55,6 +56,7 @@ export default function B2BCashflow({ onOpenOrder }: B2BCashflowProps) {
         orderNumber: payment.orderNumber,
         orderId: payment.orderId,
         amount: payment.amount,
+        editTab: 'payment',
       }));
     const outcome: CashflowTransaction[] = expenses
       .filter(expense => !(expense.source === 'driver_payment' && expense.sourceId && !validPayoutIds.has(expense.sourceId)))
@@ -67,6 +69,7 @@ export default function B2BCashflow({ onOpenOrder }: B2BCashflowProps) {
         orderNumber: expense.orderNumber,
         orderId: orderIdsByNumber.get(expense.orderNumber),
         amount: expense.amount,
+        editTab: expense.source === 'driver_payment' ? 'driver' : expense.source === 'tax_4pct' ? 'payment' : 'pnl',
       }));
     return [...income, ...outcome];
   }, [expenses, orders, payments, payouts]);
@@ -146,6 +149,6 @@ export default function B2BCashflow({ onOpenOrder }: B2BCashflowProps) {
 
     <div className="b2b-cashflow-table-wrap"><table><thead><tr><th>{monthHead('Период', 'month')}</th><th>{monthHead('Выручка', 'income')}</th><th>{monthHead('Все расходы', 'expense')}</th><th>{monthHead('Чистый поток', 'net')}</th><th>{monthHead('На начало', 'opening')}</th><th>{monthHead('На конец', 'closing')}</th></tr></thead><tbody>{expensesLoading ? <tr><td colSpan={6} className="empty">Загрузка…</td></tr> : sortedMonths.map(month => <tr key={month.month} onClick={() => { setSelectedMonthNumber(month.month); setTransactionSort({ key: 'date', direction: 'desc' }); }}><td><button type="button" className="month" aria-label={`Открыть движение денег за ${month.label.toLocaleLowerCase('ru-RU')}`}><span><b>{month.label}</b><small>{month.rows.length} операций</small></span></button></td><td className="income">{money(month.income)}</td><td className="expense">{money(month.expense)}</td><td className={month.net < 0 ? 'negative' : 'net'}>{money(month.net)}</td><td>{money(month.opening)}</td><td className={month.closing < 0 ? 'negative' : 'closing'}>{money(month.closing)}</td></tr>)}</tbody><tfoot><tr><td>Итого за {year}</td><td>{money(totals.income)}</td><td>{money(totals.expense)}</td><td>{money(totals.net)}</td><td>{money(openingBalance)}</td><td>{money(closingBalance)}</td></tr></tfoot></table></div>
 
-    {selectedMonth && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedMonthNumber(null); }}><article className="b2b-cashflow-month-card" role="dialog" aria-modal="true" aria-labelledby="b2b-cashflow-month-title"><header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><WalletCards size={22} /></span><div><small>Движение денег</small><h2 id="b2b-cashflow-month-title">{selectedMonth.label} {year}</h2><p>{selectedMonth.rows.length} операций · чистый поток {money(selectedMonth.net)}</p></div></div><div className="b2b-client-profile-summary"><span>Поступило: <b>{money(selectedMonth.income)}</b></span><span>Расходы: <b>{money(selectedMonth.expense)}</b></span><button type="button" onClick={() => setSelectedMonthNumber(null)} aria-label="Закрыть"><X size={18} /></button></div></header><div className="b2b-cashflow-month-body"><div className="b2b-cashflow-transactions-wrap"><table><thead><tr><th>{transactionHead('Дата', 'date')}</th><th>{transactionHead('Движение', 'direction')}</th><th>{transactionHead('Категория', 'category')}</th><th>{transactionHead('Описание', 'description')}</th><th>{transactionHead('Заказ', 'orderNumber')}</th><th className="number">{transactionHead('Сумма', 'amount')}</th></tr></thead><tbody>{sortedTransactions.length ? sortedTransactions.map(transaction => <tr key={transaction.id}><td>{transaction.date}</td><td><span className={`b2b-cashflow-direction ${transaction.direction}`}>{transaction.direction === 'income' ? 'Поступление' : 'Расход'}</span></td><td>{transaction.category}</td><td>{transaction.description}</td><td>{transaction.orderId && onOpenOrder ? <button type="button" className="b2b-cashflow-order-link" onClick={() => onOpenOrder(transaction.orderId!)}>{transaction.orderNumber}</button> : transaction.orderNumber}</td><td className={`number amount ${transaction.direction}`}>{transaction.direction === 'income' ? '+' : '−'}{money(transaction.amount)}</td></tr>) : <tr><td colSpan={6} className="empty">В этом месяце движения денег нет</td></tr>}</tbody></table></div></div></article></div>}
+    {selectedMonth && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedMonthNumber(null); }}><article className="b2b-cashflow-month-card" role="dialog" aria-modal="true" aria-labelledby="b2b-cashflow-month-title"><header className="b2b-client-profile-head"><div className="b2b-client-profile-identity"><span><WalletCards size={22} /></span><div><small>Движение денег</small><h2 id="b2b-cashflow-month-title">{selectedMonth.label} {year}</h2><p>{selectedMonth.rows.length} операций · чистый поток {money(selectedMonth.net)}</p></div></div><div className="b2b-client-profile-summary"><span>Поступило: <b>{money(selectedMonth.income)}</b></span><span>Расходы: <b>{money(selectedMonth.expense)}</b></span><button type="button" onClick={() => setSelectedMonthNumber(null)} aria-label="Закрыть"><X size={18} /></button></div></header><div className="b2b-cashflow-month-body"><div className="b2b-cashflow-transactions-wrap"><table><thead><tr><th>{transactionHead('Дата', 'date')}</th><th>{transactionHead('Движение', 'direction')}</th><th>{transactionHead('Категория', 'category')}</th><th>{transactionHead('Описание', 'description')}</th><th>{transactionHead('Заказ', 'orderNumber')}</th><th className="number">{transactionHead('Сумма', 'amount')}</th></tr></thead><tbody>{sortedTransactions.length ? sortedTransactions.map(transaction => <tr key={transaction.id} className={transaction.orderId ? 'b2b-openable-row' : undefined} onClick={() => transaction.orderId && onOpenOrder?.(transaction.orderId, transaction.editTab)} title={transaction.orderId ? 'Открыть исходный заказ и редактирование' : undefined}><td>{transaction.date}</td><td><span className={`b2b-cashflow-direction ${transaction.direction}`}>{transaction.direction === 'income' ? 'Поступление' : 'Расход'}</span></td><td>{transaction.category}</td><td>{transaction.description}</td><td>{transaction.orderId && onOpenOrder ? <button type="button" className="b2b-cashflow-order-link" onClick={event => { event.stopPropagation(); onOpenOrder(transaction.orderId!, transaction.editTab); }}>{transaction.orderNumber}</button> : transaction.orderNumber}</td><td className={`number amount ${transaction.direction}`}>{transaction.direction === 'income' ? '+' : '−'}{money(transaction.amount)}</td></tr>) : <tr><td colSpan={6} className="empty">В этом месяце движения денег нет</td></tr>}</tbody></table></div></div></article></div>}
   </section>;
 }

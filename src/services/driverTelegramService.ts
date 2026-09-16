@@ -105,9 +105,9 @@ export async function connectDriverTelegramGroup(params: {
   const data = await callDriverTelegramAdmin<{ group: DriverTelegramGroupRow }>(
     params.sessionToken,
     {
-      action: 'connect_group',
-      group_reference: params.groupReference,
-      group_name: params.groupName,
+      action: 'link_group',
+      chat_id: params.groupReference,
+      title: params.groupName,
       transfer_id: params.transferId,
       driver_id: params.driverId,
     },

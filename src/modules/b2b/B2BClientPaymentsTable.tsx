@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, X } from 'lucide-react';
 import { B2B_QUERY_KEYS } from '../../hooks/useB2BData';
-import { updateB2BClientPayment } from '../../services/b2bDataService';
+import { addB2BAudit, updateB2BClientPayment } from '../../services/b2bDataService';
 import {
   B2B_PAYMENT_METHODS,
   B2BPaymentMethod,
@@ -34,13 +34,14 @@ interface Props {
   payments: B2BPaymentRecord[];
   canEditStatus: boolean;
   onOpenOrder?: (orderId: string) => void;
+  userName?: string;
 }
 
 function compareText(left: string, right: string): number {
   return left.localeCompare(right, 'ru-RU', { numeric: true, sensitivity: 'base' });
 }
 
-export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpenOrder }: Props) {
+export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpenOrder, userName = 'CRM' }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; direction: SortDirection }>({ key: 'paymentDate', direction: 'desc' });
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<PaymentDraft | null>(null);
@@ -96,6 +97,7 @@ export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpen
         comment: draft.comment.trim(),
         ...(canEditStatus ? { status: draft.status } : {}),
       });
+      await addB2BAudit({ entityId: payment.orderId, entityType: 'b2b_payment', action: 'payment_update', actorName: userName, oldValue: payment, newValue: draft });
       await queryClient.invalidateQueries({ queryKey: B2B_QUERY_KEYS.payments });
       cancelEdit();
     } catch (saveError) {

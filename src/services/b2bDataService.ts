@@ -13,6 +13,7 @@ export interface B2BOrderRecord {
   routeTo: string;
   requestDate: string;
   departureDate: string;
+  departureTime?: string;
   transport: string;
   transportCount: number;
   pricePerUnit: number;
@@ -24,6 +25,17 @@ export interface B2BOrderRecord {
   driverName: string;
   driverPricePerUnit?: number;
   driverTotal?: number;
+}
+
+export interface B2BAuditRecord {
+  id: string;
+  actorName: string;
+  action: string;
+  entityType: string;
+  oldValue: unknown;
+  newValue: unknown;
+  comment: string;
+  createdAt: string;
 }
 
 export interface B2BDriverPayoutRecord {
@@ -114,15 +126,23 @@ const assert = (error: { message: string } | null) => {
 };
 
 export async function fetchB2BOrders(): Promise<B2BOrderRecord[]> {
-  const { data, error } = await supabase.from('v2_b2b_orders').select(`
+  const ordersResult = await supabase.from('v2_b2b_orders').select(`
     *, client:v2_b2b_clients(company_name, contact_name),
     assignments:v2_b2b_order_driver_assignments(
       id, driver_id, driver_price, driver_total, created_at,
       driver:v2_drivers(full_name)
     )
   `).order('request_date', { ascending: false });
-  assert(error);
-  return (data ?? []).map((row: any) => {
+  assert(ordersResult.error);
+  const orderIds = (ordersResult.data ?? []).map((row: any) => String(row.id));
+  const timeLogsResult = orderIds.length
+    ? await supabase.from('v2_b2b_order_logs').select('order_id, new_value, created_at').in('order_id', orderIds).eq('changed_field', 'departure_time').order('created_at', { ascending: false }).limit(500)
+    : { data: [] };
+  const latestTimeByOrder = new Map<string, string>();
+  (timeLogsResult.data ?? []).forEach((log: any) => {
+    if (!latestTimeByOrder.has(String(log.order_id))) latestTimeByOrder.set(String(log.order_id), String(log.new_value ?? ''));
+  });
+  return (ordersResult.data ?? []).map((row: any) => {
     const assignments = [...(row.assignments ?? [])].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
     const assignment = assignments[0];
     return {
@@ -135,6 +155,7 @@ export async function fetchB2BOrders(): Promise<B2BOrderRecord[]> {
       routeTo: row.route_to,
       requestDate: dateLabel(row.request_date),
       departureDate: dateLabel(row.departure_date),
+      departureTime: row.departure_time ? String(row.departure_time).slice(0, 5) : latestTimeByOrder.get(String(row.id)) ?? '',
       transport: transportLabel(row.transport_type),
       transportCount: Number(row.transport_count),
       pricePerUnit: Number(row.price_per_unit),
@@ -148,6 +169,34 @@ export async function fetchB2BOrders(): Promise<B2BOrderRecord[]> {
       driverTotal: assignment ? Number(assignment.driver_total) : undefined,
     };
   });
+}
+
+export async function fetchB2BAudit(entityId: string): Promise<B2BAuditRecord[]> {
+  const { data, error } = await supabase.from('v2_audit_log').select('*').eq('entity_id', entityId)
+    .order('created_at', { ascending: false }).limit(100);
+  assert(error);
+  return (data ?? []).map((row: any) => ({
+    id: String(row.id), actorName: row.actor_name ?? 'CRM', action: row.action ?? '',
+    entityType: row.entity_type ?? '', oldValue: row.old_value, newValue: row.new_value,
+    comment: row.comment ?? '', createdAt: row.created_at ?? '',
+  }));
+}
+
+export async function addB2BAudit(params: {
+  entityId: string;
+  entityType: string;
+  action: string;
+  actorName?: string;
+  oldValue?: unknown;
+  newValue?: unknown;
+  comment?: string;
+}): Promise<void> {
+  const { error } = await supabase.from('v2_audit_log').insert({
+    actor_name: params.actorName ?? 'CRM', action: params.action, entity_type: params.entityType,
+    entity_id: params.entityId, old_value: params.oldValue ?? null, new_value: params.newValue ?? null,
+    comment: params.comment ?? null,
+  });
+  if (error) console.warn('B2B audit write failed:', error.message);
 }
 
 export async function fetchB2BDriverPayouts(): Promise<B2BDriverPayoutRecord[]> {
@@ -253,7 +302,7 @@ export async function updateB2BClient(id: string, client: Omit<B2BClientRecord, 
   assert(error);
 }
 
-export async function createB2BOrder(order: Pick<B2BOrderRecord, 'clientId' | 'routeFrom' | 'routeTo' | 'requestDate' | 'departureDate' | 'transport' | 'transportCount' | 'pricePerUnit' | 'total' | 'status'> & { category?: B2BOrderRecord['category'] }) {
+export async function createB2BOrder(order: Pick<B2BOrderRecord, 'clientId' | 'routeFrom' | 'routeTo' | 'requestDate' | 'departureDate' | 'departureTime' | 'transport' | 'transportCount' | 'pricePerUnit' | 'total' | 'status'> & { category?: B2BOrderRecord['category'] }) {
   const { data: last } = await supabase.from('v2_b2b_orders').select('order_number').order('created_at', { ascending: false }).limit(1);
   const next = Math.max(1, Number(String(last?.[0]?.order_number ?? '').match(/(\d+)$/)?.[1] ?? 0) + 1);
   const payload = {
@@ -264,6 +313,10 @@ export async function createB2BOrder(order: Pick<B2BOrderRecord, 'clientId' | 'r
   };
   const { data, error } = await supabase.from('v2_b2b_orders').insert(payload).select('id, order_number').single();
   assert(error);
+  if (order.departureTime) {
+    const { error: logError } = await supabase.from('v2_b2b_order_logs').insert({ order_id: data!.id, changed_field: 'departure_time', new_value: order.departureTime });
+    assert(logError);
+  }
   return { id: data!.id, number: data!.order_number };
 }
 
@@ -281,6 +334,10 @@ export async function updateB2BOrder(id: string, patch: Partial<B2BOrderRecord>)
   if (patch.status !== undefined) payload.status = patch.status;
   const { error } = await supabase.from('v2_b2b_orders').update(payload).eq('id', id);
   assert(error);
+  if (patch.departureTime !== undefined) {
+    const { error: logError } = await supabase.from('v2_b2b_order_logs').insert({ order_id: id, changed_field: 'departure_time', new_value: patch.departureTime });
+    assert(logError);
+  }
 }
 
 export async function saveB2BAssignment(order: B2BOrderRecord, driverId: string, driverPrice: number): Promise<B2BAssignmentRecord> {
