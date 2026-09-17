@@ -699,7 +699,7 @@ function rowToFamily(row: ChildRow): Family {
 
 export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
-  const canDeleteFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
+  const canDeleteFamilies = ['admin', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const canManageChildStops = ['admin', 'gen_director', 'manager', 'logist', 'senior_logist'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
@@ -1679,8 +1679,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   const modeRows = useMemo(() => {
     if (isPagedMode) return pagedRows;
-    return mode === 'logistics' ? logisticsWorkRows(rows) : rows;
-  }, [isPagedMode, pagedRows, mode, rows]);
+    return mode === 'logistics' && quickChildStatus !== 'rejected' ? logisticsWorkRows(rows) : rows;
+  }, [isPagedMode, pagedRows, mode, rows, quickChildStatus]);
 
   useEffect(() => {
     if (!initialOpenFamilyId) return;
