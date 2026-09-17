@@ -93,6 +93,18 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     fetchV2Branches().then(next => { if (activeFamilyIdRef.current === family.id) setBranches(next); }).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
+
+  // The card is mounted immediately with a lightweight table-row preview.
+  // The full family (including its comment) arrives shortly afterwards with
+  // the same id, so the id-only effect above cannot observe that update.
+  useEffect(() => {
+    if (activeFamilyIdRef.current !== family.id || editing) return;
+    setSavedFamily(family);
+    setDraftFamily(family);
+  // Updating an open draft from a background refresh would discard edits.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [family]);
+
   async function loadChildren(): Promise<Child[]> {
     setLoadingKids(true);
     const requestedFamilyId = family.id;
