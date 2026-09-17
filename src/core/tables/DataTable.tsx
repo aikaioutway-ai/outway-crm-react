@@ -53,6 +53,8 @@ export interface DataTableProps<T = any> {
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
   onRowOpen?: (row: T) => void;
+  onRowReject?: (row: T) => void;
+  canRowReject?: (row: T) => boolean;
   onRowDelete?: (row: T) => void;
   onRowEdit?: (row: T) => void;
   onRowPayment?: (row: T) => void;
@@ -327,6 +329,8 @@ export function DataTable<T extends Record<string, any>>({
   rowKey,
   onRowClick,
   onRowOpen,
+  onRowReject,
+  canRowReject,
   onRowDelete,
   onRowEdit: _onRowEdit,
   onRowPayment: _onRowPayment,
@@ -1091,6 +1095,11 @@ export function DataTable<T extends Record<string, any>>({
               setRowMenu(null);
             }}>
               <span>↗</span> Открыть карточку
+            </button>
+          )}
+          {onRowReject && (canRowReject?.(rowMenu.row) ?? true) && (
+            <button className="dt-ctx-item dt-ctx-item--reject" onClick={() => { onRowReject(rowMenu.row); setRowMenu(null); }}>
+              <span>×</span> Отказ
             </button>
           )}
           {onRowDelete && (

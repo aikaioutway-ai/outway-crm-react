@@ -2117,6 +2117,33 @@ export async function deleteV2Family(familyId: string): Promise<void> {
   invalidateFamiliesCache();
 }
 
+export async function rejectV2Family(familyId: string, actorName = 'CRM'): Promise<void> {
+  const { error: childrenError } = await supabase
+    .from('v2_children')
+    .update({ status: 'rejected' })
+    .eq('family_id', familyId);
+  if (childrenError) throw new Error(childrenError.message);
+
+  const { error: familyError } = await supabase
+    .from('v2_families')
+    .update({ status: 'rejected' })
+    .eq('id', familyId)
+    .select('id')
+    .single();
+  if (familyError) throw new Error(familyError.message);
+
+  // Отказ не удаляет данные. Отдельно фиксируем действие для истории карточки.
+  await supabase.from('v2_audit_log').insert({
+    actor_name: actorName,
+    action: 'reject',
+    entity_type: 'family_status',
+    entity_id: familyId,
+    new_value: { status: 'rejected' },
+    comment: 'Семья переведена в группу «Отказ»',
+  });
+  invalidateFamiliesCache();
+}
+
 // crm_page_filters: id uuid pk, mode text, tab_key text, metric text, vehicle_filter text, updated_at timestamptz
 // unique(mode, tab_key)
 export interface PageFilterSettings {

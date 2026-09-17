@@ -90,3 +90,29 @@ test('sorts families by the first child and keeps siblings together', async () =
     expect(names[2]).toContain('Алина');
   });
 });
+
+test('shows reject next to delete in the row menu', () => {
+  const onRowReject = jest.fn();
+  const onRowDelete = jest.fn();
+
+  render(
+    <DataTable
+      columns={columns}
+      data={[{ id: 'family-1', paymentMethod: 'cash' }]}
+      rowKey="id"
+      onRowReject={onRowReject}
+      onRowDelete={onRowDelete}
+      storageKey="family-reject-test"
+    />,
+  );
+
+  const table = screen.getAllByRole('table').at(-1)!;
+  fireEvent.contextMenu(within(table).getAllByRole('row')[1]);
+
+  expect(screen.getByRole('button', { name: /Отказ/ })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Удалить/ })).toBeInTheDocument();
+
+  fireEvent.click(screen.getByRole('button', { name: /Отказ/ }));
+  expect(onRowReject).toHaveBeenCalledWith(expect.objectContaining({ id: 'family-1' }));
+  expect(onRowDelete).not.toHaveBeenCalled();
+});

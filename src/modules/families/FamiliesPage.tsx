@@ -4,7 +4,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, deleteV2Family, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
@@ -3300,6 +3300,20 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               showProperties={columnsOpen ?? false}
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
+              onRowReject={canDeleteFamilies ? async (row) => {
+                if (!window.confirm(`Перевести семью "${row.parentName}" в «Отказ»? Все данные сохранятся.`)) return;
+                try {
+                  await rejectV2Family(row.familyId, userName);
+                  setRows(prev => {
+                    const next = prev.map(item => item.familyId === row.familyId ? { ...item, status: 'rejected' } : item);
+                    familiesRowsCache = next;
+                    return next;
+                  });
+                } catch (e: any) {
+                  window.alert('Не удалось перевести в отказ: ' + (e?.message ?? String(e)));
+                }
+              } : undefined}
+              canRowReject={(row) => row.status !== 'rejected'}
               onRowDelete={canDeleteFamilies ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
               onCellSave={handleCellSave}
               onExport={mode === 'logistics'

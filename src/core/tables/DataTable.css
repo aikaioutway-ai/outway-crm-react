@@ -421,6 +421,8 @@
 .dt-ctx-item:hover         { background: var(--dt-hover); }
 .dt-ctx-item--danger       { color: #DC2626; }
 .dt-ctx-item--danger:hover { background: #FEF2F2; }
+.dt-ctx-item--reject       { color: #B45309; }
+.dt-ctx-item--reject:hover { background: #FFFBEB; }
 .dt-ctx-item--active       { color: var(--dt-accent); font-weight: 700; background: var(--dt-hover); }
 
 .dt-calc-popup { min-width: 160px; }
