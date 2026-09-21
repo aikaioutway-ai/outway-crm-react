@@ -2137,12 +2137,6 @@ export async function addV2Audit(params: {
   if (error) throw new Error(error.message);
 }
 
-export async function deleteV2Family(familyId: string): Promise<void> {
-  const { error } = await supabase.from('v2_families').delete().eq('id', familyId);
-  if (error) throw new Error(error.message);
-  invalidateFamiliesCache();
-}
-
 export async function rejectV2Family(familyId: string, actorName = 'CRM'): Promise<void> {
   const { error: childrenError } = await supabase
     .from('v2_children')
