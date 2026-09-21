@@ -42,7 +42,7 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
   else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses', 'employees', 'b2b'];
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
-  else if (role === 'cashier')       sections = ['cashier', 'expenses', 'b2b'];
+  else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
   else sections = ['families'];
   return userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
 }

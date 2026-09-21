@@ -81,9 +81,9 @@ export default function TabFinance({
   const [confirmingRefundId, setConfirmingRefundId] = useState<string | null>(null);
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
-  const canCreatePayment = !isCashier || isAdmin;
+  const canCreatePayment = !isCashier || isAdmin || (isCashier && !readOnly);
   const canConfirmPayment = !readOnly && (isCashier || isAdmin);
-  const canCreateRefund = isManager || isAdmin;
+  const canCreateRefund = isManager || isAdmin || (isCashier && !readOnly);
   const canConfirmRefund = !readOnly && (isCashier || isAdmin);
 
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));

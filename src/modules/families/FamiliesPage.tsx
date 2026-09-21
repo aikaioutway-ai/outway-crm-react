@@ -1292,6 +1292,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
+    if (userRole === 'cashier') return false;
     try {
       if (['parentName', 'phone', 'secondPhone', 'contactName', 'contactPhone'].includes(key)) {
         const family = await fetchV2Family(row.familyId);
@@ -2601,8 +2602,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       },
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     }];
-    const dataCols = (isRequestsModule ? REQUEST_COLUMNS : isChargesMode ? CHARGES_COLUMNS : isPaymentsMode ? PAYMENTS_COLUMNS : COLUMNS).map(column => (
-      isRequestsModule
+    const dataCols = (isRequestsModule ? REQUEST_COLUMNS : isChargesMode ? CHARGES_COLUMNS : isPaymentsMode ? PAYMENTS_COLUMNS : COLUMNS).map(column => {
+      const configuredColumn = isRequestsModule
         ? {
             ...column,
             label: column.key === 'childName'
@@ -2636,8 +2637,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 },
               } : {}),
             }
-          : column
-    ));
+          : column;
+      return userRole === 'cashier' ? { ...configuredColumn, editable: false } : configuredColumn;
+    });
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
@@ -3315,7 +3317,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               } : undefined}
               canRowReject={(row) => row.status !== 'rejected'}
               onRowDelete={canDeleteFamilies ? async (row) => { if (!window.confirm(`Удалить семью "${row.parentName}" со всеми детьми и данными? Это необратимо.`)) return; try { await deleteV2Family(row.familyId); setRows(prev => { const next = prev.filter(r => r.familyId !== row.familyId); familiesRowsCache = next; return next; }); } catch (e: any) { window.alert('Не удалось удалить: ' + (e?.message ?? String(e))); } } : undefined}
-              onCellSave={handleCellSave}
+              onCellSave={userRole === 'cashier' ? undefined : handleCellSave}
               onExport={mode === 'logistics'
                 ? exportLogisticsRouteSheet
                 : isDirectoryMode
@@ -3366,13 +3368,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       </button>
                     </>
                   )}
-                  <button
-                    onClick={() => setShowNewFamily(true)}
-                    title="Новая заявка"
-                    style={{ width: 30, height: 30, border: 'none', borderRadius: 10, background: '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
-                  >
-                    <Plus size={16} />
-                  </button>
+                  {userRole !== 'cashier' && (
+                    <button
+                      onClick={() => setShowNewFamily(true)}
+                      title="Новая заявка"
+                      style={{ width: 30, height: 30, border: 'none', borderRadius: 10, background: '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                    >
+                      <Plus size={16} />
+                    </button>
+                  )}
                 </div>
               )}
             />
