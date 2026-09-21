@@ -285,6 +285,8 @@ export interface FamilyListRow {
   familyId: string;
   familyIndex: number;
   isFirstChild: boolean;
+  childCreatedAt: string | null;
+  transferAssignedAt: string | null;
   childName: string;
   childClass: string;
   parentName: string;
@@ -434,6 +436,8 @@ export function mapV2Child(row: any, family: Family): Child {
   return {
     id: String(row.id),
     familyId: String(row.family_id),
+    createdAt: row.created_at ?? undefined,
+    transferAssignedAt: row.transfer_assigned_at ?? undefined,
     childName: row.child_name ?? '',
     class: row.class_name ?? '',
     selfExitAllowed: Boolean(row.self_exit_allowed),
@@ -615,6 +619,8 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
         familyId: String(family.id),
         familyIndex,
         isFirstChild: idx === 0,
+        childCreatedAt: child?.created_at ?? family.created_at ?? null,
+        transferAssignedAt: child?.transfer_assigned_at ?? null,
         childName: child?.child_name ?? '',
         childClass: child?.class_name ?? '',
         parentName: family.parent_name ?? '',
@@ -736,6 +742,24 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
   const branchById: Record<string, typeof branches[number]> = {};
   branches.forEach(b => { branchById[b.id] = b; });
 
+  const childIds = (data ?? [])
+    .map((row: any) => row.child_id)
+    .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
+  const childDatesById: Record<string, { createdAt: string | null; transferAssignedAt: string | null }> = {};
+  if (childIds.length > 0) {
+    const { data: childDates, error: childDatesError } = await supabase
+      .from('v2_children')
+      .select('id, created_at, transfer_assigned_at')
+      .in('id', childIds);
+    if (childDatesError) throw new Error(childDatesError.message);
+    (childDates ?? []).forEach((row: any) => {
+      childDatesById[String(row.id)] = {
+        createdAt: row.created_at ?? null,
+        transferAssignedAt: row.transfer_assigned_at ?? null,
+      };
+    });
+  }
+
   const rowsByFamily: Record<string, any[]> = {};
   (data ?? []).forEach((row: any) => {
     if (!rowsByFamily[row.family_id]) rowsByFamily[row.family_id] = [];
@@ -771,6 +795,8 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
         familyId: String(child.family_id),
         familyIndex,
         isFirstChild: idx === 0,
+        childCreatedAt: childDatesById[String(child.child_id)]?.createdAt ?? child.family_created_at ?? null,
+        transferAssignedAt: childDatesById[String(child.child_id)]?.transferAssignedAt ?? null,
         childName: formatName(child.child_name),
         childClass: child.class_name ?? '',
         parentName: formatName(child.parent_name),

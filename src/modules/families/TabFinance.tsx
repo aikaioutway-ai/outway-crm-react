@@ -39,6 +39,10 @@ interface Props {
   readOnly?: boolean;
 }
 
+export function canCreateFamilyRefund(isManager: boolean, isAdmin: boolean, isCashier: boolean): boolean {
+  return isManager || isAdmin || isCashier;
+}
+
 export default function TabFinance({
   charges,
   payments,
@@ -83,7 +87,9 @@ export default function TabFinance({
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
   const canCreatePayment = !isCashier || isAdmin || (isCashier && !readOnly);
   const canConfirmPayment = !readOnly && (isCashier || isAdmin);
-  const canCreateRefund = isManager || isAdmin || (isCashier && !readOnly);
+  // A cashier may create a refund without enabling the general family editor.
+  // `readOnly` protects non-financial family fields and must not hide this form.
+  const canCreateRefund = canCreateFamilyRefund(isManager, isAdmin, isCashier);
   const canConfirmRefund = !readOnly && (isCashier || isAdmin);
 
   const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));

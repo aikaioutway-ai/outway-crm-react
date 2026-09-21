@@ -62,6 +62,8 @@ export interface Family {
 export interface Child {
   id: string;
   familyId: string;
+  createdAt?: string;
+  transferAssignedAt?: string;
   childName: string;
   class: string;
   selfExitAllowed: boolean;

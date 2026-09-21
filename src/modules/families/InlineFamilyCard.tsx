@@ -47,6 +47,12 @@ const DISCOUNT_PERCENT_OPTIONS = Array.from({ length: 21 }, (_, i) => {
   return { value, label: i === 0 ? '-' : `${value}%` };
 });
 
+function formatInlineDate(value?: string): string {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('ru-RU');
+}
+
 export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', onUpdated }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [children, setChildren] = useState<Child[]>([]);
@@ -88,7 +94,14 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setTab(initialTab);
     setFinanceLoaded(false);
     setAuditLoaded(false);
-    loadChildren();
+    void loadChildren().catch(() => {
+      if (activeFamilyIdRef.current === family.id) setLoadingKids(false);
+    });
+    // Balance and finance totals load immediately with the card instead of
+    // waiting until the user opens the Finance tab.
+    void loadFinance().catch(() => {
+      if (activeFamilyIdRef.current === family.id) setFinanceLoaded(false);
+    });
     loadDocuments();
     fetchV2Branches().then(next => { if (activeFamilyIdRef.current === family.id) setBranches(next); }).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -130,16 +143,21 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if (activeFamilyIdRef.current === requestedFamilyId) setLoadingDocuments(false);
     }
   }
-  async function loadFinance(kids = children) {
+  async function loadFinance(kids?: Child[]) {
+    const requestedFamilyId = family.id;
     setLoadingFinance(true);
-    const snap = await fetchFinanceSnapshot(family.id, kids);
-    setCharges(snap.charges);
-    setPayments(snap.payments);
-    setPaymentItems(snap.paymentItems);
-    setRefunds(snap.refunds);
-    setMainBalance(snap.mainBalance ?? 0);
-    setLoadingFinance(false);
-    setFinanceLoaded(true);
+    try {
+      const snap = await fetchFinanceSnapshot(requestedFamilyId, kids);
+      if (activeFamilyIdRef.current !== requestedFamilyId) return;
+      setCharges(snap.charges);
+      setPayments(snap.payments);
+      setPaymentItems(snap.paymentItems);
+      setRefunds(snap.refunds);
+      setMainBalance(snap.mainBalance ?? 0);
+      setFinanceLoaded(true);
+    } finally {
+      if (activeFamilyIdRef.current === requestedFamilyId) setLoadingFinance(false);
+    }
   }
   async function loadAudit() {
     try {
@@ -633,7 +651,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               )}
               <SideMetric label="Платежи" value={money(totalPaid)} />
               {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
-              <SideMetric label="Баланс" value={money(mainBalance)} alert={mainBalance < 0} />
+              <SideMetric label="Баланс" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
               <div style={{ width: 10, flexShrink: 0 }} />
               <SideMetric label="Начислено" value={money(totalCharged)} />
               <SideMetric label="Оплачено" value={money(totalPaid)} />
@@ -1410,6 +1428,9 @@ function ChildCard({
         <span style={childCardIndexStyle}>{index + 1}</span>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13.5, fontWeight: 850, color: '#111827' }}>{formatName(child.childName) || 'Без имени'}</span>
+          <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 650, whiteSpace: 'nowrap' }}>
+            CRM: {formatInlineDate(child.createdAt)} · Посадка: {formatInlineDate(child.transferAssignedAt)}
+          </span>
           <span style={{ fontSize: 11, color: '#8A94A3', fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
         </div>
         <span style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 10.5, fontWeight: 750, padding: '4px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>

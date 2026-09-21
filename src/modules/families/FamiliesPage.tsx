@@ -78,6 +78,8 @@ export interface ChildRow {
   familyId: string;
   familyIndex: number;
   isFirstChild: boolean;
+  childCreatedAt: string | null;
+  transferAssignedAt: string | null;
   childName: string;
   childClass: string;
   parentName: string;
@@ -359,6 +361,8 @@ const LOGISTICS_CHART_COLORS = [
 
 type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidCount' | 'paidSum' | 'balanceSum' | 'pendingSum' | 'pendingAmount' | 'rejectedCount' | 'rejectedSum' | 'allPaymentsCount' | 'allPaymentsSum';
 type LogisticsVehicleFilter = 'all' | VehicleType;
+type DirectoryDateSortField = 'application' | 'seating';
+type DirectoryDateSort = { field: DirectoryDateSortField; direction: 'asc' | 'desc' };
 type TransferCardData = {
   transfer: V2TransferDashboardRow;
   driver?: V2DriverTableRow;
@@ -715,6 +719,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
+  const [directoryDateSort, setDirectoryDateSort] = useState<DirectoryDateSort>({ field: 'application', direction: 'desc' });
   const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
   const restrictedSchoolKey = allowedSchools && allowedSchools.length === 1 && allowedSchools[0] !== 'ALL' ? allowedSchools[0] : null;
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
@@ -1805,6 +1810,32 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }), [dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
 
   const filteredSorted = useMemo(() => {
+    if (isDirectoryMode) {
+      const timestamp = (row: ChildRow) => {
+        const value = directoryDateSort.field === 'application' ? row.childCreatedAt : row.transferAssignedAt;
+        if (!value) return null;
+        const parsed = new Date(value).getTime();
+        return Number.isNaN(parsed) ? null : parsed;
+      };
+      const familyTimestamp = new Map<string, number | null>();
+      filtered.forEach(row => {
+        const value = timestamp(row);
+        const current = familyTimestamp.get(row.familyId);
+        if (value != null && (current == null || value > current)) familyTimestamp.set(row.familyId, value);
+        else if (!familyTimestamp.has(row.familyId)) familyTimestamp.set(row.familyId, null);
+      });
+      return [...filtered].sort((a, b) => {
+        const aTime = familyTimestamp.get(a.familyId) ?? null;
+        const bTime = familyTimestamp.get(b.familyId) ?? null;
+        if (aTime == null && bTime != null) return 1;
+        if (aTime != null && bTime == null) return -1;
+        if (aTime != null && bTime != null && aTime !== bTime) {
+          return directoryDateSort.direction === 'desc' ? bTime - aTime : aTime - bTime;
+        }
+        if (a.familyId === b.familyId) return a.familyIndex - b.familyIndex;
+        return a.familyIndex - b.familyIndex;
+      });
+    }
     if (!isChargesMode) return filtered;
     const periodFamilyIds = chargesPeriodKey !== 'ALL' && periodStats.length > 0
       ? new Set(periodStats.map(s => s.familyId))
@@ -1813,7 +1844,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       ? filtered.filter(r => periodFamilyIds.has(r.familyId))
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
-  }, [filtered, isChargesMode, chargesPeriodKey, periodStats]);
+  }, [filtered, isChargesMode, isDirectoryMode, directoryDateSort, chargesPeriodKey, periodStats]);
 
   const transferVehicleType = useCallback((transfer: string) => {
     if (!transfer || transfer === 'empty') return 'empty';
@@ -2638,13 +2669,29 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               } : {}),
             }
           : column;
+      if (isDirectoryMode && configuredColumn.key === 'childName') {
+        return {
+          ...configuredColumn,
+          render: (value: unknown, row: ChildRow) => {
+            const dateValue = directoryDateSort.field === 'application' ? row.childCreatedAt : row.transferAssignedAt;
+            return (
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(value || '—')}</div>
+                <div style={{ marginTop: 1, fontSize: 9.5, lineHeight: 1.1, color: '#9AA5AE', fontWeight: 650 }}>
+                  {directoryDateSort.field === 'application' ? 'Заявка' : 'Посадка'} · {formatDateShort(dateValue ?? undefined)}
+                </div>
+              </div>
+            );
+          },
+        };
+      }
       return userRole === 'cashier' ? { ...configuredColumn, editable: false } : configuredColumn;
     });
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isChargesMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, periodStatsByFamily]);
+  }, [isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, directoryDateSort, periodStatsByFamily]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows
@@ -3326,6 +3373,24 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               hideToolbar={tableBarsCollapsed}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {isDirectoryMode && ([
+                    { field: 'application' as const, label: 'Дата заявки' },
+                    { field: 'seating' as const, label: 'Дата посадки' },
+                  ]).map(item => {
+                    const active = directoryDateSort.field === item.field;
+                    return (
+                      <button
+                        key={item.field}
+                        type="button"
+                        onClick={() => setDirectoryDateSort(current => current.field === item.field
+                          ? { ...current, direction: current.direction === 'desc' ? 'asc' : 'desc' }
+                          : { field: item.field, direction: 'desc' })}
+                        style={{ height: 26, padding: '0 9px', border: `1px solid ${active ? '#31A4A5' : 'var(--border)'}`, borderRadius: 7, background: active ? '#E8F7F7' : '#fff', color: active ? '#237F81' : 'var(--text-2)', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        {item.label}{active ? (directoryDateSort.direction === 'desc' ? ' ↓' : ' ↑') : ''}
+                      </button>
+                    );
+                  })}
                   {isPagedMode && pagedTotalFamilies > 0 && (
                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>
                       <button
