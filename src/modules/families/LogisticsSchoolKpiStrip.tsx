@@ -4,7 +4,7 @@ import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
-import { isNewUnassignedRow } from './familiesRowHelpers';
+import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
 
 interface LogisticsSchoolKpiStripProps {
   schoolKey: string;
@@ -27,9 +27,8 @@ function workRows(rows: FamilyListRow[]): FamilyListRow[] {
 function transferStats(rows: FamilyListRow[]) {
   const transferMap = new Map<string, { vehicleType: string; count: number }>();
   workRows(rows).forEach(row => {
-    if (!row.transferNumber) return;
-    const branchKey = row.branchId ?? row.branchFilter ?? row.branchShort ?? row.branchName ?? 'school';
-    const key = `${branchKey}:${row.transferNumber}`;
+    const key = transferIdentityKey(row);
+    if (!key) return;
     const prev = transferMap.get(key);
     transferMap.set(key, {
       vehicleType: prev?.vehicleType ?? row.vehicleType,

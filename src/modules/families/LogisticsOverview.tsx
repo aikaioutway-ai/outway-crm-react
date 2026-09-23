@@ -7,7 +7,7 @@ import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolA
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
-import { isNewUnassignedRow } from './familiesRowHelpers';
+import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
 
 type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 'microbusCount' | 'lightVehicleCount';
 
@@ -62,9 +62,8 @@ function workRows(rows: FamilyListRow[]): FamilyListRow[] {
 function transferStats(rows: FamilyListRow[]) {
   const transferMap = new Map<string, { vehicleType: string; count: number }>();
   workRows(rows).forEach(row => {
-    if (!row.transferNumber) return;
-    const branchKey = row.branchId ?? row.branchFilter ?? row.branchShort ?? row.branchName ?? 'school';
-    const key = `${branchKey}:${row.transferNumber}`;
+    const key = transferIdentityKey(row);
+    if (!key) return;
     const prev = transferMap.get(key);
     transferMap.set(key, {
       vehicleType: prev?.vehicleType ?? row.vehicleType,

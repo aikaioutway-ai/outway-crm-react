@@ -78,13 +78,29 @@ export function isNewUnassignedRow(row: Pick<ChildRow, 'status' | 'transferNumbe
   return row.status === 'new' && !row.transferNumber;
 }
 
+type TransferIdentityRow = {
+  transferNumber?: string | null;
+  branchFilter?: string | null;
+  branchId?: string | null;
+  branchShort?: string | null;
+  branchName?: string | null;
+};
+
+export function transferIdentityKey(row: TransferIdentityRow): string | null {
+  if (!row.transferNumber) return null;
+  // branchFilter is the CRM-level school/route grouping. For example,
+  // Indigo Kids and Asylkech both belong to ING, so transfer #1 is one
+  // transfer even though the children point to different branch rows.
+  const scopeKey = row.branchFilter || row.branchId || row.branchShort || row.branchName || 'school';
+  return `${scopeKey}:${row.transferNumber}`;
+}
+
 export function transferVehicleSummary(rows: ChildRow[]) {
   const transferMap = new Map<string, { vehicleType?: string; studentCount: number }>();
 
   logisticsWorkRows(rows).forEach(row => {
-    if (!row.transferNumber) return;
-    const branchKey = row.branchId ?? row.branchFilter ?? row.branchShort ?? row.branchName ?? 'school';
-    const key = `${branchKey}:${row.transferNumber}`;
+    const key = transferIdentityKey(row);
+    if (!key) return;
     const prev = transferMap.get(key);
     transferMap.set(key, {
       vehicleType: prev?.vehicleType ?? row.vehicleType,
