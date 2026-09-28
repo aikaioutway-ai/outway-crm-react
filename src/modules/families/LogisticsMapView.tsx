@@ -20,7 +20,7 @@ import {
   updateRouteZone,
 } from '../../services/routeZoneService';
 import { VEHICLE_COLOR } from './LogisticsSchoolTransferDashboard';
-import { SCHOOL_TABS } from './constants';
+import { SCHOOL_TABS, isSchoolAllowed } from './constants';
 import { SCHOOL_COLORS } from './LogisticsOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -32,6 +32,7 @@ interface LogisticsMapViewProps {
   userRole?: string;
   userName?: string;
   onSelectSchool: (key: string) => void;
+  allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
 }
 
@@ -100,7 +101,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
   return `${escapeHtml(address)}${childBlocks}`;
 }
 
-export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, onSelectSchool, onSidebarWidthChange }: LogisticsMapViewProps) {
+export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsMapViewProps) {
   const { data: rows = null } = useFamiliesTable(false);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -150,13 +151,13 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const dockItems = useMemo(() => SCHOOL_TABS.filter(tab => tab.key !== 'ALL').map((tab, index) => ({
+  const dockItems = useMemo(() => SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools)).map((tab, index) => ({
     key: tab.key,
     label: tab.label,
     color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
     logo: tab.logo,
     active: tab.key === schoolKey,
-  })), [schoolKey]);
+  })), [allowedSchools, schoolKey]);
 
   useEffect(() => {
     fetchV2Branches()

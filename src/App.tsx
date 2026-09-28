@@ -124,6 +124,10 @@ export default function App() {
     setManagerSchoolMode('directory');
     setManagerSchoolKey(schoolKey);
   };
+  const handleLogisticsSelectSchool = (schoolKey: string) => {
+    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    setLogisticsSchoolKey(schoolKey);
+  };
   const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
     if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     setLogisticsSearch(searchQuery);
@@ -504,7 +508,7 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            {logisticsSchoolKey ? (
+            {logisticsSchoolKey && isSchoolAllowed(logisticsSchoolKey, currentUser?.schoolKeys) ? (
               <>
               <DashboardTopPanel>
                 <LogisticsSchoolKpiStrip
@@ -525,7 +529,8 @@ export default function App() {
                   search={logisticsSearch}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
-                  onSelectSchool={setLogisticsSchoolKey}
+                  onSelectSchool={handleLogisticsSelectSchool}
+                  allowedSchools={currentUser?.schoolKeys}
                   onSidebarWidthChange={setSchoolSidebarReserveWidth}
                 />
               ) : (
@@ -535,7 +540,7 @@ export default function App() {
                   userName={currentUser?.name}
                   allowedSchools={currentUser?.schoolKeys}
                   initialQuickFilter={{ activeTab: logisticsSchoolKey }}
-                  onSchoolKeyChange={setLogisticsSchoolKey}
+                  onSchoolKeyChange={handleLogisticsSelectSchool}
                   adminFiltersOpen={adminFiltersOpen}
                   onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                   columnsOpen={columnsOpen}
@@ -550,7 +555,8 @@ export default function App() {
               </>
             ) : (
               <LogisticsOverview
-                onSelectSchool={setLogisticsSchoolKey}
+                onSelectSchool={handleLogisticsSelectSchool}
+                allowedSchools={currentUser?.schoolKeys}
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             )}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Bus, Car, ChevronDown, ChevronRight, Inbox, School } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
-import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
+import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, isSchoolAllowed } from './constants';
 import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
@@ -13,6 +13,7 @@ type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 
 
 interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
+  allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
 }
 
@@ -83,8 +84,8 @@ function transferStats(rows: FamilyListRow[]) {
   };
 }
 
-function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier): LogisticsSchoolStat[] {
-  return SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && SCHOOL_TIER_2_KEYS.includes(tab.key) === (tier === '2.0')).map((tab, index) => {
+function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedSchools?: string[]): LogisticsSchoolStat[] {
+  return SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (tier === '2.0')).map((tab, index) => {
     const schoolRows = rows.filter(row => row.branchFilter === tab.key);
     const transfers = transferStats(schoolRows);
     return {
@@ -101,8 +102,12 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier): Logisti
   });
 }
 
-export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange }: LogisticsOverviewProps) {
-  const { data: rows = null } = useFamiliesTable(false);
+export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsOverviewProps) {
+  const { data: allRows = null } = useFamiliesTable(false);
+  const rows = useMemo(
+    () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
+    [allRows, allowedSchools],
+  );
   const applicationCounts = useSchoolApplicationCounts();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
@@ -114,7 +119,7 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier), [rows, schoolTier]);
+  const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier, allowedSchools), [rows, schoolTier, allowedSchools]);
   const totals = useMemo(() => {
     const tierRows = (rows ?? []).filter(row => SCHOOL_TIER_2_KEYS.includes(row.branchFilter) === (schoolTier === '2.0'));
     const transferSummary = transferStats(tierRows);
