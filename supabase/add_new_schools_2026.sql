@@ -14,8 +14,8 @@ set name = excluded.name,
 with branch_data(school_code, code, short_name, name, address, latitude, longitude, manager_phone) as (
   values
     ('KRT', 'KRT', 'KRT', 'Креатив-Таалим', 'ул. 7 Апреля, 156', 42.858703::double precision, 74.634108::double precision, '996999260894'),
-    ('ABL', 'ABL1', 'ABL #1', 'Академия будущих лидеров (Авангард)', 'ул. Байтик баатыра, 4а/8', 42.84358275219382::double precision, 74.63115331300138::double precision, '996550242924'),
-    ('ABL', 'ABL2', 'ABL #2', 'Академия будущих лидеров (Мавлянова)', 'ул. Жуная Мавлянова, 10', 42.8173419841855::double precision, 74.60383769639346::double precision, '996550242924')
+    ('ABL', 'ABL1', 'ABL #2', 'Академия будущих лидеров (Авангард)', 'ул. Байтик баатыра, 4а/8', 42.8173419841855::double precision, 74.60383769639346::double precision, '996550242924'),
+    ('ABL', 'ABL2', 'ABL #1', 'Академия будущих лидеров (Мавлянова)', 'ул. Жуная Мавлянова, 10', 42.84358275219382::double precision, 74.63115331300138::double precision, '996550242924')
 )
 insert into public.v2_school_branches(
   school_id, code, short_name, name, address,
