@@ -19,8 +19,6 @@ const PRICE_RULES: Record<SchoolCode, { zone1: number; zone2: number; zone3: num
   EDISON:  { zone1: 6500, zone2: 7000, zone3: null },
   ABL1:    { zone1: 6000, zone2: 6500, zone3: null },
   ABL2:    { zone1: 6000, zone2: 6500, zone3: null },
-  KLM:     { zone1: 6000, zone2: 6500, zone3: null },
-  TSL:     { zone1: 6000, zone2: 6500, zone3: null },
   SANARIP: { zone1: 6000, zone2: 6500, zone3: null },
   ELLIPSE: { zone1: 6000, zone2: 6500, zone3: null },
 };

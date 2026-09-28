@@ -19,8 +19,6 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
   { key: 'ABL1',  label: 'ABL #2',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'ABL2',  label: 'ABL #1',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
-  { key: 'KLM',   label: 'KLM',   codes: ['KLM'],  branches: [], logo: '/school-logos/KLM.png' },
-  { key: 'TSL',   label: 'TSL',   codes: ['TSL'],  branches: [], logo: '/school-logos/TSL.png' },
   { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
   { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
@@ -29,7 +27,7 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
 // School 2.0 — школы без постоянного контракта: обычно один минивэн,
 // небольшой поток и вероятность, что сотрудничество не продолжится.
 // Остальные школы (не в этом списке) — School 1.0.
-export const SCHOOL_TIER_2_KEYS = ['BJ', 'EDI', 'KLM', 'LA_P', 'SNP', 'TSL', 'ING_P', 'ING_W'];
+export const SCHOOL_TIER_2_KEYS = ['BJ', 'EDI', 'LA_P', 'SNP', 'ING_P', 'ING_W'];
 
 // Школы с несколькими филиалами — схлопываются в один ряд, разворачиваются по клику
 export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; children: string[] }[] = [
@@ -87,8 +85,6 @@ export const BRANCH_SHORT: Record<string, string> = {
   'Академия будущих лидеров(Авангард)':   'ABL #2',
   'Академия будущих лидеров (Мавлянова)': 'ABL #1',
   'Академия будущих лидеров(Мавлянова)':  'ABL #1',
-  'Калем Академи Скуул':           'KLM',
-  'Tesla Academy':                 'TSL',
   'Light Academy Primary':         'LA_P',
   'Международная школа Сан Арип':  'SNP',
   'Ellipse International School':  'ELS',
@@ -126,8 +122,6 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Академия будущих лидеров(Авангард)':   'ABL1',
   'Академия будущих лидеров (Мавлянова)': 'ABL2',
   'Академия будущих лидеров(Мавлянова)':  'ABL2',
-  'Калем Академи Скуул': 'KLM',
-  'Tesla Academy': 'TSL',
   'Light Academy Primary': 'LA_P',
   'Международная школа Сан Арип': 'SNP',
   'Ellipse International School': 'ELS',
@@ -139,7 +133,6 @@ export const SCHOOL_NAME: Record<string, string> = {
   GENIUS: 'Genius', GENIUS4: 'Genius 4', NOVA: 'Nova',
   INDIGO: 'Indigo', ERUDIT: 'Erudit', TENSAY: 'Tensay', EDISON: 'Edison',
   ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
-  KLM: 'Kalem Academy', TSL: 'Tesla Academy',
   SANARIP: 'Sanarip', ELLIPSE: 'Ellipse',
 };
 
@@ -149,7 +142,7 @@ export const SCHOOL_SHORT: Record<string, string> = {
   GENIUS: 'GEN #2', GENIUS4: 'GEN #4', NOVA: 'NOVA',
   INDIGO: 'ING', ERUDIT: 'ERU', TENSAY: 'TIS', EDISON: 'EDI',
   AES_KAS: 'AES',
-  ABL1: 'ABL #2', ABL2: 'ABL #1', KLM: 'KLM', TSL: 'TSL',
+  ABL1: 'ABL #2', ABL2: 'ABL #1',
   SANARIP: 'SNP', ELLIPSE: 'ELS',
 };
 

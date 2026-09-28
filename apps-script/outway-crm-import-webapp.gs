@@ -73,9 +73,7 @@ const SCHOOL_CODE_TO_BRANCH = {
   ABL1: 'ABL1',
   'ABL #1': 'ABL1',
   ABL2: 'ABL2',
-  'ABL #2': 'ABL2',
-  KLM: 'KLM',
-  TSL: 'TSL'
+  'ABL #2': 'ABL2'
 };
 
 const BRANCH_NAME_TO_CODE = {
@@ -110,9 +108,7 @@ const BRANCH_NAME_TO_CODE = {
   'Академия будущих лидеров (Авангард)': 'ABL1',
   'Академия будущих лидеров(Авангард)': 'ABL1',
   'Академия будущих лидеров (Мавлянова)': 'ABL2',
-  'Академия будущих лидеров(Мавлянова)': 'ABL2',
-  'Калем Академи Скуул': 'KLM',
-  'Tesla Academy': 'TSL'
+  'Академия будущих лидеров(Мавлянова)': 'ABL2'
 };
 
 const BRANCH_CODE_TO_SCHOOL_CODE = {
@@ -134,9 +130,7 @@ const BRANCH_CODE_TO_SCHOOL_CODE = {
   GEN4: 'GENIUS',
   KRT: 'KRT',
   ABL1: 'ABL',
-  ABL2: 'ABL',
-  KLM: 'KLM',
-  TSL: 'TSL'
+  ABL2: 'ABL'
 };
 
 function doGet(e) {

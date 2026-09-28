@@ -15,8 +15,6 @@ const SCHOOL_LINKS: { name: string; code: string; url: string; logo: string }[] 
   { name: 'Light Academy',              code: 'LIGHT',   logo: '/school-logos/LA.png',   url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1010' },
   { name: 'Light Academy Primary',      code: 'LIGHT_PRIMARY', logo: '/school-logos/LA.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1019' },
   { name: 'Академия будущих лидеров',   code: 'ABL',     logo: '/school-logos/ABL.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1014' },
-  { name: 'Калем Академи Скуул',        code: 'KLM',     logo: '/school-logos/KLM.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1015' },
-  { name: 'Tesla Academy',              code: 'TSL',     logo: '/school-logos/TSL.png',  url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1016' },
   { name: 'Ellipse International School', code: 'ELLIPSE', logo: '/school-logos/ELS.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1017' },
   { name: 'Международная школа Сан Арип', code: 'SANARIP', logo: '/school-logos/SNP.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1018' },
 ];
