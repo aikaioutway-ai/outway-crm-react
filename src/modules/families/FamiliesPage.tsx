@@ -179,6 +179,20 @@ const MODE_LABEL: Record<FamiliesMode, string> = {
 const TRANSFER_OPTIONS = Array.from({ length: 30 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }));
 const TRANSFER_BAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
 const STOP_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
+const CHILD_STATUS_OPTIONS = [
+  { value: 'new', label: 'Новый' },
+  { value: 'waiting', label: 'Ожидание' },
+  { value: 'boarded', label: 'Посажен' },
+  { value: 'paused', label: 'Пауза' },
+  { value: 'rejected', label: 'Отказ' },
+];
+const CHILD_STATUS_TONE: Record<string, { bg: string; color: string }> = {
+  new: { bg: '#E0F2F1', color: '#0F5F5F' },
+  waiting: { bg: '#FEF3C7', color: '#92400E' },
+  boarded: { bg: '#DCFCE7', color: '#166534' },
+  paused: { bg: '#EDE9FE', color: '#5B21B6' },
+  rejected: { bg: '#ECEFF3', color: '#52606F' },
+};
 const PAYMENT_METHOD_OPTIONS: { value: PaymentType; label: string }[] = [
   { value: 'cash', label: 'Наличные' },
   { value: 'transfer', label: 'АйКай Мбанк' },
@@ -205,6 +219,18 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'childClass', label: 'Класс', type: 'text', category: 'Клиент', width: 65, editable: true,
     render: (val) => <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{val ? `${val} кл.` : '—'}</span>,
+  },
+  {
+    key: 'status', label: 'Статус', type: 'select', category: 'Клиент', width: 105, editable: true,
+    editOptions: CHILD_STATUS_OPTIONS,
+    render: (val) => {
+      const tone = CHILD_STATUS_TONE[String(val)] ?? CHILD_STATUS_TONE.new;
+      return (
+        <span style={{ display: 'inline-flex', padding: '3px 8px', borderRadius: 7, background: tone.bg, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>
+          {CHILD_STATUS_OPTIONS.find(option => option.value === val)?.label ?? '—'}
+        </span>
+      );
+    },
   },
   {
     key: 'secondPhone', label: 'Второй телефон', type: 'text', category: 'Клиент', width: 125, editable: true, visible: false,
@@ -1331,6 +1357,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             source: mode === 'logistics' ? 'logistics' : 'family_card',
             actorName: userName,
           });
+          await load(false);
+          return true;
+        }
+        if (key === 'status') {
+          if (value === 'rejected' && !window.confirm(`Перевести «${row.childName || row.parentName}» в «Отказ»?`)) return false;
+          // Статус меняет семейную скидку и может создать начисление при посадке.
+          await updateV2Child(row.rowId, { status: value });
           await load(false);
           return true;
         }

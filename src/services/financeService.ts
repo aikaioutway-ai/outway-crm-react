@@ -418,117 +418,20 @@ export async function confirmFamilyPayment(params: {
 }
 
 /**
- * Отменяет подтверждение платежа:
- * - статус → pending
- * - откатывает баланс кошелька
- * - снимает применение к начислениям
+ * Возвращает подтверждённый платёж на проверку: база откатывает пополнение
+ * основного и депозитного баланса и снимает списания, если баланс ушёл в минус.
  */
 export async function unconfirmFamilyPayment(payment: FamilyPayment): Promise<void> {
-  const confirmedAmount = payment.amount;
-
-  // 1. Откатываем статус платежа
-  const { error: e1 } = await supabase
-    .from('v2_payments')
-    .update({
-      status: 'pending',
-      confirmed_main_amount: 0,
-      confirmed_deposit_amount: 0,
-      reviewed_by: null,
-      reviewed_at: null,
-    })
-    .eq('id', payment.id);
-  if (e1) throw new Error(e1.message);
-
-  // 2. Вычитаем из кошелька
-  const { error: e2 } = await supabase.rpc('v2_add_wallet_transaction', {
-    p_family_id: payment.familyId,
-    p_wallet_type: 'main',
-    p_transaction_type: 'payment_reversed',
-    p_amount: -confirmedAmount,
-    p_source_type: 'payment',
-    p_source_id: payment.id,
-    p_comment: 'Отмена подтверждения',
-    p_created_by: 'CRM',
+  const { error } = await supabase.rpc('v2_unconfirm_payment', {
+    p_payment_id: payment.id,
+    p_actor: 'CRM',
   });
-  if (e2) throw new Error(e2.message);
-
-  // 3. Пересчитываем применение к начислениям
-  await supabase.rpc('v2_apply_wallet_to_charges', {
-    p_family_id: payment.familyId,
-    p_wallet_type: 'main',
-    p_created_by: 'CRM',
-  });
+  if (error) throw new Error(error.message);
   invalidateFinanceCache();
 }
 
-// Учебный год: сентябрь(9)–май(5)
-const ACADEMIC_MONTHS = [9, 10, 11, 12, 1, 2, 3, 4, 5];
-
-function currentAcademicPeriod(): { month: number; year: number } | null {
-  const now = new Date();
-  const month = now.getMonth() + 1; // 1-based
-  const year = now.getFullYear();
-  if (!ACADEMIC_MONTHS.includes(month)) return null; // июнь, июль, август — не сезон
-  return { month, year };
-}
-
-async function familyHasDeposit(familyId: string): Promise<boolean> {
-  const { data } = await supabase
-    .from('v2_charges')
-    .select('id')
-    .eq('family_id', familyId)
-    .eq('charge_type', 'deposit')
-    .limit(1);
-  return (data?.length ?? 0) > 0;
-}
-
-async function createDepositCharge(familyId: string, children: Child[]): Promise<void> {
-  const activeChildren = children.filter(c => c.status === 'boarded');
-  if (!activeChildren.length) return;
-  const rows = activeChildren.map(child => ({
-    child_id: child.id,
-    family_id: familyId,
-    period_month: 5, // депозит хранится как май
-    period_year: new Date().getFullYear(),
-    charge_type: 'deposit',
-    original_amount: Number(child.finalPrice ?? 0),
-    amount: Number(child.finalPrice ?? 0),
-    paid_amount: 0,
-    pricing_managed: true,
-    status: 'unpaid',
-  }));
-  const { error } = await supabase
-    .from('v2_charges')
-    .upsert(rows, { onConflict: 'child_id,period_month,period_year,charge_type', ignoreDuplicates: true });
-  if (error) throw new Error(error.message);
-  await supabase.rpc('v2_apply_wallet_to_charges', {
-    p_family_id: familyId,
-    p_wallet_type: 'deposit',
-    p_created_by: 'auto',
-  });
-}
-
-/**
- * Вызывается при смене статуса ребёнка → boarded.
- * Логика:
- * - Август (8): ничего, начисление пойдёт 1 сентября
- * - Июнь/Июль: ничего, не сезон
- * - Сентябрь–Май: начисление за текущий месяц + депозит (если первый раз)
- */
-export async function autoChargeOnBoarding(familyId: string, children: Child[]): Promise<void> {
-  const period = currentAcademicPeriod();
-  if (!period) return; // не сезон или август
-
-  const hasDeposit = await familyHasDeposit(familyId);
-
-  // Начисление за текущий месяц
-  await createChargesForPeriod(familyId, children, period.month, period.year);
-
-  // Депозит — только если ещё не было
-  if (!hasDeposit) {
-    await createDepositCharge(familyId, children);
-  }
-}
+// Начисление при посадке (месяц + депозит) создаёт база — триггер
+// trg_v2_children_charge_on_boarding при переводе ребёнка в «Посажен».
 
 // ─── Возвраты ────────────────────────────────────────────────────────────────
 
