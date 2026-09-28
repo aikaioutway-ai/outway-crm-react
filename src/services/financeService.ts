@@ -3,6 +3,8 @@ import { safeStorageFileName, uploadToBucket } from './storage';
 import { queryClient, QK } from './queryClient';
 import {
   Charge,
+  ChargeDiscount,
+  ChargeDiscountReason,
   Child,
   FamilyPayment,
   FinanceSnapshot,
@@ -66,6 +68,22 @@ function mapCharge(row: any, childName?: string): Charge {
   };
 }
 
+function mapChargeDiscount(row: any): ChargeDiscount {
+  return {
+    id: String(row.id),
+    chargeId: String(row.charge_id),
+    childId: String(row.child_id),
+    familyId: String(row.family_id),
+    amount: Number(row.amount ?? 0),
+    reasonType: row.reason_type as ChargeDiscountReason,
+    comment: row.comment ?? '',
+    createdBy: row.created_by ?? undefined,
+    createdAt: String(row.created_at ?? ''),
+    cancelledAt: row.cancelled_at ?? undefined,
+    cancelledBy: row.cancelled_by ?? undefined,
+  };
+}
+
 function mapPayment(row: any): FamilyPayment {
   return {
     id: String(row.id),
@@ -118,7 +136,7 @@ function mapPaymentItem(row: any): PaymentItem {
 }
 
 export async function fetchFinanceSnapshot(familyId: string, children?: Child[]): Promise<FinanceSnapshot> {
-  const [chargeRes, paymentRes, walletRes, childrenRes, refundRes] = await Promise.all([
+  const [chargeRes, paymentRes, walletRes, childrenRes, refundRes, discountRes] = await Promise.all([
     supabase
       .from('v2_charges')
       .select('*')
@@ -140,6 +158,11 @@ export async function fetchFinanceSnapshot(familyId: string, children?: Child[])
       : supabase.from('v2_children').select('*').eq('family_id', familyId),
     supabase
       .from('v2_refunds')
+      .select('*')
+      .eq('family_id', familyId)
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('v2_charge_discounts')
       .select('*')
       .eq('family_id', familyId)
       .order('created_at', { ascending: false }),
@@ -177,8 +200,11 @@ export async function fetchFinanceSnapshot(familyId: string, children?: Child[])
 
   const refunds = refundRes.error ? [] : (refundRes.data ?? []).map(mapRefund);
 
+  const chargeDiscounts = discountRes.error ? [] : (discountRes.data ?? []).map(mapChargeDiscount);
+
   return {
     charges,
+    chargeDiscounts,
     payments,
     paymentItems,
     refunds,

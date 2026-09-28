@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
-import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
-import { applyChildPricingPatch, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, isTeacherPriced, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
+import { Family, Child, Charge, ChargeDiscount, ChargeDiscountReason, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
+import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
@@ -12,6 +12,8 @@ import {
   requestFamilyRefund, confirmFamilyRefund, rejectFamilyRefund,
 } from '../../services/financeService';
 import TabFinance from './TabFinance';
+import ChildDiscountModal, { ChildDiscountInput } from './ChildDiscountModal';
+import { addChargeDiscount, cancelChargeDiscount, setChildDiscount, setChildrenFixedPrice } from '../../services/discountService';
 import TabHistory from './TabHistory';
 import NotionSelect from '../../core/selects/NotionSelect';
 import { createCustomFamilyDocument, createDefaultFamilyDocuments, FamilyDocument, fetchFamilyDocuments, saveFamilyDocuments } from '../../services/familyDocumentService';
@@ -24,6 +26,7 @@ interface AuditEntry {
 }
 interface Props {
   family: Family; onClose: () => void; userRole?: string; userName?: string; initialTab?: Tab; onUpdated?: () => void;
+  sessionToken?: string;
 }
 type Tab = 'overview' | 'documents' | 'finance' | 'history';
 
@@ -42,10 +45,6 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
 ];
 const TRANSFER_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }))];
 const STOP_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))];
-const DISCOUNT_PERCENT_OPTIONS = Array.from({ length: 21 }, (_, i) => {
-  const value = String(i * 5);
-  return { value, label: i === 0 ? '-' : `${value}%` };
-});
 
 function formatInlineDate(value?: string): string {
   if (!value) return '—';
@@ -53,10 +52,12 @@ function formatInlineDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('ru-RU');
 }
 
-export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', onUpdated }: Props) {
+export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', onUpdated, sessionToken }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
+  const [chargeDiscounts, setChargeDiscounts] = useState<ChargeDiscount[]>([]);
+  const [discountChild, setDiscountChild] = useState<Child | null>(null);
   const [payments, setPayments] = useState<FamilyPayment[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
   const [refunds, setRefunds] = useState<Refund[]>([]);
@@ -82,6 +83,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const isAdmin = userRole === 'admin' || userRole === 'director' || userRole === 'gen_director';
   const isCashier = userRole === 'cashier';
   const isManager = userRole === 'manager';
+  const canManageDiscount = canManageDiscounts(userRole);
 
   const activeFamilyIdRef = useRef(family.id);
 
@@ -150,6 +152,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       const snap = await fetchFinanceSnapshot(requestedFamilyId, kids);
       if (activeFamilyIdRef.current !== requestedFamilyId) return;
       setCharges(snap.charges);
+      setChargeDiscounts(snap.chargeDiscounts);
       setPayments(snap.payments);
       setPaymentItems(snap.paymentItems);
       setRefunds(snap.refunds);
@@ -244,18 +247,48 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setSaveMsg('Адрес пересчитан · нажмите «Сохранить»');
   }
 
-  function toggleTeacherPricing() {
-    const sourceChildren = editing ? draftChildren : children;
-    const active = sourceChildren.length > 0 && sourceChildren.every(child => Boolean(child.teacherPrice ?? isTeacherPriced(child)));
-    const nextChildren = sourceChildren.map(child => applyChildPricingPatch(child, { teacherPrice: !active }));
-    if (!editing) {
-      setDraftFamily({ ...savedFamily });
-      setDeletedChildIds(new Set());
-      setDraftDocuments(savedDocuments.map(document => ({ ...document, scanFile: null })));
-      setEditing(true);
+  async function toggleTeacherPricing() {
+    const eligible = children.filter(child => supportsTeacherPrice(child));
+    if (!eligible.length) return;
+    const active = eligible.every(child => child.fixedPrice != null);
+    const reason = window.prompt(active ? 'Причина отмены цены учителя:' : 'Причина цены учителя:', active ? '' : 'Цена учителя')?.trim();
+    if (!reason) return;
+    try {
+      await setChildrenFixedPrice(sessionToken, {
+        childIds: eligible.map(child => child.id),
+        fixedPrice: active ? null : TEACHER_MONTHLY_PRICE,
+        reason,
+      });
+      await refreshAfterDiscountChange();
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось изменить цену учителя');
     }
-    setDraftChildren(nextChildren);
-    setSaveMsg('');
+  }
+
+  async function refreshAfterDiscountChange() {
+    const nextChildren = await loadChildren();
+    await loadFinance(nextChildren);
+    await loadAudit();
+    onUpdated?.();
+  }
+
+  async function saveChildDiscount(child: Child, input: ChildDiscountInput) {
+    await setChildDiscount(sessionToken, { childId: child.id, ...input });
+    await refreshAfterDiscountChange();
+  }
+
+  async function handleAddChargeDiscount(input: { chargeId: string; amount: number; reasonType: ChargeDiscountReason; comment: string }) {
+    await addChargeDiscount(sessionToken, input);
+    await loadFinance();
+    await loadAudit();
+    onUpdated?.();
+  }
+
+  async function handleCancelChargeDiscount(discount: ChargeDiscount) {
+    await cancelChargeDiscount(sessionToken, discount.id);
+    await loadFinance();
+    await loadAudit();
+    onUpdated?.();
   }
 
   function addDraftChild() {
@@ -514,16 +547,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if ('selfExitAllowed' in patch) dbPatch.self_exit_allowed = Boolean(nextChild.selfExitAllowed);
       if ('status' in patch) dbPatch.status = nextChild.status ?? 'new';
 
-      if (shouldReprice) {
-        dbPatch.base_price = nextChild.basePrice;
-        dbPatch.sibling_discount_percent = nextChild.siblingDiscountPercent;
-        dbPatch.manual_discount_percent = nextChild.manualDiscountPercent;
-        dbPatch.manual_discount_amount = nextChild.manualDiscountAmount;
-        dbPatch.final_price = nextChild.finalPrice;
-      } else if ('finalPrice' in patch) {
-        nextChild.finalPrice = Math.max(0, Number(nextChild.finalPrice || 0));
-        dbPatch.final_price = nextChild.finalPrice;
-      }
+      // Итоговую цену и скидки считает база (триггер v2_children_pricing_guard);
+      // скидки меняются только через discount-api.
+      if (shouldReprice) dbPatch.base_price = nextChild.basePrice;
 
       if ('vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch) {
         await updateV2ChildRoute({
@@ -537,9 +563,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         });
         delete dbPatch.vehicle_type;
         delete dbPatch.base_price;
-        delete dbPatch.final_price;
-        delete dbPatch.manual_discount_percent;
-        delete dbPatch.manual_discount_amount;
       }
 
       if (Object.keys(dbPatch).length > 0) {
@@ -547,8 +570,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       }
 
       const routeChanged = 'vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch;
-      const savedChildren = routeChanged
-        ? await fetchV2Children(family.id)
+      const savedChildren = routeChanged || shouldReprice || 'status' in patch
+        ? await fetchV2Children(family)
         : children.map(item => item.id === child.id ? nextChild : item);
       setChildren(savedChildren);
       await addAudit('Редактирование ребёнка', 'child', JSON.stringify(child), JSON.stringify(nextChild));
@@ -569,9 +592,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const cardFamily = editing ? draftFamily : savedFamily;
   const cardChildren = editing ? draftChildren : children;
   const cardDocuments = editing ? draftDocuments : savedDocuments;
-  const canManageTeacherPrice = isAdmin || isManager;
-  const teacherPricingAvailable = cardChildren.length > 0 && cardChildren.every(supportsTeacherPrice);
-  const teacherPricingActive = cardChildren.length > 0 && cardChildren.every(child => Boolean(child.teacherPrice ?? isTeacherPriced(child)));
+  const teacherPricingAvailable = children.length > 0 && children.some(supportsTeacherPrice);
+  const teacherPricingActive = teacherPricingAvailable && children.filter(supportsTeacherPrice).every(child => child.fixedPrice != null);
   const primaryChild = cardChildren[0];
   const familyMonthlyPrice = cardChildren.length > 0
     ? cardChildren.reduce((sum, c) => sum + Number(c.finalPrice || 0), 0)
@@ -660,7 +682,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            {canManageTeacherPrice && teacherPricingAvailable && (
+            {canManageDiscount && teacherPricingAvailable && !editing && (
               <button type="button" onClick={toggleTeacherPricing} disabled={savingAll} style={teacherPriceButtonStyle(teacherPricingActive)} title={`Постоянная цена ${money(TEACHER_MONTHLY_PRICE)}`}>
                 <GraduationCap size={14} /> {teacherPricingActive ? `Учитель · ${money(TEACHER_MONTHLY_PRICE)}` : 'Учитель'}
               </button>
@@ -711,7 +733,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
 
               <DetailPanel title={`Дети (${cardChildren.length})`}>
-                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
+                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
             </div>
           )}
@@ -732,6 +754,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               loaded={financeLoaded}
               onLoad={() => loadFinance()}
               charges={charges} payments={payments} paymentItems={paymentItems} refunds={refunds}
+              chargeDiscounts={chargeDiscounts} canManageDiscounts={canManageDiscount}
+              onAddChargeDiscount={handleAddChargeDiscount} onCancelChargeDiscount={handleCancelChargeDiscount}
               loading={loadingFinance} family={savedFamily} children={children}
               isAdmin={isAdmin} isCashier={isCashier} isManager={isManager} userRole={userRole as any}
               onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
@@ -747,6 +771,13 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           )}
         </div>
       </section>
+      {discountChild && (
+        <ChildDiscountModal
+          child={discountChild}
+          onClose={() => setDiscountChild(null)}
+          onSave={input => saveChildDiscount(discountChild, input)}
+        />
+      )}
       {addressModalOpen && (
         <AddressChangeModal
           initialAddress={draftFamily.fullAddress}
@@ -1326,6 +1357,19 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   );
 }
 
+function childDiscountLabel(child: Child): string {
+  if (child.fixedPrice != null) return `Фикс. цена ${money(Number(child.fixedPrice))}`;
+  const percent = Number(child.manualDiscountPercent || 0);
+  const amount = Number(child.manualDiscountAmount || 0);
+  if (percent > 0 || amount > 0) {
+    const parts = [percent > 0 ? `${percent}%` : '', amount > 0 ? money(amount) : ''].filter(Boolean).join(' + ');
+    const from = child.discountValidFrom ? ` с ${child.discountValidFrom.slice(0, 7)}` : '';
+    const to = child.discountValidTo ? ` по ${child.discountValidTo.slice(0, 7)}` : '';
+    return `${parts}${from}${to}`;
+  }
+  return child.siblingApplied ? 'Семейная 5%' : '—';
+}
+
 function ReadOnlyValue({ value }: { value?: string }) {
   return <span style={{ color: '#17222F', fontSize: 12, fontWeight: 750 }}>{value || '-'}</span>;
 }
@@ -1394,6 +1438,7 @@ function ChildCard({
   busy,
   editing,
   isAdmin,
+  onEditDiscount,
 }: {
   child: Child;
   index: number;
@@ -1403,6 +1448,7 @@ function ChildCard({
   busy?: boolean;
   editing?: boolean;
   isAdmin?: boolean;
+  onEditDiscount?: (child: Child) => void;
 }) {
   // новый ребёнок (ещё не сохранён) сразу открыт — его нужно заполнить
   const [manuallyExpanded, setManuallyExpanded] = React.useState(() => child.id.startsWith('draft-'));
@@ -1440,6 +1486,16 @@ function ChildCard({
           {hasDiscount && <span style={{ fontSize: 10.5, color: '#9CA3AF', textDecoration: 'line-through' }}>{money(basePrice)}</span>}
           <span style={{ fontSize: 13.5, fontWeight: 900, color: '#111827' }}>{money(finalPrice)}</span>
         </div>
+        {onEditDiscount && !child.id.startsWith('draft-') && (
+          <button
+            type="button"
+            onClick={event => { event.stopPropagation(); onEditDiscount(child); }}
+            title="Постоянная скидка"
+            style={discountButtonStyle}
+          >
+            Скидка
+          </button>
+        )}
         {editing && (
           <button
             type="button"
@@ -1527,17 +1583,12 @@ function ChildCard({
                   : <ReadOnlyValue value={money(basePrice)} />,
               },
               {
-                label: 'Скидка %',
-                content: editing ? <EditableSelect value={String(child.manualDiscountPercent || child.siblingDiscountPercent || 0)} options={DISCOUNT_PERCENT_OPTIONS} onCommit={value => {
-                  const discountPercent = Number(value || 0);
-                  return onSaveChild(child, discountPercent === 0
-                    ? { manualDiscountPercent: 0, siblingDiscountPercent: 0 }
-                    : { manualDiscountPercent: discountPercent });
-                }} width={58} panelWidth={120} /> : <ReadOnlyValue value={`${child.manualDiscountPercent || child.siblingDiscountPercent || 0}%`} />,
+                label: 'Скидка',
+                content: <ReadOnlyValue value={childDiscountLabel(child)} />,
               },
               {
-                label: 'Скидка сом',
-                content: editing ? <EditableNumber value={child.manualDiscountAmount || undefined} onCommit={value => onSaveChild(child, { manualDiscountAmount: value ?? 0 })} step={100} min={0} max={Math.max(0, basePrice)} /> : <ReadOnlyValue value={money(child.manualDiscountAmount || 0)} />,
+                label: 'Итого',
+                content: <ReadOnlyValue value={money(finalPrice)} />,
               },
             ].map(({ label, content }) => (
               <div key={label} style={{ background: '#F8FAFC', borderRadius: 7, padding: '5px 8px' }}>
@@ -1561,6 +1612,7 @@ function ChildrenOverviewTable({
   busy,
   editing,
   isAdmin,
+  onEditDiscount,
 }: {
   children: Child[];
   branches: V2BranchOption[];
@@ -1570,6 +1622,7 @@ function ChildrenOverviewTable({
   busy?: boolean;
   editing?: boolean;
   isAdmin?: boolean;
+  onEditDiscount?: (child: Child) => void;
 }) {
   return (
     <div style={{ display: 'grid', gap: 10 }}>
@@ -1594,6 +1647,7 @@ function ChildrenOverviewTable({
               busy={busy}
               editing={editing}
               isAdmin={isAdmin}
+              onEditDiscount={onEditDiscount}
             />
           ))}
         </div>
@@ -2128,6 +2182,18 @@ const addressModalFooterStyle: React.CSSProperties = {
   justifyContent: 'space-between',
   gap: 16,
   background: '#FBFCFC',
+};
+
+const discountButtonStyle: React.CSSProperties = {
+  border: '1px solid #E5E7EB',
+  background: '#fff',
+  color: '#374151',
+  borderRadius: 7,
+  padding: '3px 8px',
+  fontSize: 11,
+  fontWeight: 750,
+  cursor: 'pointer',
+  flexShrink: 0,
 };
 
 function teacherPriceButtonStyle(active: boolean): React.CSSProperties {

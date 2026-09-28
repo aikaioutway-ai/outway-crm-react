@@ -366,6 +366,7 @@ export default function TimesheetPage({
       {...props}
       userRole={userRole}
       userName={userName}
+      authToken={sessionToken}
       mode="payments"
       hideTransferBars
       customTopContent={renderPayrollHeader?.({ calculator })}

@@ -31,6 +31,7 @@ interface LogisticsMapViewProps {
   search?: string;
   userRole?: string;
   userName?: string;
+  sessionToken?: string;
   onSelectSchool: (key: string) => void;
   allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
@@ -101,7 +102,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
   return `${escapeHtml(address)}${childBlocks}`;
 }
 
-export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsMapViewProps) {
+export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, sessionToken, onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsMapViewProps) {
   const { data: rows = null } = useFamiliesTable(false);
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -841,6 +842,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
               family={openFamily}
               userRole={userRole}
               userName={userName}
+              sessionToken={sessionToken}
               onClose={() => setOpenFamily(null)}
             />
           </div>

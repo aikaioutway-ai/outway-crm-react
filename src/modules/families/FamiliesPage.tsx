@@ -1363,9 +1363,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           const nextZone = (key === 'zone' ? value : row.zone) as Zone;
           const nextVehicle = (key === 'vehicleLabel' ? value : row.vehicleType) as VehicleType;
           const base = getPriceByZone(row.schoolCode as any, nextZone, nextVehicle);
+          // Итоговую цену со скидками пересчитывает база.
           updates.base_price = base;
-          updates.final_price = base;
-          rowPatch.monthlyPrice = base;
         }
 
         if (key === 'transferNumber') {
@@ -4727,6 +4726,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 family={expandedFamily}
                 userRole={userRole}
                 userName={userName}
+                sessionToken={authToken}
                 initialTab={expandedInitialTab}
                 onUpdated={() => load(false)}
                 onClose={() => { setExpandedFamilyId(null); setExpandedFamily(null); setExpandedInitialTab('overview'); }}

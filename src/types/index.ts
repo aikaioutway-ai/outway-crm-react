@@ -94,6 +94,12 @@ export interface Child {
   manualDiscountAmount?: number;
   teacherPrice?: boolean;
   finalPrice?: number;
+  fixedPrice?: number | null;
+  discountValidFrom?: string | null;
+  discountValidTo?: string | null;
+  discountReason?: string;
+  discountApprovedBy?: string;
+  siblingApplied?: boolean;
 }
 
 // ─── ОПЛАТЫ ──────────────────────────────────────────────────────────────────
@@ -201,8 +207,25 @@ export interface Refund {
   rejectReason?: string;
 }
 
+export type ChargeDiscountReason = 'partial_month' | 'recalculation' | 'compensation' | 'other';
+
+export interface ChargeDiscount {
+  id: string;
+  chargeId: string;
+  childId: string;
+  familyId: string;
+  amount: number;
+  reasonType: ChargeDiscountReason;
+  comment: string;
+  createdBy?: string;
+  createdAt: string;
+  cancelledAt?: string;
+  cancelledBy?: string;
+}
+
 export interface FinanceSnapshot {
   charges: Charge[];
+  chargeDiscounts: ChargeDiscount[];
   payments: FamilyPayment[];
   paymentItems: PaymentItem[];
   refunds: Refund[];

@@ -4,7 +4,6 @@ import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../ty
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone } from '../utils/format';
-import { isTeacherPriced } from '../utils/pricing';
 import {
   buildTransferRepricingPlan,
   PricingManagedChargeSnapshot,
@@ -465,7 +464,13 @@ export function mapV2Child(row: any, family: Family): Child {
       ? normalizeVehicle(row.requested_vehicle_type) as VehicleType
       : undefined,
     ...storedPrice,
-    teacherPrice: isTeacherPriced(storedPrice),
+    teacherPrice: row.fixed_price != null,
+    fixedPrice: row.fixed_price == null ? null : Number(row.fixed_price),
+    discountValidFrom: row.discount_valid_from ?? null,
+    discountValidTo: row.discount_valid_to ?? null,
+    discountReason: row.discount_reason ?? '',
+    discountApprovedBy: row.discount_approved_by ?? '',
+    siblingApplied: Boolean(row.sibling_applied),
   };
 }
 

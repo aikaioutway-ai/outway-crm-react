@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useReceiptOcr } from '../../hooks/useReceiptOcr';
-import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentType, Refund, UserRole } from '../../types';
+import { Charge, ChargeDiscount, ChargeDiscountReason, Child, Family, FamilyPayment, PaymentItem, PaymentType, Refund, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL } from './constants';
 import { Section, Spinner, Empty } from './DrawerUI';
+import ChargeDiscountsSection from './ChargeDiscountsSection';
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
   cash: 'Наличные',
@@ -15,6 +16,10 @@ const PAYMENT_TYPE_LABEL: Record<string, string> = {
 
 interface Props {
   charges: Charge[];
+  chargeDiscounts?: ChargeDiscount[];
+  canManageDiscounts?: boolean;
+  onAddChargeDiscount?: (input: { chargeId: string; amount: number; reasonType: ChargeDiscountReason; comment: string }) => Promise<void>;
+  onCancelChargeDiscount?: (discount: ChargeDiscount) => Promise<void>;
   payments: FamilyPayment[];
   paymentItems: PaymentItem[];
   refunds: Refund[];
@@ -45,11 +50,15 @@ export function canCreateFamilyRefund(isManager: boolean, isAdmin: boolean, isCa
 
 export default function TabFinance({
   charges,
+  chargeDiscounts = [],
+  canManageDiscounts = false,
+  onAddChargeDiscount,
+  onCancelChargeDiscount,
   payments,
   paymentItems,
   refunds,
   loading,
-  children: _children,
+  children,
   isAdmin,
   isCashier,
   isManager,
@@ -259,6 +268,17 @@ export default function TabFinance({
               ))}
             </div>
           </Section>
+        )}
+
+        {onAddChargeDiscount && onCancelChargeDiscount && (
+          <ChargeDiscountsSection
+            charges={charges}
+            discounts={chargeDiscounts}
+            children={children}
+            canManage={canManageDiscounts}
+            onAdd={onAddChargeDiscount}
+            onCancel={onCancelChargeDiscount}
+          />
         )}
 
         <Section

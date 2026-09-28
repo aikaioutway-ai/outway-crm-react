@@ -452,6 +452,7 @@ export default function App() {
                   mode="cashier"
                   userRole={currentUserRole}
                   userName={currentUser?.name}
+                  authToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
                   initialQuickFilter={{ activeTab: cashierSchoolKey }}
                   onSchoolKeyChange={handleCashierSelectSchool}
@@ -529,6 +530,7 @@ export default function App() {
                   search={logisticsSearch}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
+                  sessionToken={currentUser?.sessionToken}
                   onSelectSchool={handleLogisticsSelectSchool}
                   allowedSchools={currentUser?.schoolKeys}
                   onSidebarWidthChange={setSchoolSidebarReserveWidth}
@@ -538,6 +540,7 @@ export default function App() {
                   mode="logistics"
                   userRole={currentUserRole}
                   userName={currentUser?.name}
+                  authToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
                   initialQuickFilter={{ activeTab: logisticsSchoolKey }}
                   onSchoolKeyChange={handleLogisticsSelectSchool}

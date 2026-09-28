@@ -1,4 +1,4 @@
-import { applyChildPricingPatch, changedChildPatch, getPriceByZone, getChildPrice, getFamilyPrice, getSiblingDiscountPercent, getZoneByDistance, isTeacherPriced, money, repriceChild, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
+import { applyChildPricingPatch, calcChildPrice, canManageDiscounts, changedChildPatch, getPriceByZone, getChildPrice, getFamilyPrice, getSiblingDiscountPercent, getZoneByDistance, isTeacherPriced, money, repriceChild, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
 import { Child } from '../types';
 
 // ─── getSiblingDiscountPercent ─────────────────────────────────────────────────
@@ -324,5 +324,44 @@ describe('repriceChild', () => {
       manualDiscountPercent: 10,
       finalPrice: 6120,
     });
+  });
+});
+
+describe('calcChildPrice — правила скидок', () => {
+  const base = { basePrice: 6000, siblingEligible: false };
+
+  it('семейная 5% работает без ручной скидки', () => {
+    expect(calcChildPrice({ ...base, siblingEligible: true }, '2026-10-01')).toBe(5700);
+  });
+
+  it('ручная скидка отключает семейную', () => {
+    expect(calcChildPrice({ ...base, siblingEligible: true, manualDiscountPercent: 10 }, '2026-10-01')).toBe(5400);
+    expect(calcChildPrice({ ...base, siblingEligible: true, manualDiscountAmount: 500 }, '2026-10-01')).toBe(5500);
+  });
+
+  it('процент и сумма складываются, сумма не уводит цену ниже нуля', () => {
+    expect(calcChildPrice({ ...base, manualDiscountPercent: 10, manualDiscountAmount: 400 }, '2026-10-01')).toBe(5000);
+    expect(calcChildPrice({ ...base, manualDiscountPercent: 50, manualDiscountAmount: 9000 }, '2026-10-01')).toBe(0);
+  });
+
+  it('скидка действует только в своём периоде (границы включительно)', () => {
+    const rules = { ...base, siblingEligible: true, manualDiscountPercent: 20, discountValidFrom: '2026-10-01', discountValidTo: '2026-12-01' };
+    expect(calcChildPrice(rules, '2026-09-01')).toBe(5700);
+    expect(calcChildPrice(rules, '2026-10-01')).toBe(4800);
+    expect(calcChildPrice(rules, '2026-12-01')).toBe(4800);
+    expect(calcChildPrice(rules, '2027-01-01')).toBe(5700);
+  });
+
+  it('фиксированная цена важнее любых скидок', () => {
+    expect(calcChildPrice({ ...base, siblingEligible: true, manualDiscountPercent: 50, fixedPrice: 4800 }, '2026-10-01')).toBe(4800);
+  });
+
+  it('скидки назначают только директор, гендиректор и админ', () => {
+    expect(canManageDiscounts('admin')).toBe(true);
+    expect(canManageDiscounts('gen_director')).toBe(true);
+    expect(canManageDiscounts('director')).toBe(true);
+    expect(canManageDiscounts('manager')).toBe(false);
+    expect(canManageDiscounts('cashier')).toBe(false);
+    expect(canManageDiscounts(undefined)).toBe(false);
   });
 });

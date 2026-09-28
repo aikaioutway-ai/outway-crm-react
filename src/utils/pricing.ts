@@ -199,6 +199,55 @@ export function changedChildPatch(original: Child, draft: Child): Partial<Child>
   return patch;
 }
 
+// ─── ПРАВИЛА СКИДОК (зеркало v2_calc_child_price в базе) ─────────────────────
+
+/** Скидки назначают только директор, гендиректор и администратор. */
+export function canManageDiscounts(role?: string): boolean {
+  return role === 'admin' || role === 'gen_director' || role === 'director';
+}
+
+export const CHARGE_DISCOUNT_REASON_LABEL: Record<string, string> = {
+  partial_month: 'Неполный месяц',
+  recalculation: 'Перерасчёт',
+  compensation: 'Компенсация',
+  other: 'Другое',
+};
+
+export interface ChildPriceRules {
+  basePrice: number;
+  fixedPrice?: number | null;
+  manualDiscountPercent?: number;
+  manualDiscountAmount?: number;
+  discountValidFrom?: string | null;
+  discountValidTo?: string | null;
+  siblingEligible: boolean;
+}
+
+/** Период действия — месяцы в формате YYYY-MM-01, границы включительно. */
+export function isManualDiscountActive(rules: Omit<ChildPriceRules, 'basePrice' | 'siblingEligible'>, period: string): boolean {
+  const hasDiscount = Number(rules.manualDiscountPercent || 0) > 0 || Number(rules.manualDiscountAmount || 0) > 0;
+  if (!hasDiscount) return false;
+  const month = period.slice(0, 7);
+  if (rules.discountValidFrom && month < rules.discountValidFrom.slice(0, 7)) return false;
+  if (rules.discountValidTo && month > rules.discountValidTo.slice(0, 7)) return false;
+  return true;
+}
+
+/**
+ * Цена ребёнка за месяц: фиксированная цена, иначе тариф минус постоянная
+ * скидка (если действует в этом месяце) или семейная 5%. Ручная скидка
+ * отключает семейную.
+ */
+export function calcChildPrice(rules: ChildPriceRules, period: string): number {
+  if (rules.fixedPrice != null) return Number(rules.fixedPrice);
+  const base = Math.max(0, Number(rules.basePrice || 0));
+  const manual = isManualDiscountActive(rules, period);
+  const percent = manual ? Number(rules.manualDiscountPercent || 0) : rules.siblingEligible ? 5 : 0;
+  const percentAmount = Math.round(base * percent / 100);
+  const amount = manual ? Math.min(Number(rules.manualDiscountAmount || 0), Math.max(0, base - percentAmount)) : 0;
+  return Math.max(0, base - percentAmount - amount);
+}
+
 // ─── ФОРМАТИРОВАНИЕ ──────────────────────────────────────────────────────────
 
 export function money(n: number): string {
