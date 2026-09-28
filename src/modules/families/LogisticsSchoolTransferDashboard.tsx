@@ -33,7 +33,7 @@ function vehicleShort(vehicleType?: string): string {
 }
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
-  const { data: rows } = useFamiliesTable(false);
+  const { data: rows, refetch } = useFamiliesTable(false);
   const [vehicleMenu, setVehicleMenu] = useState<{
     x: number;
     y: number;
@@ -42,6 +42,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
     schoolId: string | null;
   } | null>(null);
   const [savingVehicleType, setSavingVehicleType] = useState(false);
+  const [vehicleTypeOverrides, setVehicleTypeOverrides] = useState<Record<string, VehicleType | ''>>({});
 
   useEffect(() => {
     if (!vehicleMenu) return;
@@ -57,20 +58,37 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
 
   const applyVehicleType = async (value: VehicleType | 'unassigned') => {
     if (!vehicleMenu || !vehicleMenu.branchId) { setVehicleMenu(null); return; }
+    const menu = vehicleMenu;
+    const overrideKey = `${menu.branchId}:${menu.transferNumber}`;
+    const nextVehicleType = value === 'unassigned' ? '' : value;
+    const previousOverride = vehicleTypeOverrides[overrideKey];
+    setVehicleTypeOverrides(current => ({ ...current, [overrideKey]: nextVehicleType }));
     setSavingVehicleType(true);
     try {
       if (value === 'unassigned') {
-        await clearV2TransferVehicleType({ branchId: vehicleMenu.branchId, transferNumber: Number(vehicleMenu.transferNumber) });
+        await clearV2TransferVehicleType({ branchId: menu.branchId, transferNumber: Number(menu.transferNumber) });
       } else {
         await updateV2TransferVehicleType({
-          schoolId: vehicleMenu.schoolId,
-          branchId: vehicleMenu.branchId,
-          transferNumber: Number(vehicleMenu.transferNumber),
+          schoolId: menu.schoolId,
+          branchId: menu.branchId,
+          transferNumber: Number(menu.transferNumber),
           vehicleType: value,
           source: 'logistics',
         });
       }
+      await refetch();
+      setVehicleTypeOverrides(current => {
+        const next = { ...current };
+        delete next[overrideKey];
+        return next;
+      });
     } catch (error) {
+      setVehicleTypeOverrides(current => {
+        const next = { ...current };
+        if (previousOverride === undefined) delete next[overrideKey];
+        else next[overrideKey] = previousOverride;
+        return next;
+      });
       window.alert(error instanceof Error ? error.message : 'Не удалось изменить тип транспорта');
     } finally {
       setSavingVehicleType(false);
@@ -83,14 +101,19 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
   const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, i) => {
     const number = String(i + 1);
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
+    const branchId = transferRows[0]?.branchId ?? allSchoolRows[0]?.branchId ?? null;
+    const overrideKey = `${branchId ?? ''}:${number}`;
+    const savedVehicleType = transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
+      ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
+      ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType;
     return {
       filterKey: number,
       label: `#${number}`,
       count: transferRows.length,
-      vehicleType: transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
-        ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
-        ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType,
-      branchId: transferRows[0]?.branchId ?? allSchoolRows[0]?.branchId ?? null,
+      vehicleType: Object.prototype.hasOwnProperty.call(vehicleTypeOverrides, overrideKey)
+        ? vehicleTypeOverrides[overrideKey]
+        : savedVehicleType,
+      branchId,
       schoolId: transferRows[0]?.schoolId ?? allSchoolRows[0]?.schoolId ?? null,
     };
   });
