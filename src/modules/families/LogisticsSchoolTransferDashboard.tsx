@@ -38,8 +38,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
     x: number;
     y: number;
     transferNumber: string;
-    branchId: string | null;
-    schoolId: string | null;
+    targets: Array<{ branchId: string; schoolId: string | null }>;
   } | null>(null);
   const [savingVehicleType, setSavingVehicleType] = useState(false);
   const [vehicleTypeOverrides, setVehicleTypeOverrides] = useState<Record<string, VehicleType | ''>>({});
@@ -57,24 +56,26 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
   const schoolRows = useMemo(() => allSchoolRows.filter(row => row.status !== 'rejected'), [allSchoolRows]);
 
   const applyVehicleType = async (value: VehicleType | 'unassigned') => {
-    if (!vehicleMenu || !vehicleMenu.branchId) { setVehicleMenu(null); return; }
+    if (!vehicleMenu || vehicleMenu.targets.length === 0) { setVehicleMenu(null); return; }
     const menu = vehicleMenu;
-    const overrideKey = `${menu.branchId}:${menu.transferNumber}`;
+    const overrideKey = menu.transferNumber;
     const nextVehicleType = value === 'unassigned' ? '' : value;
     const previousOverride = vehicleTypeOverrides[overrideKey];
     setVehicleTypeOverrides(current => ({ ...current, [overrideKey]: nextVehicleType }));
     setSavingVehicleType(true);
     try {
-      if (value === 'unassigned') {
-        await clearV2TransferVehicleType({ branchId: menu.branchId, transferNumber: Number(menu.transferNumber) });
-      } else {
-        await updateV2TransferVehicleType({
-          schoolId: menu.schoolId,
-          branchId: menu.branchId,
-          transferNumber: Number(menu.transferNumber),
-          vehicleType: value,
-          source: 'logistics',
-        });
+      for (const target of menu.targets) {
+        if (value === 'unassigned') {
+          await clearV2TransferVehicleType({ branchId: target.branchId, transferNumber: Number(menu.transferNumber) });
+        } else {
+          await updateV2TransferVehicleType({
+            schoolId: target.schoolId,
+            branchId: target.branchId,
+            transferNumber: Number(menu.transferNumber),
+            vehicleType: value,
+            source: 'logistics',
+          });
+        }
       }
       await refetch();
       setVehicleTypeOverrides(current => {
@@ -102,7 +103,14 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
     const number = String(i + 1);
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
     const branchId = transferRows[0]?.branchId ?? allSchoolRows[0]?.branchId ?? null;
-    const overrideKey = `${branchId ?? ''}:${number}`;
+    const targets = Array.from(new Map(
+      transferRows
+        .filter(row => Boolean(row.branchId))
+        .map(row => [row.branchId!, { branchId: row.branchId!, schoolId: row.schoolId ?? null }]),
+    ).values());
+    if (targets.length === 0 && branchId) {
+      targets.push({ branchId, schoolId: transferRows[0]?.schoolId ?? allSchoolRows[0]?.schoolId ?? null });
+    }
     const savedVehicleType = transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
       ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
       ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType;
@@ -110,11 +118,12 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       filterKey: number,
       label: `#${number}`,
       count: transferRows.length,
-      vehicleType: Object.prototype.hasOwnProperty.call(vehicleTypeOverrides, overrideKey)
-        ? vehicleTypeOverrides[overrideKey]
+      vehicleType: Object.prototype.hasOwnProperty.call(vehicleTypeOverrides, number)
+        ? vehicleTypeOverrides[number]
         : savedVehicleType,
       branchId,
       schoolId: transferRows[0]?.schoolId ?? allSchoolRows[0]?.schoolId ?? null,
+      targets,
     };
   });
 
@@ -157,8 +166,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
                 x: event.clientX,
                 y: event.clientY,
                 transferNumber: cell.filterKey,
-                branchId: 'branchId' in cell ? cell.branchId : null,
-                schoolId: 'schoolId' in cell ? cell.schoolId : null,
+                targets: 'targets' in cell ? cell.targets : [],
               });
             }}
             title={active ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
@@ -210,7 +218,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
           <div style={{ padding: '2px 6px 8px', fontSize: 12, fontWeight: 900, color: '#17222F', borderBottom: '1px solid #EEF3F5', marginBottom: 6 }}>
             Трансфер №{vehicleMenu.transferNumber} · тип транспорта
           </div>
-          {!vehicleMenu.branchId ? (
+          {vehicleMenu.targets.length === 0 ? (
             <div style={{ padding: '4px 6px', fontSize: 11, color: '#94A3B8' }}>Нет данных о филиале</div>
           ) : (
             <div style={{ display: 'grid', gap: 3 }}>
