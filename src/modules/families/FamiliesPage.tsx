@@ -750,6 +750,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
   const [bulkStatus, setBulkStatus] = useState<ChildStatus>('boarded');
   const [bulkSaving, setBulkSaving] = useState(false);
+  const [bulkConfirming, setBulkConfirming] = useState(false);
   const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
   const restrictedSchoolKey = allowedSchools && allowedSchools.length === 1 && allowedSchools[0] !== 'ALL' ? allowedSchools[0] : null;
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
@@ -1329,13 +1330,17 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   function closeBulkStatus() {
     setBulkStatusMode(false);
     setBulkSelectedIds(new Set());
+    setBulkConfirming(false);
   }
 
   async function applyBulkStatus() {
     const ids = Array.from(bulkSelectedIds).filter(id => !id.endsWith('_empty'));
     if (!ids.length) return;
-    const label = CHILD_STATUS_OPTIONS.find(option => option.value === bulkStatus)?.label ?? bulkStatus;
-    if (!window.confirm(`Поставить статус «${label}» для ${ids.length} детей?`)) return;
+    // Подтверждение прямо в панели: window.confirm блокируется встроенными браузерами.
+    if (!bulkConfirming) {
+      setBulkConfirming(true);
+      return;
+    }
     setBulkSaving(true);
     try {
       await updateV2ChildrenStatus(ids, bulkStatus);
@@ -3430,14 +3435,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               hideToolbar={tableBarsCollapsed}
               selectable={bulkStatusMode}
               selectedKeys={bulkStatusMode ? bulkSelectedIds : undefined}
-              onSelectedKeysChange={bulkStatusMode ? keys => setBulkSelectedIds(new Set(Array.from(keys, String))) : undefined}
+              onSelectedKeysChange={bulkStatusMode ? keys => { setBulkSelectedIds(new Set(Array.from(keys, String))); setBulkConfirming(false); } : undefined}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {userRole !== 'cashier' && (bulkStatusMode ? (
                     <>
                       <select
                         value={bulkStatus}
-                        onChange={event => setBulkStatus(event.target.value as ChildStatus)}
+                        onChange={event => { setBulkStatus(event.target.value as ChildStatus); setBulkConfirming(false); }}
                         style={{ height: 26, border: '1px solid #31A4A5', borderRadius: 7, fontSize: 11, fontWeight: 700, padding: '0 6px', background: '#fff' }}
                       >
                         {CHILD_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
@@ -3446,9 +3451,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                         type="button"
                         onClick={applyBulkStatus}
                         disabled={bulkSaving || bulkSelectedIds.size === 0}
-                        style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: bulkSelectedIds.size === 0 ? '#A7C9CA' : '#31A4A5', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: bulkSelectedIds.size === 0 ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                        style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: bulkSelectedIds.size === 0 ? '#A7C9CA' : bulkConfirming ? '#D97706' : '#31A4A5', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: bulkSelectedIds.size === 0 ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
                       >
-                        {bulkSaving ? 'Сохраняем...' : `Применить (${bulkSelectedIds.size})`}
+                        {bulkSaving
+                          ? 'Сохраняем...'
+                          : bulkConfirming
+                            ? `Да, «${CHILD_STATUS_OPTIONS.find(option => option.value === bulkStatus)?.label}» для ${bulkSelectedIds.size}`
+                            : `Применить (${bulkSelectedIds.size})`}
                       </button>
                       <button
                         type="button"
