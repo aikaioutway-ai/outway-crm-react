@@ -76,6 +76,10 @@ export interface DataTableProps<T = any> {
   onExpandedRowKeyChange?: (key: React.Key | null, row?: T) => void;
   renderExpandedRow?: (row: T) => React.ReactNode;
   onExport?: (rows: T[]) => void;
+  /** Режим выбора строк галочками (вместо номера строки). */
+  selectable?: boolean;
+  selectedKeys?: Set<any>;
+  onSelectedKeysChange?: (keys: Set<any>) => void;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -351,6 +355,9 @@ export function DataTable<T extends Record<string, any>>({
   onExpandedRowKeyChange,
   renderExpandedRow,
   onExport,
+  selectable = false,
+  selectedKeys,
+  onSelectedKeysChange,
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
@@ -413,7 +420,17 @@ export function DataTable<T extends Record<string, any>>({
   const [colMenu, setColMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<{ row: T; x: number; y: number } | null>(null);
   const [calcPopup, setCalcPopup] = useState<{ key: string; x: number; y: number } | null>(null);
-  const [selected, setSelected] = useState<Set<any>>(new Set());
+  const [internalSelected, setInternalSelected] = useState<Set<any>>(new Set());
+  const selected = selectedKeys ?? internalSelected;
+  const setSelected = (next: Set<any>) => {
+    if (onSelectedKeysChange) onSelectedKeysChange(next);
+    else setInternalSelected(next);
+  };
+  const toggleSelected = (id: any) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setSelected(next);
+  };
   const [editingCell, setEditingCell] = useState<{ rowId: any; key: string } | null>(null);
   const [draftValue, setDraftValue] = useState('');
   const [savingCell, setSavingCell] = useState(false);
@@ -897,7 +914,24 @@ export function DataTable<T extends Record<string, any>>({
           <table className="dt-table">
             <thead>
               <tr>
-                <th className="dt-th dt-th--num dt-sticky-col">#</th>
+                <th className="dt-th dt-th--num dt-sticky-col">
+                  {selectable ? (
+                    <input
+                      type="checkbox"
+                      title="Выбрать всех на странице"
+                      checked={pageRows.length > 0 && pageRows.every(row => selected.has(row[rowKey]))}
+                      onChange={event => {
+                        const next = new Set(selected);
+                        pageRows.forEach(row => {
+                          if (event.currentTarget.checked) next.add(row[rowKey]);
+                          else next.delete(row[rowKey]);
+                        });
+                        setSelected(next);
+                      }}
+                      style={{ cursor: 'pointer' }}
+                    />
+                  ) : '#'}
+                </th>
 
                 {visibleCols.map(col => {
                   const sortEntry = sorts.find(s => s.key === col.key);
@@ -976,9 +1010,23 @@ export function DataTable<T extends Record<string, any>>({
                       setRowMenu({ row, x: e.clientX, y: e.clientY });
                     }}
                   >
-                    <td className="dt-td dt-td--num dt-sticky-col">
-                      <span className="dt-row-number">{pageStart + idx + 1}</span>
-                      {(onRowOpen || onRowClick) && (
+                    <td
+                      className="dt-td dt-td--num dt-sticky-col"
+                      onClick={selectable ? event => { event.stopPropagation(); toggleSelected(id); } : undefined}
+                      style={selectable ? { cursor: 'pointer' } : undefined}
+                    >
+                      {selectable ? (
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onClick={event => event.stopPropagation()}
+                          onChange={() => toggleSelected(id)}
+                          style={{ cursor: 'pointer' }}
+                        />
+                      ) : (
+                        <span className="dt-row-number">{pageStart + idx + 1}</span>
+                      )}
+                      {!selectable && (onRowOpen || onRowClick) && (
                         <button
                           className="dt-row-open-btn"
                           title="Открыть карточку"

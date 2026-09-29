@@ -1,10 +1,10 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
+import { ChildStatus, Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
@@ -746,6 +746,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
   const [directoryDateSort, setDirectoryDateSort] = useState<DirectoryDateSort>({ field: 'application', direction: 'desc' });
+  const [bulkStatusMode, setBulkStatusMode] = useState(false);
+  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkStatus, setBulkStatus] = useState<ChildStatus>('boarded');
+  const [bulkSaving, setBulkSaving] = useState(false);
   const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
   const restrictedSchoolKey = allowedSchools && allowedSchools.length === 1 && allowedSchools[0] !== 'ALL' ? allowedSchools[0] : null;
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
@@ -1320,6 +1324,28 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     // не успел открыть другую семью, пока шёл этот запрос
     const family = await fetchV2Family(familyId);
     if (family && expandedFamilyRequestRef.current === familyId) setExpandedFamily(family);
+  }
+
+  function closeBulkStatus() {
+    setBulkStatusMode(false);
+    setBulkSelectedIds(new Set());
+  }
+
+  async function applyBulkStatus() {
+    const ids = Array.from(bulkSelectedIds).filter(id => !id.endsWith('_empty'));
+    if (!ids.length) return;
+    const label = CHILD_STATUS_OPTIONS.find(option => option.value === bulkStatus)?.label ?? bulkStatus;
+    if (!window.confirm(`Поставить статус «${label}» для ${ids.length} детей?`)) return;
+    setBulkSaving(true);
+    try {
+      await updateV2ChildrenStatus(ids, bulkStatus);
+      closeBulkStatus();
+      await load(false);
+    } catch (error) {
+      window.alert('Не удалось изменить статус: ' + (error instanceof Error ? error.message : String(error)));
+    } finally {
+      setBulkSaving(false);
+    }
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
@@ -3402,8 +3428,47 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   ? exportAllDirectoryRouteRows
                   : undefined}
               hideToolbar={tableBarsCollapsed}
+              selectable={bulkStatusMode}
+              selectedKeys={bulkStatusMode ? bulkSelectedIds : undefined}
+              onSelectedKeysChange={bulkStatusMode ? keys => setBulkSelectedIds(new Set(Array.from(keys, String))) : undefined}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {userRole !== 'cashier' && (bulkStatusMode ? (
+                    <>
+                      <select
+                        value={bulkStatus}
+                        onChange={event => setBulkStatus(event.target.value as ChildStatus)}
+                        style={{ height: 26, border: '1px solid #31A4A5', borderRadius: 7, fontSize: 11, fontWeight: 700, padding: '0 6px', background: '#fff' }}
+                      >
+                        {CHILD_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={applyBulkStatus}
+                        disabled={bulkSaving || bulkSelectedIds.size === 0}
+                        style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: bulkSelectedIds.size === 0 ? '#A7C9CA' : '#31A4A5', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: bulkSelectedIds.size === 0 ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        {bulkSaving ? 'Сохраняем...' : `Применить (${bulkSelectedIds.size})`}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeBulkStatus}
+                        disabled={bulkSaving}
+                        style={{ height: 26, padding: '0 9px', border: '1px solid var(--border)', borderRadius: 7, background: '#fff', color: 'var(--text-2)', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
+                      >
+                        Отмена
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => setBulkStatusMode(true)}
+                      title="Выбрать несколько детей и изменить статус"
+                      style={{ height: 26, padding: '0 9px', border: '1px solid var(--border)', borderRadius: 7, background: '#fff', color: 'var(--text-2)', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      ☑ Статус
+                    </button>
+                  ))}
                   {isDirectoryMode && ([
                     { field: 'application' as const, label: 'Дата заявки' },
                     { field: 'seating' as const, label: 'Дата посадки' },

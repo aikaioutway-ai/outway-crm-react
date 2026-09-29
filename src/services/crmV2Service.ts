@@ -1057,6 +1057,14 @@ export async function updateV2Child(childId: string, updates: Record<string, unk
   invalidateFamiliesCache();
 }
 
+/** Массовая смена статуса детей; начисления при посадке и семейную скидку пересчитывает база. */
+export async function updateV2ChildrenStatus(childIds: string[], status: ChildStatus): Promise<void> {
+  if (!childIds.length) return;
+  const { error } = await supabase.from('v2_children').update({ status }).in('id', childIds);
+  if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
+}
+
 export async function createV2Child(family: Family, input: Partial<Child> & { childName: string }): Promise<Child> {
   const { data, error } = await supabase
     .from('v2_children')
