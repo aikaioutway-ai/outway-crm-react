@@ -101,8 +101,8 @@ export default function TabFinance({
   const canCreateRefund = canCreateFamilyRefund(isManager, isAdmin, isCashier);
   const canConfirmRefund = !readOnly && (isCashier || isAdmin);
 
-  const existingPeriodKeys = new Set(charges.map(c => `${periodKeyOfCharge(c)}:${c.year}`));
-  const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(`${p.month}:${p.year}`));
+  const existingPeriodKeys = new Set(charges.map(c => periodGroupKey(c.periodMonth, c.year, c.chargeType)));
+  const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(periodGroupKey(p.month, p.year, p.key)));
   const periodRows = useMemo(() => buildPeriodRows(charges, payments, paymentItems), [charges, payments, paymentItems]);
   const sortedPayments = useMemo(() => [...payments].sort((a, b) => (
     new Date(b.createdAt || b.paymentDate || 0).getTime() - new Date(a.createdAt || a.paymentDate || 0).getTime()
@@ -305,7 +305,7 @@ export default function TabFinance({
             <table style={financeTableStyle}>
               <thead>
                 <tr>
-                  {['Месяц', 'Начисления', 'Оплата', 'Дата списания'].map(label => (
+                  {['Месяц', 'Начислено', 'Оплачено', 'Дата списания'].map(label => (
                     <th key={label} style={financeThStyle}>{label}</th>
                   ))}
                 </tr>
@@ -321,8 +321,9 @@ export default function TabFinance({
                     </td>
                     <td style={{ ...financeTdStyle, textAlign: 'right', fontWeight: 900 }}>{money(row.charged)}</td>
                     <td style={{ ...financeTdStyle, textAlign: 'right' }}>
-                      <div style={{ fontWeight: 900, color: row.debt > 0 ? '#991B1B' : '#17222F' }}>{money(row.paid)}</div>
-                      {row.debt > 0 && <div style={{ fontSize: 10, color: '#C62828', marginTop: 2 }}>долг {money(row.debt)}</div>}
+                      <div style={{ fontWeight: 900, color: row.debt > 0 ? '#C62828' : '#17222F' }}>
+                        {money(periodPaidDisplayAmount(row))}
+                      </div>
                     </td>
                     <td style={financeTdStyle}>{row.writeOffDate || '-'}</td>
                   </tr>
@@ -333,7 +334,7 @@ export default function TabFinance({
                   <tr>
                     <td style={financeTotalCellStyle}>Итого</td>
                     <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + row.charged, 0))}</td>
-                    <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + row.paid, 0))}</td>
+                    <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + periodPaidDisplayAmount(row), 0))}</td>
                     <td style={financeTotalCellStyle} />
                   </tr>
                 </tfoot>
@@ -593,8 +594,9 @@ interface PeriodFinanceRow {
   writeOffDate: string;
 }
 
-function periodKeyOfCharge(charge: Pick<Charge, 'periodMonth' | 'chargeType'>): string {
-  return charge.chargeType === 'deposit' ? 'deposit' : String(charge.periodMonth);
+function periodGroupKey(month: number, year: number, chargeType?: string): string {
+  if (chargeType === 'deposit' || month === 0) return 'deposit';
+  return `${month}:${year}`;
 }
 
 function periodLabel(month: number, year: number, chargeType?: string): string {
@@ -609,13 +611,18 @@ function formatShortDate(value?: string): string {
   return date.toLocaleDateString('ru-RU');
 }
 
-function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], paymentItems: PaymentItem[]): PeriodFinanceRow[] {
+export function periodPaidDisplayAmount(row: Pick<PeriodFinanceRow, 'paid' | 'debt'>): number {
+  return row.debt > 0 ? -row.debt : row.paid;
+}
+
+export function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], paymentItems: PaymentItem[]): PeriodFinanceRow[] {
   const paymentsById = new Map(payments.map(payment => [payment.id, payment]));
   const grouped = new Map<string, PeriodFinanceRow & { rawMonth: number; rawYear: number; dateValue: number }>();
 
   ALL_PERIODS.forEach(period => {
-    grouped.set(`${period.key}:${period.year}`, {
-      key: `${period.key}:${period.year}`,
+    const key = periodGroupKey(period.month, period.year, period.key);
+    grouped.set(key, {
+      key,
       label: period.label,
       charged: 0,
       paid: 0,
@@ -629,7 +636,7 @@ function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], paymentIt
   });
 
   charges.forEach(charge => {
-    const key = `${periodKeyOfCharge(charge)}:${charge.year}`;
+    const key = periodGroupKey(charge.periodMonth, charge.year, charge.chargeType);
     const existing = grouped.get(key);
     if (existing) {
       existing.charged += Number(charge.amount || 0);
@@ -653,7 +660,7 @@ function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], paymentIt
   });
 
   paymentItems.forEach(item => {
-    const key = `${item.periodMonth}:${item.year}`;
+    const key = periodGroupKey(item.periodMonth, item.year);
     const row = grouped.get(key);
     if (!row) return;
     const payment = paymentsById.get(item.paymentId);
