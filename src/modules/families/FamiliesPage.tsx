@@ -1723,7 +1723,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     childStatus: pagedChildStatus,
     hasTransfer: pagedHasTransfer,
     transferNumber: pagedTransferNumber,
-    excludeRejectedChildren: isDirectoryMode,
+    // При фильтре «Отказ» отказников не исключаем, иначе список всегда пуст.
+    excludeRejectedChildren: isDirectoryMode && pagedChildStatus !== 'rejected',
     pageSize: FAMILIES_PAGE_SIZE,
   }), [branchIdsForPage, search, pagedChildStatus, pagedHasTransfer, pagedTransferNumber, isDirectoryMode]);
 
@@ -1742,8 +1743,9 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   const modeRows = useMemo(() => {
     if (isPagedMode) return pagedRows;
-    return mode === 'logistics' ? logisticsWorkRows(rows) : rows;
-  }, [isPagedMode, pagedRows, mode, rows]);
+    // Кнопка «Отказ» показывает именно отказников — не отсекаем их заранее.
+    return mode === 'logistics' && quickChildStatus !== 'rejected' ? logisticsWorkRows(rows) : rows;
+  }, [isPagedMode, pagedRows, mode, rows, quickChildStatus]);
 
   useEffect(() => {
     if (!initialOpenFamilyId) return;
