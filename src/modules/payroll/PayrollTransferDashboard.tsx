@@ -1,3 +1,4 @@
+import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import { useMemo } from 'react';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { PAYROLL_OFFICE_KEY } from '../expenses/timesheetTypes';
@@ -10,7 +11,6 @@ interface PayrollTransferDashboardProps {
   onSelect?: (key: string) => void;
 }
 
-const TRANSFER_COUNT = 15;
 
 const VEHICLE_COLOR: Record<string, string> = {
   microbus: '#2DD4BF',
@@ -33,7 +33,7 @@ export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth 
 
   if (rows === null || isOffice) return null;
 
-  const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, index) => {
+  const transferCells = Array.from({ length: transferCellCount(schoolRows.flatMap(payrollTransferNumbers), selectedKey) }, (_, index) => {
     const number = String(index + 1);
     const transferRows = schoolRows.filter(row => payrollTransferNumbers(row).includes(number));
     return {
@@ -62,6 +62,7 @@ export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth 
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
+      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.count)} >
       {cells.map(cell => {
         const active = cell.count > 0;
         const isSelected = selectedKey === cell.filterKey;
@@ -105,6 +106,7 @@ export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth 
           </button>
         );
       })}
+      </TransferBarPages>
     </div>
   );
 }

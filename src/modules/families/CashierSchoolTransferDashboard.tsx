@@ -1,3 +1,4 @@
+import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useMemo } from 'react';
 import { PaymentTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable } from '../../hooks/useCrmQueries';
@@ -12,7 +13,6 @@ interface CashierSchoolTransferDashboardProps {
   statusFilter?: 'pending' | 'confirmed';
 }
 
-const TRANSFER_COUNT = 15;
 
 function paymentDate(row: PaymentTableRow): Date | null {
   const raw = row.actualPaymentDate || row.paymentDate || row.createdAt;
@@ -55,7 +55,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
 
   if (rows === null) return null;
 
-  const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, i) => {
+  const transferCells = Array.from({ length: transferCellCount(schoolRows.map(row => row.transferNumber), selectedKey) }, (_, i) => {
     const number = String(i + 1);
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
     return {
@@ -82,6 +82,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
+      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.count)} >
       {cells.map(cell => {
         const active = cell.count > 0;
         const isSelected = selectedKey === cell.filterKey;
@@ -129,6 +130,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
           </button>
         );
       })}
+      </TransferBarPages>
     </div>
   );
 }

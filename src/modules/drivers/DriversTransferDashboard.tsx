@@ -1,3 +1,4 @@
+import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useMemo } from 'react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
@@ -11,7 +12,6 @@ interface DriversTransferDashboardProps {
   onSelect?: (key: string) => void;
 }
 
-const TRANSFER_COUNT = 15;
 
 const VEHICLE_COLOR: Record<string, string> = {
   microbus: '#2DD4BF',
@@ -56,7 +56,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
 
   if (rows === null || isReserve) return null;
 
-  const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, index) => {
+  const transferCells = Array.from({ length: transferCellCount(schoolRows.flatMap(row => row.transferNumbers.split(',').map(number => number.replace(/[^\d]/g, ''))), selectedKey) }, (_, index) => {
     const number = String(index + 1);
     const transferRows = schoolRows.filter(row => driverMatchesTransfer(row, number));
     return {
@@ -87,6 +87,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
+      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.count)} >
       {cells.map(cell => {
         const active = cell.count > 0;
         const isSelected = selectedKey === cell.filterKey;
@@ -130,6 +131,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
           </button>
         );
       })}
+      </TransferBarPages>
     </div>
   );
 }

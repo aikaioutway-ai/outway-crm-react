@@ -1,3 +1,4 @@
+import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React from 'react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
@@ -12,7 +13,6 @@ interface SchoolTransferDashboardProps {
   allowedSchools?: string[];
 }
 
-const TRANSFER_COUNT = 15;
 
 const STATUS_CELL_TONE: Record<string, string> = {
   new: '#31A4A5',
@@ -45,7 +45,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
   const allSchoolRows = rows.filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');
 
-  const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, i) => {
+  const transferCells = Array.from({ length: transferCellCount(schoolRows.map(row => row.transferNumber), selectedKey) }, (_, i) => {
     const number = String(i + 1);
     const assignedRows = schoolRows.filter(r => r.transferNumber === number);
     return {
@@ -75,6 +75,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
+      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.childCount)} >
       {cells.map(cell => {
         const active = cell.childCount > 0;
         const isSelected = selectedKey === cell.filterKey;
@@ -132,6 +133,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
           </button>
         );
       })}
+      </TransferBarPages>
     </div>
   );
 }
