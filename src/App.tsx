@@ -270,7 +270,7 @@ export default function App() {
     });
   }, [currentUser]);
 
-  const badgesQuery = useFamiliesTable(true, { enabled: !!currentUser });
+  const badgesQuery = useFamiliesTable({ enabled: !!currentUser });
   const badges: Partial<Record<NavSection, number>> = currentUser && badgesQuery.data
     ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length }
     : {};

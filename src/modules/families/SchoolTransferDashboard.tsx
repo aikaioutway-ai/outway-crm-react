@@ -38,7 +38,7 @@ function childCountOf(rows: FamilyListRow[]): number {
 }
 
 export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools }: SchoolTransferDashboardProps) {
-  const { data: rows } = useFamiliesTable(false);
+  const { data: rows } = useFamiliesTable();
 
   if (!isSchoolAllowed(schoolKey, allowedSchools) || !rows) return null;
 

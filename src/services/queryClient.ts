@@ -14,7 +14,7 @@ export const queryClient = new QueryClient({
 export const QK = {
   branchStats: ['branchStats'] as const,
   schoolApplicationCounts: ['schoolApplicationCounts'] as const,
-  familiesTable: (withFinance: boolean) => ['familiesTable', withFinance] as const,
+  familiesTable: ['familiesTable'] as const,
   familiesPage: (filters: Record<string, unknown>) => ['familiesPage', filters] as const,
   driversTable: ['driversTable'] as const,
   paymentsTable: ['paymentsTable'] as const,

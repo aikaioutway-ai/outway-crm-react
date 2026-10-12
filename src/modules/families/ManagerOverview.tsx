@@ -308,7 +308,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   // Полная таблица семей нужна только для разбивки по конкретному периоду
   // (charged/paid по месяцу привязаны к семье, а не к филиалу) — грузим её
   // лениво, только когда period выбран, а не всегда при заходе на экран.
-  const familiesQuery = useFamiliesTable(true, { enabled: periodKey !== 'ALL' });
+  const familiesQuery = useFamiliesTable({ enabled: periodKey !== 'ALL' });
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
     () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,

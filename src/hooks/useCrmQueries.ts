@@ -29,13 +29,19 @@ import { fetchEmployees } from '../services/employeeService';
 import { Employee } from '../types';
 import { QK } from '../services/queryClient';
 
-/** Единая точка загрузки таблицы семей — все компоненты с одинаковым
- * withFinance разделяют один запрос и один кэш (React Query дедуплицирует
- * параллельные вызовы и переиспользует данные, пока они не протухли). */
-export function useFamiliesTable(withFinance = false, options?: { enabled?: boolean }): UseQueryResult<FamilyListRow[]> {
+/** Таблица семей — самый тяжёлый запрос CRM. Одна копия на всё приложение
+ * (меню, Логистика, FamiliesPage): данные с финансами нужны части экранов,
+ * а лишний запрос ожидающих платежей стоит намного дешевле второй полной
+ * загрузки. После правок кэш сбрасывает invalidateFamiliesCache. */
+export const familiesTableQuery = {
+  queryKey: QK.familiesTable,
+  queryFn: (): Promise<FamilyListRow[]> => fetchV2FamiliesTable(true),
+  staleTime: 5 * 60 * 1000,
+};
+
+export function useFamiliesTable(options?: { enabled?: boolean }): UseQueryResult<FamilyListRow[]> {
   return useQuery({
-    queryKey: QK.familiesTable(withFinance),
-    queryFn: (): Promise<FamilyListRow[]> => fetchV2FamiliesTable(withFinance),
+    ...familiesTableQuery,
     enabled: options?.enabled ?? true,
   });
 }
