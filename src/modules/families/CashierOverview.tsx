@@ -1,18 +1,23 @@
+import CashierViewTabs, { CashierView } from './CashierViewTabs';
+import SchoolDashboardTable from './SchoolDashboardTable';
+import HiddenSchoolsList from './HiddenSchoolsList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, QrCode, ReceiptText, RotateCcw, Search, X } from 'lucide-react';
+import { Search, X } from 'lucide-react';
 import { PaymentTableRow, RefundTableRow } from '../../services/crmV2Service';
-import { usePaymentsTable, useRefundsTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
+import { usePaymentsTable, useRefundsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
 import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
-import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
+import { SchoolTier } from './SchoolTierTabs';
 import ManagerPeriodBar from './ManagerPeriodBar';
 
-type SortKey = 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsAmount';
+type SortKey = 'school' | 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsAmount' | 'refundsPendingAmount' | 'refundsConfirmedAmount';
 
 interface CashierOverviewProps {
+  view: CashierView;
+  onViewChange: (view: CashierView) => void;
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
@@ -39,32 +44,21 @@ interface CashierSchoolStat {
 
 const SCHOOL_COLORS = [
   '#378ADD', '#639922', '#7F77DD', '#3C3489', '#A32D2D', '#185FA5', '#0F6E56', '#085041',
-  '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
+  '#993556', '#712B13', '#854F0B', '#2563EB', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
 const KPI_COLORS: Record<SortKey, string> = {
+  school: '#64748B',
   paymentsAmount: '#626C8B',
-  pendingCount: '#B45309',
-  pendingAmount: '#BA7517',
+  pendingCount: '#7C3AED',
+  pendingAmount: '#2563EB',
   confirmedAmount: 'var(--success)',
   qrAmount: '#1D6FA4',
   cashAmount: '#15803D',
   refundsAmount: '#B91C1C',
+  refundsPendingAmount: '#7C3AED',
+  refundsConfirmedAmount: 'var(--success)',
 };
-
-const COLUMN_WEIGHTS: Record<SortKey, number> = {
-  paymentsAmount: 1.6,
-  pendingCount: 1,
-  pendingAmount: 1.15,
-  confirmedAmount: 1.2,
-  qrAmount: 1,
-  cashAmount: 1,
-  refundsAmount: 1.15,
-};
-
-const GRID_TEMPLATE = ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsAmount']
-  .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
-  .join(' ');
 
 function paymentDate(row: PaymentTableRow): Date | null {
   const raw = row.actualPaymentDate || row.paymentDate || row.createdAt;
@@ -210,18 +204,17 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
   );
 }
 
-export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
+export default function CashierOverview({ view, onViewChange, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
   const { data: refundRows = [] } = useRefundsTable();
-  const applicationCounts = useSchoolApplicationCounts();
   const searchablePayments = useMemo(
     () => (rows ?? []).filter(row => isSchoolAllowed(getBranchFilter(row.branchShort, row.branchShort), allowedSchools)),
     [allowedSchools, rows],
   );
   const [sidebarHidden, setSidebarHidden] = useState(false);
-  const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'paymentsAmount', dir: 'desc' });
+  const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
+  const [schoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
@@ -237,12 +230,12 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   const periodRefundRows = useMemo(() => (refundRows ?? []).filter(row => refundMatchesPeriod(row, periodKey)), [periodKey, refundRows]);
 
   const stats = useMemo(() => {
-    const schoolStats = SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && SCHOOL_TIER_2_KEYS.includes(tab.key) === (schoolTier === '2.0')).map((tab, index): CashierSchoolStat => {
+    const schoolStats = SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (schoolTier === '2.0')).map((tab, index): CashierSchoolStat => {
     const schoolRows = periodRows.filter(row => rowMatchesSchool(row, tab));
     const pendingRows = schoolRows.filter(isPending);
     const confirmedRows = schoolRows.filter(isConfirmed);
     const paymentRows = schoolRows.filter(row => isPending(row) || isConfirmed(row));
-    const activeRows = schoolRows.filter(row => !String(row.status ?? '').toLowerCase().includes('отклон') && String(row.status ?? '').toLowerCase() !== 'rejected');
+    const activeRows = (view === 'pending' ? pendingRows : view === 'confirmed' ? confirmedRows : schoolRows).filter(row => !String(row.status ?? '').toLowerCase().includes('отклон') && String(row.status ?? '').toLowerCase() !== 'rejected');
     const schoolRefundRows = periodRefundRows.filter(row => refundMatchesSchool(row, tab));
     const refundsPendingAmount = schoolRefundRows.filter(row => row.status === 'pending').reduce((sum, row) => sum + row.amount, 0);
     const refundsConfirmedAmount = schoolRefundRows.filter(row => row.status === 'confirmed').reduce((sum, row) => sum + row.amount, 0);
@@ -263,7 +256,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
     };
     });
     return schoolStats;
-  }, [periodRefundRows, periodRows, schoolTier]);
+  }, [periodRefundRows, periodRows, schoolTier, view, allowedSchools]);
 
   const totals = useMemo(() => stats.reduce((acc, s) => ({
     pendingCount: acc.pendingCount + s.pendingCount,
@@ -283,14 +276,14 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
       expandedGroups,
       ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsAmount', 'refundsPendingAmount', 'refundsConfirmedAmount'],
       (a, b) => {
-        const cmp = a.data[sortState.key] - b.data[sortState.key];
+        const cmp = sortState.key === 'school' ? a.label.localeCompare(b.label) : a.data[sortState.key] - b.data[sortState.key];
         return sortState.dir === 'asc' ? cmp : -cmp;
       },
     );
   }, [stats, expandedGroups, sortState]);
 
   const handleSort = (key: SortKey) => {
-    setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'desc' });
+    setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
   };
 
   if (rows === null) {
@@ -301,7 +294,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel className="dashboard-control-row cashier-control-row">
-          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
+          <CashierViewTabs value={view} onChange={onViewChange} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
               periodKey={periodKey}
@@ -310,87 +303,33 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
             />
           </div>
           <CashierPaymentSearch rows={searchablePayments} onOpenPaymentFamily={onOpenPaymentFamily} />
+          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
         </DashboardTopPanel>
 
-        <DashboardGrid template={GRID_TEMPLATE}>
-            <ColumnCard
-              first
-              sortKey="paymentsAmount"
-              label="Платежи"
-              icon={<ReceiptText size={17} color="#fff" />}
-              value={money(totals.paymentsAmount)}
-              color={KPI_COLORS.paymentsAmount}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-              {displayRows.map((row, i) => (
-                <div
-                  key={row.key}
-                  onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
-                  style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}
-                >
-                  <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
-                  <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
-                  {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
-                  {row.isGroup ? (
-                    row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
-                  ) : (
-                    <ChevronRight size={14} color="var(--text-2)" />
-                  )}
-                </div>
-              ))}
-            </ColumnCard>
-
-            {([
-              ['pendingCount', 'К-во на проверке', <Clock3 size={17} color="#fff" />, String(totals.pendingCount)],
-              ['pendingAmount', 'Сумма на проверке', <ReceiptText size={17} color="#fff" />, money(totals.pendingAmount)],
-              ['confirmedAmount', 'Подтверждено', <CheckCircle2 size={17} color="#fff" />, money(totals.confirmedAmount)],
-              ['qrAmount', 'QR', <QrCode size={17} color="#fff" />, money(totals.qrAmount)],
-              ['cashAmount', 'Наличные', <Banknote size={17} color="#fff" />, money(totals.cashAmount)],
-            ] as const).map(([key, label, icon, value]) => (
-              <ColumnCard
-                key={key}
-                sortKey={key}
-                label={label}
-                icon={icon}
-                value={value}
-                color={KPI_COLORS[key]}
-                sortState={sortState}
-                onSort={handleSort}
-              >
-                {displayRows.map((row, i) => {
-                  const value = row.data[key];
-                  const isMoney = key !== 'pendingCount';
-                  return (
-                    <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: Number(value) > 0 ? KPI_COLORS[key] : undefined }}>{isMoney ? (Number(value) > 0 ? money(Number(value)) : '0') : String(value)}</span>
-                    </div>
-                  );
-                })}
-              </ColumnCard>
-            ))}
-
-            <ColumnCard
-              sortKey="refundsAmount"
-              label="Возвраты"
-              icon={<RotateCcw size={17} color="#fff" />}
-              value={money(totals.refundsAmount)}
-              color={KPI_COLORS.refundsAmount}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-              {displayRows.map((row, i) => {
-                const pending = Number(row.data.refundsPendingAmount);
-                const confirmed = Number(row.data.refundsConfirmedAmount);
-                return (
-                  <div key={row.key} style={{ flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 2, padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                    <span style={{ fontSize: 13, fontWeight: 700, color: pending > 0 ? '#B91C1C' : 'var(--text-2)' }}>{pending > 0 ? money(pending) : '0'}</span>
-                    {confirmed > 0 && <span style={{ fontSize: 11, fontWeight: 700, color: '#10B981' }}>{money(confirmed)}</span>}
-                  </div>
-                );
-              })}
-            </ColumnCard>
-        </DashboardGrid>
+        <SchoolDashboardTable
+          columns={[
+            { key: 'school', label: 'Школа', total: stats.length, color: KPI_COLORS.school },
+            ...(view === 'pending' ? [
+              { key: 'pendingCount', label: 'К-во на проверке', total: totals.pendingCount, color: KPI_COLORS.pendingCount },
+              { key: 'pendingAmount', label: 'Сумма на проверке', total: money(totals.pendingAmount), color: KPI_COLORS.pendingAmount },
+            ] : view === 'confirmed' ? [
+              { key: 'confirmedAmount', label: 'Подтверждено', total: money(totals.confirmedAmount), color: KPI_COLORS.confirmedAmount },
+            ] : [
+              { key: 'refundsAmount', label: 'Возвраты', total: money(totals.refundsAmount), color: KPI_COLORS.refundsAmount },
+              { key: 'refundsPendingAmount', label: 'На проверке', total: money(totals.refundsPendingAmount), color: '#7C3AED' },
+              { key: 'refundsConfirmedAmount', label: 'Подтверждено', total: money(totals.refundsConfirmedAmount), color: 'var(--success)' },
+            ]),
+            ...(view !== 'refunds' ? [
+              { key: 'qrAmount', label: 'QR', total: money(totals.qrAmount), color: KPI_COLORS.qrAmount },
+              { key: 'cashAmount', label: 'Наличные', total: money(totals.cashAmount), color: KPI_COLORS.cashAmount },
+            ] : []),
+          ]}
+          rows={displayRows.map(row => ({ ...row, values: { pendingCount: row.data.pendingCount, pendingAmount: money(row.data.pendingAmount), confirmedAmount: money(row.data.confirmedAmount), qrAmount: money(row.data.qrAmount), cashAmount: money(row.data.cashAmount), refundsAmount: money(row.data.refundsAmount), refundsPendingAmount: money(row.data.refundsPendingAmount), refundsConfirmedAmount: money(row.data.refundsConfirmedAmount) } }))}
+          sortKey={sortState.key}
+          ascending={sortState.dir === 'asc'}
+          onSort={key => handleSort(key as SortKey)}
+          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        />
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

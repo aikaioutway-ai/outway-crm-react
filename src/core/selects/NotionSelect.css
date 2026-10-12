@@ -1,0 +1,9 @@
+.notion-select-trigger { transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease; }
+.notion-select-trigger:not(:disabled):hover { background: #F0F5F5 !important; }
+.notion-select-trigger:focus-visible { outline: 2px solid var(--accent) !important; outline-offset: 2px; }
+.notion-select-panel { animation: notion-select-appear 140ms ease-out; scrollbar-width: thin; overscroll-behavior: contain; }
+.notion-select-option { background: transparent; transition: background-color 120ms ease, box-shadow 120ms ease; }
+.notion-select-option[aria-selected="true"] { background: #EAF5F4; }
+.notion-select-option:not(:disabled):hover, .notion-select-option:not(:disabled):focus-visible { background: #DDEEEB !important; box-shadow: inset 3px 0 0 var(--accent); outline: none; }
+@keyframes notion-select-appear { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { .notion-select-panel { animation: none; } .notion-select-trigger, .notion-select-option { transition: none; } }

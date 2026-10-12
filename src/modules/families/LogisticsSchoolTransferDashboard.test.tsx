@@ -44,10 +44,10 @@ test('shows the selected vehicle type immediately and refreshes the transfer dat
 
   render(<LogisticsSchoolTransferDashboard schoolKey="AES" />);
 
-  fireEvent.contextMenu(screen.getByRole('button', { name: /#1 МКР/i }));
+  fireEvent.contextMenu(screen.getByRole('button', { name: '2 1', exact: true }));
   fireEvent.click(screen.getByRole('button', { name: 'Минивэн' }));
 
-  expect(screen.getByRole('button', { name: /#1 MINI/i })).toBeInTheDocument();
+  expect(screen.getByRole('button', { name: '2 1', exact: true })).toHaveStyle({ border: '1px solid #8B5CF6' });
   expect(mockedUpdateVehicleType).toHaveBeenNthCalledWith(1, expect.objectContaining({
     branchId: 'branch-1',
     transferNumber: 1,

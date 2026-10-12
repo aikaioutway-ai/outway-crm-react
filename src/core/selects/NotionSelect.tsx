@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ChevronDown, X } from 'lucide-react';
+import './NotionSelect.css';
+import { Check, ChevronDown, X } from 'lucide-react';
 
 export interface NotionSelectOption {
   value: string;
@@ -107,12 +108,15 @@ export default function NotionSelect({
     >
       <button
         ref={buttonRef}
+        className="notion-select-trigger"
+        aria-expanded={open}
+        aria-haspopup="listbox"
         type="button"
         disabled={disabled}
-        onClick={() => setOpen(current => !current)}
+        onClick={() => { if (open) close(); else setOpen(true); }}
         style={{
           width: '100%',
-          height: isCell || open ? 38 : 24,
+          height: isCell ? 38 : 24,
           border: open || isCell ? '1px solid #E5ECEF' : 'none',
           borderRadius: open || isCell ? 12 : 0,
           background: open || isCell ? '#fff' : 'transparent',
@@ -169,6 +173,9 @@ export default function NotionSelect({
       {open && createPortal(
         <div
           ref={panelRef}
+          className="notion-select-panel"
+          role="listbox"
+          aria-label="Выберите вариант"
           style={{
             ...panelStyle,
             maxHeight: 340,
@@ -182,33 +189,44 @@ export default function NotionSelect({
           onClick={event => event.stopPropagation()}
         >
           <div style={{ color: '#777', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
-            Select an option
+            Выберите вариант
           </div>
           <div style={{ display: 'grid', gap: 7 }}>
-            {options.map((option, index) => {
+            {options.map((option) => {
               const active = option.value === value;
               return (
                 <button
                   key={option.value}
+                  className="notion-select-option"
+                  role="option"
+                  aria-selected={active}
+                  onKeyDown={event => {
+                    const items = Array.from(event.currentTarget.parentElement?.querySelectorAll<HTMLButtonElement>('.notion-select-option') ?? []);
+                    const index = items.indexOf(event.currentTarget);
+                    const next = event.key === 'ArrowDown' ? (index + 1) % items.length
+                      : event.key === 'ArrowUp' ? (index - 1 + items.length) % items.length
+                      : event.key === 'Home' ? 0 : event.key === 'End' ? items.length - 1 : -1;
+                    if (next >= 0) { event.preventDefault(); items[next]?.focus(); }
+                  }}
                   type="button"
                   onClick={() => {
                     onChange(option.value);
                     close();
                   }}
                   style={{
-                    minHeight: 24,
+                    minHeight: 32,
                     border: 'none',
-                    background: active ? '#EEF6F7' : index % 2 === 0 ? '#FAFCFC' : 'transparent',
+
                     borderRadius: 6,
                     display: 'flex',
                     alignItems: 'center',
                     gap: 10,
-                    padding: '2px 4px',
+                    padding: '5px 8px',
                     cursor: 'pointer',
                     textAlign: 'left',
                   }}
                 >
-                  <span style={{ color: '#9B9B9B', fontSize: 16, lineHeight: 1 }}>⠿</span>
+                  <span aria-hidden="true" style={{ width: 16, flexShrink: 0, display: 'flex', color: 'var(--accent)' }}>{active && <Check size={15} />}</span>
                   <span
                     style={{
                       display: 'inline-flex',

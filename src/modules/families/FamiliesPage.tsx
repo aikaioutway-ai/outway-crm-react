@@ -1,3 +1,4 @@
+import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChildStatus, Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
@@ -292,7 +293,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     ],
     render: (_val, row) => (
       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-        {(VT_LABEL[row.vehicleType] ?? row.vehicleType)}{row.transferNumber ? ` №${row.transferNumber}` : ''}
+        {(VT_LABEL[row.vehicleType] ?? row.vehicleType)}{' '}<TransferNumberBadge number={row.transferNumber} vehicleType={row.vehicleType} />
       </span>
     ),
     getValue: (row) => row.vehicleType,
@@ -300,7 +301,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'transferNumber', label: '№ Трансфера', type: 'select', category: 'Маршрут', width: 100, editable: true,
     editOptions: [{ value: '', label: '—' }, ...TRANSFER_OPTIONS],
-    render: (val) => <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{val ? `№${val}` : '—'}</span>,
+    render: (val, row) => <TransferNumberBadge number={val} vehicleType={row.vehicleType} />,
   },
   {
     key: 'stopNumber', label: 'Остановка', type: 'select', category: 'Маршрут', width: 95, editable: true,
@@ -359,7 +360,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
     ),
   },
   { key: 'branchShorts', label: 'Школа', type: 'text', category: 'Маршрут', width: 110, getValue: row => row.branchShorts.join(', ') },
-  { key: 'transferNumbers', label: 'Трансфер', type: 'text', category: 'Маршрут', width: 140 },
+  { key: 'transferNumbers', label: 'Трансфер', type: 'text', category: 'Маршрут', width: 140, render: (value, row) => <TransferNumberBadge number={value} vehicleType={row.vehicleType} /> },
   {
     key: 'vehicleLabel',
     label: 'Тип ТС',
@@ -479,8 +480,8 @@ const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[
 
 const TRANSFER_TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   microbus: { bg: '#D7EEEE', border: '#AAD4D4', text: '#237F81', dot: '#31A4A5' },
-  minivan: { bg: '#ECFDF5', border: '#A7F3D0', text: '#065F46', dot: '#10B981' },
-  sedan: { bg: '#F2F5E9', border: '#DCE8C6', text: '#687C54', dot: '#687C54' },
+  minivan: { bg: '#F3EEFF', border: '#D9C9FE', text: '#6D28D9', dot: '#8B5CF6' },
+  sedan: { bg: '#FFF4EB', border: '#FED7AA', text: '#C2410C', dot: '#F97316' },
   empty: { bg: '#F5FAFB', border: '#D4E3E7', text: '#626C8B', dot: '#AAB5AE' },
 };
 
@@ -3482,20 +3483,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       </button>
                     );
                   })}
-                  {isPagedMode && pagedTotalFamilies > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>
-                      <button
-                        onClick={() => setFamiliesPageNumber(p => Math.max(0, p - 1))}
-                        disabled={familiesPageNumber === 0}
-                        style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber === 0 ? 'default' : 'pointer', opacity: familiesPageNumber === 0 ? 0.4 : 1 }}
-                      >‹</button>
-                      <button
-                        onClick={() => setFamiliesPageNumber(p => Math.min(pagedTotalPages - 1, p + 1))}
-                        disabled={familiesPageNumber >= pagedTotalPages - 1}
-                        style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber >= pagedTotalPages - 1 ? 'default' : 'pointer', opacity: familiesPageNumber >= pagedTotalPages - 1 ? 0.4 : 1 }}
-                      >›</button>
-                    </div>
-                  )}
+
                 </div>
               )}
               toolbarRightExtra={(
@@ -4681,6 +4669,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
       {transferTypeMenu && (
         <div
+          className="notion-select-panel"
           onClick={event => event.stopPropagation()}
           style={{
             position: 'fixed',
@@ -4749,6 +4738,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               return (
                 <button
                   key={option.value}
+                  className="notion-select-option"
+                  type="button"
                   onClick={() => changeDashboardTransferVehicleType(option.value)}
                   style={{
                     width: '100%',
