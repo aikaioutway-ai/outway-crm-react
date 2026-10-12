@@ -510,14 +510,19 @@ export default function App() {
                     <button onClick={() => { setLogisticsSchoolKey(null); setLogisticsSearch(''); }} style={managerModeTabStyle(false)}>
                       ← Все школы
                     </button>
-                    <div role="tablist" aria-label="Раздел логистики" style={{ display: 'flex', alignItems: 'center', gap: 2, height: 34, padding: 3, marginBottom: 8, flexShrink: 0, border: '1px solid var(--border)', borderRadius: 12, boxSizing: 'border-box' }}>
-                      {([['table', 'Таблица'], ['map', 'Карта']] as const).map(([view, label]) => (
-                        <button key={view} type="button" role="tab" aria-selected={logisticsView === view} onClick={() => setLogisticsView(view)} style={{ height: 26, padding: '0 14px', border: 'none', borderRadius: 8, background: logisticsView === view ? 'var(--accent)' : 'transparent', color: logisticsView === view ? '#fff' : 'var(--text-2)', fontSize: 13, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap' }}>{label}</button>
-                      ))}
+                    <div style={{ marginBottom: 8 }}>
+                      <LogisticsTabs school value={logisticsView} onChange={key => {
+                        if (key === 'drivers') {
+                          setDriversSchoolKey(logisticsSchoolKey);
+                          setDriversTransferFilter(logisticsTransferFilter);
+                          setDriversSearch(logisticsSearch);
+                          setSection('drivers');
+                        } else if (key !== 'schools') setLogisticsView(key);
+                      }} />
                     </div>
                   </>
                 )}
-                {logisticsSchoolKey && <button type="button" onClick={() => { setDriversSchoolKey(logisticsSchoolKey); setDriversTransferFilter(logisticsTransferFilter); setDriversSearch(logisticsSearch); setSection('drivers'); }} style={managerModeTabStyle(false)}>Водители</button>}
+
                 {extraTabs(true)}
               </div>
             </div>
@@ -658,7 +663,7 @@ export default function App() {
                     ← Все школы
                   </button>
                 )}
-                {driversSchoolKey && <div style={{ marginBottom: 8 }}><LogisticsTabs value="drivers" onChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }} /></div>}
+                {driversSchoolKey && <div style={{ marginBottom: 8 }}><LogisticsTabs school value="drivers" onChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }} /></div>}
                 {extraTabs(true)}
               </div>
             </div>
