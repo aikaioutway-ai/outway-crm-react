@@ -10,8 +10,7 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'GEN2',  label: 'GEN #2',codes: ['GENIUS'],  branches: ['Гениум — Чуйкова','Гениум Чуйкова'], logo: '/school-logos/GEN.png' },
   { key: 'GEN4',  label: 'GEN #4',codes: ['GENIUS4'], branches: ['Гениум — Авангард','Гениум Авангард'], logo: '/school-logos/GEN.png' },
   { key: 'NOVA',  label: 'NOVA',  codes: ['NOVA'],    branches: [], logo: '/school-logos/NOVA.png' },
-  { key: 'ING',   label: 'ING',   codes: ['INDIGO'], branches: ['Индиго Kids','Asylkech Girls School'], logo: '/school-logos/ING.png' },
-  { key: 'ING_P', label: 'ING_P', codes: ['INDIGO'], branches: ['Indigo Prime Academy'], logo: '/school-logos/ING.png' },
+  { key: 'ING',   label: 'ING',   codes: ['INDIGO'], branches: ['Индиго Kids','Asylkech Girls School','Indigo Prime Academy'], logo: '/school-logos/ING.png' },
   { key: 'ING_W', label: 'ING_W', codes: ['INDIGO'], branches: ['Indigo West'], logo: '/school-logos/ING.png' },
   { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: ['Light Academy'], logo: '/school-logos/LA.png' },
   { key: 'LA_P',  label: 'LA Primary', codes: ['LIGHT'], branches: ['Light Academy Primary'], logo: '/school-logos/LA.png' },
@@ -27,12 +26,12 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
 // School 2.0 — школы без постоянного контракта: обычно один минивэн,
 // небольшой поток и вероятность, что сотрудничество не продолжится.
 // Остальные школы (не в этом списке) — School 1.0.
-export const SCHOOL_TIER_2_KEYS = ['BJ', 'EDI', 'LA_P', 'ING_P', 'ING_W'];
+export const SCHOOL_TIER_2_KEYS = ['BJ', 'EDI', 'LA_P', 'ING_W'];
 
 // Школы с несколькими филиалами — схлопываются в один ряд, разворачиваются по клику
 export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; children: string[] }[] = [
   { key: 'GENIUS', label: 'Genius', logo: '/school-logos/GEN.png', children: ['GEN2', 'GEN4'] },
-  { key: 'INDIGO', label: 'Indigo', logo: '/school-logos/ING.png', children: ['ING', 'ING_P', 'ING_W'] },
+  { key: 'INDIGO', label: 'Indigo', logo: '/school-logos/ING.png', children: ['ING', 'ING_W'] },
   { key: 'BILIM',  label: 'Bilim',  logo: '/school-logos/BKG.png', children: ['BKG', 'BJ'] },
   { key: 'LIGHT',  label: 'Light',  logo: '/school-logos/LA.png',  children: ['LA', 'LA_P'] },
   { key: 'ABL',    label: 'ABL',    logo: '/school-logos/ABL.png', children: ['ABL1', 'ABL2'] },
@@ -91,13 +90,13 @@ export const BRANCH_SHORT: Record<string, string> = {
 };
 
 // Группировка branch_name по school_code для фильтра филиалов
-// ING_A входит в ING (одна трансферная линия)
+// ING_A и ING_P входят в ING (одна трансферная линия)
 export const BRANCH_TO_FILTER: Record<string, string> = {
   'Индиго Kids':          'ING',
   'Индиго кидс':          'ING',
   'Asylkech Girls School':'ING',   // ING_A едет с ING
   'AsylKech Girls School':'ING',
-  'Indigo Prime Academy': 'ING_P',
+  'Indigo Prime Academy': 'ING',   // ING_P едет с ING
   'Indigo West':          'ING_W',
   'Гениум — Чуйкова':    'GEN2',
   'Гениум — Авангард':   'GEN4',

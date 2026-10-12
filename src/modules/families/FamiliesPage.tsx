@@ -1931,7 +1931,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     GEN4: 'Гениум — Авангард',
     NOVA: 'Nova International School',
     ING: 'Индиго Kids',
-    ING_P: 'Indigo Prime Academy',
     ING_W: 'Indigo West',
     LA: 'Light Academy',
     BKG: 'Билим Бишкек KG',
