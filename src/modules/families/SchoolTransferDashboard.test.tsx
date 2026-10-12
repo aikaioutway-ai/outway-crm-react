@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import SchoolTransferDashboard from './SchoolTransferDashboard';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 
@@ -16,6 +16,21 @@ test('flags assigned unboarded children only in their school and transfer', () =
   render(<SchoolTransferDashboard schoolKey="AES" />);
   expect(screen.getAllByLabelText('Посадка не подтверждена: 1')).toHaveLength(1);
   expect(screen.getByLabelText('Посадка не подтверждена: 1').closest('button')).toHaveTextContent('#1');
+});
+
+
+test('manager can select a transfer above 15 and still sees its boarding alert', () => {
+  (useFamiliesTable as jest.Mock).mockReturnValue({ data: [
+    { familyId: 'a', branchFilter: 'AES', transferNumber: '20', status: 'new', debtAmount: 0 },
+  ] });
+  const onSelect = jest.fn();
+  render(<SchoolTransferDashboard schoolKey="AES" onSelect={onSelect} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Следующие трансферы' }));
+  const transfer = screen.getByRole('button', { name: /20/ });
+  expect(transfer).toHaveTextContent('1');
+  expect(transfer).not.toHaveTextContent('!');
+  fireEvent.click(transfer);
+  expect(onSelect).toHaveBeenCalledWith('20');
 });
 
 
