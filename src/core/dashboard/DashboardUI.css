@@ -51,14 +51,14 @@
 }
 
 .dashboard-overview-grid {
-  flex: 1;
+  flex: 0 1 auto;
   min-height: 0;
   display: grid;
   gap: 0;
   background: #fff;
   border: 1px solid var(--border);
   border-radius: 16px;
-  overflow: hidden;
+  overflow: auto;
 }
 
 .dashboard-kpi {
@@ -104,7 +104,7 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow: visible;
   background: #fff;
   border-left: 1px solid var(--border);
 }
@@ -147,7 +147,7 @@
   text-overflow: ellipsis;
 }
 .dashboard-column-body {
-  flex: 1;
+  flex: 0 0 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -233,4 +233,11 @@
   box-sizing: border-box;
   line-height: 30px !important;
   border-radius: 12px !important;
+}
+
+/* School lists keep the same row height regardless of available screen space. */
+.dashboard-column-head { flex-shrink: 0; }
+.dashboard-column-body > [data-school-row] {
+  flex: 0 0 var(--dashboard-row-height, 56px) !important;
+  box-sizing: border-box;
 }

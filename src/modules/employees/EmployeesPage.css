@@ -9,3 +9,14 @@
 
 /* Keep the table cell compact: identities are visual, the full list lives in the tooltip. */
 .employee-school-cell{width:max-content;max-width:100%;min-height:30px;padding:3px 8px 3px 4px;border:1px solid #e4ecef;border-radius:10px;background:#f8fbfc;gap:7px}.employee-school-cell.all{padding-left:7px;background:#f6f8fb}.employee-school-cell>span:last-child{font-size:11px;font-weight:800;color:#52606f}.employee-school-avatars img,.employee-school-avatars>span{margin-left:-7px;border:2px solid #f8fbfc;box-shadow:0 1px 2px rgba(23,34,47,.08)}.employee-school-avatars img:first-child,.employee-school-avatars>span:first-child{margin-left:0}
+
+/* Department navigation follows the shared CRM dashboard layout. */
+.employees-overview{padding:8px 14px;flex-shrink:0}
+.employees-controls{display:flex;align-items:center;gap:8px}
+.employees-controls .employees-search{margin:0;height:34px;flex:1;min-width:180px}
+.employees-controls .employee-primary{height:34px;border-radius:10px;font-size:12px;white-space:nowrap}
+.employee-back{height:34px;padding:0 12px;border:0;border-radius:10px;background:var(--surface-2);color:var(--text);font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap}
+.employee-location{font-size:12px;font-weight:700;color:var(--text-2)}
+.employee-department-icon{width:30px;height:30px;border-radius:9px;background:var(--accent-l);color:var(--accent);display:grid;place-items:center;flex-shrink:0}
+.employees-table-panel{margin:0;min-height:0;flex:0 0 auto;border:0;}
+@media(max-width:900px){.employees-controls{flex-wrap:wrap}.employees-controls .employees-search{min-width:220px}}

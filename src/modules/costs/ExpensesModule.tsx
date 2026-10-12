@@ -318,7 +318,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
 
   const canViewPersonalDetails = userRole === 'admin' || userRole === 'gen_director';
   const overviewRows = (selectedCategory
-    ? subcategoryTotals.filter(item => item.count > 0).map(item => ({ key: item.subcategory, category: selectedCategory, label: item.subcategory }))
+    ? subcategoryTotals.map(item => ({ key: item.subcategory, category: selectedCategory, label: item.subcategory }))
     : EXPENSE_CATEGORY_KEYS.map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label }))
   ).map(item => {
     const matching = categoryRows.filter(row => selectedCategory ? row.subcategory === item.key : row.category === item.category);
