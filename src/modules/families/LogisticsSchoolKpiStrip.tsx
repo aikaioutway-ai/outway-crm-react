@@ -48,7 +48,7 @@ function transferStats(rows: FamilyListRow[]) {
 }
 
 export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: LogisticsSchoolKpiStripProps) {
-  const { data: rows } = useFamiliesTable(false);
+  const { data: rows } = useFamiliesTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const stats = useMemo(() => {

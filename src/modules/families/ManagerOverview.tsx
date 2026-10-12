@@ -306,7 +306,7 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   const branchStatsQuery = useBranchStats();
   const applicationCounts = useSchoolApplicationCounts();
   // Rows also supply the boarding alerts beside each school.
-  const familiesQuery = useFamiliesTable(periodKey !== 'ALL');
+  const familiesQuery = useFamiliesTable();
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
     () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,

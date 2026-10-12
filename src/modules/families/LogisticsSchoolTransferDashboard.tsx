@@ -33,7 +33,7 @@ function vehicleShort(vehicleType?: string): string {
 }
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
-  const { data: rows, refetch } = useFamiliesTable(false);
+  const { data: rows, refetch } = useFamiliesTable();
   const [vehicleMenu, setVehicleMenu] = useState<{
     x: number;
     y: number;

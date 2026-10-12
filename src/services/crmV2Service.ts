@@ -371,17 +371,24 @@ const SUPABASE_PAGE_SIZE = 1000;
 
 async function fetchAllRows<T = any>(
   buildQuery: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: any }>,
+  parallelPages = 1,
 ): Promise<T[]> {
+  // Для больших таблиц порции запрашиваются пачками параллельно: каждый
+  // запрос — это в основном задержка сети до Supabase, а не работа базы.
+  // Загрузка заканчивается, как только пришла неполная порция.
   const rows: T[] = [];
-  for (let from = 0; ; from += SUPABASE_PAGE_SIZE) {
-    const to = from + SUPABASE_PAGE_SIZE - 1;
-    const { data, error } = await buildQuery(from, to);
-    if (error) throw new Error(error.message);
-    const batch = data ?? [];
-    rows.push(...batch);
-    if (batch.length < SUPABASE_PAGE_SIZE) break;
+  for (let from = 0; ; from += SUPABASE_PAGE_SIZE * parallelPages) {
+    const batches = await Promise.all(Array.from({ length: parallelPages }, async (_, index) => {
+      const start = from + index * SUPABASE_PAGE_SIZE;
+      const { data, error } = await buildQuery(start, start + SUPABASE_PAGE_SIZE - 1);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    }));
+    for (const batch of batches) {
+      rows.push(...batch);
+      if (batch.length < SUPABASE_PAGE_SIZE) return rows;
+    }
   }
-  return rows;
 }
 
 export function mapV2Family(row: any, children: any[] = []): Family {
@@ -567,11 +574,11 @@ export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, an
   return map;
 }
 
-const familiesTableInflight: Partial<Record<'withFinance' | 'base', Promise<FamilyListRow[]>>> = {};
+// Семей и детей сейчас 1–3 тысячи: три порции за раз покрывают всю таблицу
+// одним кругом запросов.
+const FAMILIES_TABLE_PARALLEL_PAGES = 3;
 
-export async function fetchV2FamiliesTableCached(): Promise<FamilyListRow[]> {
-  return fetchV2FamiliesTable(false);
-}
+const familiesTableInflight: Partial<Record<'withFinance' | 'base', Promise<FamilyListRow[]>>> = {};
 
 export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
   const cacheKey = withFinance ? 'withFinance' : 'base';
@@ -579,10 +586,10 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
 
   const request = (async (): Promise<FamilyListRow[]> => {
   const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to)),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
     withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
     fetchV2Branches(),
   ]);
@@ -1764,23 +1771,6 @@ export async function fetchV2DriverAdvancesForPeriod(periodMonth: number, period
   }));
 }
 
-export async function createV2DriverAdvance(driverId: string, amount: number, date: string, comment: string): Promise<V2DriverAdvance> {
-  const { data, error } = await supabase
-    .from('v2_driver_advances')
-    .insert({ driver_id: driverId, amount, date, comment: comment.trim() || null })
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  return {
-    id: String(data.id),
-    driverId: String(data.driver_id),
-    amount: Number(data.amount),
-    date: data.date ?? '',
-    comment: data.comment ?? '',
-    createdAt: data.created_at ?? '',
-  };
-}
-
 export async function deleteV2DriverAdvance(advanceId: string): Promise<void> {
   const { error } = await supabase
     .from('v2_driver_advances')
@@ -2041,26 +2031,6 @@ export async function setV2PayrollApprovalStatus(input: {
   return mapV2PayrollApproval(data.row);
 }
 
-export async function setV2PayrollEntryApprovalStatus(input: {
-  schoolKey: string;
-  periodMonth: number;
-  periodYear: number;
-  subjectId?: string;
-  subjectType?: PayrollSubjectType;
-  status: 'draft' | 'approved' | 'rejected';
-  allSubjects: Array<{ subjectId: string; subjectType: PayrollSubjectType }>;
-  rejectionComment?: string;
-}, sessionToken?: string): Promise<{ approval: V2PayrollApproval; entries: V2PayrollEntry[] }> {
-  const data = await callPayrollApprovalApi(sessionToken, { action: 'setEntryStatus', ...input });
-  queryClient.invalidateQueries({ queryKey: QK.payrollEntries(input.periodMonth, input.periodYear) });
-  queryClient.invalidateQueries({ queryKey: QK.payrollApproval(input.schoolKey, input.periodMonth, input.periodYear) });
-  queryClient.invalidateQueries({ queryKey: QK.payrollApprovals(input.periodMonth, input.periodYear) });
-  return {
-    approval: mapV2PayrollApproval(data.approval),
-    entries: (data.entries ?? []).map(mapV2PayrollEntry),
-  };
-}
-
 export async function updateV2TransferVehicleType(params: {
   schoolId?: string | null;
   branchId?: string | null;
@@ -2188,11 +2158,11 @@ export interface PageFilterSettings {
   vehicle_filter: string;
 }
 
-export async function fetchPageFilters(mode: string): Promise<PageFilterSettings[]> {
+export async function fetchPageFilters(modes: string[]): Promise<PageFilterSettings[]> {
   const { data } = await supabase
     .from('crm_page_filters')
     .select('mode, tab_key, metric, vehicle_filter')
-    .eq('mode', mode);
+    .in('mode', modes);
   return data ?? [];
 }
 

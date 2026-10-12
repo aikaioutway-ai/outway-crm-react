@@ -103,7 +103,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
 }
 
 export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, sessionToken, onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsMapViewProps) {
-  const { data: rows = null } = useFamiliesTable(false);
+  const { data: rows = null } = useFamiliesTable();
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
@@ -278,7 +278,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
               timeMorning: row.timeMorning ?? undefined,
               source: 'map',
             });
-            queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable(false), (prev: FamilyListRow[] | undefined) => prev?.map((r: FamilyListRow) => (
+            queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, (prev: FamilyListRow[] | undefined) => prev?.map((r: FamilyListRow) => (
               r.rowId === childId ? { ...r, transferNumber: transferValue || null, stopNumber: stopValue || null } : r
             )) ?? prev);
             if (statusEl) statusEl.textContent = 'Сохранено ✓';

@@ -1,4 +1,4 @@
-import { Child, SchoolCode, VehicleType, Zone } from '../types';
+import { SchoolCode, VehicleType, Zone } from '../types';
 import { getPriceByZone, isTeacherPriced, repriceChild, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
 
 export type TransferRepricingSource =
@@ -177,23 +177,5 @@ export function buildTransferRepricingPlan(input: TransferRepricingPlanInput): T
     actorName: input.actorName?.trim() || 'CRM',
     children,
     familyComments,
-  };
-}
-
-export function childSnapshotFromModel(child: Child): Omit<TransferRepricingChildSnapshot, 'charges'> {
-  return {
-    id: child.id,
-    familyId: child.familyId,
-    childName: child.childName,
-    schoolCode: child.schoolCode,
-    zone: child.zone,
-    requestedVehicleType: child.requestedVehicleType ?? null,
-    vehicleType: child.vehicleType,
-    basePrice: Number(child.basePrice ?? 0),
-    finalPrice: Number(child.finalPrice ?? child.basePrice ?? 0),
-    siblingDiscountPercent: Number(child.siblingDiscountPercent ?? 0),
-    manualDiscountPercent: Number(child.manualDiscountPercent ?? 0),
-    manualDiscountAmount: Number(child.manualDiscountAmount ?? 0),
-    transferId: child.transferId ?? null,
   };
 }

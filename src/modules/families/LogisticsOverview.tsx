@@ -103,7 +103,7 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
 }
 
 export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsOverviewProps) {
-  const { data: allRows = null } = useFamiliesTable(false);
+  const { data: allRows = null } = useFamiliesTable();
   const rows = useMemo(
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
     [allRows, allowedSchools],

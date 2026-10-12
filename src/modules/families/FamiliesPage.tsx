@@ -4,8 +4,9 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2FamiliesTable, fetchV2FamiliesTableCached, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
-import { useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
+import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
+import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
@@ -732,8 +733,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const canRejectFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
-  const [financeLoaded, setFinanceLoaded] = useState(false);
-  const [loadingFinanceRows, setLoadingFinanceRows] = useState(false);
   const [paymentRows, setPaymentRows] = useState<PaymentTableRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
@@ -1005,7 +1004,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     // загрузка запускается лениво, если mode позже сменится на режим,
     // которому всё ещё нужен весь rows (Кассир/Логистика/Начисления/...).
     if (isRequestsModule || mode === 'directory') return;
-    load(!familiesRowsCache);
+    load(!familiesRowsCache, false);
     // This transition loader deliberately follows the active module only. `load`
     // reads the latest cache and filters when the effect runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -1171,16 +1170,13 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   useEffect(() => {
     const modes: FamiliesMode[] = ['requests', 'payments', 'debtors', 'directory', 'cashier', 'logistics'];
-    Promise.all(modes.map(m => fetchPageFilters(m).catch(() => [] as PageFilterSettings[]))).then(results => {
+    fetchPageFilters(modes).catch(() => [] as PageFilterSettings[]).then(rows => {
       const map: Record<string, { metric: LogisticsDashboardMetric; vehicleFilter: LogisticsVehicleFilter }> = {};
-      results.forEach((rows, i) => {
-        const m = modes[i];
-        rows.forEach(row => {
-          map[`${m}:${row.tab_key}`] = {
-            metric: row.metric as LogisticsDashboardMetric,
-            vehicleFilter: row.vehicle_filter as LogisticsVehicleFilter,
-          };
-        });
+      rows.forEach(row => {
+        map[`${row.mode}:${row.tab_key}`] = {
+          metric: row.metric as LogisticsDashboardMetric,
+          vehicleFilter: row.vehicle_filter as LogisticsVehicleFilter,
+        };
       });
       setTabDefaultFilters(map);
     });
@@ -1206,12 +1202,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     onSchoolsSidebarWidthChange?.(schoolsSidebarReserveWidth);
   }, [onSchoolsSidebarWidthChange, schoolsSidebarReserveWidth]);
 
-  const FINANCE_MODES: FamiliesMode[] = ['payments', 'debtors', 'charges', 'cashier'];
-  useEffect(() => {
-    if (FINANCE_MODES.includes(mode)) loadFinanceRows();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode]);
-
   useEffect(() => {
     if (!isChargesMode) return;
     if (chargesPeriodKey === 'ALL') { setPeriodStats([]); return; }
@@ -1232,13 +1222,14 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     return () => { cancelled = true; };
   }, [isChargesMode, chargesPeriodKey]);
 
-  async function load(showSpinner = true) {
+  // force — после правок: данные берутся заново (или из уже идущего запроса),
+  // без force — из общего кэша, если он ещё свежий.
+  async function load(showSpinner = true, force = true) {
     if (showSpinner) setLoading(true);
-    setFinanceLoaded(false);
     try {
       const shouldLoadTransportMeta = mode === 'logistics' || isDriversModule;
       const [families, transfers, drivers] = await Promise.all([
-        fetchV2FamiliesTableCached(),
+        queryClient.fetchQuery(force ? { ...familiesTableQuery, staleTime: 0 } : familiesTableQuery),
         shouldLoadTransportMeta ? fetchV2TransfersDashboard().catch(() => []) : Promise.resolve([]),
         shouldLoadTransportMeta ? fetchV2DriversTable().catch(() => []) : Promise.resolve([]),
       ]);
@@ -1247,27 +1238,10 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       setRows(result);
       setDashboardTransfers(transfers);
       setDriverRows(drivers);
-      if (FINANCE_MODES.includes(mode)) void loadFinanceRows();
     } catch (error) {
       console.error('Families load failed', error);
     } finally {
       if (showSpinner) setLoading(false);
-    }
-  }
-
-  async function loadFinanceRows() {
-    if (financeLoaded || loadingFinanceRows) return;
-    setLoadingFinanceRows(true);
-    try {
-      const families = await fetchV2FamiliesTable(true);
-      const result = normalizeRows(families);
-      familiesRowsCache = result;
-      setRows(result);
-      setFinanceLoaded(true);
-    } catch (error) {
-      console.error('Finance rows load failed', error);
-    } finally {
-      setLoadingFinanceRows(false);
     }
   }
 
