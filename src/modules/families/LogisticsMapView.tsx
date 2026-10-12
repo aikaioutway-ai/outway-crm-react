@@ -19,8 +19,8 @@ import {
   RouteZoneShape,
   updateRouteZone,
 } from '../../services/routeZoneService';
-import { VEHICLE_COLOR } from './LogisticsSchoolTransferDashboard';
-import { SCHOOL_TABS, isSchoolAllowed } from './constants';
+import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
+import { SCHOOL_TIER_2_KEYS, SCHOOL_TABS, isSchoolAllowed } from './constants';
 import { SCHOOL_COLORS } from './LogisticsOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -316,6 +316,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     setZonesLoading(true);
     setZoneError(null);
     setSelectedZoneId(null);
+    if (!schoolKey) { setZones([]); setZonesLoading(false); return; }
     fetchRouteZones(schoolKey)
       .then(result => {
         if (!cancelled) setZones(result);
@@ -544,7 +545,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase().replace(/\s+/g, '');
-    const baseRows = (rows ?? []).filter(row => row.branchFilter === schoolKey && (!query || [row.parentName, row.childName, row.phone, row.streetAddress]
+    const baseRows = (rows ?? []).filter(row => (schoolKey ? row.branchFilter === schoolKey : isSchoolAllowed(row.branchFilter, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)) && (!query || [row.parentName, row.childName, row.phone, row.streetAddress]
       .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query))));
     if (transferFilter === 'rejected') {
       return baseRows.filter(row => row.status === 'rejected');
@@ -553,7 +554,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     if (!transferFilter) return activeRows;
     if (transferFilter === 'empty') return activeRows.filter(row => !row.transferNumber);
     return activeRows.filter(row => row.transferNumber === transferFilter);
-  }, [rows, schoolKey, search, transferFilter]);
+  }, [rows, schoolKey, search, transferFilter, allowedSchools]);
 
   const pointRows = useMemo<PointRow[]>(
     () => filteredRows.filter((row): row is PointRow => row.latitude != null && row.longitude != null),

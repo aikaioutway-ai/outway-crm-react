@@ -1,12 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { Bus, Car, ChevronDown, ChevronRight, FileWarning, School, UserCheck, UserX } from 'lucide-react';
+import LogisticsTabs, { LogisticsTab } from '../families/LogisticsTabs';
+import HiddenSchoolsList from '../families/HiddenSchoolsList';
+import SchoolDashboardTable from '../families/SchoolDashboardTable';
+import { useEffect, useMemo, useState } from 'react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
-import { useDriversTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
+import { useDriversTable } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardSearch, DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
-import SchoolTierTabs, { SchoolTier } from '../families/SchoolTierTabs';
+import { SchoolTier } from '../families/SchoolTierTabs';
 
 export const DRIVER_RESERVE_KEY = 'RESERVE';
 export const DRIVER_RESERVE_STATUSES = new Set(['vacation', 'reserve', 'waiting', 'pending']);
@@ -23,6 +25,9 @@ type SortKey = 'school' | 'activeCount' | 'inactiveCount' | 'microbusCount' | 'm
 
 interface DriversOverviewProps {
   onSelectSchool: (key: string) => void;
+  search?: string;
+  onSearchChange: (value: string) => void;
+  onTabChange: (tab: LogisticsTab) => void;
   onSidebarWidthChange?: (width: number) => void;
   allowedSchools?: string[];
 }
@@ -42,7 +47,7 @@ interface DriverSchoolStat {
 
 const SCHOOL_COLORS = [
   '#378ADD', '#639922', '#7F77DD', '#3C3489', '#A32D2D', '#185FA5', '#0F6E56', '#085041',
-  '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
+  '#993556', '#712B13', '#854F0B', '#2563EB', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
 const KPI_COLORS: Record<SortKey, string> = {
@@ -51,7 +56,7 @@ const KPI_COLORS: Record<SortKey, string> = {
   inactiveCount: '#EF7168',
   microbusCount: '#1D6FA4',
   minivanCount: '#15803D',
-  sedanCount: '#BA7517',
+  sedanCount: '#2563EB',
   incompleteDocumentsCount: '#B45309',
 };
 
@@ -112,32 +117,14 @@ function computeDriverStats(rows: V2DriverTableRow[], allowedSchools: string[] |
   ];
 }
 
-export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools }: DriversOverviewProps) {
+export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools, search = '', onSearchChange, onTabChange }: DriversOverviewProps) {
   const { data: rows = null } = useDriversTable();
-  const applicationCounts = useSchoolApplicationCounts();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
+  const [schoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
-  // Каждая колонка KPI — отдельный скролл-контейнер, поэтому синхронизируем
-  // scrollTop между ними вручную — иначе при скролле одной колонки школы
-  // «съезжают» относительно остальных.
-  const columnScrollRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const isSyncingScroll = useRef(false);
-  const registerColumnScroll = (index: number) => (el: HTMLDivElement | null) => {
-    columnScrollRefs.current[index] = el;
-  };
-  const handleColumnScroll = (index: number) => (event: React.UIEvent<HTMLDivElement>) => {
-    if (isSyncingScroll.current) return;
-    isSyncingScroll.current = true;
-    const top = event.currentTarget.scrollTop;
-    columnScrollRefs.current.forEach((el, i) => {
-      if (el && i !== index) el.scrollTop = top;
-    });
-    isSyncingScroll.current = false;
-  };
 
   useEffect(() => {
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
@@ -145,7 +132,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
 
   const stats = useMemo(() => computeDriverStats(rows ?? [], allowedSchools, schoolTier), [rows, allowedSchools, schoolTier]);
   const totals = useMemo(() => {
-    const allRows = rows ?? [];
+    const allRows = (rows ?? []).filter(row => isReserveDriver(row) || SCHOOL_TABS.some(tab => tab.key !== 'ALL' && !SCHOOL_TIER_2_KEYS.includes(tab.key) && isSchoolAllowed(tab.key, allowedSchools) && driverMatchesSchool(row, tab)));
     return {
       schools: stats.filter(stat => stat.activeCount + stat.inactiveCount > 0).length,
       activeCount: allRows.filter(row => row.status === 'active').length,
@@ -155,7 +142,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
       sedanCount: allRows.filter(row => row.vehicleType === 'sedan').length,
       incompleteDocumentsCount: allRows.filter(row => row.hasIncompleteDocuments).length,
     };
-  }, [rows, stats]);
+  }, [rows, stats, allowedSchools]);
 
   const displayRows = useMemo(() => {
     const reserve = stats.find(stat => stat.key === DRIVER_RESERVE_KEY);
@@ -185,72 +172,30 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <DashboardTopPanel className="dashboard-control-row">
-          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
-        </DashboardTopPanel>
-        <DashboardGrid template={GRID_TEMPLATE}>
-          <ColumnCard
-            first
-            sortKey="school"
-            label="Школы с водителями"
-            icon={<School size={17} color="#fff" />}
-            value={String(totals.schools)}
-            color={KPI_COLORS.school}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            <div ref={registerColumnScroll(0)} onScroll={handleColumnScroll(0)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {displayRows.map((row, index) => (
-                <div
-                  key={row.key}
-                  onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
-                  style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}
-                >
-                  <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
-                  <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
-                  {!row.isGroup && row.key !== DRIVER_RESERVE_KEY && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
-                  {row.isGroup ? (
-                    row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
-                  ) : (
-                    <ChevronRight size={14} color="var(--text-2)" />
-                  )}
-                </div>
-              ))}
-            </div>
-          </ColumnCard>
+      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-          {([
-            ['activeCount', 'Активные', <UserCheck size={17} color="#fff" />, String(totals.activeCount)],
-            ['inactiveCount', 'Неактивные', <UserX size={17} color="#fff" />, String(totals.inactiveCount)],
-            ['microbusCount', 'Микробусы', <Bus size={17} color="#fff" />, String(totals.microbusCount)],
-            ['minivanCount', 'Минивэны', <Car size={17} color="#fff" />, String(totals.minivanCount)],
-            ['sedanCount', 'Седаны', <Car size={17} color="#fff" />, String(totals.sedanCount)],
-            ['incompleteDocumentsCount', 'Документы', <FileWarning size={17} color="#fff" />, String(totals.incompleteDocumentsCount)],
-          ] as const).map(([key, label, icon, value], columnIndex) => (
-            <ColumnCard
-              key={key}
-              sortKey={key}
-              label={label}
-              icon={icon}
-              value={value}
-              color={KPI_COLORS[key]}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-              <div ref={registerColumnScroll(columnIndex + 1)} onScroll={handleColumnScroll(columnIndex + 1)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                {displayRows.map((row, index) => {
-                  const value = row.data[key];
-                  return (
-                    <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                      <span style={{ fontSize: 14, fontWeight: 700, color: Number(value) > 0 ? KPI_COLORS[key] : undefined }}>{value}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </ColumnCard>
-          ))}
-        </DashboardGrid>
+        <DashboardTopPanel className="dashboard-control-row">
+          <LogisticsTabs value="drivers" onChange={onTabChange} />
+          <div style={{ flex: 1 }} />
+          <DashboardSearch value={search} onChange={onSearchChange} placeholder="Поиск школы…" />
+          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
+        </DashboardTopPanel>
+        <SchoolDashboardTable
+          columns={[
+            { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
+            { key: 'activeCount', label: 'Активные', total: totals.activeCount, color: KPI_COLORS.activeCount },
+            { key: 'inactiveCount', label: 'Неактивные', total: totals.inactiveCount, color: KPI_COLORS.inactiveCount },
+            { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
+            { key: 'minivanCount', label: 'Минивэны', total: totals.minivanCount, color: KPI_COLORS.minivanCount },
+            { key: 'sedanCount', label: 'Седаны', total: totals.sedanCount, color: KPI_COLORS.sedanCount },
+            { key: 'incompleteDocumentsCount', label: 'Документы', total: totals.incompleteDocumentsCount, color: KPI_COLORS.incompleteDocumentsCount }
+          ]}
+          rows={displayRows.filter(row => row.label.toLowerCase().includes(search.trim().toLowerCase())).map(row => ({ ...row, values: { ...row.data } }))}
+          sortKey={sortState.key}
+          ascending={sortState.dir === 'asc'}
+          onSort={key => handleSort(key as SortKey)}
+          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        />
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

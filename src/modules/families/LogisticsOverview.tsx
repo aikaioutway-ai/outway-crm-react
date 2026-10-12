@@ -1,18 +1,26 @@
+import LogisticsTabs from './LogisticsTabs';
+import SchoolsMap from './SchoolsMap';
+import { ManagerSearch } from './ManagerOverview';
+import SchoolDashboardTable from './SchoolDashboardTable';
+import HiddenSchoolsList from './HiddenSchoolsList';
 import { useEffect, useMemo, useState } from 'react';
-import { Bus, Car, ChevronDown, ChevronRight, Inbox, School } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
-import { useFamiliesTable, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, isSchoolAllowed } from './constants';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
-import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
+import { SchoolTier } from './SchoolTierTabs';
 import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
 
 type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 'microbusCount' | 'lightVehicleCount';
 
 interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
+  onOpenFamily: (schoolKey: string, familyId: string, search: string) => void;
+  onDrivers: () => void;
+  view: 'table' | 'map' | 'schools';
+  onViewChange: (view: 'table' | 'map' | 'schools') => void;
   allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
 }
@@ -31,13 +39,13 @@ interface LogisticsSchoolStat {
 
 export const SCHOOL_COLORS = [
   '#378ADD', '#639922', '#7F77DD', '#3C3489', '#A32D2D', '#185FA5', '#0F6E56', '#085041',
-  '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
+  '#993556', '#712B13', '#854F0B', '#2563EB', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
 const KPI_COLORS: Record<SortKey, string> = {
   school: '#626C8B',
   newRequests: '#378ADD',
-  microbusAverage: '#BA7517',
+  microbusAverage: '#2563EB',
   transferCount: '#2DD4BF',
   microbusCount: '#1D6FA4',
   lightVehicleCount: '#15803D',
@@ -102,17 +110,16 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
   });
 }
 
-export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsOverviewProps) {
+export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers }: LogisticsOverviewProps) {
   const { data: allRows = null } = useFamiliesTable();
   const rows = useMemo(
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
     [allRows, allowedSchools],
   );
-  const applicationCounts = useSchoolApplicationCounts();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
+  const [schoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
@@ -168,119 +175,28 @@ export default function LogisticsOverview({ onSelectSchool, onSidebarWidthChange
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '10px 0', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel className="dashboard-control-row">
-          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
+          <LogisticsTabs value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} />
+          <div style={{ flex: 1 }} />
+          <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
+          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
         </DashboardTopPanel>
-        <DashboardGrid template={GRID_TEMPLATE}>
-          <ColumnCard
-            first
-            sortKey="school"
-            label="Школы"
-            icon={<School size={17} color="#fff" />}
-            value={String(totals.schools)}
-            color={KPI_COLORS.school}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            {displayRows.map((row, i) => (
-              <div
-                key={row.key}
-                onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
-                style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}
-              >
-                <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
-                <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
-                {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
-                {row.isGroup ? (
-                  row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
-                ) : (
-                  <ChevronRight size={14} color="var(--text-2)" />
-                )}
-              </div>
-            ))}
-          </ColumnCard>
-
-          <ColumnCard
-            sortKey="newRequests"
-            label="Новые заявки"
-            icon={<Inbox size={17} color="#fff" />}
-            value={String(totals.newRequests)}
-            color={KPI_COLORS.newRequests}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.newRequests > 0 ? KPI_COLORS.newRequests : undefined }}>{row.data.newRequests}</span>
-              </div>
-            ))}
-          </ColumnCard>
-
-          <ColumnCard
-            sortKey="microbusAverage"
-            label="Средний по МКР"
-            icon={<Bus size={17} color="#fff" />}
-            value={totals.microbusAverage.toFixed(1)}
-            color={KPI_COLORS.microbusAverage}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.microbusAverage > 0 ? KPI_COLORS.microbusAverage : undefined }}>{row.data.microbusAverage.toFixed(1)}</span>
-              </div>
-            ))}
-          </ColumnCard>
-
-          <ColumnCard
-            sortKey="transferCount"
-            label="К-во трансферов"
-            icon={<Bus size={17} color="#fff" />}
-            value={String(totals.transferCount)}
-            color={KPI_COLORS.transferCount}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.transferCount > 0 ? KPI_COLORS.transferCount : undefined }}>{row.data.transferCount}</span>
-              </div>
-            ))}
-          </ColumnCard>
-
-          <ColumnCard
-            sortKey="microbusCount"
-            label="Микробусы"
-            icon={<Bus size={17} color="#fff" />}
-            value={String(totals.microbusCount)}
-            color={KPI_COLORS.microbusCount}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.microbusCount > 0 ? KPI_COLORS.microbusCount : undefined }}>{row.data.microbusCount}</span>
-              </div>
-            ))}
-          </ColumnCard>
-
-          <ColumnCard
-            sortKey="lightVehicleCount"
-            label="Легковые"
-            icon={<Car size={17} color="#fff" />}
-            value={String(totals.lightVehicleCount)}
-            color={KPI_COLORS.lightVehicleCount}
-            sortState={sortState}
-            onSort={handleSort}
-          >
-            {displayRows.map((row, i) => (
-              <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                <span style={{ fontSize: 14, fontWeight: 700, color: row.data.lightVehicleCount > 0 ? KPI_COLORS.lightVehicleCount : undefined }}>{row.data.lightVehicleCount}</span>
-              </div>
-            ))}
-          </ColumnCard>
-        </DashboardGrid>
+        {view === 'schools' ? <SchoolsMap allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable
+          columns={[
+            { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
+            { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },
+            { key: 'microbusAverage', label: 'Средний по МКР', total: totals.microbusAverage.toFixed(1), color: KPI_COLORS.microbusAverage },
+            { key: 'transferCount', label: 'К-во трансферов', total: totals.transferCount, color: KPI_COLORS.transferCount },
+            { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
+            { key: 'lightVehicleCount', label: 'Легковые', total: totals.lightVehicleCount, color: KPI_COLORS.lightVehicleCount }
+          ]}
+          rows={displayRows.map(row => ({ ...row, values: { ...row.data, microbusAverage: row.data.microbusAverage.toFixed(1) } }))}
+          sortKey={sortState.key}
+          ascending={sortState.dir === 'asc'}
+          onSort={key => handleSort(key as SortKey)}
+          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        />}
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

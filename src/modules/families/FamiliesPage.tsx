@@ -479,8 +479,8 @@ const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[
 
 const TRANSFER_TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
   microbus: { bg: '#D7EEEE', border: '#AAD4D4', text: '#237F81', dot: '#31A4A5' },
-  minivan: { bg: '#ECFDF5', border: '#A7F3D0', text: '#065F46', dot: '#10B981' },
-  sedan: { bg: '#F2F5E9', border: '#DCE8C6', text: '#687C54', dot: '#687C54' },
+  minivan: { bg: '#F3EEFF', border: '#D9C9FE', text: '#6D28D9', dot: '#8B5CF6' },
+  sedan: { bg: '#FFF4EB', border: '#FED7AA', text: '#C2410C', dot: '#F97316' },
   empty: { bg: '#F5FAFB', border: '#D4E3E7', text: '#626C8B', dot: '#AAB5AE' },
 };
 
@@ -3481,20 +3481,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                       </button>
                     );
                   })}
-                  {isPagedMode && pagedTotalFamilies > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>
-                      <button
-                        onClick={() => setFamiliesPageNumber(p => Math.max(0, p - 1))}
-                        disabled={familiesPageNumber === 0}
-                        style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber === 0 ? 'default' : 'pointer', opacity: familiesPageNumber === 0 ? 0.4 : 1 }}
-                      >‹</button>
-                      <button
-                        onClick={() => setFamiliesPageNumber(p => Math.min(pagedTotalPages - 1, p + 1))}
-                        disabled={familiesPageNumber >= pagedTotalPages - 1}
-                        style={{ width: 24, height: 24, border: '1px solid var(--border)', borderRadius: 6, background: '#fff', cursor: familiesPageNumber >= pagedTotalPages - 1 ? 'default' : 'pointer', opacity: familiesPageNumber >= pagedTotalPages - 1 ? 0.4 : 1 }}
-                      >›</button>
-                    </div>
-                  )}
+
                 </div>
               )}
               toolbarRightExtra={(

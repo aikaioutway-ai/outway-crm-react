@@ -14,7 +14,7 @@ interface LogisticsSchoolKpiStripProps {
 const COLORS = {
   school: '#626C8B',
   newRequests: '#378ADD',
-  average: '#BA7517',
+  average: '#2563EB',
   transfers: '#2DD4BF',
   microbus: '#1D6FA4',
   light: '#15803D',
@@ -65,15 +65,16 @@ export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth =
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
       <KpiChip
         icon={<SchoolAvatar logo={school.logo} label={school.label} color={COLORS.school} size={38} radius={11} fontSize={12} />}
+        iconBackground="transparent"
         label="Школа"
         value={school.label}
         color={COLORS.school}
       />
-      <KpiChip icon={<Inbox size={18} color="#fff" />} label="Новые заявки" value={String(stats.newRequests)} color={COLORS.newRequests} />
-      <KpiChip icon={<Bus size={18} color="#fff" />} label="Средний по МКР" value={stats.microbusAverage.toFixed(1)} color={COLORS.average} />
-      <KpiChip icon={<Bus size={18} color="#fff" />} label="К-во трансферов" value={String(stats.transferCount)} color={COLORS.transfers} />
-      <KpiChip icon={<Bus size={18} color="#fff" />} label="Микробусы" value={String(stats.microbusCount)} color={COLORS.microbus} />
-      <KpiChip icon={<Car size={18} color="#fff" />} label="Легковые" value={String(stats.lightVehicleCount)} color={COLORS.light} />
+      <KpiChip icon={null} label="Новые заявки" value={String(stats.newRequests)} color={COLORS.newRequests} />
+      <KpiChip icon={null} label="Средний по МКР" value={stats.microbusAverage.toFixed(1)} color={COLORS.average} />
+      <KpiChip icon={null} label="К-во трансферов" value={String(stats.transferCount)} color={COLORS.transfers} />
+      <KpiChip icon={null} label="Микробусы" value={String(stats.microbusCount)} color={COLORS.microbus} />
+      <KpiChip icon={null} label="Легковые" value={String(stats.lightVehicleCount)} color={COLORS.light} />
     </div>
   );
 }

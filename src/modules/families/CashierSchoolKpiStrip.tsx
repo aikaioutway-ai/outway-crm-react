@@ -1,5 +1,5 @@
+import { CashierView } from './CashierViewTabs';
 import React, { useMemo } from 'react';
-import { Banknote, CheckCircle2, Clock3, QrCode, ReceiptText } from 'lucide-react';
 import { PaymentTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
@@ -8,6 +8,7 @@ import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface CashierSchoolKpiStripProps {
   schoolKey: string;
+  view?: CashierView;
   periodKey: string;
   rightReserveWidth?: number;
 }
@@ -15,8 +16,8 @@ interface CashierSchoolKpiStripProps {
 const COLORS = {
   school: '#378ADD',
   payments: '#626C8B',
-  pendingCount: '#B45309',
-  pendingAmount: '#BA7517',
+  pendingCount: '#7C3AED',
+  pendingAmount: '#2563EB',
   confirmed: 'var(--success)',
   qr: '#1D6FA4',
   cash: '#15803D',
@@ -30,6 +31,7 @@ function paymentDate(row: PaymentTableRow): Date | null {
 }
 
 function matchesPeriod(row: PaymentTableRow, periodKey: string): boolean {
+  if (periodKey === 'ALL') return true;
   const period = CASHIER_PERIODS.find(item => item.key === periodKey);
   const date = paymentDate(row);
   if (!period || !date) return false;
@@ -63,7 +65,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierSchoolKpiStrip({ schoolKey, periodKey, rightReserveWidth = 0 }: CashierSchoolKpiStripProps) {
+export default function CashierSchoolKpiStrip({ view = 'pending', schoolKey, periodKey, rightReserveWidth = 0 }: CashierSchoolKpiStripProps) {
   const { data: rows = null } = usePaymentsTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
@@ -72,7 +74,7 @@ export default function CashierSchoolKpiStrip({ schoolKey, periodKey, rightReser
     const pendingRows = schoolRows.filter(isPending);
     const confirmedRows = schoolRows.filter(isConfirmed);
     const paymentRows = schoolRows.filter(row => isPending(row) || isConfirmed(row));
-    const activeRows = schoolRows.filter(row => !String(row.status ?? '').toLowerCase().includes('отклон') && String(row.status ?? '').toLowerCase() !== 'rejected');
+    const activeRows = (view === 'pending' ? pendingRows : confirmedRows).filter(row => !String(row.status ?? '').toLowerCase().includes('отклон') && String(row.status ?? '').toLowerCase() !== 'rejected');
     return {
       paymentsAmount: paymentRows.reduce((sum, row) => sum + row.amount, 0),
       pendingCount: pendingRows.length,
@@ -81,24 +83,19 @@ export default function CashierSchoolKpiStrip({ schoolKey, periodKey, rightReser
       qrAmount: activeRows.filter(isQr).reduce((sum, row) => sum + row.amount, 0),
       cashAmount: activeRows.filter(isCash).reduce((sum, row) => sum + row.amount, 0),
     };
-  }, [periodKey, rows, schoolKey]);
+  }, [periodKey, rows, schoolKey, view]);
 
   if (!school || rows === null) return null;
 
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
-      <KpiChip
-        icon={<SchoolAvatar logo={school.logo} label={school.label} color={COLORS.school} size={38} radius={11} fontSize={12} />}
-        label="Школа"
-        value={school.label}
-        color={COLORS.school}
-      />
-      <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Платежи" value={money(stats.paymentsAmount)} color={COLORS.payments} />
-      <KpiChip icon={<Clock3 size={18} color="#fff" />} label="К-во на проверке" value={String(stats.pendingCount)} color={COLORS.pendingCount} />
-      <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Сумма на проверке" value={money(stats.pendingAmount)} color={COLORS.pendingAmount} />
-      <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Подтверждено" value={money(stats.confirmedAmount)} color={COLORS.confirmed} />
-      <KpiChip icon={<QrCode size={18} color="#fff" />} label="QR" value={money(stats.qrAmount)} color={COLORS.qr} />
-      <KpiChip icon={<Banknote size={18} color="#fff" />} label="Наличные" value={money(stats.cashAmount)} color={COLORS.cash} />
-    </div>
-  );
+  const metrics = view === 'pending' ? [
+    { label: 'К-во на проверке', value: String(stats.pendingCount), color: COLORS.pendingCount },
+    { label: 'Сумма на проверке', value: money(stats.pendingAmount), color: COLORS.pendingAmount },
+  ] : [
+    { label: 'Подтверждено', value: money(stats.confirmedAmount), color: COLORS.confirmed },
+  ];
+  metrics.push({ label: 'QR', value: money(stats.qrAmount), color: COLORS.qr }, { label: 'Наличные', value: money(stats.cashAmount), color: COLORS.cash });
+  return <div style={{ display: 'grid', gridTemplateColumns: `repeat(${metrics.length + 1}, minmax(0, 1fr))`, gap: 12, padding: '10px 0 0', paddingRight: rightReserveWidth }}>
+    <KpiChip iconBackground="transparent" icon={<SchoolAvatar logo={school.logo} label={school.label} color={COLORS.school} size={38} radius={11} />} label="Школа" value={school.label} color={COLORS.school} />
+    {metrics.map(metric => <KpiChip key={metric.label} icon={null} label={metric.label} value={metric.value} color={metric.color} />)}
+  </div>;
 }

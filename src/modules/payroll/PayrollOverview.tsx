@@ -1,3 +1,4 @@
+import HiddenSchoolsList from '../families/HiddenSchoolsList';
 import { useEmployeeAdvances } from '../../hooks/useCrmQueries';
 import { useEffect, useMemo, useState } from 'react';
 import { Banknote, CheckCircle2, ChevronDown, ChevronRight, Clock3, ReceiptText, School, ShieldCheck, WalletCards } from 'lucide-react';
@@ -6,7 +7,7 @@ import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn as Co
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, GroupedRow, toggleGroupKey } from '../families/schoolGrouping';
 import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_TIER_2_KEYS } from '../families/constants';
-import SchoolTierTabs, { SchoolTier } from '../families/SchoolTierTabs';
+import { SchoolTier } from '../families/SchoolTierTabs';
 import { money } from '../../utils/pricing';
 import { buildPayrollApprovalSummaryBySchool, buildPayrollSummaryBySchool, computePayrollStats, PAYROLL_COLORS, PayrollSchoolStat } from './payrollStats';
 import { PAYROLL_OFFICE_KEY, PayrollSchoolTab } from '../expenses/timesheetTypes';
@@ -53,7 +54,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
-  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
+  const [schoolTier] = useState<SchoolTier>('1.0');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
@@ -156,8 +157,9 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel>
+          <HiddenSchoolsList onSelectSchool={onSelectSchool} />
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
-            <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
+            <span style={{ fontSize: 13, fontWeight: 700, padding: '0 14px' }}>School 1.0</span>
             <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
               <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} periods={PAYROLL_PERIODS} showAll={false} />
             </div>
@@ -178,7 +180,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
           >
             {sortedStats.map((row, index) => (
               <div
-                key={row.key}
+                key={row.key} data-school-row={row.key}
                 onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
                 style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}
               >
@@ -216,7 +218,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
               onSort={handleSort}
             >
               {sortedStats.map((row, index) => (
-                <div key={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
+                <div key={row.key} data-school-row={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
                   <span style={{ fontSize: 14, fontWeight: 700, color: (row.data[key] ?? 0) > 0 ? color : undefined }}>{money(row.data[key] ?? 0)}</span>
                 </div>
               ))}

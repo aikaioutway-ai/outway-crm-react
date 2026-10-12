@@ -22,7 +22,7 @@ export interface PayrollSchoolStat extends PayrollMoneySummary {
 
 export const PAYROLL_SCHOOL_COLORS = [
   '#378ADD', '#639922', '#7F77DD', '#3C3489', '#A32D2D', '#185FA5', '#0F6E56', '#085041',
-  '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
+  '#993556', '#712B13', '#854F0B', '#2563EB', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
 export const PAYROLL_COLORS = {
