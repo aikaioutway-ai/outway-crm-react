@@ -109,7 +109,3 @@ export function nextMarketOrderStatus(status: MarketOrderStatus): MarketOrderSta
   if (index === -1 || index === MARKET_ORDER_STATUSES.length - 1) return null;
   return MARKET_ORDER_STATUSES[index + 1].key;
 }
-
-export function marketOrderStatusMeta(status: MarketOrderStatus) {
-  return MARKET_ORDER_STATUSES.find(item => item.key === status) ?? MARKET_ORDER_STATUSES[0];
-}

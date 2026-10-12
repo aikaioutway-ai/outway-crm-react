@@ -39,106 +39,10 @@ export function Field({ label, value, editMode, inputEl }: {
   );
 }
 
-export function EInput({ value, onChange, type = 'text', placeholder }: {
-  value: string;
-  onChange: (v: string) => void;
-  type?: string;
-  placeholder?: string;
-}) {
-  return (
-    <input
-      type={type}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={placeholder}
-      style={{
-        flex: 1, padding: '5px 10px', border: '1px solid var(--border)',
-        borderRadius: 6, fontSize: 13, fontWeight: 500, color: 'var(--text)',
-        background: 'var(--bg)', outline: 'none',
-      }}
-    />
-  );
-}
-
-export function ESelect({ value, onChange, options }: {
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  return (
-    <select
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      style={{
-        flex: 1, padding: '5px 10px', border: '1px solid var(--border)',
-        borderRadius: 6, fontSize: 13, fontWeight: 500, color: 'var(--text)',
-        background: 'var(--bg)', outline: 'none',
-      }}
-    >
-      {options.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-    </select>
-  );
-}
-
-export function Tag({ label, color }: { label: string; color?: { bg: string; color: string } }) {
-  return (
-    <span style={{
-      background: color?.bg ?? '#EEF2FF',
-      color: color?.color ?? 'var(--accent)',
-      borderRadius: 5, padding: '3px 9px', fontSize: 11, fontWeight: 600,
-    }}>
-      {label}
-    </span>
-  );
-}
-
-export function PriceCell({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
-  return (
-    <div>
-      <div style={{ fontSize: 10, color: 'var(--text-2)', fontWeight: 500, textTransform: 'uppercase', letterSpacing: 0.4 }}>{label}</div>
-      <div style={{ fontSize: 13, fontWeight: bold ? 700 : 500, color: 'var(--text)', marginTop: 2 }}>{value}</div>
-    </div>
-  );
-}
-
-export function SummaryCard({ label, value, color, bg }: {
-  label: string; value: string; color?: string; bg?: string;
-}) {
-  return (
-    <div style={{
-      flex: 1, background: bg ?? 'var(--bg)',
-      border: '1px solid var(--border)', borderRadius: 8, padding: '10px 12px',
-    }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: color ?? 'var(--text)', marginTop: 4 }}>{value}</div>
-    </div>
-  );
-}
-
 export function Spinner() {
   return <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-2)', fontSize: 12 }}>Загрузка...</div>;
 }
 
 export function Empty({ text }: { text: string }) {
   return <div style={{ textAlign: 'center', padding: '18px 0', color: 'var(--text-2)', fontSize: 12 }}>{text}</div>;
-}
-
-export function SaveBtn({ onClick, saving, label = 'Сохранить изменения' }: {
-  onClick: () => void;
-  saving: boolean;
-  label?: string;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      disabled={saving}
-      style={{
-        width: '100%', padding: '12px', background: 'var(--accent)', color: '#fff',
-        border: 'none', borderRadius: 8, fontSize: 14, fontWeight: 700,
-        cursor: 'pointer', opacity: saving ? 0.7 : 1,
-      }}
-    >
-      {saving ? 'Сохранение...' : label}
-    </button>
-  );
 }

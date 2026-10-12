@@ -127,15 +127,6 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Ellipse International School': 'ELS',
 };
 
-export const SCHOOL_NAME: Record<string, string> = {
-  LIGHT: 'Light Academy', BILIM: 'Bilim KG',
-  AES: 'AES', KAS: 'KAS', EPSILON: 'Epsilon',
-  GENIUS: 'Genius', GENIUS4: 'Genius 4', NOVA: 'Nova',
-  INDIGO: 'Indigo', ERUDIT: 'Erudit', TENSAY: 'Tensay', EDISON: 'Edison',
-  ABL1: 'ABL — Avangard', ABL2: 'ABL — Mavlyanova',
-  SANARIP: 'Sanarip', ELLIPSE: 'Ellipse',
-};
-
 export const SCHOOL_SHORT: Record<string, string> = {
   LIGHT: 'LA', BILIM: 'BKG',
   AES: 'AES', KAS: 'KAS', EPSILON: 'EPS',
@@ -190,8 +181,6 @@ export const PERIOD_LABEL: Record<string, string> = {
   '9': 'Сентябрь', '10': 'Октябрь', '11': 'Ноябрь', '12': 'Декабрь',
   '1': 'Январь',   '2': 'Февраль',  '3': 'Март',    '4': 'Апрель', '5': 'Май',
 };
-
-export const PERIOD_ORDER = ['deposit','9','10','11','12','1','2','3','4','5'];
 
 function getSeasonStartYear(): number {
   const currentDate = new Date();
@@ -249,10 +238,6 @@ export function normalizeZone(z: unknown, fallback = 'A'): string {
   return fallback;
 }
 
-export function zoneToNum(z: string): number {
-  return z === 'A' ? 1 : z === 'B' ? 2 : 3;
-}
-
 export function normalizeVehicle(vt: unknown): string {
   if (!vt) return 'microbus';
   if (vt === 'minibus' || vt === 'bus' || vt === 'mini-bus') return 'microbus';
@@ -264,28 +249,6 @@ export function normalizeSchoolCode(code: unknown): string {
   const raw = String(code).trim();
   const upper = raw.toUpperCase();
   return SCHOOL_CODE_ALIASES[raw] ?? SCHOOL_CODE_ALIASES[upper] ?? upper;
-}
-
-export function getFilterFromSchoolCode(rawCode: unknown): string | null {
-  if (!rawCode) return null;
-  const raw = String(rawCode).trim();
-  const upper = raw.toUpperCase();
-  if (upper === 'ING_A') return 'ING';
-  if (upper === 'ING_P') return 'ING_P';
-  if (upper === 'ING_W') return 'ING_W';
-  if (upper === 'AES_KAS') return 'AES';
-  if (upper === 'GEN2' || upper === 'GEN_2' || upper === 'GEN #2') return 'GEN2';
-  if (upper === 'GEN4' || upper === 'GEN_4' || upper === 'GEN #4') return 'GEN4';
-  if (upper === 'ABL1' || upper === 'ABL_1' || upper === 'ABL #1') return 'ABL1';
-  if (upper === 'ABL2' || upper === 'ABL_2' || upper === 'ABL #2') return 'ABL2';
-  const schoolCode = normalizeSchoolCode(rawCode);
-  return SCHOOL_SHORT[schoolCode] ?? schoolCode ?? null;
-}
-
-// Получить короткое название по branch_name или school_code
-export function getBranchShort(branchName: string | null, schoolCode: string): string {
-  if (branchName && BRANCH_SHORT[branchName]) return BRANCH_SHORT[branchName];
-  return SCHOOL_SHORT[schoolCode] ?? schoolCode;
 }
 
 // Получить filter-ключ для фильтра филиалов

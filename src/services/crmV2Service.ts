@@ -1764,23 +1764,6 @@ export async function fetchV2DriverAdvancesForPeriod(periodMonth: number, period
   }));
 }
 
-export async function createV2DriverAdvance(driverId: string, amount: number, date: string, comment: string): Promise<V2DriverAdvance> {
-  const { data, error } = await supabase
-    .from('v2_driver_advances')
-    .insert({ driver_id: driverId, amount, date, comment: comment.trim() || null })
-    .select()
-    .single();
-  if (error) throw new Error(error.message);
-  return {
-    id: String(data.id),
-    driverId: String(data.driver_id),
-    amount: Number(data.amount),
-    date: data.date ?? '',
-    comment: data.comment ?? '',
-    createdAt: data.created_at ?? '',
-  };
-}
-
 export async function deleteV2DriverAdvance(advanceId: string): Promise<void> {
   const { error } = await supabase
     .from('v2_driver_advances')
@@ -2039,26 +2022,6 @@ export async function setV2PayrollApprovalStatus(input: {
   queryClient.invalidateQueries({ queryKey: QK.payrollApproval(input.schoolKey, input.periodMonth, input.periodYear) });
   queryClient.invalidateQueries({ queryKey: QK.payrollApprovals(input.periodMonth, input.periodYear) });
   return mapV2PayrollApproval(data.row);
-}
-
-export async function setV2PayrollEntryApprovalStatus(input: {
-  schoolKey: string;
-  periodMonth: number;
-  periodYear: number;
-  subjectId?: string;
-  subjectType?: PayrollSubjectType;
-  status: 'draft' | 'approved' | 'rejected';
-  allSubjects: Array<{ subjectId: string; subjectType: PayrollSubjectType }>;
-  rejectionComment?: string;
-}, sessionToken?: string): Promise<{ approval: V2PayrollApproval; entries: V2PayrollEntry[] }> {
-  const data = await callPayrollApprovalApi(sessionToken, { action: 'setEntryStatus', ...input });
-  queryClient.invalidateQueries({ queryKey: QK.payrollEntries(input.periodMonth, input.periodYear) });
-  queryClient.invalidateQueries({ queryKey: QK.payrollApproval(input.schoolKey, input.periodMonth, input.periodYear) });
-  queryClient.invalidateQueries({ queryKey: QK.payrollApprovals(input.periodMonth, input.periodYear) });
-  return {
-    approval: mapV2PayrollApproval(data.approval),
-    entries: (data.entries ?? []).map(mapV2PayrollEntry),
-  };
 }
 
 export async function updateV2TransferVehicleType(params: {

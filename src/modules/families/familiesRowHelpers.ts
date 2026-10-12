@@ -66,10 +66,6 @@ export function childDebtAmount(row: ChildRow): number {
   return Number(row.childDebtAmount ?? row.debtAmount ?? 0);
 }
 
-export function childDebtorRows(rows: ChildRow[]): ChildRow[] {
-  return rows.filter(row => childDebtAmount(row) > 0);
-}
-
 export function logisticsWorkRows(rows: ChildRow[]): ChildRow[] {
   return rows.filter(row => row.status !== 'rejected');
 }
@@ -132,20 +128,6 @@ export function driverDocumentExpired(document: V2DriverDocumentInput): boolean 
   if (!document.expiresAt) return false;
   const expires = new Date(`${document.expiresAt}T23:59:59`);
   return !Number.isNaN(expires.getTime()) && expires.getTime() < Date.now();
-}
-
-export function logisticsTransferCountColor(count: number): string {
-  if (count <= 0) return '#C9D4D6';
-  if (count < 16) return '#EF7168';
-  if (count === 16) return '#E49A55';
-  if (count === 17) return '#74BE92';
-  return '#31A4A5';
-}
-
-export function logisticsVehicleTypeLineColor(vehicleType?: string): string | null {
-  if (vehicleType === 'minivan') return '#74BE92';
-  if (vehicleType === 'sedan') return '#E49A55';
-  return null;
 }
 
 export function vehicleTypeShortLabel(vehicleType?: string): string {

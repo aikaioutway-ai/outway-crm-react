@@ -5,7 +5,6 @@ import {
   fetchV2FamiliesPage,
   fetchV2DriversTable,
   fetchPaymentsTable,
-  fetchCashierPaymentsTable,
   fetchRefundsTable,
   fetchBranchStats,
   fetchSchoolApplicationCounts,
@@ -19,7 +18,6 @@ import {
   FamiliesPageResult,
   V2DriverTableRow,
   PaymentTableRow,
-  CashierPaymentRow,
   RefundTableRow,
   BranchStat,
   V2PayrollEntry,
@@ -67,13 +65,6 @@ export function usePaymentsTable(options?: { enabled?: boolean }): UseQueryResul
     queryKey: QK.paymentsTable,
     queryFn: fetchPaymentsTable,
     enabled: options?.enabled ?? true,
-  });
-}
-
-export function useCashierPaymentsTable(): UseQueryResult<CashierPaymentRow[]> {
-  return useQuery({
-    queryKey: QK.cashierPaymentsTable,
-    queryFn: fetchCashierPaymentsTable,
   });
 }
 
