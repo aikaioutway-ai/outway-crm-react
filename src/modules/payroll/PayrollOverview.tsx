@@ -20,6 +20,7 @@ type PayrollOverviewStat = PayrollSchoolStat & { pendingAmount: number; approved
 const PAYROLL_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 
 interface PayrollOverviewProps {
+  toolbarContent?: React.ReactNode;
   view: PayrollSchoolTab;
   userRole?: UserRole;
   sessionToken?: string;
@@ -47,7 +48,7 @@ function sortValue(stat: PayrollOverviewStat, key: SortKey): number | string {
   return stat[key];
 }
 
-export default function PayrollOverview({ view, userRole, sessionToken, periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange }: PayrollOverviewProps) {
+export default function PayrollOverview({ view, userRole, sessionToken, periodKey, onPeriodKeyChange, onSelectSchool, onSidebarWidthChange, search = '', onSearchChange, toolbarContent }: PayrollOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const { data: employees = null } = useEmployees();
   const applicationCounts = useSchoolApplicationCounts();
@@ -157,13 +158,13 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel>
-          <HiddenSchoolsList onSelectSchool={onSelectSchool} />
-          <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
-            <span style={{ fontSize: 13, fontWeight: 700, padding: '0 14px' }}>School 1.0</span>
-            <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+          <div className="finance-overview-controls">
+            {toolbarContent}
+            <div className="finance-period-control" style={{ flex: 1, minWidth: 0, display: 'flex' }}>
               <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={onPeriodKeyChange} periods={PAYROLL_PERIODS} showAll={false} />
             </div>
             <DashboardSearch value={search} onChange={onSearchChange ?? (() => {})} placeholder="Поиск школы..." />
+            <HiddenSchoolsList onSelectSchool={onSelectSchool} />
           </div>
         </DashboardTopPanel>
 

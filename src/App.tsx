@@ -1,3 +1,5 @@
+import FinanceTabs from './modules/costs/FinanceTabs';
+import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
@@ -108,6 +110,8 @@ export default function App() {
   const [salaryTransferFilter, setSalaryTransferFilter] = useState('');
   const [salarySearch, setSalarySearch] = useState('');
   const [salaryPeriodKey, setSalaryPeriodKey] = useState(currentPayrollPeriodKey);
+  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | null>(null);
+  const [expenseSubcategory, setExpenseSubcategory] = useState('ALL');
   const [financeTab, setFinanceTab] = useState<'expenses' | 'timesheet' | 'salary'>(() => (
     canAccessFinanceExpenses(currentUserRole) ? 'expenses' : 'timesheet'
   ));
@@ -692,17 +696,12 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Финансы')}
-                {canAccessFinanceExpenses(currentUserRole) && (
-                  <button onClick={() => setFinanceTab('expenses')} style={managerModeTabStyle(financeTab === 'expenses')}>
-                    Расходы
-                  </button>
-                )}
-                <button onClick={() => setFinanceTab('timesheet')} style={managerModeTabStyle(financeTab === 'timesheet')}>
-                  Табель
-                </button>
-                <button onClick={() => setFinanceTab('salary')} style={managerModeTabStyle(financeTab === 'salary')}>
-                  Зарплата
-                </button>
+                {financeTab === 'expenses' && expenseCategory && <>
+                  <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>{expenseSubcategory !== 'ALL' ? '← Подкатегории' : '← Категории'}</button>
+                  <FinanceTabs compact value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} />
+                  <span style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>{expenseSubcategory !== 'ALL' ? expenseSubcategory : EXPENSE_CATEGORIES[expenseCategory].label}</span>
+                </>}
+                {financeTab !== 'expenses' && activePayrollSchoolKey && <FinanceTabs compact value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} />}
                 {financeTab !== 'expenses' && activePayrollSchoolKey && (
                   <button onClick={() => {
                     if (financeTab === 'salary') {
@@ -721,11 +720,12 @@ export default function App() {
             </div>
             {canAccessFinanceExpenses(currentUserRole) && (
               <div style={{ flex: 1, minHeight: 0, display: financeTab === 'expenses' ? 'flex' : 'none' }}>
-                <ExpensesModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
+                <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} toolbarContent={!expenseCategory ? <FinanceTabs value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
               </div>
             )}
             {financeTab !== 'expenses' && (
               <PayrollModule
+                toolbarContent={!activePayrollSchoolKey ? <FinanceTabs value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined}
                 userRole={currentUserRole}
                 userName={currentUser?.name}
                 sessionToken={currentUser?.sessionToken}

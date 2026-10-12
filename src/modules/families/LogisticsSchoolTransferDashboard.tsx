@@ -1,3 +1,4 @@
+import '../../core/selects/NotionSelect.css';
 import TransferCell, { transferCellColor, VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
@@ -217,6 +218,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       {fixedCells.map(renderCell)}
       {vehicleMenu && (
         <div
+          className="notion-select-panel"
           onClick={event => event.stopPropagation()}
           style={{
             position: 'fixed',
@@ -241,6 +243,8 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
               {VEHICLE_MENU_OPTIONS.map(option => (
                 <button
                   key={option.value}
+                  className="notion-select-option"
+                  type="button"
                   disabled={savingVehicleType}
                   onClick={() => void applyVehicleType(option.value)}
                   style={{

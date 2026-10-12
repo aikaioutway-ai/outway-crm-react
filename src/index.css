@@ -222,3 +222,9 @@ a { color: var(--accent); text-decoration: none; }
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
+
+/* Consistent pointer feedback for native selects throughout the CRM. */
+select { transition: border-color 140ms ease, box-shadow 140ms ease, background-color 140ms ease; }
+select:not(:disabled):hover { border-color: #8BBAB7 !important; background-color: #F0F7F6 !important; }
+select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) { select { transition: none; } }

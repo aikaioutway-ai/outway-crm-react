@@ -1,3 +1,4 @@
+import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChildStatus, Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
@@ -292,7 +293,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     ],
     render: (_val, row) => (
       <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
-        {(VT_LABEL[row.vehicleType] ?? row.vehicleType)}{row.transferNumber ? ` №${row.transferNumber}` : ''}
+        {(VT_LABEL[row.vehicleType] ?? row.vehicleType)}{' '}<TransferNumberBadge number={row.transferNumber} vehicleType={row.vehicleType} />
       </span>
     ),
     getValue: (row) => row.vehicleType,
@@ -300,7 +301,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'transferNumber', label: '№ Трансфера', type: 'select', category: 'Маршрут', width: 100, editable: true,
     editOptions: [{ value: '', label: '—' }, ...TRANSFER_OPTIONS],
-    render: (val) => <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{val ? `№${val}` : '—'}</span>,
+    render: (val, row) => <TransferNumberBadge number={val} vehicleType={row.vehicleType} />,
   },
   {
     key: 'stopNumber', label: 'Остановка', type: 'select', category: 'Маршрут', width: 95, editable: true,
@@ -359,7 +360,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
     ),
   },
   { key: 'branchShorts', label: 'Школа', type: 'text', category: 'Маршрут', width: 110, getValue: row => row.branchShorts.join(', ') },
-  { key: 'transferNumbers', label: 'Трансфер', type: 'text', category: 'Маршрут', width: 140 },
+  { key: 'transferNumbers', label: 'Трансфер', type: 'text', category: 'Маршрут', width: 140, render: (value, row) => <TransferNumberBadge number={value} vehicleType={row.vehicleType} /> },
   {
     key: 'vehicleLabel',
     label: 'Тип ТС',
@@ -4667,6 +4668,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
       {transferTypeMenu && (
         <div
+          className="notion-select-panel"
           onClick={event => event.stopPropagation()}
           style={{
             position: 'fixed',
@@ -4735,6 +4737,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               return (
                 <button
                   key={option.value}
+                  className="notion-select-option"
+                  type="button"
                   onClick={() => changeDashboardTransferVehicleType(option.value)}
                   style={{
                     width: '100%',
