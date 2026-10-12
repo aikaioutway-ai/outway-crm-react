@@ -32,7 +32,7 @@ import {
   isEmployeeSessionActive,
 } from './services/employeeSession';
 import { useFamiliesTable } from './hooks/useCrmQueries';
-import { CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
+import { SCHOOL_TABS, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
 import { UserRole } from './types';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
@@ -230,10 +230,12 @@ export default function App() {
     setCashierSchoolKey(null);
     setCashierTransferFilter('');
     setCashierOpenFamilySearch('');
-    setLogisticsSchoolKey(null);
-    setLogisticsTransferFilter('');
-    setDriversSchoolKey(null);
-    setDriversTransferFilter('');
+    if (section !== 'logistics' && section !== 'drivers') {
+      setLogisticsSchoolKey(null);
+      setLogisticsTransferFilter('');
+      setDriversSchoolKey(null);
+      setDriversTransferFilter('');
+    }
   }, [section, managerSchoolKey]);
 
   useEffect(() => {
@@ -354,6 +356,23 @@ export default function App() {
     flexShrink: 0,
     paddingRight: schoolSidebarReserveWidth,
     transition: 'padding-right .18s ease',
+  };
+
+  const changeFinanceTab = (next: 'expenses' | 'timesheet' | 'salary') => {
+    if (financeTab !== 'expenses' && next !== 'expenses' && next !== financeTab) {
+      if (next === 'salary') {
+        setSalarySchoolKey(payrollSchoolKey);
+        setSalaryTransferFilter(payrollTransferFilter);
+        setSalarySearch(payrollSearch);
+        setSalaryPeriodKey(payrollPeriodKey);
+      } else {
+        setPayrollSchoolKey(salarySchoolKey);
+        setPayrollTransferFilter(salaryTransferFilter);
+        setPayrollSearch(salarySearch);
+        setPayrollPeriodKey(salaryPeriodKey);
+      }
+    }
+    setFinanceTab(next);
   };
 
   const activePayrollSchoolKey = financeTab === 'salary' ? salarySchoolKey : payrollSchoolKey;
@@ -498,7 +517,7 @@ export default function App() {
                     </div>
                   </>
                 )}
-                {logisticsSchoolKey && <button type="button" onClick={() => setSection('drivers')} style={managerModeTabStyle(false)}>Водители</button>}
+                {logisticsSchoolKey && <button type="button" onClick={() => { setDriversSchoolKey(logisticsSchoolKey); setDriversTransferFilter(logisticsTransferFilter); setDriversSearch(logisticsSearch); setSection('drivers'); }} style={managerModeTabStyle(false)}>Водители</button>}
                 {extraTabs(true)}
               </div>
             </div>
@@ -639,7 +658,7 @@ export default function App() {
                     ← Все школы
                   </button>
                 )}
-                {driversSchoolKey && <div style={{ marginBottom: 8 }}><LogisticsTabs value="drivers" onChange={key => { if (key !== 'drivers') { setSection('logistics'); setLogisticsView(key); } }} /></div>}
+                {driversSchoolKey && <div style={{ marginBottom: 8 }}><LogisticsTabs value="drivers" onChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }} /></div>}
                 {extraTabs(true)}
               </div>
             </div>
@@ -671,7 +690,7 @@ export default function App() {
             ) : (
               <DriversOverview
                 onSearchChange={setDriversSearch}
-                onTabChange={key => { if (key !== 'drivers') { setSection('logistics'); setLogisticsView(key); } }}
+                onTabChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }}
                 search={driversSearch}
                 onSelectSchool={setDriversSchoolKey}
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
@@ -695,13 +714,18 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
-                {sectionLabel('Финансы')}
+                <div style={{ padding: '0 14px 8px 10px', marginRight: 8 }}>
+                  <div style={{ fontSize: 17, fontWeight: 800, color: '#17222F' }}>Финансы</div>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginTop: 2 }}>
+                    {financeTab === 'expenses'
+                      ? ['Расходы', expenseCategory ? EXPENSE_CATEGORIES[expenseCategory].label : 'Категории', expenseSubcategory !== 'ALL' ? expenseSubcategory : ''].filter(Boolean).join(' / ')
+                      : [financeTab === 'timesheet' ? 'Табель' : 'Зарплата', activePayrollSchoolKey ? SCHOOL_TABS.find(school => school.key === activePayrollSchoolKey)?.label ?? (activePayrollSchoolKey === 'OFFICE' ? 'Офис' : activePayrollSchoolKey) : 'Все школы'].join(' / ')}
+                  </div>
+                </div>
                 {financeTab === 'expenses' && expenseCategory && <>
                   <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>{expenseSubcategory !== 'ALL' ? '← Подкатегории' : '← Категории'}</button>
-                  <FinanceTabs compact value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} />
-                  <span style={{ fontSize: 13, fontWeight: 700, marginBottom: 16 }}>{expenseSubcategory !== 'ALL' ? expenseSubcategory : EXPENSE_CATEGORIES[expenseCategory].label}</span>
                 </>}
-                {financeTab !== 'expenses' && activePayrollSchoolKey && <FinanceTabs compact value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} />}
+                {financeTab !== 'expenses' && activePayrollSchoolKey && <FinanceTabs compact value={financeTab} onChange={changeFinanceTab} showExpenses={false} />}
                 {financeTab !== 'expenses' && activePayrollSchoolKey && (
                   <button onClick={() => {
                     if (financeTab === 'salary') {
@@ -720,12 +744,12 @@ export default function App() {
             </div>
             {canAccessFinanceExpenses(currentUserRole) && (
               <div style={{ flex: 1, minHeight: 0, display: financeTab === 'expenses' ? 'flex' : 'none' }}>
-                <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} toolbarContent={!expenseCategory ? <FinanceTabs value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
+                <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} toolbarContent={!expenseCategory ? <FinanceTabs value={financeTab} onChange={changeFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
               </div>
             )}
             {financeTab !== 'expenses' && (
               <PayrollModule
-                toolbarContent={!activePayrollSchoolKey ? <FinanceTabs value={financeTab} onChange={setFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined}
+                toolbarContent={!activePayrollSchoolKey ? <FinanceTabs value={financeTab} onChange={changeFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined}
                 userRole={currentUserRole}
                 userName={currentUser?.name}
                 sessionToken={currentUser?.sessionToken}

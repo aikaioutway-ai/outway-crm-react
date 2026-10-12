@@ -1,17 +1,31 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { BriefcaseBusiness, Building2, CalendarDays, FileText, Plus, Save, Search, ShieldCheck, Trash2, UserCheck, Users, UserX, WalletCards, X } from 'lucide-react';
+import { BriefcaseBusiness, Building2, CalendarDays, FileText, Plus, Save, Search, ShieldCheck, Trash2, WalletCards, X } from 'lucide-react';
 import { ColumnDef, DataTable } from '../../core/tables/DataTable';
 import { Employee, EmployeeRole, EmployeeStatus, UserRole } from '../../types';
 import { createDefaultEmployeeDocuments, createEmployeeAdvance, deleteEmployee, deleteEmployeeAdvance, EmployeeAdvance, EmployeeDocument, EmployeeDraft, fetchEmployeeAdvances, fetchEmployeeDocuments, fetchEmployees, saveEmployee, saveEmployeeDocuments } from '../../services/employeeService';
 import { fetchV2PayrollEntriesForPeriod, V2PayrollEntry } from '../../services/crmV2Service';
 import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { SCHOOL_TABS } from '../families/constants';
+import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import './EmployeesPage.css';
 
 const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
   { value: 'admin', label: 'Админ' }, { value: 'gen_director', label: 'Ген. директор' }, { value: 'director', label: 'Директор' },
   { value: 'manager', label: 'Менеджер' }, { value: 'cashier', label: 'Кассир' }, { value: 'logist', label: 'Логист' },
   { value: 'b2b_manager', label: 'Менеджер B2B' }, { value: 'b2b_logist', label: 'Логист B2B' }, { value: 'senior_logist', label: 'Нач. логистики' }, { value: 'driver', label: 'Водитель' },
+];
+const DEPARTMENTS = [
+  { key: 'logistics', label: 'Отдел логистики', roles: ['logist', 'senior_logist', 'b2b_logist', 'driver'], icon: <BriefcaseBusiness size={18} /> },
+  { key: 'service', label: 'Отдел клиентского сервиса', roles: ['manager', 'b2b_manager', 'director'], icon: <Building2 size={18} /> },
+  { key: 'finance', label: 'Отдел финансов', roles: ['cashier', 'gen_director'], icon: <WalletCards size={18} /> },
+  { key: 'admin', label: 'Администратор', roles: ['admin'], icon: <ShieldCheck size={18} /> },
+];
+const DEPARTMENT_COLUMNS = [
+  { key: 'department', label: 'Отдел', color: '#626C8B' },
+  { key: 'total', label: 'Сотрудники', color: '#2563EB' },
+  { key: 'active', label: 'Активные', color: '#008A47' },
+  { key: 'inactive', label: 'Неактивные', color: '#B75B75' },
+  { key: 'documents', label: 'Не хватает документов', color: '#D17B2C' },
 ];
 const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
   { value: 'active', label: 'Активен' }, { value: 'inactive', label: 'Неактивен' }, { value: 'dismissed', label: 'Уволен' },
@@ -83,21 +97,39 @@ export default function EmployeesPage({ viewerRole, sessionToken }: { viewerRole
   useEffect(() => { void load(); }, []);
   const scoped = useMemo(() => restrictedRole ? rows.filter(row => restrictedRole.includes(row.role)) : rows, [rows, restrictedRole]);
   const filtered = useMemo(() => { const needle = query.trim().toLowerCase(); return needle ? scoped.filter(row => [row.fullName, row.position, row.login, row.phone1, row.phone2, roleLabel(row.role), schoolLabel(row.schoolKeys)].some(value => String(value ?? '').toLowerCase().includes(needle))) : scoped; }, [scoped, query]);
-  const stats = useMemo(() => ({ total: scoped.length, active: scoped.filter(row => row.status === 'active').length, inactive: scoped.filter(row => row.status !== 'active').length, documents: scoped.filter(row => row.missingDocumentCount > 0).length }), [scoped]);
+  const [departmentKey, setDepartmentKey] = useState<string | null>(null);
+  const [sort, setSort] = useState({ key: 'department', ascending: true });
+  const department = DEPARTMENTS.find(item => item.key === departmentKey);
+  const departmentRows = DEPARTMENTS.filter(item => !restrictedRole || item.roles.some(role => restrictedRole.includes(role as EmployeeRole))).map(item => {
+    const members = filtered.filter(row => item.roles.includes(row.role));
+    return { key: item.key, label: item.label, icon: <span className="employee-department-icon">{item.icon}</span>, values: {
+      total: members.length, active: members.filter(row => row.status === 'active').length,
+      inactive: members.filter(row => row.status !== 'active').length,
+      documents: members.filter(row => row.missingDocumentCount > 0).length,
+    } };
+  }).sort((a, b) => {
+    const difference = sort.key === 'department' ? a.label.localeCompare(b.label, 'ru') : Number(a.values[sort.key as keyof typeof a.values]) - Number(b.values[sort.key as keyof typeof b.values]);
+    return sort.ascending ? difference : -difference;
+  });
+  const departmentEmployees = department ? filtered.filter(row => department.roles.includes(row.role)) : filtered;
+  const columns = DEPARTMENT_COLUMNS.map(column => ({ ...column, total: column.key === 'department' ? departmentRows.length : departmentRows.reduce((sum, row) => sum + Number(row.values[column.key as keyof typeof row.values]), 0) }));
   const openNewEmployee = () => { setSelected(null); setCreating(true); };
   const openEmployee = (employee: Employee) => { setCreating(false); setSelected(employee); };
   return <div className="employees-page">
     <section className="employees-overview">
-      <div className="employees-heading"><div><h1>Сотрудники</h1><p>Команда, доступы, документы и расчёты</p></div><button className="employee-primary" onClick={openNewEmployee}><Plus size={17} /> Новый сотрудник</button></div>
-      <div className="employees-kpis"><Kpi icon={<Users size={19} />} label="Всего сотрудников" value={stats.total} color="#5267A8" /><Kpi icon={<UserCheck size={19} />} label="Активные" value={stats.active} color="#258B8C" /><Kpi icon={<UserX size={19} />} label="Неактивные" value={stats.inactive} color="#B75B75" /><Kpi icon={<FileText size={19} />} label="Не хватает документов" value={stats.documents} color="#D17B2C" /></div>
-      <div className="employees-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="ФИО, должность, телефон, школа..." /></div>
+      <div className="employees-controls">
+        {department && <button className="employee-back" onClick={() => setDepartmentKey(null)}>← Все отделы</button>}
+        <span className="employee-location">{department?.label ?? 'Отделы'}</span>
+        <label className="employees-search"><Search size={16} /><input value={query} onChange={event => setQuery(event.target.value)} placeholder="ФИО, должность, телефон, школа..." /></label>
+        <button className="employee-primary" onClick={openNewEmployee}><Plus size={17} /> Новый сотрудник</button>
+      </div>
       {loadError && <div className="employee-error">{loadError}</div>}
     </section>
-    <section className="employees-table-panel"><DataTable<EmployeeRow> columns={COLUMNS} data={filtered} rowKey="id" loading={loading} storageKey="employees_table_v2" emptyText="Сотрудники не найдены" onRowClick={openEmployee} onRowOpen={openEmployee} canManageProperties={false} toolbarRightExtra={<button className="employee-toolbar-add" onClick={openNewEmployee} title="Новый сотрудник"><Plus size={16} /></button>} /></section>
+    {department ? <section className="employees-table-panel"><DataTable<EmployeeRow> columns={COLUMNS} data={departmentEmployees} rowKey="id" loading={loading} storageKey="employees_table_v2" emptyText="Сотрудники не найдены" onRowClick={openEmployee} onRowOpen={openEmployee} canManageProperties={false} toolbarRightExtra={<button className="employee-toolbar-add" onClick={openNewEmployee} title="Новый сотрудник"><Plus size={16} /></button>} /></section>
+      : loading ? <div className="employee-loading">Загрузка сотрудников…</div> : <SchoolDashboardTable columns={columns} rows={departmentRows} sortKey={sort.key} ascending={sort.ascending} onSort={key => setSort(current => ({ key, ascending: current.key === key ? !current.ascending : true }))} onSelect={setDepartmentKey} showAvatars={false} />}
     {(selected || creating) && <EmployeeCardModal employee={selected} restrictedRole={restrictedRole} sessionToken={sessionToken} onClose={() => { setSelected(null); setCreating(false); }} onChanged={async employee => { setSelected(employee); setCreating(false); await load(); }} onDeleted={async () => { setSelected(null); setCreating(false); await load(); }} />}
   </div>;
 }
-function Kpi({ icon, label, value, color }: { icon: React.ReactNode; label: string; value: number; color: string }) { return <div className="employee-kpi dock-hover-card"><span style={{ background: color }}>{icon}</span><div><small>{label}</small><strong>{value}</strong></div></div>; }
 
 function EmployeeCardModal({ employee, restrictedRole, sessionToken, onClose, onChanged, onDeleted }: { employee: Employee | null; restrictedRole: EmployeeRole[] | null; sessionToken?: string; onClose: () => void; onChanged: (employee: Employee) => void; onDeleted: () => void }) {
   const [draft, setDraft] = useState<EmployeeDraft>(employee ? toDraft(employee) : { ...EMPTY_DRAFT, role: restrictedRole?.[0] ?? EMPTY_DRAFT.role, position: restrictedRole ? roleLabel(restrictedRole[0]) : EMPTY_DRAFT.position, startDate: today() });

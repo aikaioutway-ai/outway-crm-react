@@ -7,7 +7,7 @@ interface Props { columns: Column[]; rows: Row[]; sortKey: string; ascending: bo
 
 export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, rowGap = 0, className = '' }: Props) {
   return (
-    <div style={{ flex: 1, minHeight: 0, overflow: 'auto', background: 'var(--white)', borderRadius: 14 }}>
+    <div style={{ flex: '0 1 auto', minHeight: 0, overflow: 'auto', background: 'var(--white)', borderRadius: 14 }}>
       <table className={`school-dashboard-table ${className}`} style={{ width: '100%', borderCollapse: rowGap ? 'separate' : 'collapse', borderSpacing: `0 ${rowGap}px`, tableLayout: 'fixed' }}>
         <thead><tr>{columns.map((column, index) => <th key={column.key} scope="col" aria-sort={sortKey === column.key ? (ascending ? 'ascending' : 'descending') : 'none'} style={{ position: 'sticky', top: 0, zIndex: 1, background: 'var(--white)', borderBottom: `3px solid ${column.color}`, textAlign: 'left', padding: 'var(--dashboard-head-padding, 14px 16px)', width: index === 0 ? '22%' : undefined }}>
           <button type="button" onClick={() => onSort(column.key)} style={{ border: 'none', background: 'transparent', color: column.color, textAlign: 'left', cursor: 'pointer', padding: 0 }}>

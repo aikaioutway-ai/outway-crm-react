@@ -86,7 +86,7 @@
 .expenses-category-heading .expenses-back { margin: 0; padding: 0; white-space: nowrap; }
 
 .finance-category-table { --dashboard-row-height: 56px; }
-.finance-category-table tbody td { background: var(--surface-2); }
+.finance-category-table tbody td { background: inherit; }
 .finance-category-table tbody td:first-child { border-radius: 10px 0 0 10px; }
 .finance-category-table tbody td:last-child { border-radius: 0 10px 10px 0; }
 .finance-category-icon { width: 32px; height: 32px; border-radius: 9px; flex-shrink: 0; display: inline-flex; align-items: center; justify-content: center; }
