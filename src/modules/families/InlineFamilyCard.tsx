@@ -13,7 +13,7 @@ import {
 } from '../../services/financeService';
 import TabFinance from './TabFinance';
 import ChildDiscountModal, { ChildDiscountInput } from './ChildDiscountModal';
-import { addChargeDiscount, cancelChargeDiscount, setChildDiscount, setChildrenFixedPrice } from '../../services/discountService';
+import { addChargeDiscount, cancelChargeDiscount, setChildDiscountChoice, setChildDiscount, setChildrenFixedPrice } from '../../services/discountService';
 import TabHistory from './TabHistory';
 import NotionSelect from '../../core/selects/NotionSelect';
 import { createCustomFamilyDocument, createDefaultFamilyDocuments, FamilyDocument, fetchFamilyDocuments, saveFamilyDocuments } from '../../services/familyDocumentService';
@@ -531,6 +531,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
   async function handleSaveChild(child: Child, patch: Partial<Child>): Promise<boolean> {
     try {
+      if ('discountOverridePercent' in patch) {
+        if (!canManageDiscount) throw new Error('Нет доступа к изменению скидки');
+        await setChildDiscountChoice(sessionToken, child.id, patch.discountOverridePercent ?? null);
+      }
       const nextChild = applyChildPricingPatch(child, patch);
       const dbPatch: Record<string, unknown> = {};
       const shouldReprice = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch || 'basePrice' in patch || 'siblingDiscountPercent' in patch || 'manualDiscountPercent' in patch || 'manualDiscountAmount' in patch || 'teacherPrice' in patch;
@@ -570,7 +574,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       }
 
       const routeChanged = 'vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch;
-      const savedChildren = routeChanged || shouldReprice || 'status' in patch
+      const savedChildren = routeChanged || shouldReprice || 'status' in patch || 'discountOverridePercent' in patch
         ? await fetchV2Children(family)
         : children.map(item => item.id === child.id ? nextChild : item);
       setChildren(savedChildren);
@@ -733,7 +737,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
 
               <DetailPanel title={`Дети (${cardChildren.length})`}>
-                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
+                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
             </div>
           )}
@@ -1359,6 +1363,7 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
 
 function childDiscountLabel(child: Child): string {
   if (child.fixedPrice != null) return `Фикс. цена ${money(Number(child.fixedPrice))}`;
+  if (child.discountOverridePercent != null) return child.discountOverridePercent === 0 ? 'Без скидки · 0%' : `${child.discountOverridePercent}%`;
   const percent = Number(child.manualDiscountPercent || 0);
   const amount = Number(child.manualDiscountAmount || 0);
   if (percent > 0 || amount > 0) {
@@ -1439,6 +1444,7 @@ function ChildCard({
   editing,
   isAdmin,
   onEditDiscount,
+  canManageDiscount,
 }: {
   child: Child;
   index: number;
@@ -1449,6 +1455,7 @@ function ChildCard({
   editing?: boolean;
   isAdmin?: boolean;
   onEditDiscount?: (child: Child) => void;
+  canManageDiscount?: boolean;
 }) {
   // новый ребёнок (ещё не сохранён) сразу открыт — его нужно заполнить
   const [manuallyExpanded, setManuallyExpanded] = React.useState(() => child.id.startsWith('draft-'));
@@ -1584,7 +1591,19 @@ function ChildCard({
               },
               {
                 label: 'Скидка',
-                content: <ReadOnlyValue value={childDiscountLabel(child)} />,
+                content: editing && canManageDiscount && !child.id.startsWith('draft-') && child.fixedPrice == null ? (
+                  <select
+                    aria-label={`Скидка для ${child.childName}`}
+                    value={child.discountOverridePercent == null ? (Number(child.manualDiscountPercent || 0) > 0 || Number(child.manualDiscountAmount || 0) > 0 ? 'custom' : 'auto') : String(child.discountOverridePercent)}
+                    disabled={busy}
+                    onChange={event => void onSaveChild(child, { discountOverridePercent: event.target.value === 'auto' ? null : Number(event.target.value) })}
+                    style={{ width: '100%', border: '1px solid #D5E3E7', borderRadius: 5, background: '#fff', color: '#17222F', fontSize: 12, fontWeight: 750, padding: '3px 5px' }}
+                  >
+                    {child.discountOverridePercent == null && (Number(child.manualDiscountPercent || 0) > 0 || Number(child.manualDiscountAmount || 0) > 0) && <option value="custom" disabled>{childDiscountLabel(child)}</option>}
+                    <option value="auto">Автоматически</option>
+                    {Array.from({ length: 11 }, (_, index) => index * 5).map(percent => <option key={percent} value={percent}>{percent}%</option>)}
+                  </select>
+                ) : <ReadOnlyValue value={childDiscountLabel(child)} />,
               },
               {
                 label: 'Итого',
@@ -1613,6 +1632,7 @@ function ChildrenOverviewTable({
   editing,
   isAdmin,
   onEditDiscount,
+  canManageDiscount,
 }: {
   children: Child[];
   branches: V2BranchOption[];
@@ -1623,6 +1643,7 @@ function ChildrenOverviewTable({
   editing?: boolean;
   isAdmin?: boolean;
   onEditDiscount?: (child: Child) => void;
+  canManageDiscount?: boolean;
 }) {
   return (
     <div style={{ display: 'grid', gap: 10 }}>
@@ -1648,6 +1669,7 @@ function ChildrenOverviewTable({
               editing={editing}
               isAdmin={isAdmin}
               onEditDiscount={onEditDiscount}
+              canManageDiscount={canManageDiscount}
             />
           ))}
         </div>

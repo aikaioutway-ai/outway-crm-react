@@ -428,6 +428,7 @@ export function mapV2Child(row: any, family: Family): Child {
   const storedPrice = {
     basePrice: Number(row.base_price ?? 0),
     siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
+    discountOverridePercent: row.discount_override_percent == null ? null : Number(row.discount_override_percent),
     manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
     manualDiscountAmount: Number(row.manual_discount_amount ?? 0),
     finalPrice: Number(row.final_price ?? 0),
@@ -1179,6 +1180,7 @@ async function fetchTransferRepricingChildren(
     basePrice: Number(row.base_price ?? 0),
     finalPrice: Number(row.final_price ?? 0),
     siblingDiscountPercent: Number(row.sibling_discount_percent ?? 0),
+    discountOverridePercent: row.discount_override_percent == null ? null : Number(row.discount_override_percent),
     manualDiscountPercent: Number(row.manual_discount_percent ?? 0),
     manualDiscountAmount: Number(row.manual_discount_amount ?? 0),
     transferId: row.transfer_id ? String(row.transfer_id) : null,

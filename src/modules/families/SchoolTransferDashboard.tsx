@@ -53,6 +53,7 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
       label: `#${number}`,
       debtSum: debtSumOf(assignedRows),
       childCount: childCountOf(assignedRows),
+      unboardedCount: assignedRows.filter(row => row.status !== 'boarded').length,
       tone: null as string | null,
     };
   });
@@ -77,14 +78,16 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
       {cells.map(cell => {
         const active = cell.childCount > 0;
         const isSelected = selectedKey === cell.filterKey;
+        const unboardedCount = 'unboardedCount' in cell ? cell.unboardedCount : 0;
         const activeColor = cell.tone ?? '#2DD4BF';
         return (
           <button
             className="dock-hover-card dock-hover-card--compact"
             key={cell.filterKey || 'all'}
             onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            title={active ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')} сом` : undefined}
+            title={active ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')} сом${unboardedCount ? ` · Посадка не подтверждена: ${unboardedCount}` : ''}` : undefined}
             style={{
+              position: 'relative',
               flex: 1,
               minWidth: 0,
               display: 'flex',
@@ -104,6 +107,14 @@ export default function SchoolTransferDashboard({ schoolKey, rightReserveWidth =
               cursor: 'pointer',
             }}
           >
+            {unboardedCount > 0 && (
+              <span
+                aria-label={`Посадка не подтверждена: ${unboardedCount}`}
+                style={{ position: 'absolute', top: -5, right: -3, minWidth: 18, height: 18, padding: '0 4px', boxSizing: 'border-box', borderRadius: 9, background: '#DC2626', color: '#fff', fontSize: 10, fontWeight: 900, display: 'flex', alignItems: 'center', justifyContent: 'center', border: '2px solid #fff' }}
+              >
+                ! {unboardedCount}
+              </span>
+            )}
             <span style={{
               fontSize: 13,
               fontWeight: 800,

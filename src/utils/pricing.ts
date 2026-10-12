@@ -174,6 +174,17 @@ export function applyChildPricingPatch(child: Child, patch: Partial<Child>): Chi
     || siblingPercentChanged
     || manualPercentChanged
     || manualAmountChanged;
+  if ('discountOverridePercent' in patch || next.discountOverridePercent != null) {
+    const basePrice = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch
+      ? getPriceByZone(next.schoolCode, next.zone, next.vehicleType)
+      : Math.max(0, Number(next.basePrice || 0));
+    const rules = 'discountOverridePercent' in patch
+      ? { ...next, manualDiscountPercent: 0, manualDiscountAmount: 0, discountValidFrom: null, discountValidTo: null }
+      : next;
+    const month = new Date();
+    const period = `${month.getFullYear()}-${String(month.getMonth() + 1).padStart(2, '0')}`;
+    return { ...next, basePrice, finalPrice: calcChildPrice({ ...rules, basePrice, siblingEligible: Boolean(next.siblingApplied) }, period) };
+  }
   if (!shouldReprice) return { ...next, teacherPrice };
 
   const tariffChanged = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch;
@@ -215,6 +226,7 @@ export const CHARGE_DISCOUNT_REASON_LABEL: Record<string, string> = {
 
 export interface ChildPriceRules {
   basePrice: number;
+  discountOverridePercent?: number | null;
   fixedPrice?: number | null;
   manualDiscountPercent?: number;
   manualDiscountAmount?: number;
@@ -241,6 +253,7 @@ export function isManualDiscountActive(rules: Omit<ChildPriceRules, 'basePrice' 
 export function calcChildPrice(rules: ChildPriceRules, period: string): number {
   if (rules.fixedPrice != null) return Number(rules.fixedPrice);
   const base = Math.max(0, Number(rules.basePrice || 0));
+  if (rules.discountOverridePercent != null) return Math.max(0, base - Math.round(base * rules.discountOverridePercent / 100));
   const manual = isManualDiscountActive(rules, period);
   const percent = manual ? Number(rules.manualDiscountPercent || 0) : rules.siblingEligible ? 5 : 0;
   const percentAmount = Math.round(base * percent / 100);

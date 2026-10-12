@@ -90,6 +90,7 @@ export interface Child {
   requestedVehicleType?: VehicleType;
   basePrice?: number;
   siblingDiscountPercent?: number;
+  discountOverridePercent?: number | null;
   manualDiscountPercent?: number;
   manualDiscountAmount?: number;
   teacherPrice?: boolean;

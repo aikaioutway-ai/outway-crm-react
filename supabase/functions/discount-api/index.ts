@@ -70,6 +70,18 @@ Deno.serve(async req => {
     const body = await req.json();
     const actor = String(employee.full_name ?? 'CRM');
 
+    if (body.action === 'setDiscountChoice') {
+      const percent = body.percent === null ? null : body.percent;
+      if (percent !== null && (typeof percent !== 'number' || !Number.isInteger(percent) || percent < 0 || percent > 50 || percent % 5 !== 0)) {
+        return response({ ok: false, error: 'Выберите скидку от 0 до 50% с шагом 5' }, 400);
+      }
+      const { error } = await supabase.rpc('v2_set_child_discount_choice', {
+        p_child_id: String(body.childId ?? ''), p_percent: percent, p_actor: actor,
+      });
+      if (error) return response({ ok: false, error: error.message }, 400);
+      return response({ ok: true });
+    }
+
     if (body.action === 'setDiscount') {
       const { error } = await supabase.rpc('v2_set_child_discount', {
         p_child_id: String(body.childId ?? ''),

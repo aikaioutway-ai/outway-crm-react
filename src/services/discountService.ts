@@ -66,3 +66,8 @@ export async function cancelChargeDiscount(sessionToken: string | undefined, dis
   await callDiscountApi(sessionToken, { action: 'cancelChargeDiscount', discountId });
   invalidateDiscountCaches();
 }
+
+export async function setChildDiscountChoice(sessionToken: string | undefined, childId: string, percent: number | null): Promise<void> {
+  await callDiscountApi(sessionToken, { action: 'setDiscountChoice', childId, percent });
+  invalidateDiscountCaches();
+}

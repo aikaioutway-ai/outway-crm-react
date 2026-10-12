@@ -3437,12 +3437,22 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               hideToolbar={tableBarsCollapsed}
               selectable={bulkStatusMode}
               selectedKeys={bulkStatusMode ? bulkSelectedIds : undefined}
-              onSelectedKeysChange={bulkStatusMode ? keys => { setBulkSelectedIds(new Set(Array.from(keys, String))); setBulkConfirming(false); } : undefined}
+              onSelectedKeysChange={bulkStatusMode ? keys => {
+                // Keep selections from other transfers when the current table changes.
+                const visibleIds = new Set(filteredSorted.map(row => row.rowId));
+                setBulkSelectedIds(previous => new Set([
+                  ...Array.from(previous).filter(id => !visibleIds.has(id)),
+                  ...Array.from(keys, String).filter(id => !id.endsWith('_empty')),
+                ]));
+                setBulkConfirming(false);
+              } : undefined}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   {userRole !== 'cashier' && (bulkStatusMode ? (
                     <>
+                      <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Выбрано во всех трансферах: {bulkSelectedIds.size}</span>
                       <select
+                        aria-label="Статус выбранных детей"
                         value={bulkStatus}
                         onChange={event => { setBulkStatus(event.target.value as ChildStatus); setBulkConfirming(false); }}
                         style={{ height: 26, border: '1px solid #31A4A5', borderRadius: 7, fontSize: 11, fontWeight: 700, padding: '0 6px', background: '#fff' }}

@@ -116,3 +116,18 @@ test('shows reject next to delete in the row menu', () => {
   expect(onRowReject).toHaveBeenCalledWith(expect.objectContaining({ id: 'family-1' }));
   expect(onRowDelete).not.toHaveBeenCalled();
 });
+
+
+test('keeps selections across transfers when selecting and deselecting the current page', () => {
+  const onSelectedKeysChange = jest.fn();
+  const props = { columns, rowKey: 'id' as const, selectable: true, onSelectedKeysChange, storageKey: 'cross-transfer-selection-test' };
+  const { rerender } = render(<DataTable {...props} data={[{ id: 'child-1', paymentMethod: 'cash' }]} selectedKeys={new Set()} />);
+  fireEvent.click(screen.getByTitle('Выбрать всех на странице'));
+  expect(onSelectedKeysChange).toHaveBeenLastCalledWith(new Set(['child-1']));
+  rerender(<DataTable {...props} data={[{ id: 'child-2', paymentMethod: 'cash' }]} selectedKeys={new Set(['child-1'])} />);
+  fireEvent.click(screen.getByTitle('Выбрать всех на странице'));
+  expect(onSelectedKeysChange).toHaveBeenLastCalledWith(new Set(['child-1', 'child-2']));
+  rerender(<DataTable {...props} data={[{ id: 'child-2', paymentMethod: 'cash' }]} selectedKeys={new Set(['child-1', 'child-2'])} />);
+  fireEvent.click(screen.getByTitle('Выбрать всех на странице'));
+  expect(onSelectedKeysChange).toHaveBeenLastCalledWith(new Set(['child-1']));
+});
