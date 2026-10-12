@@ -1,3 +1,5 @@
+import '../../core/selects/NotionSelect.css';
+import TransferCell, { transferCellColor, VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { clearV2TransferVehicleType, updateV2TransferVehicleType } from '../../services/crmV2Service';
@@ -19,18 +21,7 @@ const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }
   { value: 'sedan', label: 'Седан' },
 ];
 
-export const VEHICLE_COLOR: Record<string, string> = {
-  microbus: '#2DD4BF',
-  minivan: '#10B981',
-  sedan: '#687C54',
-};
 
-function vehicleShort(vehicleType?: string): string {
-  if (vehicleType === 'microbus') return 'МКР';
-  if (vehicleType === 'minivan') return 'MINI';
-  if (vehicleType === 'sedan') return 'CAR';
-  return '';
-}
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
   const { data: rows, refetch } = useFamiliesTable();
@@ -134,7 +125,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType;
     return {
       filterKey: number,
-      label: `#${number}`,
+      label: number,
       count: transferRows.length,
       vehicleType: Object.prototype.hasOwnProperty.call(vehicleTypeOverrides, number)
         ? vehicleTypeOverrides[number]
@@ -155,60 +146,29 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
 
   type BarCell = typeof transferCells[number] | typeof fixedCells[number];
 
-  const renderCell = (cell: BarCell) => {
-      const active = cell.count > 0;
-      const isSelected = selectedKey === cell.filterKey;
-      const activeColor = 'color' in cell && cell.color
-        ? cell.color
-        : cell.vehicleType
-          ? (VEHICLE_COLOR[cell.vehicleType] ?? '#2DD4BF')
-          : '#2DD4BF';
-      return (
-        <button
-          className="dock-hover-card dock-hover-card--compact"
-          key={cell.filterKey || 'all'}
-          onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-          onContextMenu={event => {
-            if (!/^\d+$/.test(cell.filterKey)) return;
-            event.preventDefault();
-            event.stopPropagation();
-            setVehicleMenu({
-              x: event.clientX,
-              y: event.clientY,
-              transferNumber: cell.filterKey,
-              targets: 'targets' in cell ? cell.targets : [],
-            });
-          }}
-          title={active ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
-          style={{
-            flex: 1,
-            minWidth: 0,
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-            gap: 2,
-            padding: '8px 4px',
-            borderRadius: 12,
-            background: isSelected
-              ? activeColor
-              : active
-                ? '#fff'
-                : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
-            border: `1px solid ${isSelected || active ? activeColor : '#E1E8EA'}`,
-            boxShadow: isSelected ? `0 0 10px ${activeColor}99` : 'none',
-            cursor: 'pointer',
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 800, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-            {active ? cell.count : ''}
-          </span>
-          <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-            {cell.label}{cell.vehicleType ? ` ${vehicleShort(cell.vehicleType)}` : ''}
-          </span>
-        </button>
-      );
-  };
+  const renderCell = (cell: BarCell) => (
+    <TransferCell
+      key={cell.filterKey || 'all'}
+      label={cell.label}
+      color={transferCellColor(cell)}
+      active={cell.count > 0}
+      selected={selectedKey === cell.filterKey}
+      value={cell.count}
+      onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
+      onContextMenu={event => {
+        if (!/^\d+$/.test(cell.filterKey)) return;
+        event.preventDefault();
+        event.stopPropagation();
+        setVehicleMenu({
+          x: event.clientX,
+          y: event.clientY,
+          transferNumber: cell.filterKey,
+          targets: 'targets' in cell ? cell.targets : [],
+        });
+      }}
+      title={cell.count > 0 ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
+    />
+  );
 
   const renderPageArrow = (direction: -1 | 1) => {
     const disabled = direction < 0 ? currentPage === 0 : currentPage >= pageCount - 1;
@@ -258,6 +218,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       {fixedCells.map(renderCell)}
       {vehicleMenu && (
         <div
+          className="notion-select-panel"
           onClick={event => event.stopPropagation()}
           style={{
             position: 'fixed',
@@ -282,6 +243,8 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
               {VEHICLE_MENU_OPTIONS.map(option => (
                 <button
                   key={option.value}
+                  className="notion-select-option"
+                  type="button"
                   disabled={savingVehicleType}
                   onClick={() => void applyVehicleType(option.value)}
                   style={{

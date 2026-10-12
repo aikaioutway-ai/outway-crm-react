@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { ReactNode, useCallback, useState } from 'react';
 import TimesheetModule, { TimesheetModuleProps } from '../expenses/TimesheetModule';
 import { PAYROLL_OFFICE_COLOR, PAYROLL_OFFICE_KEY, PAYROLL_OFFICE_LABEL, PayrollSchoolTab, TimesheetPayrollSummary } from '../expenses/timesheetTypes';
 import PayrollOverview from './PayrollOverview';
@@ -11,6 +11,7 @@ import { ALL_PERIODS } from '../families/constants';
 const PAYROLL_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 
 interface PayrollModuleProps extends TimesheetModuleProps {
+  toolbarContent?: ReactNode;
   schoolKey: string | null;
   transferFilter: string;
   schoolTab: PayrollSchoolTab;
@@ -22,7 +23,7 @@ interface PayrollModuleProps extends TimesheetModuleProps {
   onSearchChange: (value: string) => void;
 }
 
-export default function PayrollModule({ schoolKey, transferFilter, schoolTab, periodKey, onSelectSchool, onTransferFilterChange, onPeriodKeyChange, search, onSearchChange, ...props }: PayrollModuleProps) {
+export default function PayrollModule({ schoolKey, transferFilter, schoolTab, periodKey, onSelectSchool, onTransferFilterChange, onPeriodKeyChange, search, onSearchChange, toolbarContent, ...props }: PayrollModuleProps) {
   const rightReserveWidth = props.rightReserveWidth ?? 0;
   const [summaryBySchool, setSummaryBySchool] = useState<Record<string, TimesheetPayrollSummary>>({});
 
@@ -49,6 +50,7 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
   if (!schoolKey) {
     return (
       <PayrollOverview
+        toolbarContent={toolbarContent}
         view={schoolTab}
         userRole={props.userRole}
         sessionToken={props.sessionToken}

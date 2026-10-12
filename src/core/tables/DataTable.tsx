@@ -1065,6 +1065,7 @@ export function DataTable<T extends Record<string, any>>({
                                 commitCellEdit(row, col, nextValue);
                               }}
                               onEscape={cancelCellEdit}
+                              onClose={() => setEditingCell(null)}
                             />
                           ) : (
                             <input

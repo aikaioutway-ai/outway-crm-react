@@ -83,7 +83,7 @@
 .dashboard-kpi-copy, .dashboard-column-copy { min-width: 0; flex: 1; }
 .dashboard-kpi-value {
   color: var(--text);
-  font-size: 18px;
+  font-size: 15.5px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
@@ -140,7 +140,7 @@
   align-items: center;
   gap: 4px;
   color: var(--text);
-  font-size: 16px;
+  font-size: 15.5px;
   font-weight: 800;
   white-space: nowrap;
   overflow: hidden;
@@ -156,6 +156,51 @@
 @media (max-width: 900px) {
   .dashboard-kpi { padding: 10px; }
   .dashboard-kpi-icon { width: 34px; height: 34px; }
+}
+
+.school-dashboard-table tbody tr:hover > td,
+.school-dashboard-table tbody tr:focus-within > td {
+  background: #DDF2F1;
+}
+.school-dashboard-table tbody tr:hover > td:first-child,
+.school-dashboard-table tbody tr:focus-within > td:first-child {
+  box-shadow: inset 3px 0 var(--accent);
+}
+.school-dashboard-table tbody td {
+  transition: background-color 100ms ease;
+}
+
+.dashboard-column-body [data-school-row].dashboard-row-hover { background: #DDF2F1 !important; }
+.dashboard-column.first .dashboard-row-hover { box-shadow: inset 3px 0 var(--accent); }
+
+/* Fit dashboard totals and controls comfortably on laptop screens. */
+@media (max-width: 1600px), (max-height: 900px) {
+  :root {
+    --dashboard-total-size: 15.5px;
+    --dashboard-label-size: 10px;
+    --dashboard-head-padding: 9px 12px;
+    --dashboard-row-height: 44px;
+    --dashboard-row-size: 13px;
+  }
+  .dashboard-top-panel { padding: 6px 12px 8px; }
+  .dashboard-kpi { padding: 8px 10px; gap: 8px; border-radius: 12px; }
+  .dashboard-kpi-value { font-size: 15.5px; }
+  .dashboard-kpi-label, .dashboard-column-label {
+    font-size: 9px;
+    line-height: 12px;
+    white-space: normal;
+  }
+  .dashboard-kpi-icon { width: 30px; height: 30px; }
+  .dashboard-kpi-icon > * { max-width: 30px; max-height: 30px; }
+  .dashboard-column-head { padding: 8px 10px; gap: 7px; }
+  .dashboard-column-value { font-size: 15.5px; }
+  .dashboard-column-icon { width: 28px; height: 28px; }
+  .school-dashboard-table thead button { max-width: 100%; }
+  .school-dashboard-table thead button > div:first-child {
+    overflow-wrap: anywhere;
+    font-variant-numeric: tabular-nums;
+    line-height: 20px;
+  }
 }
 
 /* Keep the cashier toolbar controls on one compact, aligned baseline. */

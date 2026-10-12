@@ -1,15 +1,19 @@
+import SchoolDashboardTable from './SchoolDashboardTable';
+import DirectorySchoolDashboard from './DirectorySchoolDashboard';
+import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
+import HiddenSchoolsList from './HiddenSchoolsList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, ChevronDown, ChevronRight, Inbox, Landmark, Plus, Receipt, Search, Users, Wallet, X } from 'lucide-react';
+import { Plus, Search, X } from 'lucide-react';
 import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { useFamiliesTable, useBranchStats, useSchoolApplicationCounts } from '../../hooks/useCrmQueries';
-import { ALL_PERIODS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
-import SchoolTierTabs, { SchoolTier } from './SchoolTierTabs';
+import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
+import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
+import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewFamilyModal from './NewFamilyModal';
-import { DashboardGrid, DashboardTopPanel, OverviewColumn as ColumnCard, SchoolApplicationCount, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import { formatName } from '../../utils/format';
 import { isNewUnassignedRow } from './familiesRowHelpers';
 
@@ -31,6 +35,8 @@ export interface SchoolStat {
 type SortKey = 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' | 'debtSum' | 'balance';
 
 interface ManagerOverviewProps {
+  mode: ManagerMode;
+  onModeChange: (mode: ManagerMode) => void;
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
   onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string) => void;
@@ -39,35 +45,19 @@ interface ManagerOverviewProps {
 
 const SCHOOL_COLORS = [
   '#378ADD', '#639922', '#7F77DD', '#3C3489', '#A32D2D', '#185FA5', '#0F6E56', '#085041',
-  '#993556', '#712B13', '#854F0B', '#BA7517', '#993C1D', '#27500A', '#D4537E', '#26215C',
+  '#993556', '#712B13', '#854F0B', '#2563EB', '#993C1D', '#27500A', '#D4537E', '#26215C',
 ];
 
 export const KPI_COLORS = {
   childrenCount: '#7F77DD',
   newRequests: '#378ADD',
-  charged: '#BA7517',
+  charged: '#2563EB',
   paid: 'var(--success)',
   pendingCount: '#B45309',
   pendingSum: '#B45309',
   debtSum: 'var(--danger)',
   balance: 'var(--accent)',
 };
-
-const COLUMN_WEIGHTS: Record<SortKey, number> = {
-  school: 1.6,
-  childrenCount: 0.9,
-  newRequests: 1.1,
-  charged: 1,
-  paid: 1,
-  debtSum: 1,
-  balance: 1,
-};
-
-const KPI_GRID_TEMPLATE = ['school', 'newRequests', 'charged', 'paid', 'debtSum', 'balance']
-  .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
-  .join(' ');
-
-const ROW_HEIGHT = 56;
 
 export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
   const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
@@ -274,37 +264,18 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools }: ManagerOverviewProps) {
+export default function ManagerOverview({ mode, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools }: ManagerOverviewProps) {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
-  const [periodKey, setPeriodKey] = useState('ALL');
-  const [schoolTier, setSchoolTier] = useState<SchoolTier>('1.0');
+  const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
+  const [schoolTier] = useState<SchoolTier>('1.0');
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
-  // Каждая колонка KPI — отдельный скролл-контейнер (своя высота заголовка не
-  // влияет на body), поэтому синхронизируем scrollTop между ними вручную —
-  // иначе при скролле одной колонки школы «съезжают» относительно остальных.
-  const columnScrollRefs = useRef<(HTMLDivElement | null)[]>([]);
-  const isSyncingScroll = useRef(false);
-  const registerColumnScroll = (index: number) => (el: HTMLDivElement | null) => {
-    columnScrollRefs.current[index] = el;
-  };
-  const handleColumnScroll = (index: number) => (event: React.UIEvent<HTMLDivElement>) => {
-    if (isSyncingScroll.current) return;
-    isSyncingScroll.current = true;
-    const top = event.currentTarget.scrollTop;
-    columnScrollRefs.current.forEach((el, i) => {
-      if (el && i !== index) el.scrollTop = top;
-    });
-    isSyncingScroll.current = false;
-  };
-
   // Стандартный вид («За всё время») — лёгкий RPC-агрегат по филиалам.
   const branchStatsQuery = useBranchStats();
-  const applicationCounts = useSchoolApplicationCounts();
   // Rows also supply the boarding alerts beside each school.
   const familiesQuery = useFamiliesTable();
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
@@ -312,15 +283,6 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
     () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
     [allowedSchools, rows],
   );
-  const unboardedBySchool = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const row of accessibleRows ?? []) {
-      if (row.transferNumber && row.status !== 'boarded' && row.status !== 'rejected') {
-        counts[row.branchFilter] = (counts[row.branchFilter] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }, [accessibleRows]);
   const loadError = branchStatsQuery.isError;
 
   useEffect(() => {
@@ -408,11 +370,12 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         <DashboardTopPanel className="dashboard-control-row">
-          <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
+          <ManagerModeTabs value={mode} onChange={onModeChange} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-            <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />
+            {mode === 'charges' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
           </div>
           <ManagerSearch rows={accessibleRows ?? []} onOpenFamily={onOpenFamily} />
+          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
           <button
             type="button"
             onClick={() => setShowNewFamily(true)}
@@ -439,136 +402,23 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
           </button>
         </DashboardTopPanel>
 
-        <DashboardGrid template={KPI_GRID_TEMPLATE}>
-            <ColumnCard
-              first
-              sortKey="school"
-              label="Дети"
-              icon={<Users size={17} color="#fff" />}
-              value={String(totals.childrenCount)}
-              color={KPI_COLORS.childrenCount}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-              <div ref={registerColumnScroll(0)} onScroll={handleColumnScroll(0)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-                {displayRows.map((row, i) => (
-                  <div
-                    key={row.key}
-                    onClick={() => row.isGroup ? toggleGroup(row.key) : onSelectSchool(row.key)}
-                    style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, padding: row.isChild ? '0 16px 0 34px' : '0 16px', cursor: 'pointer', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}
-                  >
-                    <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
-                    <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
-                    {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
-                    {(unboardedBySchool[row.key] ?? 0) > 0 && (
-                      <span
-                        aria-label={`Посадка не подтверждена: ${unboardedBySchool[row.key]}`}
-                        title={`${unboardedBySchool[row.key]} детей назначены в трансфер, но посадка не подтверждена`}
-                        style={{ marginLeft: 'auto', flexShrink: 0, minWidth: 24, height: 20, padding: '0 6px', borderRadius: 10, background: '#DC2626', color: '#fff', fontSize: 11, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
-                      >
-                        ! {unboardedBySchool[row.key]}
-                      </span>
-                    )}
-                    {row.isGroup ? (
-                      row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
-                    ) : (
-                      <ChevronRight size={14} color="var(--text-2)" />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </ColumnCard>
-
-            <ColumnCard
-              sortKey="newRequests"
-              label="Новые заявки"
-              icon={<Inbox size={17} color="#fff" />}
-              value={String(totals.newRequests)}
-              color={KPI_COLORS.newRequests}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-            <div ref={registerColumnScroll(1)} onScroll={handleColumnScroll(1)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {displayRows.map((row, i) => (
-                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.newRequests}</span>
-                </div>
-              ))}
-            </div>
-            </ColumnCard>
-
-            <ColumnCard
-              sortKey="charged"
-              label="Начислено"
-              icon={<Receipt size={17} color="#fff" />}
-              value={money(totals.charged)}
-              color={KPI_COLORS.charged}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-            <div ref={registerColumnScroll(2)} onScroll={handleColumnScroll(2)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {displayRows.map((row, i) => (
-                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700 }}>{row.data.charged > 0 ? money(row.data.charged) : '0'}</span>
-                </div>
-              ))}
-            </div>
-            </ColumnCard>
-
-            <ColumnCard
-              sortKey="paid"
-              label="Оплачено"
-              icon={<CheckCircle2 size={17} color="#fff" />}
-              value={money(totals.paid)}
-              color={KPI_COLORS.paid}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-            <div ref={registerColumnScroll(3)} onScroll={handleColumnScroll(3)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {displayRows.map((row, i) => (
-                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data.paid > 0 ? 'var(--success)' : undefined }}>{row.data.paid > 0 ? money(row.data.paid) : '0'}</span>
-                </div>
-              ))}
-            </div>
-            </ColumnCard>
-
-            <ColumnCard
-              sortKey="debtSum"
-              label="Сумма долга"
-              icon={<Landmark size={17} color="#fff" />}
-              value={money(totals.debtSum)}
-              color={KPI_COLORS.debtSum}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-            <div ref={registerColumnScroll(4)} onScroll={handleColumnScroll(4)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {displayRows.map((row, i) => (
-                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data.debtSum > 0 ? 'var(--danger)' : undefined }}>{row.data.debtSum > 0 ? money(row.data.debtSum) : '0'}</span>
-                </div>
-              ))}
-            </div>
-            </ColumnCard>
-
-            <ColumnCard
-              sortKey="balance"
-              label="Баланс"
-              icon={<Wallet size={17} color="#fff" />}
-              value={totals.balance.toLocaleString('ru-RU')}
-              color={KPI_COLORS.balance}
-              sortState={sortState}
-              onSort={handleSort}
-            >
-            <div ref={registerColumnScroll(5)} onScroll={handleColumnScroll(5)} style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
-              {displayRows.map((row, i) => (
-                <div key={row.key} style={{ height: ROW_HEIGHT, flexShrink: 0, display: 'flex', alignItems: 'center', padding: '0 16px', background: i % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: row.data.balance < 0 ? 'var(--danger)' : row.data.balance > 0 ? 'var(--success)' : undefined }}>{row.data.balance.toLocaleString('ru-RU')}</span>
-                </div>
-              ))}
-            </div>
-            </ColumnCard>
-        </DashboardGrid>
+        {mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : (
+        <SchoolDashboardTable
+          columns={[
+            { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },
+            { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },
+            { key: 'charged', label: 'Начислено', total: money(totals.charged), color: KPI_COLORS.charged },
+            { key: 'paid', label: 'Оплачено', total: money(totals.paid), color: KPI_COLORS.paid },
+            { key: 'debtSum', label: 'Сумма долга', total: money(totals.debtSum), color: KPI_COLORS.debtSum },
+            { key: 'balance', label: 'Баланс', total: totals.balance.toLocaleString('ru-RU'), color: KPI_COLORS.balance },
+          ]}
+          rows={displayRows.map(row => ({ ...row, values: { newRequests: row.data.newRequests, charged: money(row.data.charged), paid: money(row.data.paid), debtSum: money(row.data.debtSum), balance: row.data.balance.toLocaleString('ru-RU') } }))}
+          sortKey={sortState.key}
+          ascending={sortState.dir === 'asc'}
+          onSort={key => handleSort(key as SortKey)}
+          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        />
+        )}
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

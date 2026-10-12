@@ -41,7 +41,7 @@ test('passes the selected payment method to the cell save handler', async () => 
   );
 
   fireEvent.click(screen.getByText('cash'));
-  fireEvent.click(await screen.findByRole('button', { name: /АйКай Мбанк/ }));
+  fireEvent.click(await screen.findByRole('option', { name: /АйКай Мбанк/ }));
 
   await waitFor(() => {
     expect(onCellSave).toHaveBeenCalledWith(
@@ -130,4 +130,22 @@ test('keeps selections across transfers when selecting and deselecting the curre
   rerender(<DataTable {...props} data={[{ id: 'child-2', paymentMethod: 'cash' }]} selectedKeys={new Set(['child-1', 'child-2'])} />);
   fireEvent.click(screen.getByTitle('Выбрать всех на странице'));
   expect(onSelectedKeysChange).toHaveBeenLastCalledWith(new Set(['child-1']));
+});
+
+
+test('restores the read-only cell when dismissed without selecting', async () => {
+  const onCellSave = jest.fn();
+  render(<DataTable columns={columns} data={[{ id: 'dismiss-1', paymentMethod: 'cash' }]} rowKey="id" onCellSave={onCellSave} storageKey="dismiss-select-test" />);
+  fireEvent.click(screen.getByText('cash'));
+  expect(await screen.findByRole('listbox')).toBeInTheDocument();
+  fireEvent.mouseDown(document.body);
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Наличные/ })).not.toBeInTheDocument();
+  expect(screen.getByText('cash')).toBeInTheDocument();
+  expect(onCellSave).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByText('cash'));
+  await screen.findByRole('listbox');
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.getByText('cash')).toBeInTheDocument();
+  expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
 });

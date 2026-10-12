@@ -1,5 +1,6 @@
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
-import React, { useMemo } from 'react';
+import TransferCell from '../../core/dashboard/TransferCell';
+import { useMemo } from 'react';
 import { PaymentTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable } from '../../hooks/useCrmQueries';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
@@ -60,7 +61,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
     return {
       filterKey: number,
-      label: `#${number}`,
+      label: number,
       count: transferRows.length,
     };
   });
@@ -83,53 +84,18 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
       transition: 'padding-right .18s ease',
     }}>
       <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.count)} >
-      {cells.map(cell => {
-        const active = cell.count > 0;
-        const isSelected = selectedKey === cell.filterKey;
-        const activeColor = '#2DD4BF';
-        return (
-          <button
-            className="dock-hover-card dock-hover-card--compact"
-            key={cell.filterKey || 'all'}
-            onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            title={active ? `${statusFilter === 'confirmed' ? 'Подтверждено' : 'На проверке'}: ${cell.count}` : undefined}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 2,
-              padding: '8px 4px',
-              borderRadius: 12,
-              background: isSelected
-                ? activeColor
-                : active
-                  ? '#fff'
-                  : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
-              border: `1px solid ${isSelected || active ? activeColor : '#E1E8EA'}`,
-              boxShadow: isSelected ? `0 0 10px ${activeColor}99` : 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{
-              fontSize: 13,
-              fontWeight: 800,
-              color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2',
-              whiteSpace: 'nowrap',
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              maxWidth: '100%',
-            }}>
-              {active ? cell.count : ''}
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-              {cell.label}
-            </span>
-          </button>
-        );
-      })}
+      {cells.map(cell => (
+        <TransferCell
+          key={cell.filterKey || 'all'}
+          label={cell.label}
+          active={cell.count > 0}
+          selected={selectedKey === cell.filterKey}
+          value={cell.count}
+          alert={/^\d+$/.test(cell.filterKey) && statusFilter === 'pending'}
+          onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
+          title={cell.count > 0 ? `${statusFilter === 'confirmed' ? 'Подтверждено' : 'На проверке'}: ${cell.count}` : undefined}
+        />
+      ))}
       </TransferBarPages>
     </div>
   );

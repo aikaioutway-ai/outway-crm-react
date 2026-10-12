@@ -27,7 +27,20 @@ test('manager can select a transfer above 15 and still sees its boarding alert',
   render(<SchoolTransferDashboard schoolKey="AES" onSelect={onSelect} />);
   fireEvent.click(screen.getByRole('button', { name: 'Следующие трансферы' }));
   const transfer = screen.getByRole('button', { name: /#20/ });
-  expect(transfer).toHaveTextContent('! 1');
+  expect(transfer).toHaveTextContent('1');
+  expect(transfer).not.toHaveTextContent('!');
   fireEvent.click(transfer);
   expect(onSelect).toHaveBeenCalledWith('20');
+});
+
+
+test('payment badge counts debtor families instead of unboarded children', () => {
+  (useFamiliesTable as jest.Mock).mockReturnValue({ data: [
+    { familyId: 'a', branchFilter: 'AES', transferNumber: '1', status: 'boarded', debtAmount: 100 },
+    { familyId: 'a', branchFilter: 'AES', transferNumber: '1', status: 'boarded', debtAmount: 100 },
+    { familyId: 'b', branchFilter: 'AES', transferNumber: '1', status: 'new', debtAmount: 0 },
+  ] });
+  render(<SchoolTransferDashboard schoolKey="AES" mode="charges" />);
+  expect(screen.getAllByLabelText('Должников: 1')).toHaveLength(1);
+  expect(screen.queryByLabelText(/Посадка не подтверждена/)).not.toBeInTheDocument();
 });

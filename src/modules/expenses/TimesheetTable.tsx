@@ -1,3 +1,4 @@
+import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { PayrollSubjectType, setV2PayrollApprovalStatus, upsertV2PayrollEntries, upsertV2PayrollEntry, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
 import { useEmployeeAdvances, useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApproval, usePayrollEntriesForPeriod, usePayrollPaymentsForPeriod } from '../../hooks/useCrmQueries';
@@ -14,6 +15,7 @@ interface DriverRow {
   driverId: string;
   fullName: string;
   phone: string;
+  vehicleType?: string;
   transfers: string;   // "1, 3, 7"
   days: number;
   rate: number;
@@ -231,6 +233,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         fullName: d.fullName,
         phone: d.phone || '',
         transfers: d.transferNumbers || '—',
+        vehicleType: d.vehicleType,
         days,
         rate,
         bonusAmount,
@@ -529,7 +532,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
                 {idx + 1}
               </td>
               <td style={{ ...CELL_STYLE, fontWeight: 600 }}>{row.fullName}</td>
-              <td style={{ ...CELL_STYLE, textAlign: 'center', color: '#5A9FE8' }}>{row.transfers}</td>
+              <td style={{ ...CELL_STYLE, textAlign: 'center' }}>{isOffice ? row.transfers : <TransferNumberBadge number={row.transfers} vehicleType={row.vehicleType} />}</td>
               {isTimesheetView && <td style={{ ...CELL_STYLE, textAlign: 'center' }}>
                 <SelectInput
                   value={row.days}

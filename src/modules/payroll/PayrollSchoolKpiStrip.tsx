@@ -33,27 +33,28 @@ export default function PayrollSchoolKpiStrip({ schoolKey, view, rightReserveWid
     <>
       <KpiChip
         icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} size={38} radius={11} fontSize={12} />}
+        iconBackground="transparent"
         label="Школа"
         value={stat.label}
         color={stat.color}
       />
-      <KpiChip icon={<ReceiptText size={18} color="#fff" />} label="Начислено" value={money(stat.accruedAmount)} color={PAYROLL_COLORS.accruedAmount} />
+      <KpiChip icon={null} label="Начислено" value={money(stat.accruedAmount)} color={PAYROLL_COLORS.accruedAmount} />
     </>
   );
 
   const cards = view === 'timesheet' ? (
     <>
       {commonCards}
-      <KpiChip icon={<Clock3 size={18} color="#fff" />} label="На согласовании" value={money(summaryBySchool[schoolKey]?.pendingAmount ?? 0)} color="#B45309" />
-      <KpiChip icon={<ShieldCheck size={18} color="#fff" />} label="Утверждено" value={money(summaryBySchool[schoolKey]?.approvedAmount ?? 0)} color="#15803D" />
+      <KpiChip icon={null} label="На согласовании" value={money(summaryBySchool[schoolKey]?.pendingAmount ?? 0)} color="#B45309" />
+      <KpiChip icon={null} label="Утверждено" value={money(summaryBySchool[schoolKey]?.approvedAmount ?? 0)} color="#15803D" />
     </>
   ) : (
     <>
       {commonCards}
-      <KpiChip icon={<WalletCards size={18} color="#fff" />} label="Авансы" value={money(stat.advanceAmount)} color={PAYROLL_COLORS.advanceAmount} />
-      <KpiChip icon={<Banknote size={18} color="#fff" />} label="Зарплата" value={money(stat.salaryAmount)} color={PAYROLL_COLORS.salaryAmount} />
-      <KpiChip icon={<CheckCircle2 size={18} color="#fff" />} label="Оплачено" value={money(stat.paidAmount)} color={PAYROLL_COLORS.paidAmount} />
-      <KpiChip icon={<ChevronRight size={18} color="#fff" />} label="Остаток" value={money(stat.remainingAmount)} color={PAYROLL_COLORS.remainingAmount} />
+      <KpiChip icon={null} label="Авансы" value={money(stat.advanceAmount)} color={PAYROLL_COLORS.advanceAmount} />
+      <KpiChip icon={null} label="Зарплата" value={money(stat.salaryAmount)} color={PAYROLL_COLORS.salaryAmount} />
+      <KpiChip icon={null} label="Оплачено" value={money(stat.paidAmount)} color={PAYROLL_COLORS.paidAmount} />
+      <KpiChip icon={null} label="Остаток" value={money(stat.remainingAmount)} color={PAYROLL_COLORS.remainingAmount} />
     </>
   );
 

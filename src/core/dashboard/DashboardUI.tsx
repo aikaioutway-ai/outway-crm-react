@@ -7,7 +7,18 @@ export function DashboardTopPanel({ children, className = '' }: { children: Reac
 }
 
 export function DashboardGrid({ children, template }: { children: React.ReactNode; template: string }) {
-  return <div className="dashboard-overview-grid" style={{ gridTemplateColumns: template }}>{children}</div>;
+  const highlightRow = (grid: HTMLDivElement, key?: string) => {
+    grid.querySelectorAll<HTMLElement>('[data-school-row]').forEach(cell => {
+      cell.classList.toggle('dashboard-row-hover', !!key && cell.dataset.schoolRow === key);
+    });
+  };
+  return <div className="dashboard-overview-grid" style={{ gridTemplateColumns: template }}
+    onMouseOver={event => {
+      const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-school-row]');
+      highlightRow(event.currentTarget, cell?.dataset.schoolRow);
+    }}
+    onMouseLeave={event => highlightRow(event.currentTarget)}
+  >{children}</div>;
 }
 
 export function DashboardSearch({ value, onChange, placeholder = 'Поиск: имя, телефон, ребёнок, адрес', width = 340 }: {
@@ -59,17 +70,18 @@ export function SchoolApplicationCount({ count }: { count?: number }) {
   );
 }
 
-export function KpiChip({ icon, label, value, color }: {
+export function KpiChip({ icon, label, value, color, iconBackground }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   color: string;
+  iconBackground?: string;
 }) {
   return (
     <div className="dashboard-kpi dock-hover-card">
-      <div className="dashboard-kpi-icon" style={{ background: color }}>{icon}</div>
+      {icon && <div className="dashboard-kpi-icon" style={{ background: iconBackground ?? color }}>{icon}</div>}
       <div className="dashboard-kpi-copy">
-        <div className="dashboard-kpi-value">{value}</div>
+        <div className="dashboard-kpi-value" title={value} style={{ color: !icon ? color : undefined }}>{value}</div>
         <div className="dashboard-kpi-label" title={label}>{label}</div>
       </div>
     </div>
@@ -93,11 +105,11 @@ export function OverviewColumn<T extends string>({ sortKey, label, icon, value, 
       <button
         className={`dashboard-column-head${active ? ' active' : ''}`}
         onClick={() => onSort(sortKey)}
-        style={{ borderBottomColor: active ? color : undefined }}
+        style={{ borderBottomColor: !icon || active ? color : undefined }}
       >
-        <div className="dashboard-column-icon" style={{ background: color }}>{icon}</div>
+        {icon && <div className="dashboard-column-icon" style={{ background: color }}>{icon}</div>}
         <div className="dashboard-column-copy">
-          <div className="dashboard-column-value">
+          <div className="dashboard-column-value" title={value} style={{ color: !icon ? color : undefined }}>
             {value}
             {active && (sortState.dir === 'asc' ? <ChevronUp size={13} color={color} /> : <ChevronDown size={13} color={color} />)}
           </div>

@@ -1260,3 +1260,11 @@ select.dt-cell-input {
   color: #17222F;
   background: #D7EEEE;
 }
+
+.dt-tr:not(.dt-tr--selected):hover td,
+.dt-tr:not(.dt-tr--selected):hover .dt-td.dt-sticky-col {
+  background: #DDF2F1;
+}
+.dt-tr:not(.dt-tr--selected):hover td:first-child {
+  box-shadow: inset 3px 0 var(--dt-accent);
+}

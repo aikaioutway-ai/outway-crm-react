@@ -1,3 +1,4 @@
+import TransferCell, { transferCellColor } from '../../core/dashboard/TransferCell';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import { useMemo } from 'react';
 import { useDriversTable } from '../../hooks/useCrmQueries';
@@ -12,18 +13,7 @@ interface PayrollTransferDashboardProps {
 }
 
 
-const VEHICLE_COLOR: Record<string, string> = {
-  microbus: '#2DD4BF',
-  minivan: '#10B981',
-  sedan: '#687C54',
-};
 
-function vehicleShort(vehicleType?: string): string {
-  if (vehicleType === 'microbus') return 'МКР';
-  if (vehicleType === 'minivan') return 'MINI';
-  if (vehicleType === 'sedan') return 'CAR';
-  return '';
-}
 
 export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: PayrollTransferDashboardProps) {
   const { data: rows = null } = useDriversTable();
@@ -38,7 +28,7 @@ export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth 
     const transferRows = schoolRows.filter(row => payrollTransferNumbers(row).includes(number));
     return {
       filterKey: number,
-      label: `#${number}`,
+      label: number,
       count: transferRows.length,
       vehicleType: transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
         ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
@@ -63,49 +53,18 @@ export default function PayrollTransferDashboard({ schoolKey, rightReserveWidth 
       transition: 'padding-right .18s ease',
     }}>
       <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.count)} >
-      {cells.map(cell => {
-        const active = cell.count > 0;
-        const isSelected = selectedKey === cell.filterKey;
-        const activeColor = 'color' in cell && cell.color
-          ? cell.color
-          : cell.vehicleType
-            ? (VEHICLE_COLOR[cell.vehicleType] ?? '#2DD4BF')
-            : '#2DD4BF';
-        return (
-          <button
-            className="dock-hover-card dock-hover-card--compact"
-            key={cell.filterKey || 'all'}
-            onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            title={active ? `Водителей: ${cell.count}` : undefined}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 2,
-              padding: '8px 4px',
-              borderRadius: 12,
-              background: isSelected
-                ? activeColor
-                : active
-                  ? '#fff'
-                  : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
-              border: `1px solid ${isSelected || active ? activeColor : '#E1E8EA'}`,
-              boxShadow: isSelected ? `0 0 10px ${activeColor}99` : 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ fontSize: 13, fontWeight: 800, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-              {active ? cell.count : ''}
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-              {cell.label}{cell.vehicleType ? ` ${vehicleShort(cell.vehicleType)}` : ''}
-            </span>
-          </button>
-        );
-      })}
+      {cells.map(cell => (
+        <TransferCell
+          key={cell.filterKey || 'all'}
+          label={cell.label}
+          color={transferCellColor(cell)}
+          active={cell.count > 0}
+          selected={selectedKey === cell.filterKey}
+          value={cell.count}
+          onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
+          title={cell.count > 0 ? `Водителей: ${cell.count}` : undefined}
+        />
+      ))}
       </TransferBarPages>
     </div>
   );
