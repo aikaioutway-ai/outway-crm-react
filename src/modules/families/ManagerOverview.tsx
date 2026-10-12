@@ -305,15 +305,22 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
   // Стандартный вид («За всё время») — лёгкий RPC-агрегат по филиалам.
   const branchStatsQuery = useBranchStats();
   const applicationCounts = useSchoolApplicationCounts();
-  // Полная таблица семей нужна только для разбивки по конкретному периоду
-  // (charged/paid по месяцу привязаны к семье, а не к филиалу) — грузим её
-  // лениво, только когда period выбран, а не всегда при заходе на экран.
-  const familiesQuery = useFamiliesTable({ enabled: periodKey !== 'ALL' });
+  // Rows also supply the boarding alerts beside each school.
+  const familiesQuery = useFamiliesTable();
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
     () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
     [allowedSchools, rows],
   );
+  const unboardedBySchool = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const row of accessibleRows ?? []) {
+      if (row.transferNumber && row.status !== 'boarded' && row.status !== 'rejected') {
+        counts[row.branchFilter] = (counts[row.branchFilter] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }, [accessibleRows]);
   const loadError = branchStatsQuery.isError;
 
   useEffect(() => {
@@ -453,6 +460,15 @@ export default function ManagerOverview({ onSelectSchool, onSidebarWidthChange, 
                     <SchoolAvatar logo={row.logo} label={row.label} color={row.color} size={row.isChild ? 22 : 26} radius={row.isChild ? 6 : 7} fontSize={row.isChild ? 10 : 11} />
                     <span style={{ fontSize: row.isChild ? 13 : 14, fontWeight: row.isChild ? 550 : 650, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: row.isChild ? 'var(--text-2)' : undefined }}>{row.label}</span>
                     {!row.isGroup && <SchoolApplicationCount count={applicationCounts?.[row.key]} />}
+                    {(unboardedBySchool[row.key] ?? 0) > 0 && (
+                      <span
+                        aria-label={`Посадка не подтверждена: ${unboardedBySchool[row.key]}`}
+                        title={`${unboardedBySchool[row.key]} детей назначены в трансфер, но посадка не подтверждена`}
+                        style={{ marginLeft: 'auto', flexShrink: 0, minWidth: 24, height: 20, padding: '0 6px', borderRadius: 10, background: '#DC2626', color: '#fff', fontSize: 11, fontWeight: 900, display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}
+                      >
+                        ! {unboardedBySchool[row.key]}
+                      </span>
+                    )}
                     {row.isGroup ? (
                       row.expanded ? <ChevronDown size={14} color="var(--text-2)" /> : <ChevronRight size={14} color="var(--text-2)" />
                     ) : (
