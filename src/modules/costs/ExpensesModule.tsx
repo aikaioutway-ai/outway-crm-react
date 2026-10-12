@@ -296,18 +296,26 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
     return () => { active = false; };
   }, [bounds.first, bounds.last, selectedPeriods, sessionToken, refreshKey]);
 
-  const categoryRows = selectedCategory ? rows.filter(row => row.category === selectedCategory) : rows;
+  const canViewPersonalDetails = userRole === 'admin' || userRole === 'gen_director';
+  const accessibleRows = useMemo(() => canViewPersonalDetails ? rows : rows.filter(row => row.category !== 'personal'), [rows, canViewPersonalDetails]);
+  useEffect(() => {
+    if (selectedCategory === 'personal' && !canViewPersonalDetails) {
+      setSelectedCategory(null);
+      setSelectedSubcategory('ALL');
+    }
+  }, [selectedCategory, canViewPersonalDetails, setSelectedCategory, setSelectedSubcategory]);
+  const categoryRows = selectedCategory ? accessibleRows.filter(row => row.category === selectedCategory) : accessibleRows;
   const subcategoryTotals = useMemo(() => {
     if (!selectedCategory) return [];
     const subcategories = Array.from(new Set([
       ...EXPENSE_CATEGORIES[selectedCategory].subcategories,
-      ...rows.filter(row => row.category === selectedCategory).map(row => row.subcategory),
+      ...accessibleRows.filter(row => row.category === selectedCategory).map(row => row.subcategory),
     ]));
     return subcategories.map(subcategory => {
-      const matching = rows.filter(row => row.category === selectedCategory && row.subcategory === subcategory);
+      const matching = accessibleRows.filter(row => row.category === selectedCategory && row.subcategory === subcategory);
       return { subcategory, amount: matching.reduce((sum, row) => sum + row.amount, 0), count: matching.length };
     });
-  }, [rows, selectedCategory]);
+  }, [accessibleRows, selectedCategory]);
   const visibleRows = selectedSubcategory === 'ALL'
     ? categoryRows
     : categoryRows.filter(row => row.subcategory === selectedSubcategory);
@@ -316,10 +324,9 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
     setSelectedSubcategory('ALL');
   }, [selectedCategory, periodKey, setSelectedSubcategory]);
 
-  const canViewPersonalDetails = userRole === 'admin' || userRole === 'gen_director';
   const overviewRows = (selectedCategory
     ? subcategoryTotals.map(item => ({ key: item.subcategory, category: selectedCategory, label: item.subcategory }))
-    : EXPENSE_CATEGORY_KEYS.map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label }))
+    : EXPENSE_CATEGORY_KEYS.filter(key => canViewPersonalDetails || key !== 'personal').map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label }))
   ).map(item => {
     const matching = categoryRows.filter(row => selectedCategory ? row.subcategory === item.key : row.category === item.category);
     const meta = EXPENSE_CATEGORIES[item.category];
