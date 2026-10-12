@@ -10,7 +10,7 @@ interface LogisticsSchoolTransferDashboardProps {
   onSelect?: (key: string) => void;
 }
 
-const TRANSFER_COUNT = 15;
+const TRANSFERS_PER_PAGE = 15;
 
 const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }[] = [
   { value: 'unassigned', label: 'Не назначен' },
@@ -42,6 +42,9 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
   } | null>(null);
   const [savingVehicleType, setSavingVehicleType] = useState(false);
   const [vehicleTypeOverrides, setVehicleTypeOverrides] = useState<Record<string, VehicleType | ''>>({});
+  const [page, setPage] = useState(0);
+
+  useEffect(() => { setPage(0); }, [schoolKey]);
 
   useEffect(() => {
     if (!vehicleMenu) return;
@@ -99,8 +102,23 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
 
   if (!rows) return null;
 
-  const transferCells = Array.from({ length: TRANSFER_COUNT }, (_, i) => {
-    const number = String(i + 1);
+  const maxTransferNumber = schoolRows.reduce((max, row) => {
+    const number = Number(row.transferNumber);
+    return Number.isInteger(number) && number > max ? number : max;
+  }, 0);
+  const pageCount = Math.max(1, Math.ceil(maxTransferNumber / TRANSFERS_PER_PAGE));
+  const currentPage = Math.min(page, pageCount - 1);
+  const firstNumber = currentPage * TRANSFERS_PER_PAGE + 1;
+  const lastNumber = firstNumber + TRANSFERS_PER_PAGE - 1;
+  const countOutsidePage = (before: boolean) => schoolRows.filter(row => {
+    const number = Number(row.transferNumber);
+    return Number.isInteger(number) && number > 0 && (before ? number < firstNumber : number > lastNumber);
+  }).length;
+  const hiddenBefore = countOutsidePage(true);
+  const hiddenAfter = countOutsidePage(false);
+
+  const transferCells = Array.from({ length: TRANSFERS_PER_PAGE }, (_, i) => {
+    const number = String(firstNumber + i);
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
     const branchId = transferRows[0]?.branchId ?? allSchoolRows[0]?.branchId ?? null;
     const targets = Array.from(new Map(
@@ -129,12 +147,101 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
 
   const noTransferCount = schoolRows.filter(row => !row.transferNumber).length;
   const rejectedCount = allSchoolRows.filter(row => row.status === 'rejected').length;
-  const cells = [
-    ...transferCells,
+  const fixedCells = [
     { filterKey: 'empty', label: '—', count: noTransferCount, vehicleType: '' },
     { filterKey: 'rejected', label: '×', count: rejectedCount, vehicleType: '', color: '#64748B' },
     { filterKey: '', label: '≡', count: schoolRows.length, vehicleType: '' },
   ];
+
+  type BarCell = typeof transferCells[number] | typeof fixedCells[number];
+
+  const renderCell = (cell: BarCell) => {
+      const active = cell.count > 0;
+      const isSelected = selectedKey === cell.filterKey;
+      const activeColor = 'color' in cell && cell.color
+        ? cell.color
+        : cell.vehicleType
+          ? (VEHICLE_COLOR[cell.vehicleType] ?? '#2DD4BF')
+          : '#2DD4BF';
+      return (
+        <button
+          className="dock-hover-card dock-hover-card--compact"
+          key={cell.filterKey || 'all'}
+          onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
+          onContextMenu={event => {
+            if (!/^\d+$/.test(cell.filterKey)) return;
+            event.preventDefault();
+            event.stopPropagation();
+            setVehicleMenu({
+              x: event.clientX,
+              y: event.clientY,
+              transferNumber: cell.filterKey,
+              targets: 'targets' in cell ? cell.targets : [],
+            });
+          }}
+          title={active ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 2,
+            padding: '8px 4px',
+            borderRadius: 12,
+            background: isSelected
+              ? activeColor
+              : active
+                ? '#fff'
+                : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
+            border: `1px solid ${isSelected || active ? activeColor : '#E1E8EA'}`,
+            boxShadow: isSelected ? `0 0 10px ${activeColor}99` : 'none',
+            cursor: 'pointer',
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 800, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
+            {active ? cell.count : ''}
+          </span>
+          <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
+            {cell.label}{cell.vehicleType ? ` ${vehicleShort(cell.vehicleType)}` : ''}
+          </span>
+        </button>
+      );
+  };
+
+  const renderPageArrow = (direction: -1 | 1) => {
+    const disabled = direction < 0 ? currentPage === 0 : currentPage >= pageCount - 1;
+    const hidden = direction < 0 ? hiddenBefore : hiddenAfter;
+    const color = disabled ? '#C7D0D6' : hidden > 0 ? '#2DD4BF' : '#626C8B';
+    return (
+      <button
+        className="dock-hover-card dock-hover-card--compact"
+        disabled={disabled}
+        onClick={() => setPage(currentPage + direction)}
+        title={disabled ? undefined : direction < 0
+          ? `Трансферы ${firstNumber - TRANSFERS_PER_PAGE}–${firstNumber - 1}`
+          : `Трансферы ${lastNumber + 1}–${lastNumber + TRANSFERS_PER_PAGE}${hidden > 0 ? ` · учеников дальше: ${hidden}` : ''}`}
+        style={{
+          flex: '0 0 26px',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2,
+          padding: '8px 0',
+          borderRadius: 12,
+          background: '#fff',
+          border: `1px solid ${disabled ? '#E1E8EA' : color}`,
+          color,
+          cursor: disabled ? 'default' : 'pointer',
+        }}
+      >
+        <span style={{ fontSize: 16, fontWeight: 800, lineHeight: 1 }}>{direction < 0 ? '‹' : '›'}</span>
+        {!disabled && hidden > 0 && <span style={{ fontSize: 10, fontWeight: 800 }}>{hidden}</span>}
+      </button>
+    );
+  };
 
   return (
     <div style={{
@@ -145,60 +252,10 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
-      {cells.map(cell => {
-        const active = cell.count > 0;
-        const isSelected = selectedKey === cell.filterKey;
-        const activeColor = 'color' in cell && cell.color
-          ? cell.color
-          : cell.vehicleType
-            ? (VEHICLE_COLOR[cell.vehicleType] ?? '#2DD4BF')
-            : '#2DD4BF';
-        return (
-          <button
-            className="dock-hover-card dock-hover-card--compact"
-            key={cell.filterKey || 'all'}
-            onClick={() => onSelect?.(isSelected ? '' : cell.filterKey)}
-            onContextMenu={event => {
-              if (!/^\d+$/.test(cell.filterKey)) return;
-              event.preventDefault();
-              event.stopPropagation();
-              setVehicleMenu({
-                x: event.clientX,
-                y: event.clientY,
-                transferNumber: cell.filterKey,
-                targets: 'targets' in cell ? cell.targets : [],
-              });
-            }}
-            title={active ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              display: 'flex',
-              flexDirection: 'column',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 2,
-              padding: '8px 4px',
-              borderRadius: 12,
-              background: isSelected
-                ? activeColor
-                : active
-                  ? '#fff'
-                  : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
-              border: `1px solid ${isSelected || active ? activeColor : '#E1E8EA'}`,
-              boxShadow: isSelected ? `0 0 10px ${activeColor}99` : 'none',
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{ fontSize: 13, fontWeight: 800, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-              {active ? cell.count : ''}
-            </span>
-            <span style={{ fontSize: 11, fontWeight: 700, color: isSelected ? '#fff' : active ? activeColor : '#AEB8C2' }}>
-              {cell.label}{cell.vehicleType ? ` ${vehicleShort(cell.vehicleType)}` : ''}
-            </span>
-          </button>
-        );
-      })}
+      {pageCount > 1 && renderPageArrow(-1)}
+      {transferCells.map(renderCell)}
+      {pageCount > 1 && renderPageArrow(1)}
+      {fixedCells.map(renderCell)}
       {vehicleMenu && (
         <div
           onClick={event => event.stopPropagation()}
