@@ -24,6 +24,8 @@ import { SCHOOL_TIER_2_KEYS, SCHOOL_TABS, isSchoolAllowed } from './constants';
 import { SCHOOL_COLORS } from './LogisticsOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import InlineFamilyCard from './InlineFamilyCard';
+import { ChevronRight, Eye, EyeOff, Route } from 'lucide-react';
+import { addressKey, collectZoneTransfers, rowsForZoneTransfers, schoolLabelFor, zoneTransferKey } from './zoneTransfers';
 
 interface LogisticsMapViewProps {
   schoolKey: string;
@@ -43,6 +45,25 @@ const BISHKEK_CENTER: [number, number] = [42.8746, 74.5698];
 const FALLBACK_COLOR = '#626C8B';
 const DEFAULT_ZONE_COLOR = '#2AA5A5';
 const ZONE_COLORS = ['#2AA5A5', '#5271C4', '#E29B34', '#D85B78', '#7B61C9', '#3A9D65'];
+function plural(count: number, one: string, few: string, many: string): string {
+  const mod10 = count % 10;
+  const mod100 = count % 100;
+  if (mod10 === 1 && mod100 !== 11) return one;
+  if (mod10 >= 2 && mod10 <= 4 && (mod100 < 12 || mod100 > 14)) return few;
+  return many;
+}
+
+const PREVIEW_COLORS = ['#5271C4', '#D85B78', '#E29B34', '#7B61C9', '#3A9D65', '#C0563F', '#2B8FB3'];
+
+// Слой просмотра чужих маршрутов: приглушаем цвет, смешивая с белым.
+function dimColor(hex: string, amount = 0.45): string {
+  const value = hex.replace('#', '');
+  const channel = (offset: number) => {
+    const c = parseInt(value.slice(offset, offset + 2), 16);
+    return Math.round(c + (255 - c) * amount).toString(16).padStart(2, '0');
+  };
+  return `#${channel(0)}${channel(2)}${channel(4)}`;
+}
 
 const toolbarButtonStyle = (active = false): React.CSSProperties => ({
   minHeight: 36,
@@ -125,6 +146,9 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
   const [zoneBusy, setZoneBusy] = useState(false);
   const [zoneRenderVersion, setZoneRenderVersion] = useState(0);
   const [zoneOverlayRoot, setZoneOverlayRoot] = useState<HTMLDivElement | null>(null);
+  const [transfersZoneId, setTransfersZoneId] = useState<string | null>(null);
+  const [previewKeys, setPreviewKeys] = useState<string[]>([]);
+  const [expandedZoneSchools, setExpandedZoneSchools] = useState<string[]>([]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const ymapsRef = useRef<any>(null);
@@ -132,6 +156,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
   const placemarksRef = useRef<Map<string, any>>(new Map());
   const schoolPlacemarkRef = useRef<any>(null);
   const zoneObjectsRef = useRef<Map<string, any>>(new Map());
+  const previewPlacemarksRef = useRef<Map<string, any>>(new Map());
   const draftZoneObjectRef = useRef<any>(null);
   const drawModeRef = useRef<RouteZoneShape | null>(null);
   const rectangleStartRef = useRef<[number, number] | null>(null);
@@ -180,6 +205,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     let cancelled = false;
     const placemarks = placemarksRef.current;
     const zoneObjects = zoneObjectsRef.current;
+    const previewPlacemarks = previewPlacemarksRef.current;
     loadYandexMaps()
       .then(ymaps => {
         if (cancelled || !containerRef.current) return;
@@ -299,6 +325,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
       setZoneOverlayRoot(null);
       placemarks.clear();
       zoneObjects.clear();
+      previewPlacemarks.clear();
       draftZoneObjectRef.current = null;
       schoolPlacemarkRef.current = null;
     };
@@ -316,6 +343,8 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     setZonesLoading(true);
     setZoneError(null);
     setSelectedZoneId(null);
+    setTransfersZoneId(null);
+    setPreviewKeys([]);
     if (!schoolKey) { setZones([]); setZonesLoading(false); return; }
     fetchRouteZones(schoolKey)
       .then(result => {
@@ -528,6 +557,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
       await deleteRouteZone(zone.id);
       setZones(current => current.filter(item => item.id !== zone.id));
       if (selectedZoneId === zone.id) setSelectedZoneId(null);
+      if (transfersZoneId === zone.id) closeZoneTransfers();
       if (editingZoneId === zone.id) resetZoneForm();
     } catch (err) {
       setZoneError(err instanceof Error ? err.message : 'Не удалось удалить зону');
@@ -638,6 +668,216 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     }
   }, [addressGroups, schoolBranch, mapReady, rows, transferFilter]);
 
+  const transfersZone = useMemo(() => zones.find(zone => zone.id === transfersZoneId) ?? null, [zones, transfersZoneId]);
+
+  const zoneTransferGroups = useMemo(() => (
+    transfersZone && rows ? collectZoneTransfers(rows, transfersZone, { schoolKey, allowedSchools }) : []
+  ), [allowedSchools, rows, schoolKey, transfersZone]);
+
+  const previewColor = (key: string) => PREVIEW_COLORS[Math.max(0, previewKeys.indexOf(key)) % PREVIEW_COLORS.length];
+
+  const previewRows = useMemo(() => (
+    rows ? rowsForZoneTransfers(rows, previewKeys, allowedSchools) : []
+  ), [allowedSchools, previewKeys, rows]);
+
+  function closeZoneTransfers() {
+    setTransfersZoneId(null);
+    setPreviewKeys([]);
+  }
+
+  const toggleZoneTransfers = (zoneId: string) => {
+    if (transfersZoneId === zoneId) {
+      closeZoneTransfers();
+      return;
+    }
+    setTransfersZoneId(zoneId);
+    setSelectedZoneId(zoneId);
+    setPreviewKeys([]);
+    setExpandedZoneSchools([]);
+  };
+
+  const toggleZoneSchool = (branchFilter: string) => {
+    setExpandedZoneSchools(current => (
+      current.includes(branchFilter) ? current.filter(item => item !== branchFilter) : [...current, branchFilter]
+    ));
+  };
+
+  const togglePreview = (key: string) => {
+    setPreviewKeys(current => (current.includes(key) ? current.filter(item => item !== key) : [...current, key]));
+  };
+
+  const renderZoneTransfers = () => {
+    const current = zoneTransferGroups.filter(group => group.isCurrentSchool);
+    const otherSchools: Array<{ branchFilter: string; label: string; points: number; groups: typeof zoneTransferGroups }> = [];
+    zoneTransferGroups.filter(group => !group.isCurrentSchool).forEach(group => {
+      const school = otherSchools.find(item => item.branchFilter === group.branchFilter);
+      if (school) {
+        school.groups.push(group);
+        school.points += group.pointsInZone;
+      } else {
+        otherSchools.push({ branchFilter: group.branchFilter, label: group.schoolLabel, points: group.pointsInZone, groups: [group] });
+      }
+    });
+    otherSchools.sort((a, b) => b.points - a.points || a.label.localeCompare(b.label));
+    const renderGroup = (group: typeof zoneTransferGroups[number], nested = false) => {
+      const shown = previewKeys.includes(group.key);
+      return (
+        <div
+          key={group.key}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '8px minmax(0, 1fr) auto',
+            alignItems: 'center',
+            gap: 9,
+            padding: '7px 8px',
+            borderRadius: 8,
+            background: shown ? '#F4F7FB' : 'transparent',
+          }}
+        >
+          <span style={{ width: 8, height: 8, borderRadius: 999, background: shown ? previewColor(group.key) : '#C4CED3' }} />
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: 'block', color: '#253342', fontSize: 12.5, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+              {nested ? '' : `${group.schoolLabel} · `}{group.transferNumber ? `Трансфер №${group.transferNumber}` : 'Без трансфера'}
+            </span>
+            <span style={{ display: 'block', marginTop: 1, color: '#7A859D', fontSize: 11 }}>
+              {group.pointsInZone} из {group.totalPoints} точек в зоне · детей {group.childrenInZone}
+            </span>
+          </span>
+          <button
+            type="button"
+            title={shown ? 'Скрыть маршрут' : 'Показать весь маршрут на карте (просмотр)'}
+            onClick={() => togglePreview(group.key)}
+            style={{ ...toolbarButtonStyle(shown), minHeight: 28, padding: '2px 8px', display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 11.5 }}
+          >
+            {shown ? <EyeOff size={13} /> : <Eye size={13} />}
+            {shown ? 'Скрыть' : 'Показать'}
+          </button>
+        </div>
+      );
+    };
+    const sectionTitle = (text: string) => (
+      <div style={{ padding: '8px 8px 3px', color: '#7A859D', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{text}</div>
+    );
+
+    return (
+      <div style={{ margin: '6px 0 2px', padding: '8px 6px 6px', border: '1px solid #E1E8EA', borderRadius: 10, background: '#fff' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 4px 4px' }}>
+          <span style={{ color: '#253342', fontSize: 12.5, fontWeight: 800 }}>Трансферы в зоне</span>
+          {previewKeys.length > 0 && (
+            <button type="button" onClick={() => setPreviewKeys([])} style={{ border: 'none', background: 'none', color: '#2A8F90', fontSize: 11.5, fontWeight: 750, cursor: 'pointer', padding: 0 }}>
+              Скрыть все
+            </button>
+          )}
+        </div>
+        {rows === null ? (
+          <div style={{ padding: '10px 6px', color: '#7A859D', fontSize: 12 }}>Загрузка…</div>
+        ) : zoneTransferGroups.length === 0 ? (
+          <div style={{ padding: '10px 6px', color: '#7A859D', fontSize: 12 }}>В этой зоне нет адресов</div>
+        ) : (
+          <>
+            {current.length > 0 && sectionTitle('Эта школа')}
+            {current.map(group => renderGroup(group))}
+            {otherSchools.length > 0 && sectionTitle(`Другие школы · ${otherSchools.length}`)}
+            {otherSchools.map(school => {
+              const expanded = expandedZoneSchools.includes(school.branchFilter);
+              const shownCount = school.groups.filter(group => previewKeys.includes(group.key)).length;
+              return (
+                <div key={school.branchFilter}>
+                  <button
+                    type="button"
+                    aria-expanded={expanded}
+                    onClick={() => toggleZoneSchool(school.branchFilter)}
+                    style={{
+                      width: '100%',
+                      display: 'grid',
+                      gridTemplateColumns: '14px minmax(0, 1fr) auto',
+                      alignItems: 'center',
+                      gap: 7,
+                      padding: '7px 8px',
+                      border: 'none',
+                      borderRadius: 8,
+                      background: expanded ? '#F5F8F9' : 'transparent',
+                      cursor: 'pointer',
+                      textAlign: 'left',
+                    }}
+                  >
+                    <ChevronRight size={14} style={{ color: '#7A859D', transition: 'transform 140ms ease', transform: expanded ? 'rotate(90deg)' : 'none' }} />
+                    <span style={{ minWidth: 0, color: '#253342', fontSize: 12.5, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {school.label}
+                      <span style={{ marginLeft: 6, color: '#7A859D', fontSize: 11, fontWeight: 600 }}>
+                        {school.groups.length} {plural(school.groups.length, 'трансфер', 'трансфера', 'трансферов')} · {school.points} {plural(school.points, 'точка', 'точки', 'точек')}
+                      </span>
+                    </span>
+                    {shownCount > 0 && (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#2A8F90', fontSize: 11, fontWeight: 750 }}>
+                        <Eye size={12} /> {shownCount}
+                      </span>
+                    )}
+                  </button>
+                  {expanded && (
+                    <div style={{ marginLeft: 12, paddingLeft: 4, borderLeft: '1px solid #E4ECEE' }}>
+                      {school.groups.map(group => renderGroup(group, true))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+    );
+  };
+
+  // Слой «только просмотр»: весь маршрут выбранных трансферов тусклыми точками, без редактирования.
+  useEffect(() => {
+    const map = mapRef.current;
+    const ymaps = ymapsRef.current;
+    if (!map || !ymaps) return;
+    const previewPlacemarks = previewPlacemarksRef.current;
+
+    const groups = new Map<string, typeof previewRows>();
+    previewRows.forEach(row => {
+      const key = `${zoneTransferKey(row.branchFilter, row.transferNumber || null)}@${addressKey(row.latitude, row.longitude)}`;
+      const group = groups.get(key);
+      if (group) group.push(row);
+      else groups.set(key, [row]);
+    });
+
+    previewPlacemarks.forEach((placemark, key) => {
+      if (!groups.has(key)) {
+        map.geoObjects.remove(placemark);
+        previewPlacemarks.delete(key);
+      }
+    });
+
+    groups.forEach((group, key) => {
+      const first = group[0];
+      const transferKey = zoneTransferKey(first.branchFilter, first.transferNumber || null);
+      const color = PREVIEW_COLORS[Math.max(0, previewKeys.indexOf(transferKey)) % PREVIEW_COLORS.length];
+      const school = schoolLabelFor(first.branchFilter, first.branchShort);
+      const transferLabel = first.transferNumber ? `Трансфер №${first.transferNumber}` : 'Без трансфера';
+      const children = group.map(row => (
+        `<div style="margin-top:6px;">${escapeHtml(row.childName)}${row.stopNumber ? ` <span style="color:#7A859D;">· остановка ${escapeHtml(row.stopNumber)}</span>` : ''}</div>`
+      )).join('');
+      const properties = {
+        iconContent: first.transferNumber || undefined,
+        hintContent: `${escapeHtml(school)} · ${transferLabel} · просмотр`,
+        balloonContentHeader: `${escapeHtml(school)} · ${transferLabel}`,
+        balloonContentBody: `<div style="color:#7A859D;font-size:11px;margin-bottom:4px;">Только просмотр</div>${escapeHtml(first.streetAddress || '')}${children}`,
+      };
+      const options = { preset: 'islands#circleIcon', iconColor: dimColor(color), zIndex: 1 };
+      const existing = previewPlacemarks.get(key);
+      if (existing) {
+        existing.properties.set(properties);
+        existing.options.set(options);
+      } else {
+        const placemark = new ymaps.Placemark([first.latitude, first.longitude], properties, options);
+        previewPlacemarks.set(key, placemark);
+        map.geoObjects.add(placemark);
+      }
+    });
+  }, [mapReady, previewKeys, previewRows]);
+
   if (error) {
     return (
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#B91C1C', fontSize: 14, fontWeight: 600 }}>
@@ -711,8 +951,8 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                       ) : (
                         <div style={{ display: 'grid', gap: 7, marginTop: 9 }}>
                           {zones.map(zone => (
+                            <div key={zone.id}>
                             <div
-                              key={zone.id}
                               onClick={() => setSelectedZoneId(zone.id)}
                               style={{
                                 display: 'grid',
@@ -736,7 +976,18 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                               <span style={{ display: 'flex', gap: 4 }}>
                                 <button type="button" title="Редактировать" onClick={event => { event.stopPropagation(); startEditingZone(zone); }} style={{ ...toolbarButtonStyle(), minHeight: 30, padding: '3px 8px' }}>✎</button>
                                 <button type="button" title="Удалить" disabled={zoneBusy} onClick={event => { event.stopPropagation(); void removeZone(zone); }} style={{ ...toolbarButtonStyle(), minHeight: 30, padding: '3px 8px', color: '#B64848' }}>×</button>
+                                <button
+                                  type="button"
+                                  title="Трансферы в зоне"
+                                  aria-expanded={transfersZoneId === zone.id}
+                                  onClick={event => { event.stopPropagation(); toggleZoneTransfers(zone.id); }}
+                                  style={{ ...toolbarButtonStyle(transfersZoneId === zone.id), minHeight: 30, padding: '3px 7px', display: 'inline-flex', alignItems: 'center' }}
+                                >
+                                  <Route size={15} />
+                                </button>
                               </span>
+                            </div>
+                            {transfersZoneId === zone.id && renderZoneTransfers()}
                             </div>
                           ))}
                         </div>
