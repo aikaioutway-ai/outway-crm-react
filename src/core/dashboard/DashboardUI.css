@@ -157,3 +157,31 @@
   .dashboard-kpi { padding: 10px; }
   .dashboard-kpi-icon { width: 34px; height: 34px; }
 }
+
+/* Keep the cashier toolbar controls on one compact, aligned baseline. */
+.cashier-control-row {
+  align-items: center;
+  gap: 8px;
+  padding: 8px 14px;
+}
+.cashier-control-row > div,
+.cashier-control-row > div > div:first-child {
+  height: 34px !important;
+  box-sizing: border-box;
+}
+.cashier-control-row > div > div:first-child {
+  border-radius: 12px !important;
+}
+.cashier-control-row > div:nth-child(2) > div {
+  padding: 3px !important;
+}
+.cashier-control-row > div:nth-child(2) button {
+  height: 26px !important;
+}
+.cashier-control-row > details > summary {
+  width: 34px !important;
+  height: 34px !important;
+  box-sizing: border-box;
+  line-height: 30px !important;
+  border-radius: 12px !important;
+}

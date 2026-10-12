@@ -300,7 +300,7 @@ export default function CashierOverview({ periodKey, onPeriodKeyChange, onSelect
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <DashboardTopPanel className="dashboard-control-row">
+        <DashboardTopPanel className="dashboard-control-row cashier-control-row">
           <SchoolTierTabs value={schoolTier} onChange={setSchoolTier} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
