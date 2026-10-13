@@ -1,0 +1,273 @@
+/* Мобильный интерфейс CRM. Экран не прокручивается целиком: шапка и нижнее
+   меню стоят на месте, прокручивается только область контента. */
+
+.m-app {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: #F2F6F8;
+  color: var(--text);
+  overflow: hidden;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* Сброс без веса селектора: классы ниже всегда его перекрывают. */
+:where(.m-app) :where(button) { font: inherit; color: inherit; border: 0; background: none; padding: 0; }
+:where(.m-app) :where(a) { color: inherit; text-decoration: none; }
+/* 16px — иначе iPhone приближает страницу при фокусе на поле. */
+.m-app input, .m-app select, .m-app textarea { font-size: 16px; }
+
+/* ── Шапка ─────────────────────────────────────────────────────── */
+.m-header {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 56px;
+  padding: calc(env(safe-area-inset-top) + 6px) 12px 6px;
+  background: #FFFFFF;
+  border-bottom: 1px solid var(--border);
+}
+.m-header-back {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 12px;
+  color: var(--accent-h);
+  margin-left: -6px;
+}
+.m-header-back:active { background: var(--surface-2); }
+.m-header-titles { flex: 1; min-width: 0; }
+.m-header-title { font-size: 18px; font-weight: 800; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-header-subtitle { font-size: 12px; color: var(--text-2); font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-header-action { flex-shrink: 0; }
+
+/* ── Контент ───────────────────────────────────────────────────── */
+.m-content {
+  flex: 1;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.m-page {
+  min-height: 100%;
+  padding: 12px 12px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  animation: m-page-in .22s ease-out;
+}
+.m-page--back { animation-name: m-page-back; }
+.m-page > *, .m-sheet-body > *, .m-list > * { flex-shrink: 0; }
+@keyframes m-page-in { from { opacity: 0; transform: translateX(24px); } to { opacity: 1; transform: none; } }
+@keyframes m-page-back { from { opacity: 0; transform: translateX(-24px); } to { opacity: 1; transform: none; } }
+
+/* ── Нижнее меню ───────────────────────────────────────────────── */
+.m-tabbar {
+  flex-shrink: 0;
+  display: flex;
+  background: #FFFFFF;
+  border-top: 1px solid var(--border);
+  padding: 4px 4px calc(env(safe-area-inset-bottom) + 4px);
+}
+.m-tab {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 6px 2px;
+  border-radius: 12px;
+  color: #8792A6;
+  font-size: 10.5px;
+  font-weight: 700;
+  position: relative;
+}
+.m-tab span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-tab--active { color: var(--accent-h); }
+.m-tab--active svg { stroke-width: 2.4; }
+.m-tab-badge {
+  position: absolute; top: 2px; left: 50%; margin-left: 6px;
+  min-width: 18px; height: 18px; padding: 0 5px;
+  border-radius: 9px; background: var(--danger); color: #fff;
+  font-size: 10.5px; font-weight: 800; line-height: 18px; text-align: center;
+}
+
+/* ── Поиск, вкладки, фильтры ───────────────────────────────────── */
+.m-search {
+  display: flex; align-items: center; gap: 8px;
+  height: 44px; padding: 0 12px;
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  color: var(--text-2);
+}
+.m-search input { flex: 1; min-width: 0; height: 100%; border: 0; outline: 0; background: transparent; color: var(--text); }
+.m-search input::-webkit-search-cancel-button { -webkit-appearance: none; appearance: none; }
+.m-search-clear { width: 28px; height: 28px; display: grid; place-items: center; border-radius: 50%; background: var(--surface-2); }
+
+.m-segment {
+  display: flex; padding: 3px; gap: 3px;
+  background: #E3ECEF; border-radius: 13px;
+}
+.m-segment button {
+  flex: 1; min-width: 0; height: 36px;
+  border-radius: 10px;
+  font-size: 13.5px; font-weight: 700; color: var(--text-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.m-segment button.is-active { background: #FFFFFF; color: var(--text); box-shadow: 0 1px 4px rgba(23, 34, 47, .12); }
+
+.m-chips {
+  position: relative;
+  display: flex; gap: 6px;
+  overflow-x: auto; overflow-y: hidden;
+  margin: 0 -12px; padding: 0 12px 2px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.m-chips::-webkit-scrollbar { display: none; }
+.m-chip {
+  flex-shrink: 0;
+  height: 34px; padding: 0 13px;
+  border-radius: 17px;
+  background: #FFFFFF;
+  border: 1px solid var(--border);
+  font-size: 13px; font-weight: 700; color: var(--text-2);
+  white-space: nowrap;
+}
+.m-chip b { margin-left: 5px; font-weight: 800; color: var(--text); }
+.m-chip.is-active { background: var(--accent-h); border-color: var(--accent-h); color: #fff; }
+.m-chip.is-active b { color: #fff; }
+
+/* ── Карточки и списки ─────────────────────────────────────────── */
+.m-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.m-kpi { background: #FFFFFF; border-radius: 16px; padding: 12px; border: 1px solid #E3ECEF; min-width: 0; }
+.m-kpi-value { font-size: 22px; font-weight: 800; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.m-kpi-label { font-size: 12px; color: var(--text-2); font-weight: 600; margin-top: 2px; }
+
+.m-section-title { font-size: 13px; font-weight: 800; color: var(--text-2); text-transform: uppercase; letter-spacing: .02em; padding: 4px 4px 0; }
+
+.m-list { display: flex; flex-direction: column; gap: 8px; }
+.m-card {
+  display: block; width: 100%; min-width: 0;
+  text-align: left;
+  background: #FFFFFF;
+  border: 1px solid #E3ECEF;
+  border-radius: 16px;
+  padding: 12px 14px;
+  transition: transform .12s ease, background .12s ease;
+}
+button.m-card:active { transform: scale(.985); background: var(--surface-2); }
+.m-card-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.m-card-main { flex: 1; min-width: 0; }
+.m-card-title { font-size: 15px; font-weight: 800; line-height: 1.3; overflow-wrap: anywhere; }
+.m-card-sub { font-size: 12.5px; color: var(--text-2); font-weight: 600; line-height: 1.4; margin-top: 2px; overflow-wrap: anywhere; }
+.m-card-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.m-card-end { flex-shrink: 0; text-align: right; }
+.m-card-chevron { flex-shrink: 0; color: #A7B2C3; }
+
+.m-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  height: 22px; padding: 0 8px;
+  border-radius: 11px;
+  font-size: 11.5px; font-weight: 800;
+  background: var(--surface-2); color: var(--text-2);
+  white-space: nowrap;
+}
+
+.m-stats { display: flex; gap: 14px; margin-top: 8px; }
+.m-stat b { display: block; font-size: 16px; font-weight: 800; line-height: 1.2; }
+.m-stat span { font-size: 11px; color: var(--text-2); font-weight: 600; }
+
+.m-empty, .m-loading { padding: 40px 16px; text-align: center; color: var(--text-2); font-weight: 600; font-size: 14px; }
+.m-error { padding: 12px 14px; border-radius: 14px; background: #FBEAE9; color: #B3261E; font-size: 13px; font-weight: 700; }
+.m-note { padding: 12px 14px; border-radius: 14px; background: #FFFFFF; border: 1px dashed var(--border); color: var(--text-2); font-size: 13px; font-weight: 600; line-height: 1.45; }
+.m-more { height: 1px; }
+
+.m-skeleton { height: 76px; border-radius: 16px; background: linear-gradient(90deg, #E8EEF1 0%, #F4F7F9 50%, #E8EEF1 100%); background-size: 200% 100%; animation: m-shimmer 1.2s linear infinite; }
+@keyframes m-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* ── Кнопки ────────────────────────────────────────────────────── */
+.m-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 44px; padding: 0 16px;
+  border-radius: 13px;
+  font-size: 14.5px; font-weight: 800;
+  background: var(--surface-2); color: var(--text);
+  white-space: nowrap;
+}
+.m-btn:disabled { opacity: .5; }
+.m-btn--primary { background: var(--accent-h); color: #fff; }
+.m-btn--danger { background: #FBEAE9; color: #B3261E; }
+.m-btn--block { width: 100%; }
+.m-btn-row { display: flex; gap: 8px; }
+.m-btn-row > * { flex: 1; min-width: 0; }
+
+.m-icon-btn { width: 40px; height: 40px; display: grid; place-items: center; border-radius: 12px; background: var(--surface-2); color: var(--accent-h); flex-shrink: 0; }
+
+/* ── Нижний лист (карточка семьи, подтверждения) ───────────────── */
+.m-sheet-backdrop {
+  position: fixed; inset: 0; z-index: 50;
+  background: rgba(23, 34, 47, .38);
+  animation: m-fade .2s ease-out;
+}
+@keyframes m-fade { from { opacity: 0; } to { opacity: 1; } }
+.m-sheet {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 51;
+  max-height: calc(100dvh - env(safe-area-inset-top) - 24px);
+  display: flex; flex-direction: column;
+  background: #F2F6F8;
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 40px rgba(23, 34, 47, .18);
+  animation: m-sheet-up .26s cubic-bezier(.2, .8, .2, 1);
+}
+.m-sheet--full { height: calc(100dvh - env(safe-area-inset-top) - 24px); }
+@keyframes m-sheet-up { from { transform: translateY(100%); } to { transform: none; } }
+.m-sheet-grip { flex-shrink: 0; display: flex; justify-content: center; padding: 8px 0 2px; touch-action: none; }
+.m-sheet-grip::before { content: ''; width: 40px; height: 5px; border-radius: 3px; background: #C5D0D8; }
+.m-sheet-head { flex-shrink: 0; display: flex; align-items: center; gap: 10px; padding: 4px 14px 10px; }
+.m-sheet-title { flex: 1; min-width: 0; font-size: 18px; font-weight: 800; line-height: 1.25; overflow-wrap: anywhere; }
+.m-sheet-body {
+  flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: hidden;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 12px calc(env(safe-area-inset-bottom) + 16px);
+  display: flex; flex-direction: column; gap: 10px;
+}
+
+.m-info { background: #FFFFFF; border-radius: 16px; border: 1px solid #E3ECEF; overflow: hidden; }
+.m-info-row { display: flex; align-items: center; gap: 10px; padding: 11px 14px; min-height: 48px; }
+.m-info-row + .m-info-row { border-top: 1px solid #EDF2F4; }
+.m-info-label { font-size: 12px; color: var(--text-2); font-weight: 600; }
+.m-info-value { font-size: 14.5px; font-weight: 700; overflow-wrap: anywhere; }
+.m-info-main { flex: 1; min-width: 0; }
+
+.m-field { display: flex; flex-direction: column; gap: 6px; }
+.m-field label { font-size: 12.5px; font-weight: 700; color: var(--text-2); }
+.m-field input, .m-field select, .m-field textarea {
+  width: 100%; height: 46px; padding: 0 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: #FFFFFF; color: var(--text);
+}
+
+.m-status-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.m-status-picker button {
+  height: 38px; border-radius: 11px;
+  font-size: 12.5px; font-weight: 800;
+  border: 1px solid var(--border); background: #FFFFFF; color: var(--text-2);
+}
+.m-status-picker button:disabled { opacity: .55; }
+
+.m-month { display: flex; align-items: center; gap: 8px; }
+.m-month-label { flex: 1; text-align: center; font-size: 16px; font-weight: 800; }
+
+@media (prefers-reduced-motion: reduce) {
+  .m-page, .m-sheet, .m-sheet-backdrop { animation: none; }
+  .m-skeleton { animation: none; }
+}

@@ -33,14 +33,14 @@ export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReser
       ['rejected', 'Отказ', children.filter(row => row.status === 'rejected').length],
       ['unboarded', 'В трансфере, не посажены', children.filter(row => !!row.transferNumber && row.status !== 'boarded' && row.status !== 'rejected').length],
     ] as const;
-    return <div className="school-mobile-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
+    return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
       <KpiChip iconBackground="transparent" icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} />} label="Школа" value={stat.label} color={stat.color} />
       {metrics.map(([key, label, count]) => <KpiChip key={key} icon={null} label={label} value={String(count)} color={DIRECTORY_COLORS[key]} />)}
     </div>;
   }
 
   return (
-    <div className="school-mobile-kpis" style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
       <KpiChip
         iconBackground="transparent"
         icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} size={38} radius={11} fontSize={12} />}

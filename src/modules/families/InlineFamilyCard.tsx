@@ -616,7 +616,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       : '';
 
   return (
-    <div className="family-mobile-card" style={modalStyle()}>
+    <div style={modalStyle()}>
       <aside style={sidebarRailStyle}>
           <nav style={railNavStyle}>
             {TABS.filter(item => {
@@ -709,7 +709,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           </div>
         </header>
 
-        <div className="family-mobile-body" style={contentBodyStyle}>
+        <div style={contentBodyStyle}>
           {tab === 'overview' && (
             <div style={{ display: 'grid', gap: 10 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
@@ -1108,7 +1108,7 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
           <button type="button" onClick={onClose} disabled={Boolean(busy)} aria-label="Закрыть" style={closeButtonStyle}><X size={17} /></button>
         </header>
 
-        <div className="family-address-body" style={addressModalBodyStyle}>
+        <div style={addressModalBodyStyle}>
           <div style={addressModalFormPaneStyle}>
             <form onSubmit={searchAddress} style={{ display: 'grid', gap: 12 }}>
               <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F' }}>Адрес проживания</div>

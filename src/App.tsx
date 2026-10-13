@@ -37,6 +37,7 @@ import { UserRole } from './types';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
 import { invalidateFamiliesCache } from './services/crmV2Service';
+import { useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
 import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
@@ -48,6 +49,7 @@ const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
+const MobileApp = lazy(() => import('./mobile/MobileApp'));
 
 function SectionLoading() {
   return (
@@ -88,6 +90,9 @@ function getSavedUser(): AuthenticatedUser | null {
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => getSavedUser());
   const currentUserRole = currentUser?.role ?? getSavedRole();
+  const isMobileViewport = useIsMobileViewport();
+  const [forceDesktop, setForceDesktop] = useForceDesktop();
+  useDesktopViewport(isMobileViewport && forceDesktop && !!currentUser);
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole, currentUser?.id)[0]);
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
@@ -384,8 +389,16 @@ export default function App() {
     return <LoginPage onLogin={handleLogin} />;
   }
 
+  if (isMobileViewport && !forceDesktop) {
+    return (
+      <Suspense fallback={<SectionLoading />}>
+        <MobileApp user={currentUser} onLogout={handleLogout} onOpenDesktop={() => setForceDesktop(true)} />
+      </Suspense>
+    );
+  }
+
   return (
-    <div className="crm-shell" style={{ display: 'flex', height: '100%', background: 'var(--active-bg)' }}>
+    <div style={{ display: 'flex', height: '100%', background: 'var(--active-bg)' }}>
       <Sidebar
         active={section === 'drivers' ? 'logistics' : section}
         onChange={setSection}
@@ -401,7 +414,6 @@ export default function App() {
       />
 
       <main
-        className="crm-main"
         onClick={() => setSidebarCollapseSignal(value => value + 1)}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: 10, background: 'var(--active-bg)' }}
       >
@@ -808,6 +820,17 @@ export default function App() {
         )}
         </Suspense>
       </main>
+      {isMobileViewport && (
+        <button
+          type="button"
+          onClick={() => setForceDesktop(false)}
+          // Страница здесь шириной 1280px и уменьшена под экран — кнопку увеличиваем,
+          // чтобы на телефоне она оставалась обычного размера.
+          style={{ position: 'fixed', zIndex: 2000, left: '50%', bottom: 24, transform: `translateX(-50%) scale(${Math.max(1, 1280 / (window.screen?.width || 1280))})`, transformOrigin: 'bottom center', height: 44, padding: '0 18px', border: 0, borderRadius: 22, background: 'var(--accent-h)', color: '#fff', fontSize: 14, fontWeight: 800, boxShadow: '0 8px 24px rgba(23, 34, 47, .25)' }}
+        >
+          Мобильная версия
+        </button>
+      )}
     </div>
   );
 }

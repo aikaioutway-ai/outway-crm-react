@@ -1,17 +1,9 @@
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Building2, Bus, CircleUserRound, Route, School, ReceiptText, RotateCcw, Gift, Banknote, LockKeyhole, WalletCards, Pencil, Plus, Trash2, X } from 'lucide-react';
-import { createExpense, deleteExpense, fetchExpenses, updateExpense } from '../../services/expenseService';
-import {
-  fetchV2DriverAdvancesForPeriod,
-  fetchV2DriversTable,
-  fetchV2PayrollEntriesForPeriod,
-  V2DriverAdvance,
-  V2DriverTableRow,
-  V2PayrollEntry,
-} from '../../services/crmV2Service';
+import { createExpense, deleteExpense, updateExpense } from '../../services/expenseService';
+import { loadExpenseRows, periodBounds } from './expenseRows';
 import EmployeeAdvanceModal from './EmployeeAdvanceModal';
-import { fetchAllEmployeeAdvances, fetchEmployees } from '../../services/employeeService';
-import { Employee, UserRole } from '../../types';
+import { UserRole } from '../../types';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { CASHIER_PERIODS, currentCashierPeriodKey } from '../families/constants';
 import {
@@ -47,68 +39,6 @@ const today = () => {
   const local = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
   return local.toISOString().slice(0, 10);
 };
-
-function periodBounds(month: number, year: number) {
-  const first = `${year}-${String(month + 1).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month + 1, 0).getDate();
-  return { first, last: `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}` };
-}
-
-function payrollPeriodDate(month: number, year: number): string {
-  const day = new Date(year, month, 0).getDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
-function systemExpenseRows(
-  entries: V2PayrollEntry[],
-  advances: V2DriverAdvance[],
-  drivers: V2DriverTableRow[],
-  employees: Employee[],
-): ExpenseRecord[] {
-  const driverById = new Map(drivers.map(driver => [driver.driverId, driver]));
-  const employeeById = new Map(employees.map(employee => [employee.id, employee]));
-
-  const salaryRows = entries.filter(entry => entry.salaryAmount > 0).map(entry => {
-    const person = entry.subjectType === 'driver'
-      ? driverById.get(entry.subjectId)?.fullName
-      : employeeById.get(entry.subjectId)?.fullName;
-    const updatedDate = entry.updatedAt?.slice(0, 10) ?? '';
-    const expenseDate = /^\d{4}-\d{2}-\d{2}$/.test(updatedDate)
-      ? updatedDate
-      : payrollPeriodDate(entry.periodMonth, entry.periodYear);
-    return {
-      id: `salary-${entry.id}`,
-      name: `Зарплата — ${person || 'сотрудник'}`,
-      category: entry.subjectType === 'driver' ? 'school' as const : 'office' as const,
-      subcategory: 'Зарплата',
-      unitPrice: entry.salaryAmount,
-      quantity: 1,
-      amount: entry.salaryAmount,
-      expenseDate,
-      paymentMethod: 'cashless' as const,
-      comment: `Системная выплата за ${String(entry.periodMonth).padStart(2, '0')}.${entry.periodYear}`,
-      createdAt: entry.updatedAt,
-      source: 'salary' as const,
-    };
-  });
-
-  const advanceRows = advances.filter(advance => advance.amount > 0).map(advance => ({
-    id: `advance-${advance.id}`,
-    name: `Аванс — ${driverById.get(advance.driverId)?.fullName || 'водитель'}`,
-    category: 'school' as const,
-    subcategory: 'Аванс',
-    unitPrice: advance.amount,
-    quantity: 1,
-    amount: advance.amount,
-    expenseDate: advance.date,
-    paymentMethod: 'cashless' as const,
-    comment: advance.comment || 'Системная выплата из раздела «Зарплата»',
-    createdAt: advance.createdAt,
-    source: 'advance' as const,
-  }));
-
-  return [...salaryRows, ...advanceRows];
-}
 
 function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
   rows: ExpenseRecord[];
@@ -269,26 +199,8 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
     let active = true;
     setLoading(true);
     setLoadError('');
-    Promise.all([
-      fetchExpenses(bounds.first, bounds.last, sessionToken),
-      Promise.all(selectedPeriods.map(period => fetchV2PayrollEntriesForPeriod(period.month, period.year, sessionToken))).then(result => result.flat()),
-      Promise.all(selectedPeriods.map(period => fetchV2DriverAdvancesForPeriod(period.month, period.year))).then(result => result.flat()),
-      fetchV2DriversTable(),
-      fetchEmployees(),
-      fetchAllEmployeeAdvances(),
-    ]).then(([manualRows, payrollEntries, advances, drivers, employees, employeeAdvances]) => {
+    loadExpenseRows({ first: bounds.first, last: bounds.last }, selectedPeriods, sessionToken).then(combined => {
       if (!active) return;
-      const combined = [
-        ...manualRows.map(row => ({ ...row, source: 'manual' as const })),
-        ...systemExpenseRows(payrollEntries, advances, drivers, employees),
-        ...employeeAdvances.filter(row => row.date >= bounds.first && row.date <= bounds.last).map(row => ({
-          id: `employee-advance-${row.id}`, name: `Аванс — ${employees.find(employee => employee.id === row.employeeId)?.fullName || 'сотрудник'}`,
-          category: row.schoolKey && row.schoolKey !== 'OFFICE' ? 'school' as const : 'office' as const, subcategory: 'Аванс',
-          unitPrice: row.amount, quantity: 1, amount: row.amount, expenseDate: row.date,
-          paymentMethod: row.paymentMethod === 'cash' ? 'cash' as const : 'cashless' as const, paymentOrderNumber: row.paymentOrderNumber,
-          comment: `За ${String(row.periodMonth).padStart(2, '0')}.${row.periodYear} · ${row.comment}`, createdAt: row.createdAt, source: 'advance' as const,
-        })),
-      ].sort((a, b) => b.expenseDate.localeCompare(a.expenseDate) || b.createdAt.localeCompare(a.createdAt));
       setRows(combined);
     }).catch(reason => {
       if (active) setLoadError(reason instanceof Error ? reason.message : 'Не удалось загрузить расходы');
