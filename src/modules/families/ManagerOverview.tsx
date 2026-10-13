@@ -13,7 +13,7 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewFamilyModal from './NewFamilyModal';
-import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
+import { DashboardTopPanel, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { formatName } from '../../utils/format';
 import { isNewUnassignedRow } from './familiesRowHelpers';
 
