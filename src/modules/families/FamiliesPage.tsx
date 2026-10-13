@@ -26,7 +26,7 @@ import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
 import { Check, ChevronDown, ChevronUp, Copy, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
-import { formatClassName, formatName, formatPhone } from '../../utils/format';
+import { formatClassName, formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
 import {
@@ -1744,6 +1744,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, [rowMatchesSchoolTab, tab]);
   const matchesSearch = useCallback((r: ChildRow) => {
     if (search) {
+      if (phoneMatchesQuery(search, r.phone, r.secondPhone, r.contactPhone)) return true;
       const q = search.toLowerCase().replace(/\s+/g, '');
       const haystack = Object.values(r)
         .map(value => String(value ?? '').toLowerCase())
@@ -2012,6 +2013,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         if (!transferNumbers.includes(quickTransfer)) return false;
       }
       if (!q) return true;
+      if (phoneMatchesQuery(q, row.phone, row.secondPhone)) return true;
       return [
         row.fullName,
         row.phone,
@@ -3319,7 +3321,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 if (quickTransfer && quickTransfer !== 'empty' && r.transferNumber !== quickTransfer) return false;
                 if (!search) return true;
                 const q = search.toLowerCase().replace(/\s+/g, '');
-                return [r.parentName, r.phone, r.childrenNames, r.branchShort].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
+                return phoneMatchesQuery(search, r.phone) || [r.parentName, r.phone, r.childrenNames, r.branchShort].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
               })}
               rowKey="id"
               storageKey="cashier_table_v1"
@@ -3358,7 +3360,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }
                 if (!search) return true;
                 const q = search.toLowerCase().replace(/\s+/g, '');
-                return [r.parentName, r.phone, r.childrenNames].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
+                return phoneMatchesQuery(search, r.phone) || [r.parentName, r.phone, r.childrenNames].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
               })}
               rowKey="id"
               storageKey="payments_table_v1"

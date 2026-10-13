@@ -3,7 +3,7 @@ import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
-import { formatName, formatPhone } from '../utils/format';
+import { formatName, formatPhone, phoneQueryDigits } from '../utils/format';
 import {
   buildTransferRepricingPlan,
   PricingManagedChargeSnapshot,
@@ -741,7 +741,9 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
   }
   const { data, error } = await supabase.rpc('get_families_page', {
     p_branch_ids: params.branchIds ?? null,
-    p_search: params.search || null,
+    // Телефоны в базе записаны без пробелов, но с разными префиксами —
+    // для номера отправляем только значимые цифры.
+    p_search: phoneQueryDigits(params.search) ?? (params.search || null),
     p_child_status: params.childStatus || null,
     p_has_transfer: params.hasTransfer ?? null,
     p_transfer_number: params.transferNumber ?? null,

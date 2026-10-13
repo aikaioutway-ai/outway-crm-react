@@ -11,6 +11,7 @@ import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { queryClient, QK } from '../../services/queryClient';
 import { Family, VehicleType } from '../../types';
 import { loadYandexMaps } from '../../utils/yandexMaps';
+import { phoneMatchesQuery } from '../../utils/format';
 import {
   createRouteZone,
   deleteRouteZone,
@@ -575,7 +576,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase().replace(/\s+/g, '');
-    const baseRows = (rows ?? []).filter(row => (schoolKey ? row.branchFilter === schoolKey : isSchoolAllowed(row.branchFilter, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)) && (!query || [row.parentName, row.childName, row.phone, row.streetAddress]
+    const baseRows = (rows ?? []).filter(row => (schoolKey ? row.branchFilter === schoolKey : isSchoolAllowed(row.branchFilter, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)) && (!query || phoneMatchesQuery(search, row.phone, row.secondPhone) || [row.parentName, row.childName, row.phone, row.streetAddress]
       .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query))));
     if (transferFilter === 'rejected') {
       return baseRows.filter(row => row.status === 'rejected');

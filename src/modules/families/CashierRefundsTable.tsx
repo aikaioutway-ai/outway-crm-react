@@ -6,6 +6,7 @@ import { RefundTableRow } from '../../services/crmV2Service';
 import { useRefundsTable } from '../../hooks/useCrmQueries';
 import { confirmFamilyRefund, rejectFamilyRefund } from '../../services/financeService';
 import { money } from '../../utils/pricing';
+import { phoneMatchesQuery } from '../../utils/format';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
 
 interface Props {
@@ -158,7 +159,7 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
       if (!matchesSchool(row, schoolKey)) return false;
       if (!matchesPeriod(row, periodKey)) return false;
       if (!q) return true;
-      return [row.parentName, row.phone, row.childrenNames, row.branchShort].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
+      return phoneMatchesQuery(searchQuery, row.phone) || [row.parentName, row.phone, row.childrenNames, row.branchShort].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
     });
   }, [rows, schoolKey, periodKey, searchQuery]);
 
