@@ -7,13 +7,14 @@ import { ChevronLeft } from 'lucide-react';
  */
 export type NavEntry =
   | { kind: 'school'; schoolKey: string }
+  | { kind: 'transfer'; schoolKey: string; transfer: string }
   | { kind: 'drivers' }
   | { kind: 'employees' }
   | { kind: 'family'; familyId: string; sheet: true }
   | { kind: 'driver'; driverId: string; sheet: true }
   | { kind: 'employee'; employeeId: string; sheet: true }
   | { kind: 'payment'; paymentId: string; sheet: true }
-  | { kind: 'expense'; expenseId: string; sheet: true };
+  | { kind: 'export'; sheet: true };
 
 interface MobileNavValue {
   stack: NavEntry[];

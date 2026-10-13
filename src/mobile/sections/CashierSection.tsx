@@ -11,6 +11,8 @@ import { QK } from '../../services/queryClient';
 import { formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { money } from '../../utils/pricing';
 import FamilySheet from '../FamilySheet';
+import { SchoolCard } from '../cards';
+import { schoolByKey, schoolsFor } from '../data';
 import { Screen, useNavPosition } from '../nav';
 import { Badge, Empty, ErrorBox, formatDate, InfoRow, Kpi, PhoneRow, SearchField, Segment, SelectField, Sheet, Skeletons, todayIso, useIncremental } from '../ui';
 
@@ -168,39 +170,59 @@ function PendingPaymentSheet({ row, userName, onClose, onOpenFamily }: {
   );
 }
 
+function isQr(method: string | null): boolean {
+  const value = String(method ?? '').toLowerCase();
+  return value === 'transfer' || value === 'card' || value.includes('qr') || value.includes('безнал');
+}
+
+const sum = (rows: { amount: number }[]) => rows.reduce((total, row) => total + row.amount, 0);
+const som = (value: number) => `${compactMoney(value)} сом`;
+
 export default function CashierSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();
   const [tab, setTab] = useState<CashierTab>('pending');
   const [query, setQuery] = useState('');
+  const [schoolQuery, setSchoolQuery] = useState('');
   const [periodKey, setPeriodKey] = useState(currentCashierPeriodKey);
 
   const pending = useQuery({ queryKey: QK.cashierPaymentsTable, queryFn: fetchCashierPaymentsTable });
   const payments = usePaymentsTable({ enabled: tab === 'confirmed' });
   const refunds = useRefundsTable({ enabled: tab === 'refunds' });
 
-  const allowed = (row: MoneyRow) => isSchoolAllowed(schoolKeyOf(row), user.schoolKeys);
-  const pendingRows = useMemo(
-    () => (pending.data ?? []).filter(row => allowed(row) && matchesPeriod(row, periodKey)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+  // Строки месяца по доступным школам — основа и для сводки, и для списков.
+  const pendingBase = useMemo(
+    () => (pending.data ?? [])
+      .filter(row => isSchoolAllowed(schoolKeyOf(row), user.schoolKeys) && matchesPeriod(row, periodKey))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [pending.data, user.schoolKeys, periodKey],
   );
-  const visiblePending = useMemo(() => pendingRows.filter(row => moneyRowMatches(row, query)), [pendingRows, query]);
-  const confirmedRows = useMemo(
+  const confirmedBase = useMemo(
     () => (payments.data ?? [])
-      .filter(row => isConfirmedPaymentStatus(row.status) && allowed(row) && matchesPeriod(row, periodKey) && moneyRowMatches(row, query))
+      .filter(row => isConfirmedPaymentStatus(row.status) && isSchoolAllowed(schoolKeyOf(row), user.schoolKeys) && matchesPeriod(row, periodKey))
       .sort((a, b) => String(b.actualPaymentDate ?? b.createdAt).localeCompare(String(a.actualPaymentDate ?? a.createdAt))),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [payments.data, query, user.schoolKeys, periodKey],
+    [payments.data, user.schoolKeys, periodKey],
   );
-  const refundRows = useMemo(
+  const refundBase = useMemo(
     () => (refunds.data ?? []).filter(row => (
-      allowed(row)
+      isSchoolAllowed(schoolKeyOf(row), user.schoolKeys)
       && matchesPeriod({ paymentDate: row.requestedAt, actualPaymentDate: null, createdAt: row.createdAt }, periodKey)
-      && moneyRowMatches(row, query)
     )),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [refunds.data, query, user.schoolKeys, periodKey],
+    [refunds.data, user.schoolKeys, periodKey],
   );
+
+  const page = nav.page;
+  const schoolKey = page?.kind === 'school' ? page.schoolKey : null;
+  const activeQuery = schoolKey ? schoolQuery : query;
+  const inScope = (row: MoneyRow) => (!schoolKey || schoolKeyOf(row) === schoolKey) && moneyRowMatches(row, activeQuery);
+  const visiblePending = useMemo(() => pendingBase.filter(inScope),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [pendingBase, schoolKey, activeQuery]);
+  const visibleConfirmed = useMemo(() => confirmedBase.filter(inScope),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [confirmedBase, schoolKey, activeQuery]);
+  const visibleRefunds = useMemo(() => refundBase.filter(inScope),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [refundBase, schoolKey, activeQuery]);
 
   const openedPayment = nav.sheet?.kind === 'payment'
     ? (pending.data ?? []).find(row => row.id === (nav.sheet as { paymentId: string }).paymentId)
@@ -219,68 +241,134 @@ export default function CashierSection({ user }: { user: AuthenticatedUser }) {
   const openFamily = (row: MoneyRow) => nav.push({ kind: 'family', familyId: row.familyId, sheet: true });
   const active = tab === 'pending' ? pending : tab === 'confirmed' ? payments : refunds;
 
+  const list = tab === 'pending' ? (
+    <MoneyList<CashierPaymentRow>
+      rows={visiblePending}
+      render={row => (
+        <MoneyCard
+          row={row}
+          date={row.paymentDate ?? row.createdAt}
+          extra={<Badge>{METHOD_LABEL[row.paymentMethod ?? ''] ?? row.paymentMethod ?? '—'}</Badge>}
+          onClick={() => nav.push({ kind: 'payment', paymentId: row.id, sheet: true })}
+        />
+      )}
+    />
+  ) : tab === 'confirmed' ? (
+    <MoneyList<PaymentTableRow>
+      rows={visibleConfirmed}
+      render={row => (
+        <MoneyCard
+          row={row}
+          date={row.actualPaymentDate ?? row.paymentDate}
+          extra={<Badge tone={{ bg: '#DCFCE7', color: '#166534' }}>{METHOD_LABEL[row.paymentMethod ?? ''] ?? 'Подтверждено'}</Badge>}
+          onClick={() => openFamily(row)}
+        />
+      )}
+    />
+  ) : (
+    <>
+      <MoneyList<RefundTableRow>
+        rows={visibleRefunds}
+        render={row => {
+          const status = REFUND_STATUS[row.status] ?? REFUND_STATUS.pending;
+          return (
+            <MoneyCard
+              row={row}
+              date={row.requestedAt}
+              extra={<><Badge tone={status}>{status.label}</Badge>{row.comment && <Badge>{row.comment}</Badge>}</>}
+              onClick={() => openFamily(row)}
+            />
+          );
+        }}
+      />
+      <div className="m-note">Подтверждение возвратов — в полной версии на компьютере.</div>
+    </>
+  );
+
+  /** Показатели для текущей вкладки — общие и по школе. */
+  const statsFor = (key: string | null) => {
+    const own = <T extends MoneyRow>(rows: T[]) => (key ? rows.filter(row => schoolKeyOf(row) === key) : rows);
+    if (tab === 'pending') {
+      const rows = own(pendingBase);
+      return [
+        { label: 'на проверке', value: rows.length, color: '#B45309' },
+        { label: 'на сумму', value: som(sum(rows)), color: '#2563EB' },
+      ];
+    }
+    if (tab === 'confirmed') {
+      const rows = own(confirmedBase);
+      return [
+        { label: 'оплачено', value: som(sum(rows)), color: '#16A34A' },
+        { label: 'QR / банк', value: som(sum(rows.filter(row => isQr(row.paymentMethod)))), color: '#1D6FA4' },
+        { label: 'наличные', value: som(sum(rows.filter(row => !isQr(row.paymentMethod)))), color: '#15803D' },
+      ];
+    }
+    const rows = own(refundBase);
+    return [
+      { label: 'на проверке', value: som(sum(rows.filter(row => row.status === 'pending'))), color: '#7C3AED' },
+      { label: 'подтверждено', value: som(sum(rows.filter(row => row.status === 'confirmed'))), color: '#16A34A' },
+    ];
+  };
+
+  const controls = (
+    <>
+      <Segment
+        value={tab}
+        onChange={value => setTab(value)}
+        options={[
+          { value: 'pending', label: `Проверка${pendingBase.length ? ` · ${pendingBase.length}` : ''}` },
+          { value: 'confirmed', label: 'Оплачено' },
+          { value: 'refunds', label: 'Возвраты' },
+        ]}
+      />
+      <SelectField label="Месяц" value={periodKey} onChange={setPeriodKey} options={PERIOD_OPTIONS} />
+    </>
+  );
+
+  if (page?.kind === 'school') {
+    const school = schoolByKey(page.schoolKey);
+    return (
+      <>
+        <Screen pageKey={`cashier:${page.schoolKey}:${tab}`} title={school?.label ?? page.schoolKey} subtitle="Кассир" onBack={nav.back}>
+          {controls}
+          <div className="m-kpis">
+            {statsFor(page.schoolKey).slice(0, 2).map(stat => <Kpi key={stat.label} label={stat.label} value={stat.value} color={stat.color} />)}
+          </div>
+          <SearchField value={schoolQuery} onChange={setSchoolQuery} placeholder="Родитель, ребёнок или телефон" />
+          {active.error && <ErrorBox>Не удалось загрузить данные. Проверьте интернет и обновите страницу.</ErrorBox>}
+          {active.isLoading && !active.data ? <Skeletons /> : list}
+        </Screen>
+        {sheet}
+      </>
+    );
+  }
+
+  const base: MoneyRow[] = tab === 'pending' ? pendingBase : tab === 'confirmed' ? confirmedBase : refundBase;
+  const schools = schoolsFor(user.schoolKeys).filter(school => base.some(row => schoolKeyOf(row) === school.key));
+
   return (
     <>
-      <Screen pageKey={`cashier:${tab}`} title="Кассир" subtitle={user.name}>
-        <Segment
-          value={tab}
-          onChange={value => { setTab(value); setQuery(''); }}
-          options={[
-            { value: 'pending', label: `Проверка${pendingRows.length ? ` · ${pendingRows.length}` : ''}` },
-            { value: 'confirmed', label: 'Оплачено' },
-            { value: 'refunds', label: 'Возвраты' },
-          ]}
-        />
-        <SelectField label="Месяц" value={periodKey} onChange={setPeriodKey} options={PERIOD_OPTIONS} />
-        <SearchField value={query} onChange={setQuery} placeholder="Родитель, ребёнок или телефон" />
+      <Screen pageKey={`cashier:home:${tab}`} title="Кассир" subtitle={user.name}>
+        {controls}
+        <SearchField value={query} onChange={setQuery} placeholder="Поиск по всем школам: родитель или телефон" />
         {active.error && <ErrorBox>Не удалось загрузить данные. Проверьте интернет и обновите страницу.</ErrorBox>}
-        {active.isLoading && !active.data ? <Skeletons /> : tab === 'pending' ? (
+        {active.isLoading && !active.data ? <Skeletons /> : query.trim() ? list : (
           <>
-            <div className="m-kpis">
-              <Kpi label="Платежей на проверке" value={pendingRows.length} color="#B45309" />
-              <Kpi label="На сумму" value={`${compactMoney(pendingRows.reduce((sum, row) => sum + row.amount, 0))} сом`} />
+            <div className={`m-kpis ${tab === 'confirmed' ? 'm-kpis--3' : ''}`}>
+              {statsFor(null).map(stat => <Kpi key={stat.label} label={stat.label} value={stat.value} color={stat.color} />)}
             </div>
-            <MoneyList<CashierPaymentRow>
-              rows={visiblePending}
-              render={row => (
-                <MoneyCard
-                  row={row}
-                  date={row.paymentDate ?? row.createdAt}
-                  extra={<Badge>{METHOD_LABEL[row.paymentMethod ?? ''] ?? row.paymentMethod ?? '—'}</Badge>}
-                  onClick={() => nav.push({ kind: 'payment', paymentId: row.id, sheet: true })}
+            <div className="m-section-title">Школы</div>
+            <div className="m-list">
+              {schools.map(school => (
+                <SchoolCard
+                  key={school.key}
+                  school={school}
+                  stats={statsFor(school.key)}
+                  onClick={() => { setSchoolQuery(''); nav.push({ kind: 'school', schoolKey: school.key }); }}
                 />
-              )}
-            />
-          </>
-        ) : tab === 'confirmed' ? (
-          <MoneyList<PaymentTableRow>
-            rows={confirmedRows}
-            render={row => (
-              <MoneyCard
-                row={row}
-                date={row.actualPaymentDate ?? row.paymentDate}
-                extra={<Badge tone={{ bg: '#DCFCE7', color: '#166534' }}>{METHOD_LABEL[row.paymentMethod ?? ''] ?? 'Подтверждено'}</Badge>}
-                onClick={() => openFamily(row)}
-              />
-            )}
-          />
-        ) : (
-          <>
-            <MoneyList<RefundTableRow>
-              rows={refundRows}
-              render={row => {
-                const status = REFUND_STATUS[row.status] ?? REFUND_STATUS.pending;
-                return (
-                  <MoneyCard
-                    row={row}
-                    date={row.requestedAt}
-                    extra={<><Badge tone={status}>{status.label}</Badge>{row.comment && <Badge>{row.comment}</Badge>}</>}
-                    onClick={() => openFamily(row)}
-                  />
-                );
-              }}
-            />
-            <div className="m-note">Подтверждение возвратов — в полной версии на компьютере.</div>
+              ))}
+              {!schools.length && <Empty>За этот месяц ничего нет</Empty>}
+            </div>
           </>
         )}
       </Screen>

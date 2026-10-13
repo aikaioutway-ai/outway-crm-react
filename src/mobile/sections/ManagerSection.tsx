@@ -1,28 +1,19 @@
 import React, { useMemo, useState } from 'react';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useDriversTable, useFamiliesTable } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from '../../modules/families/constants';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { FamilyListRow } from '../../services/crmV2Service';
-import { ChildList, FamilyList, groupFamilies, SchoolCard } from '../cards';
-import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor, transferSort } from '../data';
+import { ChildList, SchoolCard } from '../cards';
+import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor } from '../data';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
-import { ErrorBox, Kpi, SearchField, SelectField, Skeletons } from '../ui';
-
-/** Фильтр школы: все в работе, конкретный трансфер, без трансфера или отказники. */
-type ManagerFilter = 'all' | 'none' | 'rejected' | `transfer:${string}`;
-
-function matchesFilter(row: FamilyListRow, filter: ManagerFilter): boolean {
-  if (filter === 'rejected') return row.status === 'rejected';
-  if (row.status === 'rejected') return false;
-  if (filter === 'all') return true;
-  if (filter === 'none') return !row.transferNumber;
-  return row.transferNumber === filter.slice('transfer:'.length);
-}
+import { buildExportList, ExportSheet, rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
+import { ErrorBox, Kpi, SearchField, Skeletons } from '../ui';
 
 export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();
   const { data, isLoading, error } = useFamiliesTable();
+  const drivers = useDriversTable();
   const rows = useMemo(
     () => (data ?? []).filter(row => !row.rowId.endsWith('_empty') && isSchoolAllowed(row.branchFilter, user.schoolKeys)),
     [data, user.schoolKeys],
@@ -30,56 +21,64 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const bySchool = useMemo(() => groupBySchool(rows), [rows]);
   const [query, setQuery] = useState('');
   const [schoolQuery, setSchoolQuery] = useState('');
-  const [filter, setFilter] = useState<ManagerFilter>('all');
 
   const page = nav.page;
-  const schoolKey = page?.kind === 'school' ? page.schoolKey : null;
+  const schoolKey = page?.kind === 'school' || page?.kind === 'transfer' ? page.schoolKey : null;
   const schoolRows = useMemo(() => (schoolKey ? bySchool.get(schoolKey) ?? [] : []), [bySchool, schoolKey]);
-  const families = useMemo(
-    () => groupFamilies(schoolRows.filter(row => matchesFilter(row, filter) && rowMatches(row, schoolQuery)).sort(byChildName)),
-    [schoolRows, filter, schoolQuery],
-  );
-  const filterOptions = useMemo(() => {
-    const working = schoolRows.filter(row => row.status !== 'rejected');
-    const transfers = Array.from(new Set(working.map(row => row.transferNumber).filter((value): value is string => !!value))).sort(transferSort);
-    const count = (value: ManagerFilter) => schoolRows.filter(row => matchesFilter(row, value)).length;
-    return [
-      { value: 'all' as ManagerFilter, label: 'Все трансферы', count: count('all') },
-      ...transfers.map(number => ({ value: `transfer:${number}` as ManagerFilter, label: `Трансфер №${number}`, count: count(`transfer:${number}`) })),
-      { value: 'none' as ManagerFilter, label: 'Без трансфера', count: count('none') },
-      { value: 'rejected' as ManagerFilter, label: 'Отказ', count: count('rejected') },
-    ];
-  }, [schoolRows]);
+  const transferKey = page?.kind === 'transfer' ? page.transfer : null;
+  const transferRows = useMemo(() => (transferKey ? rowsForTransfer(schoolRows, transferKey) : []), [schoolRows, transferKey]);
   const searchResults = useMemo(
     () => (query.trim() ? rows.filter(row => rowMatches(row, query)).sort(byChildName) : []),
     [rows, query],
   );
+  const driverRows = useMemo(() => drivers.data ?? [], [drivers.data]);
+  const schoolLabel = schoolKey ? schoolByKey(schoolKey)?.label ?? schoolKey : '';
+  const exportList = useMemo(
+    () => (transferKey ? buildExportList(schoolLabel, transferKey, transferRows, driverRows) : null),
+    [schoolLabel, transferKey, transferRows, driverRows],
+  );
 
   const openFamily = (row: FamilyListRow) => nav.push({ kind: 'family', familyId: row.familyId, sheet: true });
-  const canEditStatus = user.role !== 'cashier';
-
   const sheet = nav.sheet?.kind === 'family' ? (
-    <FamilySheet familyId={nav.sheet.familyId} onClose={nav.back} canEditStatus={canEditStatus} showFinance />
+    <FamilySheet familyId={nav.sheet.familyId} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance />
+  ) : nav.sheet?.kind === 'export' && exportList ? (
+    <ExportSheet list={exportList} onClose={nav.back} />
   ) : null;
 
-  if (page?.kind === 'school') {
-    const school = schoolByKey(page.schoolKey);
+  if (page?.kind === 'transfer') {
     return (
       <>
-        <Screen
-          pageKey={`manager:${page.schoolKey}`}
-          title={school?.label ?? page.schoolKey}
-          subtitle={`Менеджер · ${schoolRows.filter(row => row.status !== 'rejected').length} детей`}
+        <TransferScreen
+          mode="manager"
+          schoolKey={page.schoolKey}
+          schoolLabel={schoolLabel}
+          transfer={page.transfer}
+          rows={transferRows}
+          drivers={driverRows}
+          onOpenFamily={openFamily}
+          onExport={() => nav.push({ kind: 'export', sheet: true })}
           onBack={nav.back}
-        >
-          <SearchField value={schoolQuery} onChange={setSchoolQuery} placeholder="Ребёнок, родитель или телефон" />
-          <SelectField label="Трансфер" value={filter} onChange={setFilter} options={filterOptions} />
-          <FamilyList
-            families={families}
-            onOpen={familyId => nav.push({ kind: 'family', familyId, sheet: true })}
-            emptyText="Никого не найдено"
-          />
-        </Screen>
+        />
+        {sheet}
+      </>
+    );
+  }
+
+  if (page?.kind === 'school') {
+    return (
+      <>
+        <SchoolScreen
+          mode="manager"
+          schoolKey={page.schoolKey}
+          schoolLabel={schoolLabel}
+          rows={schoolRows}
+          drivers={driverRows}
+          query={schoolQuery}
+          onQueryChange={setSchoolQuery}
+          onOpenTransfer={transfer => nav.push({ kind: 'transfer', schoolKey: page.schoolKey, transfer })}
+          onOpenFamily={openFamily}
+          onBack={nav.back}
+        />
         {sheet}
       </>
     );
@@ -111,7 +110,7 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
                 <SchoolCard
                   key={school.key}
                   school={school}
-                  onClick={() => { setSchoolQuery(''); setFilter('all'); nav.push({ kind: 'school', schoolKey: school.key }); }}
+                  onClick={() => { setSchoolQuery(''); nav.push({ kind: 'school', schoolKey: school.key }); }}
                   stats={[
                     { label: 'детей', value: list.filter(row => row.status !== 'rejected').length, color: '#7C3AED' },
                     { label: 'новых', value: list.filter(row => row.status === 'new').length, color: '#2563EB' },

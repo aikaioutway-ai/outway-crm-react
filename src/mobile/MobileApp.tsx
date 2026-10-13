@@ -1,5 +1,5 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { ChevronRight, LogOut, Menu, Monitor, Receipt, Route, UserCog, Users, Wallet } from 'lucide-react';
+import { ChevronRight, LogOut, Menu, Monitor, Route, UserCog, Users, Wallet } from 'lucide-react';
 import { canAccessSection, NavSection } from '../core/bars/Sidebar';
 import { AuthenticatedUser } from '../services/employeeService';
 import { MobileNavProvider, Screen, useMobileNav, useNavPosition } from './nav';
@@ -10,10 +10,9 @@ import './mobile.css';
 const ManagerSection = lazy(() => import('./sections/ManagerSection'));
 const LogisticsSection = lazy(() => import('./sections/LogisticsSection'));
 const CashierSection = lazy(() => import('./sections/CashierSection'));
-const FinanceSection = lazy(() => import('./sections/FinanceSection'));
 const EmployeesSection = lazy(() => import('./sections/EmployeesSection'));
 
-type MobileTab = 'manager' | 'logistics' | 'cashier' | 'finance' | 'more';
+type MobileTab = 'manager' | 'logistics' | 'cashier' | 'more';
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Админ', gen_director: 'Ген. директор', director: 'Директор', manager: 'Менеджер', cashier: 'Кассир',
@@ -24,7 +23,6 @@ const TABS: { key: MobileTab; label: string; icon: React.ReactNode; sections: Na
   { key: 'manager', label: 'Менеджер', icon: <Users size={22} />, sections: ['families'] },
   { key: 'logistics', label: 'Логистика', icon: <Route size={22} />, sections: ['logistics', 'drivers'] },
   { key: 'cashier', label: 'Кассир', icon: <Wallet size={22} />, sections: ['cashier'] },
-  { key: 'finance', label: 'Финансы', icon: <Receipt size={22} />, sections: ['expenses'] },
   { key: 'more', label: 'Ещё', icon: <Menu size={22} />, sections: [] },
 ];
 
@@ -114,7 +112,6 @@ function MobileShell({ user, onLogout, onOpenDesktop }: {
   const section = tab === 'manager' ? <ManagerSection user={user} />
     : tab === 'logistics' ? <LogisticsSection user={user} />
     : tab === 'cashier' ? <CashierSection user={user} />
-    : tab === 'finance' ? <FinanceSection user={user} />
     : <MoreSection user={user} onLogout={onLogout} onOpenDesktop={onOpenDesktop} />;
 
   return (

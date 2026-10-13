@@ -1,14 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { useDriversTable, useFamiliesTable } from '../../hooks/useCrmQueries';
-import { isSchoolAllowed } from '../../modules/families/constants';
+import { isSchoolAllowed, SCHOOL_TIER_2_KEYS } from '../../modules/families/constants';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { FamilyListRow, V2DriverTableRow } from '../../services/crmV2Service';
 import { formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { ChildList, SchoolCard } from '../cards';
-import { byChildName, groupBySchool, isLogisticsWorkRow, rowMatches, schoolByKey, schoolsFor, transferSort } from '../data';
+import { byChildName, groupBySchool, isLogisticsWorkRow, rowMatches, schoolByKey, schoolsFor } from '../data';
+import { isNewUnassignedRow, transferIdentityKey } from '../../modules/families/familiesRowHelpers';
+import { buildExportList, ExportSheet, rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
-import { Badge, CallButton, Empty, ErrorBox, InfoRow, Kpi, PhoneRow, SearchField, Segment, SelectField, Sheet, Skeletons, useIncremental } from '../ui';
+import { Badge, CallButton, Empty, ErrorBox, InfoRow, Kpi, PhoneRow, SearchField, Segment, Sheet, Skeletons, useIncremental } from '../ui';
 
 type HomeTab = 'schools' | 'drivers';
 
@@ -83,6 +85,31 @@ function DriversList({ drivers, onOpen }: { drivers: V2DriverTableRow[]; onOpen:
   );
 }
 
+/** Те же показатели, что в полной версии: трансферы, бусы, средняя загрузка буса. */
+function logisticsStats(rows: FamilyListRow[]) {
+  const working = rows.filter(row => row.status !== 'rejected');
+  const transfers = new Map<string, { vehicleType: string; count: number }>();
+  working.forEach(row => {
+    const key = transferIdentityKey(row);
+    if (!key) return;
+    const previous = transfers.get(key);
+    transfers.set(key, { vehicleType: previous?.vehicleType ?? row.vehicleType, count: (previous?.count ?? 0) + 1 });
+  });
+  const list = Array.from(transfers.values());
+  const buses = list.filter(item => item.vehicleType === 'microbus');
+  const busChildren = buses.reduce((sum, item) => sum + item.count, 0);
+  return {
+    newRequests: rows.filter(isNewUnassignedRow).length,
+    transferCount: list.length,
+    microbusCount: buses.length,
+    lightVehicleCount: list.filter(item => item.vehicleType === 'minivan' || item.vehicleType === 'sedan').length,
+    microbusAverage: buses.length ? busChildren / buses.length : 0,
+    unboarded: working.filter(row => !!row.transferNumber && row.status !== 'boarded').length,
+  };
+}
+
+const formatAverage = (value: number) => value.toLocaleString('ru-RU', { maximumFractionDigits: 1 });
+
 export default function LogisticsSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();
   const families = useFamiliesTable();
@@ -90,62 +117,77 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
   const [homeTab, setHomeTab] = useState<HomeTab>('schools');
   const [query, setQuery] = useState('');
   const [schoolQuery, setSchoolQuery] = useState('');
-  const [transfer, setTransfer] = useState('all');
 
   const rows = useMemo(
     () => (families.data ?? []).filter(row => !row.rowId.endsWith('_empty') && isLogisticsWorkRow(row) && isSchoolAllowed(row.branchFilter, user.schoolKeys)),
     [families.data, user.schoolKeys],
   );
   const bySchool = useMemo(() => groupBySchool(rows), [rows]);
+  const driverList = useMemo(() => drivers.data ?? [], [drivers.data]);
 
   const page = nav.page;
-  const schoolKey = page?.kind === 'school' ? page.schoolKey : null;
+  const schoolKey = page?.kind === 'school' || page?.kind === 'transfer' ? page.schoolKey : null;
   const schoolRows = useMemo(() => (schoolKey ? bySchool.get(schoolKey) ?? [] : []), [bySchool, schoolKey]);
-  const transfers = useMemo(
-    () => Array.from(new Set(schoolRows.map(row => row.transferNumber).filter((value): value is string => !!value))).sort(transferSort),
-    [schoolRows],
+  const transferKey = page?.kind === 'transfer' ? page.transfer : null;
+  const transferRows = useMemo(() => (transferKey ? rowsForTransfer(schoolRows, transferKey) : []), [schoolRows, transferKey]);
+  const schoolLabel = schoolKey ? schoolByKey(schoolKey)?.label ?? schoolKey : '';
+  const exportList = useMemo(
+    () => (transferKey ? buildExportList(schoolLabel, transferKey, transferRows, driverList) : null),
+    [schoolLabel, transferKey, transferRows, driverList],
   );
-  const visible = useMemo(() => schoolRows
-    .filter(row => (transfer === 'all' || (transfer === 'none' ? !row.transferNumber : row.transferNumber === transfer)) && rowMatches(row, schoolQuery))
-    // По трансферу, затем по остановке — как водитель едет по маршруту.
-    .sort((a, b) => Number(a.transferNumber || 999) - Number(b.transferNumber || 999)
-      || Number(a.stopNumber || 99) - Number(b.stopNumber || 99)
-      || byChildName(a, b)),
-  [schoolRows, transfer, schoolQuery]);
   const searchResults = useMemo(
     () => (query.trim() && homeTab === 'schools' ? rows.filter(row => rowMatches(row, query)).sort(byChildName) : []),
     [rows, query, homeTab],
   );
-  const driverRows = useMemo(() => {
-    return (drivers.data ?? [])
-      .filter(driver => driverMatches(driver, query))
-      .sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || a.fullName.localeCompare(b.fullName, 'ru'));
-  }, [drivers.data, query]);
+  const driverRows = useMemo(() => driverList
+    .filter(driver => driverMatches(driver, query))
+    .sort((a, b) => (a.status === 'active' ? 0 : 1) - (b.status === 'active' ? 0 : 1) || a.fullName.localeCompare(b.fullName, 'ru')),
+  [driverList, query]);
+  // Как в полной версии: итоги по школам 1.0, школы 2.0 — отдельным блоком.
+  const totals = useMemo(() => logisticsStats(rows.filter(row => !SCHOOL_TIER_2_KEYS.includes(row.branchFilter))), [rows]);
 
   const openFamily = (row: FamilyListRow) => nav.push({ kind: 'family', familyId: row.familyId, sheet: true });
-  const openedDriver = nav.sheet?.kind === 'driver' ? (drivers.data ?? []).find(driver => driver.driverId === (nav.sheet as { driverId: string }).driverId) : null;
+  const openedDriver = nav.sheet?.kind === 'driver' ? driverList.find(driver => driver.driverId === (nav.sheet as { driverId: string }).driverId) : null;
   const sheet = nav.sheet?.kind === 'family' ? (
     <FamilySheet familyId={nav.sheet.familyId} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance={false} />
+  ) : nav.sheet?.kind === 'export' && exportList ? (
+    <ExportSheet list={exportList} onClose={nav.back} />
   ) : openedDriver ? <DriverSheet driver={openedDriver} onClose={nav.back} /> : null;
 
-  if (page?.kind === 'school') {
-    const school = schoolByKey(page.schoolKey);
+  if (page?.kind === 'transfer') {
     return (
       <>
-        <Screen pageKey={`logistics:${page.schoolKey}`} title={school?.label ?? page.schoolKey} subtitle={`Логистика · ${schoolRows.length} детей`} onBack={nav.back}>
-          <SearchField value={schoolQuery} onChange={setSchoolQuery} placeholder="Имя, телефон или адрес" />
-          <SelectField
-            label="Трансфер"
-            value={transfer}
-            onChange={setTransfer}
-            options={[
-              { value: 'all', label: 'Все трансферы', count: schoolRows.length },
-              { value: 'none', label: 'Без трансфера', count: schoolRows.filter(row => !row.transferNumber).length },
-              ...transfers.map(number => ({ value: number, label: `Трансфер №${number}`, count: schoolRows.filter(row => row.transferNumber === number).length })),
-            ]}
-          />
-          <ChildList rows={visible} onOpen={openFamily} emptyText="Никого не найдено" showAddress />
-        </Screen>
+        <TransferScreen
+          mode="logistics"
+          schoolKey={page.schoolKey}
+          schoolLabel={schoolLabel}
+          transfer={page.transfer}
+          rows={transferRows}
+          drivers={driverList}
+          onOpenFamily={openFamily}
+          onExport={() => nav.push({ kind: 'export', sheet: true })}
+          onBack={nav.back}
+        />
+        {sheet}
+      </>
+    );
+  }
+
+  if (page?.kind === 'school') {
+    return (
+      <>
+        <SchoolScreen
+          mode="logistics"
+          schoolKey={page.schoolKey}
+          schoolLabel={schoolLabel}
+          rows={schoolRows}
+          drivers={driverList}
+          query={schoolQuery}
+          onQueryChange={setSchoolQuery}
+          onOpenTransfer={transfer => nav.push({ kind: 'transfer', schoolKey: page.schoolKey, transfer })}
+          onOpenFamily={openFamily}
+          onBack={nav.back}
+        />
         {sheet}
       </>
     );
@@ -173,25 +215,40 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
           <ChildList rows={searchResults} onOpen={openFamily} emptyText="Ничего не найдено" showSchool showAddress />
         ) : (
           <>
-            <div className="m-kpis">
-              <Kpi label="Детей в работе" value={rows.length} color="#7C3AED" />
-              <Kpi label="Без трансфера" value={rows.filter(row => !row.transferNumber).length} color="#B45309" />
+            <div className="m-kpis m-kpis--3">
+              <Kpi label="Новые заявки" value={totals.newRequests} color="#378ADD" />
+              <Kpi label="Трансферов" value={totals.transferCount} color="#0F766E" />
+              <Kpi label="Ср. загрузка буса" value={formatAverage(totals.microbusAverage)} color="#2563EB" />
+              <Kpi label="Микроавтобусы" value={totals.microbusCount} color="#1D6FA4" />
+              <Kpi label="Седан и минивэн" value={totals.lightVehicleCount} color="#15803D" />
+              <Kpi label="Не посажены" value={totals.unboarded} color="#B3261E" />
             </div>
-            <div className="m-section-title">Школы</div>
-            <div className="m-list">
-              {schools.map(({ school, list }) => (
-                <SchoolCard
-                  key={school.key}
-                  school={school}
-                  onClick={() => { setSchoolQuery(''); setTransfer('all'); nav.push({ kind: 'school', schoolKey: school.key }); }}
-                  stats={[
-                    { label: 'детей', value: list.length, color: '#7C3AED' },
-                    { label: 'без трансфера', value: list.filter(row => !row.transferNumber).length, color: '#B45309' },
-                    { label: 'трансферов', value: new Set(list.map(row => row.transferNumber).filter(Boolean)).size, color: '#1D4ED8' },
-                  ]}
-                />
-              ))}
-            </div>
+            {[
+              { title: 'Школы', items: schools.filter(item => !SCHOOL_TIER_2_KEYS.includes(item.school.key)) },
+              { title: 'Школы 2.0', items: schools.filter(item => SCHOOL_TIER_2_KEYS.includes(item.school.key)) },
+            ].filter(group => group.items.length).map(group => (
+              <React.Fragment key={group.title}>
+                <div className="m-section-title">{group.title}</div>
+                <div className="m-list">
+                  {group.items.map(({ school, list }) => {
+                    const stats = logisticsStats(list);
+                    return (
+                      <SchoolCard
+                        key={school.key}
+                        school={school}
+                        onClick={() => { setSchoolQuery(''); nav.push({ kind: 'school', schoolKey: school.key }); }}
+                        stats={[
+                          { label: 'трансф.', value: stats.transferCount, color: '#0F766E' },
+                          { label: 'бусов', value: stats.microbusCount, color: '#1D6FA4' },
+                          { label: 'ср. загр.', value: formatAverage(stats.microbusAverage), color: '#2563EB' },
+                          { label: 'не посаж.', value: stats.unboarded, color: '#B3261E' },
+                        ]}
+                      />
+                    );
+                  })}
+                </div>
+              </React.Fragment>
+            ))}
           </>
         )}
       </Screen>
