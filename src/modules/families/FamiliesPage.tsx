@@ -3307,6 +3307,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             />
           ) : isCashierMode ? (
             <DataTable<CashierPaymentRow>
+              mobileColumns={[
+                { key: 'childrenNames', label: 'ФИО', type: 'text' },
+                { key: 'branchShort', label: 'Школа', type: 'text' },
+                { key: 'transferNumber', label: 'Трансфер', type: 'text', render: value => <TransferNumberBadge number={value} /> },
+              ]}
               key={`cashier_table_${cashierView}`}
               columns={cashierColumns}
               data={(cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows).filter(r => {
@@ -3337,6 +3342,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             />
           ) : isPaymentsMode ? (
             <DataTable<PaymentTableRow>
+              mobileColumns={[
+                { key: 'childrenNames', label: 'ФИО', type: 'text' },
+                { key: 'branchShort', label: 'Школа', type: 'text' },
+                { key: 'transferNumber', label: 'Трансфер', type: 'text', render: value => <TransferNumberBadge number={value} /> },
+              ]}
               key="payments_table"
               columns={paymentTableColumns}
               data={paymentRows.filter(r => {
@@ -3376,6 +3386,11 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             />
           ) : (
             <DataTable<ChildRow>
+              mobileColumns={[
+                { key: 'childName', label: 'ФИО', type: 'text' },
+                { key: 'branchShort', label: 'Школа', type: 'text' },
+                { key: 'transferNumber', label: 'Трансфер', type: 'text', render: value => <TransferNumberBadge number={value} /> },
+              ]}
               key={`families_table_${mode}`}
               columns={tableColumns}
               data={filteredSorted}
@@ -4790,6 +4805,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
       {expandedFamilyId && (
         <div
+          className="family-mobile-overlay"
           onClick={() => { setExpandedFamilyId(null); setExpandedFamily(null); setExpandedInitialTab('overview'); }}
           style={{
             position: 'fixed',

@@ -228,3 +228,41 @@ select { transition: border-color 140ms ease, box-shadow 140ms ease, background-
 select:not(:disabled):hover { border-color: #8BBAB7 !important; background-color: #F0F7F6 !important; }
 select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { select { transition: none; } }
+
+.crm-mobile-menu, .crm-mobile-backdrop { display: none; }
+@media (max-width: 720px) {
+  html, body, #root { min-width: 0; }
+  .crm-shell { height: 100dvh !important; }
+  .crm-main { min-width: 0; padding: 58px 8px 12px !important; }
+  .crm-mobile-menu { display: grid; place-items: center; position: fixed; top: max(8px, env(safe-area-inset-top)); left: 10px; width: 42px; height: 42px; z-index: 1510; border: 1px solid var(--border); border-radius: 14px; background: white; color: var(--accent-h); font-size: 23px; box-shadow: 0 4px 16px #17222f15; }
+  .crm-sidebar { display: none !important; }
+  .crm-sidebar--open { display: flex !important; position: fixed !important; left: 0; top: 52px; width: 240px !important; height: calc(100dvh - 64px) !important; z-index: 1500; overflow-y: auto !important; }
+  .crm-mobile-backdrop { display: block; position: fixed; inset: 0; z-index: 1490; border: 0; background: #17222f66; }
+  input, textarea, select { font-size: 16px !important; }
+  .family-mobile-card { width: 100% !important; max-width: 100% !important; min-width: 0 !important; }
+  .family-mobile-body { padding: 12px !important; }
+  .family-mobile-body div[style*="grid-template-columns"] { grid-template-columns: minmax(0, 1fr) !important; }
+  .family-mobile-card > aside { width: 46px !important; flex-shrink: 0; }
+  .family-mobile-card > div { min-width: 0; }
+  .family-mobile-card header { flex-wrap: wrap; gap: 8px !important; padding: 10px !important; }
+  .family-address-body { grid-template-columns: minmax(0, 1fr) !important; overflow-y: auto !important; }
+  .employee-main-grid, .employee-section-fields, .employee-documents-grid, .employee-advances-layout { grid-template-columns: minmax(0, 1fr) !important; }
+  .employees-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+  .employees-heading, .employee-card-header { flex-wrap: wrap; }
+  .employee-card-tabs { overflow-x: auto; flex-shrink: 0; }
+  .employee-modal-overlay { padding: 6px !important; }
+  .employee-card-modal { width: 100% !important; max-height: calc(100dvh - 12px) !important; }
+}
+
+@media (max-width: 720px) {
+  .family-mobile-card { grid-template-columns: 46px minmax(0, 1fr) !important; min-height: 0 !important; height: calc(100dvh - 24px) !important; max-height: calc(100dvh - 24px) !important; border-radius: 14px !important; }
+  .family-mobile-card > section { min-width: 0; }
+  .school-mobile-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; padding-right: 0 !important; }
+}
+
+@media (max-width: 720px) {
+  .school-mobile-transfers { display: grid !important; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px !important; padding-right: 0 !important; }
+  .school-mobile-transfers > button { min-height: 48px !important; }
+  .family-mobile-overlay { padding: 8px !important; z-index: 1600 !important; }
+  .family-mobile-overlay > div { width: 100% !important; }
+}

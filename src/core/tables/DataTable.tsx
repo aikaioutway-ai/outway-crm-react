@@ -5,6 +5,7 @@ import ReactDOM from 'react-dom';
 import NotionSelect from '../selects/NotionSelect';
 import { supabase } from '../../services/supabase';
 import './DataTable.css';
+import useMobile from '../hooks/useMobile';
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -49,6 +50,7 @@ export type CalcMode = 'none' | 'count' | 'sum' | 'avg' | 'min' | 'max' | 'empty
 
 export interface DataTableProps<T = any> {
   columns: ColumnDef<T>[];
+  mobileColumns?: ColumnDef<T>[];
   data: T[];
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
@@ -358,7 +360,10 @@ export function DataTable<T extends Record<string, any>>({
   selectable = false,
   selectedKeys,
   onSelectedKeysChange,
+  mobileColumns,
 }: DataTableProps<T>) {
+
+  const mobile = useMobile();
 
   // ── Persistent column order & visibility ──
   const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, null));
@@ -443,7 +448,7 @@ export function DataTable<T extends Record<string, any>>({
 
 
 
-  const visibleCols = useMemo(() => cols.filter(c => c.visible !== false), [cols]);
+  const visibleCols = useMemo(() => mobile && mobileColumns ? mobileColumns : cols.filter(c => c.visible !== false), [cols, mobile, mobileColumns]);
 
   const processedData = useMemo(() => {
     let rows = [...data];
@@ -716,7 +721,7 @@ export function DataTable<T extends Record<string, any>>({
 
   // ─────────────────────────────────────────────────────────────────────────────
   return (
-    <div className="dt-root">
+    <div className={`dt-root ${mobile && mobileColumns ? 'dt-root--mobile-summary' : ''}`}>
 
       {/* ── OVERLAY для закрытия панелей кликом (003) ── */}
       {(showFilterPanel || showSortPanel || (showProps && showPropertiesExternal === undefined) || rowMenu !== null || colMenu !== null || calcPopup !== null) && (
@@ -1052,7 +1057,11 @@ export function DataTable<T extends Record<string, any>>({
                           }
                         }}
                       >
-                        {editingCell?.rowId === id && editingCell.key === col.key ? (
+                        {mobile && mobileColumns && col === visibleCols[0] && (onRowOpen || onRowClick) ? (
+                          <button className="dt-mobile-name" onClick={event => { event.stopPropagation(); (onRowOpen ?? onRowClick)?.(row); }}>
+                            {getCellValue(row, col) || 'Открыть карточку'}
+                          </button>
+                        ) : editingCell?.rowId === id && editingCell.key === col.key ? (
                           col.editOptions ? (
                             <NotionSelect
                               autoFocus

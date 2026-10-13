@@ -39,7 +39,7 @@ export default function NewFamilyModal({ onClose }: Props) {
       <div style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
-        width: 420, background: '#fff', zIndex: 501,
+        width: 'min(420px, calc(100vw - 24px))', background: '#fff', zIndex: 501,
         borderRadius: 16, boxShadow: '0 20px 60px rgba(49,46,129,0.22)',
         overflow: 'visible',
       }}>

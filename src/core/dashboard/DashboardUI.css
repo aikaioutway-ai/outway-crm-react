@@ -241,3 +241,15 @@
   flex: 0 0 var(--dashboard-row-height, 56px) !important;
   box-sizing: border-box;
 }
+
+@media (max-width: 720px) {
+  .dashboard-top-panel { padding: 10px; border-radius: 16px; }
+  .dashboard-control-row, .cashier-control-row { flex-wrap: wrap; height: auto !important; }
+  .dashboard-control-row > div { min-width: 0 !important; max-width: 100%; }
+  .dashboard-search { min-width: 0; width: 100%; flex: 1 1 100%; }
+  .dashboard-overview-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; border: 0; background: transparent; overflow: visible; }
+  .dashboard-kpi { min-height: 78px; padding: 12px 10px; border: 1px solid var(--border); border-radius: 14px; }
+  .dashboard-kpi-value { font-size: 20px; }
+  .dashboard-kpi-label { font-size: 11px; line-height: 1.35; white-space: normal; }
+  .school-dashboard-table { min-width: 600px; }
+}
