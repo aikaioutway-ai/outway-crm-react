@@ -6,6 +6,7 @@ import { Search, X } from 'lucide-react';
 import { PaymentTableRow, RefundTableRow } from '../../services/crmV2Service';
 import { usePaymentsTable, useRefundsTable } from '../../hooks/useCrmQueries';
 import { money } from '../../utils/pricing';
+import { phoneMatchesQuery, phoneQueryDigits } from '../../utils/format';
 import { CASHIER_PERIODS, currentCashierPeriodKey, getBranchFilter, isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -138,7 +139,7 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
   const [activeIndex, setActiveIndex] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const normalizedQuery = query.trim().toLowerCase();
-  const digitsQuery = query.replace(/\D/g, '');
+  const digitsQuery = phoneQueryDigits(query) ?? '';
 
   const latestPayments = useMemo(() => {
     const byFamily = new Map<string, PaymentTableRow>();
@@ -155,11 +156,10 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
     if (normalizedQuery.length < 2 && digitsQuery.length < 3) return [];
     return latestPayments.filter(row => {
       const haystack = `${row.childrenNames} ${row.parentName}`.toLowerCase();
-      const phoneDigits = row.phone.replace(/\D/g, '');
       return (normalizedQuery.length >= 2 && haystack.includes(normalizedQuery))
-        || (digitsQuery.length >= 3 && phoneDigits.includes(digitsQuery));
+        || phoneMatchesQuery(query, row.phone);
     }).slice(0, 8);
-  }, [digitsQuery, latestPayments, normalizedQuery]);
+  }, [digitsQuery, latestPayments, normalizedQuery, query]);
 
   useEffect(() => { setActiveIndex(0); }, [query]);
   useEffect(() => {

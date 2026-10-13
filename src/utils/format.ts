@@ -50,3 +50,29 @@ export function formatClassName(value: string | number | null | undefined): stri
   const match = String(value).match(/\d+/);
   return match ? match[0] : '';
 }
+
+/**
+ * Значимые цифры номера для поиска — без +996, 996 и ведущего 0.
+ * В базе один и тот же номер записан как 0555…, 996555…, +996555… или 555…,
+ * поэтому поиск сравнивает только эту часть.
+ */
+export function phoneSearchDigits(value: string | null | undefined): string {
+  const digits = String(value ?? '').replace(/\D/g, '');
+  if (digits.startsWith('996')) return digits.slice(3);
+  if (digits.startsWith('0')) return digits.slice(1);
+  return digits;
+}
+
+/** Цифры для поиска, если запрос похож на телефон (только цифры, пробелы, +, -, скобки), иначе null. */
+export function phoneQueryDigits(query: string | null | undefined): string | null {
+  const trimmed = String(query ?? '').trim();
+  if (!/^[\d\s+()-]+$/.test(trimmed)) return null;
+  const digits = phoneSearchDigits(trimmed);
+  return digits.length >= 3 ? digits : null;
+}
+
+/** Совпадает ли хотя бы один из телефонов с запросом независимо от формата записи. */
+export function phoneMatchesQuery(query: string | null | undefined, ...phones: Array<string | null | undefined>): boolean {
+  const digits = phoneQueryDigits(query);
+  return !!digits && phones.some(phone => phoneSearchDigits(phone).includes(digits));
+}

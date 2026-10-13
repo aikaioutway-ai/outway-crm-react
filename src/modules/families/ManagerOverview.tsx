@@ -14,7 +14,7 @@ import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewFamilyModal from './NewFamilyModal';
 import { DashboardTopPanel, SchoolAvatar } from '../../core/dashboard/DashboardUI';
-import { formatName } from '../../utils/format';
+import { formatName, phoneMatchesQuery, phoneQueryDigits } from '../../utils/format';
 import { isNewUnassignedRow } from './familiesRowHelpers';
 
 export interface SchoolStat {
@@ -129,7 +129,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   const containerRef = useRef<HTMLDivElement>(null);
 
   const normalizedQuery = query.trim().toLowerCase();
-  const digitsQuery = query.replace(/\D/g, '');
+  const digitsQuery = phoneQueryDigits(query) ?? '';
 
   const suggestions = useMemo(() => {
     if (normalizedQuery.length < 2 && digitsQuery.length < 3) return [];
@@ -138,9 +138,8 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
     for (const row of rows) {
       if (seen.has(row.familyId)) continue;
       const haystack = `${row.parentName} ${row.childName}`.toLowerCase();
-      const phoneDigits = `${row.phone} ${row.secondPhone}`.replace(/\D/g, '');
       const matchesText = normalizedQuery.length >= 2 && haystack.includes(normalizedQuery);
-      const matchesPhone = digitsQuery.length >= 3 && phoneDigits.includes(digitsQuery);
+      const matchesPhone = phoneMatchesQuery(query, row.phone, row.secondPhone);
       if (matchesText || matchesPhone) {
         seen.add(row.familyId);
         matches.push(row);
@@ -148,7 +147,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
       }
     }
     return matches;
-  }, [rows, normalizedQuery, digitsQuery]);
+  }, [rows, normalizedQuery, digitsQuery, query]);
 
   useEffect(() => { setActiveIndex(0); }, [query]);
 
