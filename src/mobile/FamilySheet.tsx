@@ -1,0 +1,142 @@
+import React, { useState } from 'react';
+import { MapPin } from 'lucide-react';
+import { useFamiliesTable } from '../hooks/useCrmQueries';
+import { FamilyListRow, updateV2Child } from '../services/crmV2Service';
+import { QK, queryClient } from '../services/queryClient';
+import { money } from '../utils/pricing';
+import { formatName } from '../utils/format';
+import { schoolLabel } from './data';
+import { CHILD_STATUS_OPTIONS, CHILD_STATUS_TONE, ErrorBox, InfoRow, PhoneRow, Sheet, Skeletons, StatusBadge, TransferBadge } from './ui';
+
+export default function FamilySheet({ familyId, onClose, canEditStatus, showFinance }: {
+  familyId: string;
+  onClose: () => void;
+  canEditStatus: boolean;
+  showFinance: boolean;
+}) {
+  const { data, isLoading } = useFamiliesTable();
+  const rows = (data ?? []).filter(row => row.familyId === familyId);
+  const family = rows[0];
+  const children = rows.filter(row => !row.rowId.endsWith('_empty'));
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
+  const changeStatus = async (childId: string, childName: string, status: string) => {
+    if (status === 'rejected' && !window.confirm(`Перевести «${childName}» в «Отказ»?`)) return;
+    setSavingId(childId);
+    setError('');
+    try {
+      // Статус пересчитывает семейную скидку и может создать начисление при посадке.
+      await updateV2Child(childId, { status });
+      // Показываем новый статус сразу, не дожидаясь перезагрузки всей таблицы.
+      queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, current => current?.map(row => (
+        row.rowId === childId ? { ...row, status } : row
+      )));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Не удалось сменить статус');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const title = family ? formatName(family.parentName) || formatName(family.childName) || 'Семья' : 'Семья';
+  const mapUrl = family?.latitude && family?.longitude
+    ? `https://yandex.ru/maps/?rtext=~${family.latitude},${family.longitude}&rtt=auto`
+    : family?.streetAddress
+      ? `https://yandex.ru/maps/?text=${encodeURIComponent(`Бишкек, ${family.streetAddress}`)}`
+      : '';
+
+  return (
+    <Sheet title={title} onClose={onClose} full>
+      {isLoading && !family ? <Skeletons count={3} /> : !family ? (
+        <div className="m-empty">Семья не найдена</div>
+      ) : (
+        <>
+          {error && <ErrorBox>{error}</ErrorBox>}
+          <div className="m-info">
+            <InfoRow label="Родитель" value={family.parentName} />
+            <PhoneRow label="Телефон" phone={family.phone} />
+            <PhoneRow label="Второй телефон" phone={family.secondPhone} />
+            {family.contactName && <InfoRow label="Контактное лицо" value={family.contactName} />}
+            <PhoneRow label="Телефон контакта" phone={family.contactPhone} />
+          </div>
+
+          <div className="m-info">
+            <InfoRow
+              label="Адрес"
+              value={family.streetAddress}
+              action={mapUrl ? (
+                <a className="m-icon-btn" href={mapUrl} target="_blank" rel="noreferrer" aria-label="Открыть маршрут">
+                  <MapPin size={18} />
+                </a>
+              ) : undefined}
+            />
+            <InfoRow label="Зона и расстояние" value={[family.zone, family.distanceKm ? `${family.distanceKm} км` : ''].filter(Boolean).join(' · ')} />
+          </div>
+
+          {showFinance && (
+            <div className="m-kpis">
+              <div className="m-kpi">
+                <div className="m-kpi-value" style={{ color: family.debtAmount > 0 ? 'var(--danger)' : 'var(--success)' }}>{money(family.debtAmount)}</div>
+                <div className="m-kpi-label">Долг</div>
+              </div>
+              <div className="m-kpi">
+                <div className="m-kpi-value">{money(family.balance)}</div>
+                <div className="m-kpi-label">Баланс</div>
+              </div>
+              <div className="m-kpi">
+                <div className="m-kpi-value">{money(family.totalCharged)}</div>
+                <div className="m-kpi-label">Начислено</div>
+              </div>
+              <div className="m-kpi">
+                <div className="m-kpi-value">{money(family.totalPaid)}</div>
+                <div className="m-kpi-label">Оплачено</div>
+              </div>
+            </div>
+          )}
+
+          <div className="m-section-title">Дети · {children.length}</div>
+          {children.map(child => (
+            <div key={child.rowId} className="m-card">
+              <div className="m-card-row">
+                <div className="m-card-main">
+                  <div className="m-card-title">{formatName(child.childName) || 'Без имени'}</div>
+                  <div className="m-card-sub">
+                    {[schoolLabel(child.branchFilter), child.childClass ? `${child.childClass} класс` : '', child.vehicleLabel].filter(Boolean).join(' · ')}
+                  </div>
+                </div>
+                <StatusBadge status={child.status} />
+              </div>
+              <div className="m-card-meta">
+                <TransferBadge number={child.transferNumber} />
+                {child.stopNumber && <span className="m-badge">Остановка {child.stopNumber}</span>}
+                {child.timeMorning && <span className="m-badge">Утро {child.timeMorning.slice(0, 5)}</span>}
+                {showFinance && child.monthlyPrice > 0 && <span className="m-badge">{money(child.monthlyPrice)}/мес</span>}
+              </div>
+              {canEditStatus && (
+                <div className="m-status-picker" style={{ marginTop: 10 }}>
+                  {CHILD_STATUS_OPTIONS.map(option => {
+                    const active = child.status === option.value;
+                    const tone = CHILD_STATUS_TONE[option.value];
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        disabled={savingId === child.rowId || active}
+                        onClick={() => changeStatus(child.rowId, formatName(child.childName), option.value)}
+                        style={active ? { background: tone.bg, color: tone.color, borderColor: tone.color, opacity: 1 } : undefined}
+                      >
+                        {savingId === child.rowId && !active ? '…' : option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ))}
+          <div className="m-note">Редактирование адреса, маршрута, оплат и скидок — в полной версии на компьютере.</div>
+        </>
+      )}
+    </Sheet>
+  );
+}
