@@ -42,7 +42,7 @@ describe('buildTransferRepricingPlan', () => {
       newBasePrice: 6800,
       newFinalPrice: 6800,
     });
-    expect(plan?.familyComments[0].text).toContain('фактически определён Microbus');
+    expect(plan?.familyComments[0].text).toBe('Изначально выбран «Minivan»');
   });
 
   it('reprices Sedan to Minibus', () => {

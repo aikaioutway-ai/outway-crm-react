@@ -71,7 +71,7 @@ export default function ChargeDiscountsSection({ charges, discounts, children, c
   return (
     <Section title="Разовые скидки">
       {canManage && (
-        <div style={formStyle}>
+        <div className="finance-adjustment-panel finance-discount-form" style={formStyle}>
           <select value={chargeId} onChange={event => setChargeId(event.target.value)} style={{ ...inputStyle, gridColumn: '1 / -1' }}>
             <option value="">Начисление…</option>
             {discountable.map(charge => (

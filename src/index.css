@@ -228,3 +228,18 @@ select { transition: border-color 140ms ease, box-shadow 140ms ease, background-
 select:not(:disabled):hover { border-color: #8BBAB7 !important; background-color: #F0F7F6 !important; }
 select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { select { transition: none; } }
+.finance-adjustments-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
+.finance-adjustments-grid > * { min-width: 0; }
+.finance-adjustments-grid > :only-child { grid-column: 1 / -1; }
+@media (max-width: 720px) {
+  .finance-adjustments-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.finance-adjustments-grid .finance-adjustment-panel { padding: 10px; border: 1px solid var(--border); border-radius: 12px; background: #fff; box-shadow: 0 5px 16px rgba(43,72,89,.04); }
+.finance-refund-form { display: flex !important; flex-direction: column; gap: 8px !important; min-height: 148px; }
+.finance-refund-form > input:first-child { width: 100%; }
+.finance-refund-form .finance-refund-comment { flex: 1; min-height: 31px; width: 100%; }
+.finance-discount-form { gap: 8px !important; }
+.finance-discount-form > input, .finance-discount-form > select { height: 31px; background: #fff; font-size: 11px; font-weight: 700; border-color: var(--border) !important; }
+.finance-adjustments-grid .finance-adjustment-panel button { height: 31px !important; min-height: 31px; padding: 0 10px !important; border-radius: 7px !important; }
+
