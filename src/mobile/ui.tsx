@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MessageCircle, Phone, Search, X } from 'lucide-react';
+import { ChevronDown, MessageCircle, Phone, Search, X } from 'lucide-react';
 import { formatPhone } from '../utils/format';
 
 export const CHILD_STATUS_OPTIONS = [
@@ -82,32 +82,34 @@ export function Segment<T extends string>({ options, value, onChange }: {
   );
 }
 
-export function Chips<T extends string>({ options, value, onChange }: {
-  options: { value: T; label: string; count?: number }[];
+export interface SelectOption<T extends string> {
+  value: T;
+  label: string;
+  count?: number;
+}
+
+/**
+ * Выпадающий список. На телефоне открывается системный выбор
+ * (барабан на iPhone, список на Android) — удобнее длинного ряда кнопок.
+ */
+export function SelectField<T extends string>({ label, value, onChange, options, disabled = false }: {
+  label: string;
   value: T;
   onChange: (value: T) => void;
+  options: SelectOption<T>[];
+  disabled?: boolean;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  // Выбранная «пилюля» всегда видна, даже если она в конце длинного ряда.
-  useEffect(() => {
-    const container = containerRef.current;
-    const active = container?.querySelector<HTMLElement>('.is-active');
-    if (!container || !active) return;
-    container.scrollTo({ left: active.offsetLeft - (container.clientWidth - active.offsetWidth) / 2, behavior: 'smooth' });
-  }, [value]);
+  const optionText = (option: SelectOption<T>) => (option.count !== undefined ? `${option.label} · ${option.count}` : option.label);
+  const current = options.find(option => option.value === value);
   return (
-    <div className="m-chips" ref={containerRef}>
-      {options.map(option => (
-        <button
-          key={option.value}
-          type="button"
-          className={`m-chip ${option.value === value ? 'is-active' : ''}`}
-          onClick={() => onChange(option.value)}
-        >
-          {option.label}{option.count !== undefined && <b>{option.count}</b>}
-        </button>
-      ))}
-    </div>
+    <label className={`m-select ${disabled ? 'is-disabled' : ''}`}>
+      <span className="m-select-label">{label}</span>
+      <span className="m-select-value">{current ? optionText(current) : '—'}</span>
+      <select aria-label={label} value={value} disabled={disabled} onChange={event => onChange(event.target.value as T)}>
+        {options.map(option => <option key={option.value} value={option.value}>{optionText(option)}</option>)}
+      </select>
+      <ChevronDown className="m-select-chevron" size={18} />
+    </label>
   );
 }
 

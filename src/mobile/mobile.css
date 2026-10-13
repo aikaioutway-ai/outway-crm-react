@@ -122,27 +122,28 @@
 }
 .m-segment button.is-active { background: #FFFFFF; color: var(--text); box-shadow: 0 1px 4px rgba(23, 34, 47, .12); }
 
-.m-chips {
+.m-select {
   position: relative;
-  display: flex; gap: 6px;
-  overflow-x: auto; overflow-y: hidden;
-  margin: 0 -12px; padding: 0 12px 2px;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-}
-.m-chips::-webkit-scrollbar { display: none; }
-.m-chip {
-  flex-shrink: 0;
-  height: 34px; padding: 0 13px;
-  border-radius: 17px;
+  display: flex; flex-direction: column; justify-content: center;
+  min-height: 52px; padding: 6px 40px 6px 14px;
   background: #FFFFFF;
   border: 1px solid var(--border);
-  font-size: 13px; font-weight: 700; color: var(--text-2);
-  white-space: nowrap;
+  border-radius: 14px;
 }
-.m-chip b { margin-left: 5px; font-weight: 800; color: var(--text); }
-.m-chip.is-active { background: var(--accent-h); border-color: var(--accent-h); color: #fff; }
-.m-chip.is-active b { color: #fff; }
+.m-select:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-l); }
+.m-select.is-disabled { opacity: .6; }
+.m-select-label { font-size: 11.5px; font-weight: 700; color: var(--text-2); line-height: 1.2; pointer-events: none; }
+.m-select-value { font-size: 15px; font-weight: 800; color: var(--text); line-height: 1.3; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; pointer-events: none; }
+/* Сам список невидим и растянут на всю плашку: нажатие в любое место открывает выбор. */
+.m-select select {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  opacity: 0;
+  -webkit-appearance: none; appearance: none;
+  border: 0; cursor: pointer;
+}
+.m-select-chevron { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--text-2); pointer-events: none; }
+.m-selects { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 
 /* ── Карточки и списки ─────────────────────────────────────────── */
 .m-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -256,16 +257,7 @@ button.m-card:active { transform: scale(.985); background: var(--surface-2); }
   background: #FFFFFF; color: var(--text);
 }
 
-.m-status-picker { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-.m-status-picker button {
-  height: 38px; border-radius: 11px;
-  font-size: 12.5px; font-weight: 800;
-  border: 1px solid var(--border); background: #FFFFFF; color: var(--text-2);
-}
-.m-status-picker button:disabled { opacity: .55; }
 
-.m-month { display: flex; align-items: center; gap: 8px; }
-.m-month-label { flex: 1; text-align: center; font-size: 16px; font-weight: 800; }
 
 @media (prefers-reduced-motion: reduce) {
   .m-page, .m-sheet, .m-sheet-backdrop { animation: none; }

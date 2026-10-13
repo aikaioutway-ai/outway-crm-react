@@ -6,7 +6,7 @@ import { QK, queryClient } from '../services/queryClient';
 import { money } from '../utils/pricing';
 import { formatName } from '../utils/format';
 import { schoolLabel } from './data';
-import { CHILD_STATUS_OPTIONS, CHILD_STATUS_TONE, ErrorBox, InfoRow, PhoneRow, Sheet, Skeletons, StatusBadge, TransferBadge } from './ui';
+import { CHILD_STATUS_OPTIONS, ErrorBox, InfoRow, PhoneRow, SelectField, Sheet, Skeletons, StatusBadge, TransferBadge } from './ui';
 
 export default function FamilySheet({ familyId, onClose, canEditStatus, showFinance }: {
   familyId: string;
@@ -114,22 +114,14 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
                 {showFinance && child.monthlyPrice > 0 && <span className="m-badge">{money(child.monthlyPrice)}/мес</span>}
               </div>
               {canEditStatus && (
-                <div className="m-status-picker" style={{ marginTop: 10 }}>
-                  {CHILD_STATUS_OPTIONS.map(option => {
-                    const active = child.status === option.value;
-                    const tone = CHILD_STATUS_TONE[option.value];
-                    return (
-                      <button
-                        key={option.value}
-                        type="button"
-                        disabled={savingId === child.rowId || active}
-                        onClick={() => changeStatus(child.rowId, formatName(child.childName), option.value)}
-                        style={active ? { background: tone.bg, color: tone.color, borderColor: tone.color, opacity: 1 } : undefined}
-                      >
-                        {savingId === child.rowId && !active ? '…' : option.label}
-                      </button>
-                    );
-                  })}
+                <div style={{ marginTop: 10 }}>
+                  <SelectField
+                    label={savingId === child.rowId ? 'Сохраняю…' : 'Статус'}
+                    value={child.status}
+                    disabled={savingId === child.rowId}
+                    onChange={status => changeStatus(child.rowId, formatName(child.childName), status)}
+                    options={CHILD_STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label }))}
+                  />
                 </div>
               )}
             </div>

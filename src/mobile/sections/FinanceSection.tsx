@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { canAccessFinanceExpenses } from '../../core/bars/Sidebar';
 import { loadExpenseRows, periodBounds } from '../../modules/costs/expenseRows';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_KEYS, ExpenseCategory, ExpenseRecord } from '../../modules/costs/expenseTypes';
@@ -9,7 +8,7 @@ import { compactMoney } from '../../modules/families/familiesRowHelpers';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { money } from '../../utils/pricing';
 import { Screen, useNavPosition } from '../nav';
-import { Badge, Chips, Empty, ErrorBox, formatDate, InfoRow, Kpi, Sheet, Skeletons, useIncremental } from '../ui';
+import { Badge, Empty, ErrorBox, formatDate, InfoRow, Kpi, SelectField, Sheet, Skeletons, useIncremental } from '../ui';
 
 const METHOD_LABEL: Record<string, string> = { cash: 'Наличные', cashless: 'Безналичные' };
 
@@ -51,8 +50,7 @@ export default function FinanceSection({ user }: { user: AuthenticatedUser }) {
   const [category, setCategory] = useState<'ALL' | ExpenseCategory>('ALL');
   const nav = useNavPosition();
 
-  const periodIndex = Math.max(0, CASHIER_PERIODS.findIndex(period => period.key === periodKey));
-  const period = CASHIER_PERIODS[periodIndex];
+  const period = CASHIER_PERIODS.find(item => item.key === periodKey) ?? CASHIER_PERIODS[0];
   const bounds = periodBounds(period.month - 1, period.year);
 
   const expenses = useQuery({
@@ -87,14 +85,22 @@ export default function FinanceSection({ user }: { user: AuthenticatedUser }) {
   return (
     <>
       <Screen pageKey="finance:expenses" title="Финансы" subtitle="Расходы">
-        <div className="m-month">
-          <button type="button" className="m-icon-btn" aria-label="Предыдущий месяц" disabled={periodIndex === 0} onClick={() => setPeriodKey(CASHIER_PERIODS[periodIndex - 1].key)}>
-            <ChevronLeft size={20} />
-          </button>
-          <div className="m-month-label">{period.label}</div>
-          <button type="button" className="m-icon-btn" aria-label="Следующий месяц" disabled={periodIndex === CASHIER_PERIODS.length - 1} onClick={() => setPeriodKey(CASHIER_PERIODS[periodIndex + 1].key)}>
-            <ChevronRight size={20} />
-          </button>
+        <div className="m-selects">
+          <SelectField
+            label="Месяц"
+            value={period.key}
+            onChange={setPeriodKey}
+            options={CASHIER_PERIODS.map(item => ({ value: item.key, label: item.label }))}
+          />
+          <SelectField
+            label="Категория"
+            value={category}
+            onChange={setCategory}
+            options={[
+              { value: 'ALL' as const, label: 'Все категории' },
+              ...categories.map(key => ({ value: key, label: EXPENSE_CATEGORIES[key].label })),
+            ]}
+          />
         </div>
         {expenses.error && <ErrorBox>{expenses.error instanceof Error ? expenses.error.message : 'Не удалось загрузить расходы'}</ErrorBox>}
         {expenses.isLoading ? <Skeletons /> : (
@@ -103,14 +109,6 @@ export default function FinanceSection({ user }: { user: AuthenticatedUser }) {
               <Kpi label={category === 'ALL' ? 'Всего расходов' : EXPENSE_CATEGORIES[category].label} value={`${compactMoney(total)} сом`} color="#B3261E" />
               <Kpi label="Записей" value={visible.length} />
             </div>
-            <Chips
-              value={category}
-              onChange={setCategory}
-              options={[
-                { value: 'ALL' as const, label: 'Все' },
-                ...categories.map(key => ({ value: key, label: EXPENSE_CATEGORIES[key].label })),
-              ]}
-            />
             <ExpenseList rows={visible} onOpen={row => nav.push({ kind: 'expense', expenseId: row.id, sheet: true })} />
             <div className="m-note">Добавление расходов, табель и зарплата — в полной версии на компьютере.</div>
           </>

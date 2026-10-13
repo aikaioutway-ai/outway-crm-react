@@ -12,7 +12,7 @@ import { formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { money } from '../../utils/pricing';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
-import { Badge, Chips, Empty, ErrorBox, formatDate, InfoRow, Kpi, PhoneRow, SearchField, Segment, Sheet, Skeletons, todayIso, useIncremental } from '../ui';
+import { Badge, Empty, ErrorBox, formatDate, InfoRow, Kpi, PhoneRow, SearchField, Segment, SelectField, Sheet, Skeletons, todayIso, useIncremental } from '../ui';
 
 type CashierTab = 'pending' | 'confirmed' | 'refunds';
 
@@ -231,7 +231,7 @@ export default function CashierSection({ user }: { user: AuthenticatedUser }) {
             { value: 'refunds', label: 'Возвраты' },
           ]}
         />
-        <Chips value={periodKey} onChange={setPeriodKey} options={PERIOD_OPTIONS} />
+        <SelectField label="Месяц" value={periodKey} onChange={setPeriodKey} options={PERIOD_OPTIONS} />
         <SearchField value={query} onChange={setQuery} placeholder="Родитель, ребёнок или телефон" />
         {active.error && <ErrorBox>Не удалось загрузить данные. Проверьте интернет и обновите страницу.</ErrorBox>}
         {active.isLoading && !active.data ? <Skeletons /> : tab === 'pending' ? (

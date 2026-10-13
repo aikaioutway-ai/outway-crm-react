@@ -5,7 +5,7 @@ import { Employee, EmployeeRole, UserRole } from '../../types';
 import { formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { schoolLabel } from '../data';
 import { Screen, useNavPosition } from '../nav';
-import { Badge, CallButton, Chips, Empty, ErrorBox, formatDate, InfoRow, PhoneRow, SearchField, Sheet, Skeletons, useIncremental } from '../ui';
+import { Badge, CallButton, Empty, ErrorBox, formatDate, InfoRow, PhoneRow, SearchField, SelectField, Sheet, Skeletons, useIncremental } from '../ui';
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Админ', gen_director: 'Ген. директор', director: 'Директор', manager: 'Менеджер', cashier: 'Кассир',
@@ -104,11 +104,12 @@ export default function EmployeesSection({ user, onBack }: { user: Authenticated
     <>
       <Screen pageKey="employees:home" title="Сотрудники" subtitle={`${scoped.filter(employee => employee.status === 'active').length} активных`} onBack={onBack}>
         <SearchField value={query} onChange={setQuery} placeholder="Имя, должность или телефон" />
-        <Chips
+        <SelectField
+          label="Отдел"
           value={department}
           onChange={setDepartment}
           options={[
-            { value: 'all', label: 'Все', count: scoped.length },
+            { value: 'all', label: 'Все отделы', count: scoped.length },
             ...DEPARTMENTS
               .map(item => ({ value: item.value, label: item.label, count: scoped.filter(employee => item.roles.includes(employee.role)).length }))
               .filter(item => item.count > 0),

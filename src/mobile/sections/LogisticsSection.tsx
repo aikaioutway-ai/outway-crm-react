@@ -8,7 +8,7 @@ import { ChildList, SchoolCard } from '../cards';
 import { byChildName, groupBySchool, isLogisticsWorkRow, rowMatches, schoolByKey, schoolsFor, transferSort } from '../data';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
-import { Badge, CallButton, Chips, Empty, ErrorBox, InfoRow, Kpi, PhoneRow, SearchField, Segment, Sheet, Skeletons, useIncremental } from '../ui';
+import { Badge, CallButton, Empty, ErrorBox, InfoRow, Kpi, PhoneRow, SearchField, Segment, SelectField, Sheet, Skeletons, useIncremental } from '../ui';
 
 type HomeTab = 'schools' | 'drivers';
 
@@ -134,13 +134,14 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
       <>
         <Screen pageKey={`logistics:${page.schoolKey}`} title={school?.label ?? page.schoolKey} subtitle={`Логистика · ${schoolRows.length} детей`} onBack={nav.back}>
           <SearchField value={schoolQuery} onChange={setSchoolQuery} placeholder="Имя, телефон или адрес" />
-          <Chips
+          <SelectField
+            label="Трансфер"
             value={transfer}
             onChange={setTransfer}
             options={[
-              { value: 'all', label: 'Все', count: schoolRows.length },
+              { value: 'all', label: 'Все трансферы', count: schoolRows.length },
               { value: 'none', label: 'Без трансфера', count: schoolRows.filter(row => !row.transferNumber).length },
-              ...transfers.map(number => ({ value: number, label: `№${number}`, count: schoolRows.filter(row => row.transferNumber === number).length })),
+              ...transfers.map(number => ({ value: number, label: `Трансфер №${number}`, count: schoolRows.filter(row => row.transferNumber === number).length })),
             ]}
           />
           <ChildList rows={visible} onOpen={openFamily} emptyText="Никого не найдено" showAddress />

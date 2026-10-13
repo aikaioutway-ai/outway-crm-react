@@ -7,12 +7,12 @@ import { ChildList, SchoolCard } from '../cards';
 import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor } from '../data';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
-import { Chips, ErrorBox, Kpi, SearchField, Skeletons } from '../ui';
+import { ErrorBox, Kpi, SearchField, SelectField, Skeletons } from '../ui';
 
 type ManagerFilter = 'all' | 'new' | 'waiting' | 'boarded' | 'paused' | 'rejected' | 'debtors';
 
 const FILTERS: { value: ManagerFilter; label: string; test: (row: FamilyListRow) => boolean }[] = [
-  { value: 'all', label: 'Все', test: row => row.status !== 'rejected' },
+  { value: 'all', label: 'Все в работе', test: row => row.status !== 'rejected' },
   { value: 'new', label: 'Новые', test: row => row.status === 'new' },
   { value: 'waiting', label: 'Ожидание', test: row => row.status === 'waiting' },
   { value: 'boarded', label: 'Посажены', test: row => row.status === 'boarded' },
@@ -63,7 +63,8 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
           onBack={nav.back}
         >
           <SearchField value={schoolQuery} onChange={setSchoolQuery} placeholder="Ребёнок, родитель или телефон" />
-          <Chips
+          <SelectField
+            label="Статус"
             value={filter}
             onChange={setFilter}
             options={FILTERS.map(item => ({ value: item.value, label: item.label, count: schoolRows.filter(item.test).length }))}
