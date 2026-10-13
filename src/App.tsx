@@ -385,7 +385,7 @@ export default function App() {
   }
 
   return (
-    <div className="crm-shell" style={{ display: 'flex', height: '100%', background: 'var(--active-bg)' }}>
+    <div style={{ display: 'flex', height: '100%', background: 'var(--active-bg)' }}>
       <Sidebar
         active={section === 'drivers' ? 'logistics' : section}
         onChange={setSection}
@@ -401,7 +401,6 @@ export default function App() {
       />
 
       <main
-        className="crm-main"
         onClick={() => setSidebarCollapseSignal(value => value + 1)}
         style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: 10, background: 'var(--active-bg)' }}
       >

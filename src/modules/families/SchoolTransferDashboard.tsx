@@ -92,7 +92,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   const badgeLabel = mode === 'charges' ? 'Должников' : 'Посадка не подтверждена';
 
   return (
-    <div className="school-mobile-transfers" style={{
+    <div style={{
       display: 'flex',
       gap: 8,
       flexShrink: 0,

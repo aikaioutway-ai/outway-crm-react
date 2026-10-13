@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
-import useMobile from '../hooks/useMobile';
 import B2BIcon from '../icons/B2BIcon';
 
 export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings';
@@ -54,11 +53,8 @@ export function canAccessSection(role: UserRole, section: NavSection, userId?: s
 }
 
 export default function Sidebar({ active, onChange, badges = {}, userRole, userId, onLogout, collapseSignal = 0, onFiltersClick, onColumnsClick, filtersActive, columnsActive }: SidebarProps) {
-  const mobile = useMobile();
-  const [mobileOpen, setMobileOpen] = useState(false);
-  useEffect(() => { setMobileOpen(false); }, [active]);
   const [collapsedBySection, setCollapsedBySection] = useState<Partial<Record<NavSection, boolean>>>({});
-  const collapsed = mobile ? false : (collapsedBySection[active] ?? true);
+  const collapsed = collapsedBySection[active] ?? true;
   const setCollapsed = (next: boolean) => {
     setCollapsedBySection(prev => ({ ...prev, [active]: next }));
   };
@@ -72,10 +68,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
   const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId));
 
   return (
-    <>
-      <button className="crm-mobile-menu" aria-label={mobileOpen ? 'Закрыть меню' : 'Открыть меню'} aria-expanded={mobileOpen} onClick={() => setMobileOpen(value => !value)}>☰</button>
-      {mobile && mobileOpen && <button className="crm-mobile-backdrop" aria-label="Закрыть меню" onClick={() => setMobileOpen(false)} />}
-    <aside className={`crm-sidebar ${mobileOpen ? 'crm-sidebar--open' : ''}`} style={{
+    <aside style={{
       width: w,
       height: 'calc(100vh - 20px)',
       background: '#FFFFFF',
@@ -153,7 +146,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
           return (
             <button
               key={n.key}
-              onClick={() => { onChange(n.key); setMobileOpen(false); }}
+              onClick={() => onChange(n.key)}
               title={collapsed ? n.label : undefined}
               style={{
                 width: isActive && collapsed ? 'calc(100% + 12px)' : '100%',
@@ -284,7 +277,6 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
         )}
       </div>
     </aside>
-    </>
   );
 }
 

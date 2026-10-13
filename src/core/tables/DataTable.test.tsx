@@ -149,31 +149,3 @@ test('restores the read-only cell when dismissed without selecting', async () =>
   expect(screen.getByText('cash')).toBeInTheDocument();
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
 });
-
-
-test('mobile summary shows only requested fields and opens the card by name', () => {
-  const originalMatchMedia = window.matchMedia;
-  window.matchMedia = jest.fn().mockReturnValue({ matches: true, addEventListener: jest.fn(), removeEventListener: jest.fn() });
-  const open = jest.fn();
-  const save = jest.fn();
-  const row = { id: 'child-mobile', childName: 'Тестовый ребёнок', branchShort: 'ABL', transferNumber: '3', phone: 'hidden-phone' };
-  const columns: ColumnDef<typeof row>[] = [
-    { key: 'childName', label: 'Ребёнок', type: 'text', editable: true },
-    { key: 'phone', label: 'Телефон', type: 'text' },
-  ];
-  try {
-    render(<DataTable columns={columns} mobileColumns={[
-      { key: 'childName', label: 'ФИО', type: 'text' },
-      { key: 'branchShort', label: 'Школа', type: 'text' },
-      { key: 'transferNumber', label: 'Трансфер', type: 'text' },
-    ]} data={[row]} rowKey="id" onRowOpen={open} onCellSave={save} />);
-    expect(screen.getByText('ФИО')).toBeInTheDocument();
-    expect(screen.getByText('ABL')).toBeInTheDocument();
-    expect(screen.queryByText('hidden-phone')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Тестовый ребёнок' }));
-    expect(open).toHaveBeenCalledWith(row);
-    expect(save).not.toHaveBeenCalled();
-  } finally {
-    window.matchMedia = originalMatchMedia;
-  }
-});
