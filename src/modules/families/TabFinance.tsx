@@ -242,13 +242,14 @@ export default function TabFinance({
           </Section>
         </div>
 
+        <div className="finance-adjustments-grid">
         {(canCreateRefund || refunds.length > 0) && (
           <Section title="Возвраты">
-            <div style={paymentPanelStyle}>
+            <div className="finance-adjustment-panel" style={paymentPanelStyle}>
               {canCreateRefund && (
-                <div style={{ ...newPaymentGridStyle, marginBottom: refunds.length > 0 ? 10 : 0 }}>
+                <div className="finance-refund-form" style={{ ...newPaymentGridStyle, marginBottom: refunds.length > 0 ? 10 : 0 }}>
                   <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="Сумма возврата" style={inputStyle} />
-                  <input value={refundComment} onChange={e => setRefundComment(e.target.value)} placeholder="Комментарий" style={inputStyle} />
+                  <input value={refundComment} onChange={e => setRefundComment(e.target.value)} placeholder="Комментарий" className="finance-refund-comment" style={inputStyle} />
                   <button onClick={submitRefund} disabled={savingRefund || !refundAmount} style={submitPaymentBtnStyle(savingRefund || !refundAmount)}>
                     {savingRefund ? 'Сохраняем...' : 'Оформить возврат →'}
                   </button>
@@ -280,6 +281,8 @@ export default function TabFinance({
             onCancel={onCancelChargeDiscount}
           />
         )}
+
+        </div>
 
         <Section
           title="Месячная таблица"

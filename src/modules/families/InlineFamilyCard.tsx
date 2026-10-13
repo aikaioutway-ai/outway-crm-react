@@ -732,7 +732,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                       <MapPin size={13} /> Изменить и пересчитать
                     </button>
                   )}
-                  <DetailInput editing={editing} liveCommit label="Комментарий" tone="clear" value={cardFamily.comment ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, comment: value }))} />
+                  <DetailInput editing={editing} liveCommit multiline label="Комментарий" tone="clear" value={cardFamily.comment ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, comment: value }))} />
                 </DetailPanel>
               </div>
 
@@ -1312,7 +1312,7 @@ function DetailPanel({ title, children, accent }: { title: string; children: Rea
   );
 }
 
-function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false, whatsapp = false, liveCommit = false }: {
+function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text', tone = 'soft', editing = false, whatsapp = false, liveCommit = false, multiline = false }: {
   label: string;
   value: string;
   onCommit: (value: string) => void;
@@ -1322,6 +1322,7 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   editing?: boolean;
   whatsapp?: boolean;
   liveCommit?: boolean;
+  multiline?: boolean;
 }) {
   const [local, setLocal] = useState(value);
   useEffect(() => setLocal(value), [value]);
@@ -1329,7 +1330,17 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
   return (
     <label className="family-detail-row" style={detailFieldStyle(tone)}>
       <span style={detailLabelStyle}>{label}</span>
-      {editing ? (
+      {multiline ? (
+        editing ? <textarea
+          className="family-card-control"
+          aria-label={label}
+          value={local}
+          placeholder={placeholder}
+          onChange={event => { setLocal(event.target.value); if (liveCommit) onCommit(event.target.value); }}
+          onBlur={event => { if (!liveCommit) onCommit(event.currentTarget.value); }}
+          style={{ ...detailControlStyle, height: 72, resize: 'vertical', minHeight: 54, maxHeight: 160, padding: 8 }}
+        /> : <span tabIndex={0} aria-label={label} style={{ ...detailControlStyle, display: 'block', height: 'auto', maxHeight: 72, overflowY: 'auto', overflowWrap: 'anywhere', whiteSpace: 'pre-wrap', paddingLeft: 0 }}>{value || placeholder}</span>
+      ) : editing ? (
         <input
           className="family-card-control"
           type={type}

@@ -93,10 +93,6 @@ export interface TransferRepricingPlan {
   familyComments: Array<{ familyId: string; text: string }>;
 }
 
-function money(value: number): string {
-  return Math.round(value).toLocaleString('ru-RU');
-}
-
 const VEHICLE_NAME: Record<VehicleType, string> = {
   sedan: 'Sedan',
   minivan: 'Minivan',
@@ -160,9 +156,9 @@ export function buildTransferRepricingPlan(input: TransferRepricingPlanInput): T
   const familyComments = Array.from(new Set(changedChildren.map(child => child.familyId))).map(familyId => {
     const familyChildren = changedChildren.filter(child => child.familyId === familyId);
     const details = familyChildren.map(child => (
-      `${child.childName}: изначально выбран ${VEHICLE_NAME[child.requestedVehicleType]}, фактически определён ${VEHICLE_NAME[child.newVehicleType]}; стоимость ${money(child.oldFinalPrice)} → ${money(child.newFinalPrice)}`
-    )).join('; ');
-    return { familyId, text: `[Логистика] Трансфер №${input.transferNumber}: ${details}.` };
+      `Изначально выбран «${VEHICLE_NAME[child.requestedVehicleType]}»`
+    )).filter((text, index, texts) => texts.indexOf(text) === index).join('\n');
+    return { familyId, text: details };
   });
 
   return {
