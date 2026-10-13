@@ -80,3 +80,52 @@ export function ChildList({ rows, onOpen, emptyText, ...cardProps }: {
     </div>
   );
 }
+
+/** Дети одной семьи — одной карточкой, в исходном порядке списка. */
+export function groupFamilies(rows: FamilyListRow[]): FamilyListRow[][] {
+  const families = new Map<string, FamilyListRow[]>();
+  rows.forEach(row => {
+    const family = families.get(row.familyId);
+    if (family) family.push(row);
+    else families.set(row.familyId, [row]);
+  });
+  return Array.from(families.values());
+}
+
+export function FamilyCard({ children, onClick }: { children: FamilyListRow[]; onClick: () => void }) {
+  return (
+    <button type="button" className="m-card" onClick={onClick}>
+      <div className="m-card-row">
+        <div className="m-card-main">
+          {children.map(child => {
+            // В базе встречаются дети с именем «.» — по ним семью не узнать, подписываем родителем.
+            const name = /[\p{L}]/u.test(child.childName) ? formatName(child.childName) : '';
+            return (
+              <div key={child.rowId} className="m-card-title">
+                {name || <>Без имени <span className="m-card-sub" style={{ display: 'inline' }}>· {formatName(child.parentName) || 'родитель не указан'}</span></>}
+              </div>
+            );
+          })}
+        </div>
+        <ChevronRight className="m-card-chevron" size={20} />
+      </div>
+    </button>
+  );
+}
+
+export function FamilyList({ families, onOpen, emptyText }: {
+  families: FamilyListRow[][];
+  onOpen: (familyId: string) => void;
+  emptyText: string;
+}) {
+  const [visible, sentinelRef] = useIncremental(families);
+  if (!families.length) return <Empty>{emptyText}</Empty>;
+  return (
+    <div className="m-list">
+      {visible.map(family => (
+        <FamilyCard key={family[0].familyId} onClick={() => onOpen(family[0].familyId)}>{family}</FamilyCard>
+      ))}
+      <div ref={sentinelRef} className="m-more" />
+    </div>
+  );
+}

@@ -26,7 +26,11 @@ export function isMobilePreview(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const param = new URLSearchParams(window.location.search).get('mobile');
-    if (param === '1') sessionStorage.setItem(PREVIEW_KEY, '1');
+    if (param === '1') {
+      sessionStorage.setItem(PREVIEW_KEY, '1');
+      // Ссылка на мобильную версию важнее ранее выбранной «полной версии».
+      localStorage.removeItem(FORCE_DESKTOP_KEY);
+    }
     if (param === '0') sessionStorage.removeItem(PREVIEW_KEY);
     return sessionStorage.getItem(PREVIEW_KEY) === '1';
   } catch {

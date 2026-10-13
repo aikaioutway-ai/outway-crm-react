@@ -3,23 +3,22 @@ import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from '../../modules/families/constants';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { FamilyListRow } from '../../services/crmV2Service';
-import { ChildList, SchoolCard } from '../cards';
-import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor } from '../data';
+import { ChildList, FamilyList, groupFamilies, SchoolCard } from '../cards';
+import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor, transferSort } from '../data';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
 import { ErrorBox, Kpi, SearchField, SelectField, Skeletons } from '../ui';
 
-type ManagerFilter = 'all' | 'new' | 'waiting' | 'boarded' | 'paused' | 'rejected' | 'debtors';
+/** Фильтр школы: все в работе, конкретный трансфер, без трансфера или отказники. */
+type ManagerFilter = 'all' | 'none' | 'rejected' | `transfer:${string}`;
 
-const FILTERS: { value: ManagerFilter; label: string; test: (row: FamilyListRow) => boolean }[] = [
-  { value: 'all', label: 'Все в работе', test: row => row.status !== 'rejected' },
-  { value: 'new', label: 'Новые', test: row => row.status === 'new' },
-  { value: 'waiting', label: 'Ожидание', test: row => row.status === 'waiting' },
-  { value: 'boarded', label: 'Посажены', test: row => row.status === 'boarded' },
-  { value: 'paused', label: 'Пауза', test: row => row.status === 'paused' },
-  { value: 'rejected', label: 'Отказ', test: row => row.status === 'rejected' },
-  { value: 'debtors', label: 'Должники', test: row => row.childDebtAmount > 0 },
-];
+function matchesFilter(row: FamilyListRow, filter: ManagerFilter): boolean {
+  if (filter === 'rejected') return row.status === 'rejected';
+  if (row.status === 'rejected') return false;
+  if (filter === 'all') return true;
+  if (filter === 'none') return !row.transferNumber;
+  return row.transferNumber === filter.slice('transfer:'.length);
+}
 
 export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();
@@ -36,10 +35,21 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const page = nav.page;
   const schoolKey = page?.kind === 'school' ? page.schoolKey : null;
   const schoolRows = useMemo(() => (schoolKey ? bySchool.get(schoolKey) ?? [] : []), [bySchool, schoolKey]);
-  const visible = useMemo(() => {
-    const activeFilter = FILTERS.find(item => item.value === filter) ?? FILTERS[0];
-    return schoolRows.filter(row => activeFilter.test(row) && rowMatches(row, schoolQuery)).sort(byChildName);
-  }, [schoolRows, filter, schoolQuery]);
+  const families = useMemo(
+    () => groupFamilies(schoolRows.filter(row => matchesFilter(row, filter) && rowMatches(row, schoolQuery)).sort(byChildName)),
+    [schoolRows, filter, schoolQuery],
+  );
+  const filterOptions = useMemo(() => {
+    const working = schoolRows.filter(row => row.status !== 'rejected');
+    const transfers = Array.from(new Set(working.map(row => row.transferNumber).filter((value): value is string => !!value))).sort(transferSort);
+    const count = (value: ManagerFilter) => schoolRows.filter(row => matchesFilter(row, value)).length;
+    return [
+      { value: 'all' as ManagerFilter, label: 'Все трансферы', count: count('all') },
+      ...transfers.map(number => ({ value: `transfer:${number}` as ManagerFilter, label: `Трансфер №${number}`, count: count(`transfer:${number}`) })),
+      { value: 'none' as ManagerFilter, label: 'Без трансфера', count: count('none') },
+      { value: 'rejected' as ManagerFilter, label: 'Отказ', count: count('rejected') },
+    ];
+  }, [schoolRows]);
   const searchResults = useMemo(
     () => (query.trim() ? rows.filter(row => rowMatches(row, query)).sort(byChildName) : []),
     [rows, query],
@@ -63,13 +73,12 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
           onBack={nav.back}
         >
           <SearchField value={schoolQuery} onChange={setSchoolQuery} placeholder="Ребёнок, родитель или телефон" />
-          <SelectField
-            label="Статус"
-            value={filter}
-            onChange={setFilter}
-            options={FILTERS.map(item => ({ value: item.value, label: item.label, count: schoolRows.filter(item.test).length }))}
+          <SelectField label="Трансфер" value={filter} onChange={setFilter} options={filterOptions} />
+          <FamilyList
+            families={families}
+            onOpen={familyId => nav.push({ kind: 'family', familyId, sheet: true })}
+            emptyText="Никого не найдено"
           />
-          <ChildList rows={visible} onOpen={openFamily} emptyText="Никого не найдено" showDebt />
         </Screen>
         {sheet}
       </>
