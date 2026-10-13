@@ -13,8 +13,7 @@ export type NavEntry =
   | { kind: 'family'; familyId: string; sheet: true }
   | { kind: 'driver'; driverId: string; sheet: true }
   | { kind: 'employee'; employeeId: string; sheet: true }
-  | { kind: 'payment'; paymentId: string; sheet: true }
-  | { kind: 'export'; sheet: true };
+  | { kind: 'payment'; paymentId: string; sheet: true };
 
 interface MobileNavValue {
   stack: NavEntry[];

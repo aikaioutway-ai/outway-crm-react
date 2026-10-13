@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChevronDown, MessageCircle, Phone, Search, X } from 'lucide-react';
 import { formatPhone } from '../utils/format';
+import { VEHICLE_COLOR } from '../core/dashboard/TransferCell';
 
 export const CHILD_STATUS_OPTIONS = [
   { value: 'new', label: 'Новый' },
@@ -28,9 +29,20 @@ export function Badge({ children, tone }: { children: React.ReactNode; tone?: { 
   return <span className="m-badge" style={tone ? { background: tone.bg, color: tone.color } : undefined}>{children}</span>;
 }
 
-export function TransferBadge({ number }: { number: string | null | undefined }) {
+/** Цвета типов машин — те же, что у номеров трансферов в основной CRM. */
+export function transferColor(vehicleType: string | null | undefined): string {
+  return VEHICLE_COLOR[vehicleType ?? ''] ?? '#64748B';
+}
+
+/** Номер трансфера цветом типа машины, как в основной CRM. */
+export function TransferChip({ number, vehicleType }: { number: string | null | undefined; vehicleType?: string | null }) {
+  if (!number) return <span className="m-transfer-chip is-none">—</span>;
+  return <span className="m-transfer-chip" style={{ background: transferColor(vehicleType) }}>{number}</span>;
+}
+
+export function TransferBadge({ number, vehicleType }: { number: string | null | undefined; vehicleType?: string | null }) {
   return number
-    ? <Badge tone={{ bg: '#E0F0FF', color: '#1D4ED8' }}>Трансфер №{number}</Badge>
+    ? <Badge tone={{ bg: transferColor(vehicleType), color: '#FFFFFF' }}>Трансфер №{number}</Badge>
     : <Badge tone={{ bg: '#FFF1E6', color: '#B45309' }}>Без трансфера</Badge>;
 }
 
@@ -113,10 +125,10 @@ export function SelectField<T extends string>({ label, value, onChange, options,
   );
 }
 
-export function Kpi({ label, value, color }: { label: string; value: React.ReactNode; color?: string }) {
+export function Kpi({ label, value, color, icon }: { label: string; value: React.ReactNode; color?: string; icon?: React.ReactNode }) {
   return (
     <div className="m-kpi">
-      <div className="m-kpi-value" style={color ? { color } : undefined}>{value}</div>
+      <div className="m-kpi-value" style={color ? { color } : undefined}>{icon && <span className="m-kpi-icon">{icon}</span>}{value}</div>
       <div className="m-kpi-label">{label}</div>
     </div>
   );

@@ -201,6 +201,9 @@ button.m-card:active { transform: scale(.985); background: var(--surface-2); }
 }
 
 .m-stats { display: flex; gap: 12px; margin-top: 8px; flex-wrap: wrap; }
+.m-stat--icon { display: inline-flex; align-items: center; gap: 4px; }
+.m-stat--icon b { display: inline; }
+.m-kpi-icon { display: inline-flex; vertical-align: -2px; margin-right: 5px; opacity: .85; }
 .m-stat b { display: block; font-size: 16px; font-weight: 800; line-height: 1.2; }
 .m-stat span { font-size: 11px; color: var(--text-2); font-weight: 600; }
 
@@ -224,6 +227,18 @@ button.m-card:active { transform: scale(.985); background: var(--surface-2); }
 }
 .m-transfer-num.is-none { background: #FFF1E6; color: #B45309; }
 .m-transfer-num.is-rejected { background: #ECEFF3; color: #52606F; }
+
+/* Номер трансфера — плашка цвета типа машины (бус, минивэн, седан), как в основной CRM. */
+.m-transfer-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 28px; height: 22px; padding: 0 6px; margin-right: 6px;
+  border-radius: 6px;
+  color: #FFFFFF; font-size: 12px; font-weight: 900;
+  vertical-align: 1px;
+}
+.m-transfer-chip.is-none { background: #ECEFF3; color: #52606F; }
+.m-title-transfer { display: inline-flex; align-items: center; }
+.m-title-transfer .m-transfer-chip { height: 26px; min-width: 34px; font-size: 15px; }
 
 /* Список детей — одна плашка со строками: видно, что это перечень, а не карточки. */
 .m-rows { background: #FFFFFF; border: 1px solid #E3ECEF; border-radius: 16px; overflow: hidden; }

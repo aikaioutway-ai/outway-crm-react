@@ -1,12 +1,12 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Ban, ChevronRight, FileDown, FileText, Image as ImageIcon, Send, UserX } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Ban, ChevronRight, Download, UserX } from 'lucide-react';
 import { VT_LABEL } from '../modules/families/constants';
 import { FamilyListRow, V2DriverTableRow } from '../services/crmV2Service';
 import { formatName, formatPhone } from '../utils/format';
 import { byChildName, rowMatches, transferSort } from './data';
-import { canShareFile, ExportList, prepareExportFiles, shareOrDownload } from './exportList';
+import { downloadListImage, ExportList } from './exportList';
 import { Screen } from './nav';
-import { CallButton, Empty, ErrorBox, Kpi, SearchField, Sheet, StatusBadge, useIncremental } from './ui';
+import { CallButton, Empty, ErrorBox, Kpi, SearchField, StatusBadge, TransferChip, transferColor, useIncremental } from './ui';
 
 export type SchoolMode = 'manager' | 'logistics';
 
@@ -23,6 +23,13 @@ export function rowsForTransfer(rows: FamilyListRow[], transfer: string): Family
 
 function isUnboarded(row: FamilyListRow): boolean {
   return !!row.transferNumber && row.status !== 'boarded' && row.status !== 'rejected';
+}
+
+/** Самый частый тип машины в трансфере: по нему цвет номера, как в основной CRM. */
+export function vehicleTypeOf(rows: FamilyListRow[]): string {
+  const counts = new Map<string, number>();
+  rows.forEach(row => { if (row.vehicleType) counts.set(row.vehicleType, (counts.get(row.vehicleType) ?? 0) + 1); });
+  return Array.from(counts.entries()).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '';
 }
 
 function vehicleOf(rows: FamilyListRow[]): string {
@@ -83,7 +90,10 @@ function TransferTile({ transfer, rows, drivers, mode, onClick }: {
   const fresh = rows.filter(row => row.status === 'new').length;
   return (
     <button type="button" className="m-card m-transfer" onClick={onClick}>
-      <span className={`m-transfer-num ${transfer === NO_TRANSFER ? 'is-none' : transfer === REJECTED ? 'is-rejected' : ''}`}>
+      <span
+        className={`m-transfer-num ${transfer === NO_TRANSFER ? 'is-none' : transfer === REJECTED ? 'is-rejected' : ''}`}
+        style={special ? undefined : { background: transferColor(vehicleTypeOf(rows)), color: '#FFFFFF' }}
+      >
         {transfer === NO_TRANSFER ? <Ban size={20} /> : transfer === REJECTED ? <UserX size={20} /> : `№${transfer}`}
       </span>
       <span className="m-card-main">
@@ -99,34 +109,24 @@ function TransferTile({ transfer, rows, drivers, mode, onClick }: {
   );
 }
 
-/** Строка ребёнка: у менеджера — статус и родитель, у логиста — остановка, адрес, время. */
+/** Строка ребёнка: ФИО, ниже адрес и телефон. Логисту — ещё остановка и время, менеджеру — статус. */
 function ChildRowItem({ row, mode, showTransfer, onClick }: { row: FamilyListRow; mode: SchoolMode; showTransfer: boolean; onClick: () => void }) {
-  const hasName = /[\p{L}]/u.test(row.childName);
-  // У менеджера родитель и так во второй строке, у логиста там адрес.
-  const name = hasName ? formatName(row.childName) : mode === 'manager' ? 'Без имени' : `Без имени · ${formatName(row.parentName)}`;
-  const transferLabel = showTransfer ? (row.transferNumber ? `№${row.transferNumber}` : 'без трансфера') : '';
-  if (mode === 'logistics') {
-    return (
-      <button type="button" className="m-row" onClick={onClick}>
-        <span className="m-row-lead">{row.stopNumber || '—'}</span>
-        <span className="m-row-main">
-          <span className="m-row-title">{name}</span>
-          <span className="m-row-sub">{[transferLabel, row.streetAddress || 'адрес не указан'].filter(Boolean).join(' · ')}</span>
-        </span>
-        <span className="m-row-end">
-          {row.timeMorning && <span className="m-row-time">{row.timeMorning.slice(0, 5)}</span>}
-          {row.status !== 'boarded' && <StatusBadge status={row.status} />}
-        </span>
-      </button>
-    );
-  }
+  const name = /[\p{L}]/u.test(row.childName) ? formatName(row.childName) : 'Без имени';
   return (
     <button type="button" className="m-row" onClick={onClick}>
+      {mode === 'logistics' && <span className="m-row-lead">{row.stopNumber || '—'}</span>}
       <span className="m-row-main">
-        <span className="m-row-title">{name}</span>
-        <span className="m-row-sub">{[transferLabel, formatName(row.parentName), formatPhone(row.phone)].filter(Boolean).join(' · ')}</span>
+        <span className="m-row-title">
+          {showTransfer && <TransferChip number={row.transferNumber} vehicleType={row.vehicleType} />}
+          {name}
+        </span>
+        <span className="m-row-sub">{row.streetAddress || 'адрес не указан'}</span>
+        {row.phone && <span className="m-row-sub">{formatPhone(row.phone)}</span>}
       </span>
-      <span className="m-row-end"><StatusBadge status={row.status} /></span>
+      <span className="m-row-end">
+        {mode === 'logistics' && row.timeMorning && <span className="m-row-time">{row.timeMorning.slice(0, 5)}</span>}
+        {(mode === 'manager' || row.status !== 'boarded') && <StatusBadge status={row.status} />}
+      </span>
     </button>
   );
 }
@@ -214,8 +214,8 @@ export function buildExportList(schoolLabel: string, transfer: string, rows: Fam
   return {
     title: `${schoolLabel} · ${transferTitle(transfer)}`,
     subtitle: [date, vehicleOf(rows), driver ? `водитель ${formatName(driver.fullName)}` : '', `${rows.length} детей`].filter(Boolean).join(' · '),
+    // Сначала дети по номерам остановок, потом без остановки — номер в списке один, сквозной.
     rows: sorted.map(row => ({
-      stop: row.stopNumber ?? '',
       name: /[\p{L}]/u.test(row.childName) ? formatName(row.childName) : 'Без имени',
       address: row.streetAddress,
       phones: [row.phone, row.secondPhone].filter(Boolean).map(phone => formatPhone(phone)),
@@ -225,7 +225,7 @@ export function buildExportList(schoolLabel: string, transfer: string, rows: Fam
 }
 
 /** Экран трансфера: водитель, кнопка «Список для водителя» и дети по строкам. */
-export function TransferScreen({ mode, schoolKey, schoolLabel, transfer, rows, drivers, onOpenFamily, onExport, onBack }: {
+export function TransferScreen({ mode, schoolKey, schoolLabel, transfer, rows, drivers, onOpenFamily, onBack }: {
   mode: SchoolMode;
   schoolKey: string;
   schoolLabel: string;
@@ -233,17 +233,29 @@ export function TransferScreen({ mode, schoolKey, schoolLabel, transfer, rows, d
   rows: FamilyListRow[];
   drivers: V2DriverTableRow[];
   onOpenFamily: (row: FamilyListRow) => void;
-  onExport: () => void;
   onBack: () => void;
 }) {
   const sorted = useMemo(() => sortForMode(rows, mode), [rows, mode]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const downloadList = async () => {
+    setSaving(true);
+    setError('');
+    try {
+      await downloadListImage(buildExportList(schoolLabel, transfer, rows, drivers));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Не удалось сделать картинку');
+    } finally {
+      setSaving(false);
+    }
+  };
   const special = transfer === NO_TRANSFER || transfer === REJECTED;
   const driver = special ? undefined : driverOf(rows, drivers);
   const vehicle = vehicleOf(rows);
   return (
     <Screen
       pageKey={`${mode}:${schoolKey}:${transfer}`}
-      title={transferTitle(transfer)}
+      title={special ? transferTitle(transfer) : <span className="m-title-transfer"><TransferChip number={transfer} vehicleType={vehicleTypeOf(rows)} /> Трансфер</span>}
       subtitle={[schoolLabel, special ? '' : vehicle, `${rows.length} детей`].filter(Boolean).join(' · ')}
       onBack={onBack}
     >
@@ -260,44 +272,12 @@ export function TransferScreen({ mode, schoolKey, schoolLabel, transfer, rows, d
         </div>
       )}
       {rows.length > 0 && transfer !== REJECTED && (
-        <button type="button" className="m-btn m-btn--primary m-btn--block" onClick={onExport}>
-          <Send size={18} /> Список для водителя
+        <button type="button" className="m-btn m-btn--primary m-btn--block" disabled={saving} onClick={downloadList}>
+          <Download size={18} /> {saving ? 'Готовлю картинку…' : 'Скачать список для водителя'}
         </button>
       )}
+      {error && <ErrorBox>{error}</ErrorBox>}
       <ChildRows rows={sorted} mode={mode} onOpen={onOpenFamily} emptyText="В трансфере нет детей" />
     </Screen>
-  );
-}
-
-/** Выбор формата: картинка удобнее для WhatsApp, PDF — для печати. */
-export function ExportSheet({ list, onClose }: { list: ExportList; onClose: () => void }) {
-  const [files, setFiles] = useState<{ png: File; pdf: File } | null>(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    prepareExportFiles(list)
-      .then(result => { if (active) setFiles(result); })
-      .catch(reason => { if (active) setError(reason instanceof Error ? reason.message : 'Не удалось подготовить список'); });
-    return () => { active = false; };
-  }, [list]);
-
-  const sharing = files ? canShareFile(files.png) : false;
-  const open = (file: File) => { void shareOrDownload(file, list.title); };
-
-  return (
-    <Sheet title="Список для водителя" onClose={onClose}>
-      <div className="m-note">
-        <b style={{ color: 'var(--text)' }}>{list.title}</b><br />
-        {list.subtitle}. В списке: ФИО, адрес, телефоны родителей, остановка и время.
-      </div>
-      {error && <ErrorBox>{error}</ErrorBox>}
-      <button type="button" className="m-btn m-btn--primary m-btn--block" disabled={!files} onClick={() => files && open(files.png)}>
-        <ImageIcon size={18} /> {files ? (sharing ? 'Отправить картинкой' : 'Скачать картинку PNG') : 'Готовлю…'}
-      </button>
-      <button type="button" className="m-btn m-btn--block" disabled={!files} onClick={() => files && open(files.pdf)}>
-        {sharing ? <FileText size={18} /> : <FileDown size={18} />} {sharing ? 'Отправить PDF' : 'Скачать PDF'}
-      </button>
-    </Sheet>
   );
 }

@@ -1,18 +1,36 @@
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { useFamiliesTable } from '../hooks/useCrmQueries';
-import { FamilyListRow, updateV2Child } from '../services/crmV2Service';
+import { FamilyListRow, updateV2Child, updateV2ChildRoute } from '../services/crmV2Service';
+import { VehicleType } from '../types';
 import { QK, queryClient } from '../services/queryClient';
 import { money } from '../utils/pricing';
 import { formatName } from '../utils/format';
 import { schoolLabel } from './data';
 import { CHILD_STATUS_OPTIONS, ErrorBox, InfoRow, PhoneRow, SelectField, Sheet, Skeletons, StatusBadge, TransferBadge } from './ui';
 
-export default function FamilySheet({ familyId, onClose, canEditStatus, showFinance }: {
+const TRANSFER_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1));
+const STOP_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1));
+
+/** Номера для выбора: 1–30 плюс текущий, если он больше. */
+function numberOptions(values: string[], current: string | null, emptyLabel: string, prefix: string) {
+  const list = current && !values.includes(current) ? [...values, current] : values;
+  return [{ value: '', label: emptyLabel }, ...list.map(value => ({ value, label: `${prefix}${value}` }))];
+}
+
+function patchRow(childId: string, patch: Partial<FamilyListRow>) {
+  // Показываем изменение сразу, не дожидаясь перезагрузки всей таблицы.
+  queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, current => current?.map(row => (
+    row.rowId === childId ? { ...row, ...patch } : row
+  )));
+}
+
+export default function FamilySheet({ familyId, onClose, canEditStatus, showFinance, userName }: {
   familyId: string;
   onClose: () => void;
   canEditStatus: boolean;
   showFinance: boolean;
+  userName?: string;
 }) {
   const { data, isLoading } = useFamiliesTable();
   const rows = (data ?? []).filter(row => row.familyId === familyId);
@@ -28,10 +46,7 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
     try {
       // Статус пересчитывает семейную скидку и может создать начисление при посадке.
       await updateV2Child(childId, { status });
-      // Показываем новый статус сразу, не дожидаясь перезагрузки всей таблицы.
-      queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, current => current?.map(row => (
-        row.rowId === childId ? { ...row, status } : row
-      )));
+      patchRow(childId, { status });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось сменить статус');
     } finally {
@@ -39,7 +54,55 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
     }
   };
 
-  const title = family ? formatName(family.parentName) || formatName(family.childName) || 'Семья' : 'Семья';
+  /** Перенос в другой трансфер — как в полной версии: база пересчитывает цену под тип машины. */
+  const changeTransfer = async (child: FamilyListRow, transfer: string) => {
+    setSavingId(child.rowId);
+    setError('');
+    try {
+      await updateV2ChildRoute({
+        child: {
+          id: child.rowId,
+          familyId: child.familyId,
+          childName: child.childName,
+          class: child.childClass,
+          selfExitAllowed: false,
+          schoolCode: child.schoolCode as never,
+          schoolId: child.schoolId ?? undefined,
+          branchId: child.branchId ?? undefined,
+          zone: child.zone as never,
+          vehicleType: child.vehicleType as VehicleType,
+        },
+        vehicleType: child.vehicleType as VehicleType,
+        transferNumber: transfer ? Number(transfer) : undefined,
+        stopNumber: child.stopNumber ? Number(child.stopNumber) : undefined,
+        timeMorning: child.timeMorning ?? undefined,
+        source: 'transfer_move',
+        actorName: userName,
+      });
+      patchRow(child.rowId, { transferNumber: transfer || null });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Не удалось сменить трансфер');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  const changeStop = async (child: FamilyListRow, stop: string) => {
+    setSavingId(child.rowId);
+    setError('');
+    try {
+      await updateV2Child(child.rowId, { stop_order: stop ? Number(stop) : null });
+      patchRow(child.rowId, { stopNumber: stop || null });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Не удалось сменить остановку');
+    } finally {
+      setSavingId(null);
+    }
+  };
+
+  // Ориентируемся на детей: в заголовке их имена.
+  const title = children.map(child => (/[\p{L}]/u.test(child.childName) ? formatName(child.childName) : '')).filter(Boolean).join(', ')
+    || (family ? formatName(family.parentName) : '') || 'Семья';
   const mapUrl = family?.latitude && family?.longitude
     ? `https://yandex.ru/maps/?rtext=~${family.latitude},${family.longitude}&rtt=auto`
     : family?.streetAddress
@@ -108,13 +171,29 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
                 <StatusBadge status={child.status} />
               </div>
               <div className="m-card-meta">
-                <TransferBadge number={child.transferNumber} />
+                <TransferBadge number={child.transferNumber} vehicleType={child.vehicleType} />
                 {child.stopNumber && <span className="m-badge">Остановка {child.stopNumber}</span>}
                 {child.timeMorning && <span className="m-badge">Утро {child.timeMorning.slice(0, 5)}</span>}
                 {showFinance && child.monthlyPrice > 0 && <span className="m-badge">{money(child.monthlyPrice)}/мес</span>}
               </div>
               {canEditStatus && (
-                <div style={{ marginTop: 10 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
+                  <div className="m-selects">
+                    <SelectField
+                      label="Трансфер"
+                      value={child.transferNumber ?? ''}
+                      disabled={savingId === child.rowId}
+                      onChange={transfer => changeTransfer(child, transfer)}
+                      options={numberOptions(TRANSFER_NUMBERS, child.transferNumber, 'Без трансфера', '№')}
+                    />
+                    <SelectField
+                      label="Остановка"
+                      value={child.stopNumber ?? ''}
+                      disabled={savingId === child.rowId}
+                      onChange={stop => changeStop(child, stop)}
+                      options={numberOptions(STOP_NUMBERS, child.stopNumber, 'Не указана', '')}
+                    />
+                  </div>
                   <SelectField
                     label={savingId === child.rowId ? 'Сохраняю…' : 'Статус'}
                     value={child.status}
@@ -126,7 +205,7 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
               )}
             </div>
           ))}
-          <div className="m-note">Редактирование адреса, маршрута, оплат и скидок — в полной версии на компьютере.</div>
+          <div className="m-note">Адрес, время, оплаты и скидки меняются в полной версии на компьютере.</div>
         </>
       )}
     </Sheet>

@@ -7,7 +7,7 @@ import { ChildList, SchoolCard } from '../cards';
 import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor } from '../data';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
-import { buildExportList, ExportSheet, rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
+import { rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
 import { ErrorBox, Kpi, SearchField, Skeletons } from '../ui';
 
 export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
@@ -33,16 +33,10 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   );
   const driverRows = useMemo(() => drivers.data ?? [], [drivers.data]);
   const schoolLabel = schoolKey ? schoolByKey(schoolKey)?.label ?? schoolKey : '';
-  const exportList = useMemo(
-    () => (transferKey ? buildExportList(schoolLabel, transferKey, transferRows, driverRows) : null),
-    [schoolLabel, transferKey, transferRows, driverRows],
-  );
 
   const openFamily = (row: FamilyListRow) => nav.push({ kind: 'family', familyId: row.familyId, sheet: true });
   const sheet = nav.sheet?.kind === 'family' ? (
-    <FamilySheet familyId={nav.sheet.familyId} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance />
-  ) : nav.sheet?.kind === 'export' && exportList ? (
-    <ExportSheet list={exportList} onClose={nav.back} />
+    <FamilySheet familyId={nav.sheet.familyId} userName={user.name} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance />
   ) : null;
 
   if (page?.kind === 'transfer') {
@@ -56,7 +50,6 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
           rows={transferRows}
           drivers={driverRows}
           onOpenFamily={openFamily}
-          onExport={() => nav.push({ kind: 'export', sheet: true })}
           onBack={nav.back}
         />
         {sheet}

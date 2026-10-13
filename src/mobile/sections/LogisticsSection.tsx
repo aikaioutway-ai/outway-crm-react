@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Bus, Car, Route, UserPlus, Users, UserX } from 'lucide-react';
 import { useDriversTable, useFamiliesTable } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed, SCHOOL_TIER_2_KEYS } from '../../modules/families/constants';
 import { AuthenticatedUser } from '../../services/employeeService';
@@ -7,7 +8,7 @@ import { formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { ChildList, SchoolCard } from '../cards';
 import { byChildName, groupBySchool, isLogisticsWorkRow, rowMatches, schoolByKey, schoolsFor } from '../data';
 import { isNewUnassignedRow, transferIdentityKey } from '../../modules/families/familiesRowHelpers';
-import { buildExportList, ExportSheet, rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
+import { rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
 import { Badge, CallButton, Empty, ErrorBox, InfoRow, Kpi, PhoneRow, SearchField, Segment, Sheet, Skeletons, useIncremental } from '../ui';
@@ -131,10 +132,6 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
   const transferKey = page?.kind === 'transfer' ? page.transfer : null;
   const transferRows = useMemo(() => (transferKey ? rowsForTransfer(schoolRows, transferKey) : []), [schoolRows, transferKey]);
   const schoolLabel = schoolKey ? schoolByKey(schoolKey)?.label ?? schoolKey : '';
-  const exportList = useMemo(
-    () => (transferKey ? buildExportList(schoolLabel, transferKey, transferRows, driverList) : null),
-    [schoolLabel, transferKey, transferRows, driverList],
-  );
   const searchResults = useMemo(
     () => (query.trim() && homeTab === 'schools' ? rows.filter(row => rowMatches(row, query)).sort(byChildName) : []),
     [rows, query, homeTab],
@@ -149,9 +146,7 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
   const openFamily = (row: FamilyListRow) => nav.push({ kind: 'family', familyId: row.familyId, sheet: true });
   const openedDriver = nav.sheet?.kind === 'driver' ? driverList.find(driver => driver.driverId === (nav.sheet as { driverId: string }).driverId) : null;
   const sheet = nav.sheet?.kind === 'family' ? (
-    <FamilySheet familyId={nav.sheet.familyId} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance={false} />
-  ) : nav.sheet?.kind === 'export' && exportList ? (
-    <ExportSheet list={exportList} onClose={nav.back} />
+    <FamilySheet familyId={nav.sheet.familyId} userName={user.name} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance={false} />
   ) : openedDriver ? <DriverSheet driver={openedDriver} onClose={nav.back} /> : null;
 
   if (page?.kind === 'transfer') {
@@ -165,7 +160,6 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
           rows={transferRows}
           drivers={driverList}
           onOpenFamily={openFamily}
-          onExport={() => nav.push({ kind: 'export', sheet: true })}
           onBack={nav.back}
         />
         {sheet}
@@ -216,12 +210,12 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
         ) : (
           <>
             <div className="m-kpis m-kpis--3">
-              <Kpi label="Новые заявки" value={totals.newRequests} color="#378ADD" />
-              <Kpi label="Трансферов" value={totals.transferCount} color="#0F766E" />
-              <Kpi label="Ср. загрузка буса" value={formatAverage(totals.microbusAverage)} color="#2563EB" />
-              <Kpi label="Микроавтобусы" value={totals.microbusCount} color="#1D6FA4" />
-              <Kpi label="Седан и минивэн" value={totals.lightVehicleCount} color="#15803D" />
-              <Kpi label="Не посажены" value={totals.unboarded} color="#B3261E" />
+              <Kpi label="Новые заявки" value={totals.newRequests} color="#378ADD" icon={<UserPlus size={16} />} />
+              <Kpi label="Трансферов" value={totals.transferCount} color="#0F766E" icon={<Route size={16} />} />
+              <Kpi label="Ср. загрузка буса" value={formatAverage(totals.microbusAverage)} color="#2563EB" icon={<Users size={16} />} />
+              <Kpi label="Микроавтобусы" value={totals.microbusCount} color="#1D6FA4" icon={<Bus size={16} />} />
+              <Kpi label="Седан и минивэн" value={totals.lightVehicleCount} color="#15803D" icon={<Car size={16} />} />
+              <Kpi label="Не посажены" value={totals.unboarded} color="#B3261E" icon={<UserX size={16} />} />
             </div>
             {[
               { title: 'Школы', items: schools.filter(item => !SCHOOL_TIER_2_KEYS.includes(item.school.key)) },
@@ -238,10 +232,11 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
                         school={school}
                         onClick={() => { setSchoolQuery(''); nav.push({ kind: 'school', schoolKey: school.key }); }}
                         stats={[
-                          { label: 'трансф.', value: stats.transferCount, color: '#0F766E' },
-                          { label: 'бусов', value: stats.microbusCount, color: '#1D6FA4' },
-                          { label: 'ср. загр.', value: formatAverage(stats.microbusAverage), color: '#2563EB' },
-                          { label: 'не посаж.', value: stats.unboarded, color: '#B3261E' },
+                          { label: 'Трансферов', value: stats.transferCount, color: '#0F766E', icon: <Route size={15} /> },
+                          { label: 'Микроавтобусы', value: stats.microbusCount, color: '#1D6FA4', icon: <Bus size={15} /> },
+                          { label: 'Седан и минивэн', value: stats.lightVehicleCount, color: '#15803D', icon: <Car size={15} /> },
+                          { label: 'Ср. загрузка буса', value: formatAverage(stats.microbusAverage), color: '#2563EB', icon: <Users size={15} /> },
+                          { label: 'Не посажены', value: stats.unboarded, color: '#B3261E', icon: <UserX size={15} /> },
                         ]}
                       />
                     );

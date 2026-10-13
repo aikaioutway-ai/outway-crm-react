@@ -228,7 +228,7 @@ export default function CashierSection({ user }: { user: AuthenticatedUser }) {
     ? (pending.data ?? []).find(row => row.id === (nav.sheet as { paymentId: string }).paymentId)
     : undefined;
   const sheet = nav.sheet?.kind === 'family' ? (
-    <FamilySheet familyId={nav.sheet.familyId} onClose={nav.back} canEditStatus={false} showFinance />
+    <FamilySheet familyId={nav.sheet.familyId} userName={user.name} onClose={nav.back} canEditStatus={false} showFinance />
   ) : openedPayment ? (
     <PendingPaymentSheet
       row={openedPayment}
