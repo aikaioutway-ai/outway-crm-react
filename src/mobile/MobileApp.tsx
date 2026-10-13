@@ -4,6 +4,7 @@ import { canAccessSection, NavSection } from '../core/bars/Sidebar';
 import { AuthenticatedUser } from '../services/employeeService';
 import { MobileNavProvider, Screen, useMobileNav, useNavPosition } from './nav';
 import { Skeletons } from './ui';
+import { isMobilePreview } from './useIsMobile';
 import './mobile.css';
 
 const ManagerSection = lazy(() => import('./sections/ManagerSection'));
@@ -117,7 +118,7 @@ function MobileShell({ user, onLogout, onOpenDesktop }: {
     : <MoreSection user={user} onLogout={onLogout} onOpenDesktop={onOpenDesktop} />;
 
   return (
-    <div className="m-app">
+    <div className={`m-app ${isMobilePreview() ? 'm-app--preview' : ''}`}>
       <Suspense fallback={<div className="m-content"><div className="m-page"><Skeletons /></div></div>}>
         {section}
       </Suspense>

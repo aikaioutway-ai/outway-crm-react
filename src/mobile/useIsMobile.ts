@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 const MOBILE_MAX_WIDTH = 760;
 const FORCE_DESKTOP_KEY = 'outway_force_desktop';
 const DESKTOP_VIEWPORT = 'width=1280';
+const PREVIEW_KEY = 'outway_mobile_preview';
 const MOBILE_VIEWPORT = 'width=device-width, initial-scale=1.0, viewport-fit=cover';
 
 /**
@@ -11,9 +12,26 @@ const MOBILE_VIEWPORT = 'width=device-width, initial-scale=1.0, viewport-fit=cov
  */
 function isPhone(): boolean {
   if (typeof window === 'undefined') return false;
+  if (isMobilePreview()) return true;
   if (typeof window.matchMedia === 'function' && window.matchMedia(`(max-width: ${MOBILE_MAX_WIDTH}px)`).matches) return true;
   const coarse = typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
   return coarse && Math.min(window.screen?.width ?? Infinity, window.screen?.height ?? Infinity) <= MOBILE_MAX_WIDTH;
+}
+
+/**
+ * Просмотр мобильной версии на компьютере по ссылке `?mobile=1`
+ * (`?mobile=0` выключает). Выбор держится до закрытия вкладки.
+ */
+export function isMobilePreview(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const param = new URLSearchParams(window.location.search).get('mobile');
+    if (param === '1') sessionStorage.setItem(PREVIEW_KEY, '1');
+    if (param === '0') sessionStorage.removeItem(PREVIEW_KEY);
+    return sessionStorage.getItem(PREVIEW_KEY) === '1';
+  } catch {
+    return new URLSearchParams(window.location.search).get('mobile') === '1';
+  }
 }
 
 /** Экран телефона: на нём CRM показывает отдельный мобильный интерфейс. */

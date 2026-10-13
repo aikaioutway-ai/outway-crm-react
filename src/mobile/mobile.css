@@ -19,6 +19,21 @@
 /* 16px — иначе iPhone приближает страницу при фокусе на поле. */
 .m-app input, .m-app select, .m-app textarea { font-size: 16px; }
 
+/* Просмотр на компьютере (?mobile=1): экран размером с телефон по центру. */
+@media (min-width: 761px) {
+  .m-app--preview {
+    inset: 24px auto 24px 50%;
+    width: 390px;
+    transform: translateX(-50%);
+    border-radius: 28px;
+    border: 1px solid var(--border);
+    box-shadow: 0 30px 80px rgba(23, 34, 47, .22);
+  }
+  /* transform делает рамку точкой отсчёта для fixed-листов — они остаются внутри «телефона». */
+  .m-app--preview .m-sheet { max-height: calc(100% - 24px); border-radius: 22px 22px 28px 28px; }
+  .m-app--preview .m-sheet--full { height: calc(100% - 24px); }
+}
+
 /* ── Шапка ─────────────────────────────────────────────────────── */
 .m-header {
   flex-shrink: 0;
