@@ -92,6 +92,9 @@ export default function PayrollModule({ schoolKey, transferFilter, schoolTab, pe
               </div>
               <PayrollSchoolKpiStrip
                 schoolKey={schoolKey}
+                periodMonth={ALL_PERIODS.find(period => period.key === periodKey)?.month ?? new Date().getMonth() + 1}
+                periodYear={ALL_PERIODS.find(period => period.key === periodKey)?.year ?? new Date().getFullYear()}
+                sessionToken={props.sessionToken}
                 view={schoolTab}
                 rightReserveWidth={rightReserveWidth}
                 summaryBySchool={summaryBySchool}

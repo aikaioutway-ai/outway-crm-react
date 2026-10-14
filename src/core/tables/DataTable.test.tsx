@@ -149,3 +149,17 @@ test('restores the read-only cell when dismissed without selecting', async () =>
   expect(screen.getByText('cash')).toBeInTheDocument();
   expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
 });
+
+test('sorts transfer numbers numerically even with a number prefix', async () => {
+  render(<DataTable columns={[{ key: 'transfer', label: 'Трансфер', type: 'text' }]}
+    data={[{ id: 'a', transfer: '№1' }, { id: 'b', transfer: '№10' }, { id: 'c', transfer: '№2' }]}
+    rowKey="id" storageKey="transfer-numeric-sort-test" />);
+  const table = screen.getAllByRole('table').at(-1)!;
+  fireEvent.click(within(table).getByText('Трансфер'));
+  await waitFor(() => {
+    const values = within(table).getAllByRole('row').slice(1).map(row => row.textContent ?? '');
+    expect(values[0]).toContain('№1');
+    expect(values[1]).toContain('№2');
+    expect(values[2]).toContain('№10');
+  });
+});

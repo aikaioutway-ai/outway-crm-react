@@ -199,7 +199,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
 
   function beginEditing() {
-    if (isCashier) return;
     setDraftFamily({ ...savedFamily });
     setDraftChildren(children.map(child => ({ ...child })));
     setDeletedChildIds(new Set());
@@ -700,11 +699,11 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                   <Check size={15} /> {savingAll ? 'Сохранение…' : 'Сохранить'}
                 </button>
               </>
-            ) : !isCashier ? (
+            ) : (
               <button type="button" onClick={beginEditing} style={editHeaderButtonStyle}>
                 <Pencil size={14} /> Редактировать
               </button>
-            ) : null}
+            )}
             <button type="button" aria-label="Закрыть карточку" onClick={onClose} style={closeButtonStyle}><X size={16} /></button>
           </div>
         </header>

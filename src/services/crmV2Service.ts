@@ -183,6 +183,7 @@ export interface V2DriverAdvance {
 export type PayrollSubjectType = 'driver' | 'employee';
 
 export interface V2PayrollEntry {
+  payrollTransferId?: string | null;
   id: string;
   subjectId: string;
   subjectType: PayrollSubjectType;
@@ -1783,6 +1784,7 @@ export async function deleteV2DriverAdvance(advanceId: string): Promise<void> {
 
 function mapV2PayrollEntry(row: any): V2PayrollEntry {
   return {
+    payrollTransferId: row.payroll_transfer_id ?? null,
     id: String(row.id),
     subjectId: String(row.subject_id),
     subjectType: row.subject_type,
@@ -1887,6 +1889,7 @@ export async function fetchV2PayrollEntriesForPeriod(periodMonth: number, period
 }
 
 export async function upsertV2PayrollEntry(patch: {
+  payrollTransferId?: string;
   subjectId: string;
   subjectType: PayrollSubjectType;
   periodMonth: number;
@@ -1905,6 +1908,7 @@ export async function upsertV2PayrollEntry(patch: {
     period_month: periodMonth,
     period_year: periodYear,
   };
+  if (patch.payrollTransferId !== undefined) payload.payroll_transfer_id = patch.payrollTransferId;
   if (days !== undefined) payload.days = days;
   if (rate !== undefined) payload.rate = rate;
   if (accruedAmount !== undefined) payload.accrued_amount = accruedAmount;

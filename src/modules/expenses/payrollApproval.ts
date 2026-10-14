@@ -17,3 +17,8 @@ export function canEditTimesheet(
   if (approvalStatus === 'draft' || approvalStatus === 'rejected') return true;
   return approvalStatus === 'pending' && isPayrollApprover(userRole, userName);
 }
+
+export function canReturnTimesheet(status: PayrollApprovalStatus, role?: UserRole, name?: string): boolean {
+  if (status === 'pending') return role === 'cashier' || isPayrollApprover(role, name);
+  return status === 'approved' && isPayrollApprover(role, name);
+}

@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Banknote, CheckCircle2, ChevronRight, Clock3, ReceiptText, ShieldCheck, WalletCards } from 'lucide-react';
-import { useDriversTable } from '../../hooks/useCrmQueries';
+import { useDriversTable, usePayrollApproval } from '../../hooks/useCrmQueries';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { money } from '../../utils/pricing';
 import { computePayrollStats, PAYROLL_COLORS, PayrollMoneySummary } from './payrollStats';
@@ -8,13 +8,18 @@ import { PayrollSchoolTab } from '../expenses/timesheetTypes';
 
 interface PayrollSchoolKpiStripProps {
   schoolKey: string;
+  periodMonth: number;
+  periodYear: number;
+  sessionToken?: string;
   view: PayrollSchoolTab;
   rightReserveWidth?: number;
   summaryBySchool?: Record<string, PayrollMoneySummary>;
   leadingContent?: React.ReactNode;
 }
 
-export default function PayrollSchoolKpiStrip({ schoolKey, view, rightReserveWidth = 0, summaryBySchool = {}, leadingContent }: PayrollSchoolKpiStripProps) {
+export default function PayrollSchoolKpiStrip({ schoolKey, periodMonth, periodYear, sessionToken, view, rightReserveWidth = 0, summaryBySchool = {}, leadingContent }: PayrollSchoolKpiStripProps) {
+  const { data: approval } = usePayrollApproval(schoolKey, periodMonth, periodYear, sessionToken);
+  const awaitingApproval = view === 'salary' && approval?.status !== 'approved';
   const { data: rows = null } = useDriversTable();
 
   const stat = useMemo(() => (
@@ -38,7 +43,7 @@ export default function PayrollSchoolKpiStrip({ schoolKey, view, rightReserveWid
         value={stat.label}
         color={stat.color}
       />
-      <KpiChip icon={null} label="Начислено" value={money(stat.accruedAmount)} color={PAYROLL_COLORS.accruedAmount} />
+      <KpiChip icon={null} label={awaitingApproval ? "Ожидает утверждения" : "Начислено"} value={money(stat.accruedAmount)} color={awaitingApproval ? "#8896A5" : PAYROLL_COLORS.accruedAmount} />
     </>
   );
 
@@ -54,7 +59,7 @@ export default function PayrollSchoolKpiStrip({ schoolKey, view, rightReserveWid
       <KpiChip icon={null} label="Авансы" value={money(stat.advanceAmount)} color={PAYROLL_COLORS.advanceAmount} />
       <KpiChip icon={null} label="Зарплата" value={money(stat.salaryAmount)} color={PAYROLL_COLORS.salaryAmount} />
       <KpiChip icon={null} label="Оплачено" value={money(stat.paidAmount)} color={PAYROLL_COLORS.paidAmount} />
-      <KpiChip icon={null} label="Остаток" value={money(stat.remainingAmount)} color={PAYROLL_COLORS.remainingAmount} />
+      <KpiChip icon={null} label="Остаток" value={money(stat.remainingAmount)} color={awaitingApproval ? "#8896A5" : PAYROLL_COLORS.remainingAmount} />
     </>
   );
 

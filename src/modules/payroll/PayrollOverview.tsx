@@ -1,3 +1,5 @@
+import { useQuery } from '@tanstack/react-query';
+import { fetchV2TransfersDashboard, V2TransferDashboardRow } from '../../services/crmV2Service';
 import HiddenSchoolsList from '../families/HiddenSchoolsList';
 import { useEmployeeAdvances } from '../../hooks/useCrmQueries';
 import { useEffect, useMemo, useState } from 'react';
@@ -76,34 +78,33 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
   const { data: advances = null } = useDriverAdvancesForPeriod(periodMonth, periodYear);
   const { data: approvals = [] } = usePayrollApprovalsForPeriod(periodMonth, periodYear, sessionToken);
 
+  const { data: payrollTransfers = [] } = useQuery({ queryKey: ['payrollTransfers'], queryFn: fetchV2TransfersDashboard });
+  const payrollDrivers = useMemo(() => (rows ?? []).map(driver => {
+    const entry = (entries ?? []).find(item => item.subjectId === driver.driverId && item.subjectType === 'driver');
+    const transfer = payrollTransfers.find((item: V2TransferDashboardRow) => item.id === entry?.payrollTransferId);
+    return transfer ? { ...driver, branchCodes: [transfer.branchCode], branchNames: [transfer.branchName] } : driver;
+  }), [rows, entries, payrollTransfers]);
+
   const summaryBySchool = useMemo(
-    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], rows ?? [], employees ?? [], employeeAdvances, userRole),
-    [entries, advances, rows, employees, employeeAdvances, userRole],
+    () => buildPayrollSummaryBySchool(entries ?? [], advances ?? [], payrollDrivers, employees ?? [], employeeAdvances, userRole),
+    [entries, advances, payrollDrivers, employees, employeeAdvances, userRole],
   );
 
   const approvalBySchool = useMemo(() => new Map(approvals.map(approval => [approval.schoolKey, approval.status])), [approvals]);
   const entryApprovalBySchool = useMemo(
-    () => buildPayrollApprovalSummaryBySchool(entries ?? [], rows ?? [], employees ?? [], userRole),
-    [employees, entries, rows, userRole],
+    () => buildPayrollApprovalSummaryBySchool(entries ?? [], payrollDrivers, employees ?? [], userRole),
+    [employees, entries, payrollDrivers, userRole],
   );
   const stats = useMemo<PayrollOverviewStat[]>(() => computePayrollStats(rows ?? [], summaryBySchool).map(stat => {
-    const approvalStatus = approvalBySchool.get(stat.key);
-    const approved = approvalStatus === 'approved';
+
+
     const staged = {
       ...stat,
       pendingAmount: entryApprovalBySchool[stat.key]?.pendingAmount ?? 0,
       approvedAmount: entryApprovalBySchool[stat.key]?.approvedAmount ?? 0,
     };
-    if (view !== 'salary' || approved) return staged;
-    return {
-      ...staged,
-      accruedAmount: 0,
-      advanceAmount: 0,
-      salaryAmount: 0,
-      paidAmount: 0,
-      remainingAmount: 0,
-    };
-  }), [approvalBySchool, entryApprovalBySchool, rows, summaryBySchool, view]);
+    return staged;
+  }), [entryApprovalBySchool, rows, summaryBySchool]);
   const visibleStats = useMemo(
     () => stats.filter(stat => stat.key === PAYROLL_OFFICE_KEY || SCHOOL_TIER_2_KEYS.includes(stat.key) === (schoolTier === '2.0')),
     [stats, schoolTier],
@@ -202,7 +203,7 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
             ['pendingAmount', 'На согласовании', <Clock3 size={17} color="#fff" />, money(totals.pendingAmount), '#B45309'],
             ['approvedAmount', 'Утверждено', <ShieldCheck size={17} color="#fff" />, money(totals.approvedAmount), '#15803D'],
           ] as const : [
-            ['accruedAmount', 'Начислено', <ReceiptText size={17} color="#fff" />, money(totals.accruedAmount), PAYROLL_COLORS.accruedAmount],
+            ['accruedAmount', 'Начислено', <ReceiptText size={17} color="#fff" />, money(totals.approvedAmount), PAYROLL_COLORS.accruedAmount],
             ['advanceAmount', 'Авансы', <WalletCards size={17} color="#fff" />, money(totals.advanceAmount), PAYROLL_COLORS.advanceAmount],
             ['salaryAmount', 'Зарплата', <Banknote size={17} color="#fff" />, money(totals.salaryAmount), PAYROLL_COLORS.salaryAmount],
             ['paidAmount', 'Оплачено', <CheckCircle2 size={17} color="#fff" />, money(totals.paidAmount), PAYROLL_COLORS.paidAmount],
@@ -220,7 +221,10 @@ export default function PayrollOverview({ view, userRole, sessionToken, periodKe
             >
               {sortedStats.map((row, index) => (
                 <div key={row.key} data-school-row={row.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 === 1 ? 'var(--surface-2)' : undefined }}>
-                  <span style={{ fontSize: 14, fontWeight: 700, color: (row.data[key] ?? 0) > 0 ? color : undefined }}>{money(row.data[key] ?? 0)}</span>
+                  <div>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: view === 'salary' && (key === 'accruedAmount' || key === 'remainingAmount') && approvalBySchool.get(row.data.key) !== 'approved' ? '#8896A5' : (row.data[key] ?? 0) > 0 ? color : undefined }}>{money(row.data[key] ?? 0)}</span>
+                    {view === 'salary' && key === 'accruedAmount' && row.data.accruedAmount > 0 && approvalBySchool.get(row.data.key) !== 'approved' && <div style={{ fontSize: 10, color: '#8896A5' }}>Ожидает утверждения</div>}
+                  </div>
                 </div>
               ))}
             </ColumnCard>

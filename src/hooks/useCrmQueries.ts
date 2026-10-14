@@ -101,10 +101,11 @@ export function useSchoolApplicationCounts(): Record<string, number> | undefined
   return data;
 }
 
-export function useEmployees(): UseQueryResult<Employee[]> {
+export function useEmployees(options?: { enabled?: boolean }): UseQueryResult<Employee[]> {
   return useQuery({
     queryKey: QK.employees,
     queryFn: fetchEmployees,
+    enabled: options?.enabled ?? true,
   });
 }
 

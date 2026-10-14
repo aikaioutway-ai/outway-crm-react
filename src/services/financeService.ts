@@ -345,7 +345,7 @@ export async function deleteFamilyPayment(payment: FamilyPayment): Promise<void>
   if (payment.status === 'Подтверждено') {
     throw new Error('Подтверждённый платёж нельзя удалить простым удалением: используй cancelConfirmedPayment.');
   }
-  const { error } = await supabase.from('v2_payments').delete().eq('id', payment.id);
+  const { error } = await supabase.from('v2_payments').delete().eq('id', payment.id).in('status', ['На проверке', 'Отклонено', 'Черновик']);
   if (error) throw new Error(error.message);
   invalidateFinanceCache();
 }

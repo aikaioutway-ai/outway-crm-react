@@ -1,12 +1,13 @@
+import { useQuery } from '@tanstack/react-query';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { PayrollSubjectType, setV2PayrollApprovalStatus, upsertV2PayrollEntries, upsertV2PayrollEntry, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
+import { fetchV2TransfersDashboard, V2TransferDashboardRow, PayrollSubjectType, setV2PayrollApprovalStatus, upsertV2PayrollEntries, upsertV2PayrollEntry, V2DriverTableRow, V2PayrollEntry } from '../../services/crmV2Service';
 import { useEmployeeAdvances, useDriverAdvancesForPeriod, useDriversTable, useEmployees, usePayrollApproval, usePayrollEntriesForPeriod, usePayrollPaymentsForPeriod } from '../../hooks/useCrmQueries';
 import { queryClient, QK } from '../../services/queryClient';
 import { UserRole } from '../../types';
 import { SCHOOL_TABS } from '../families/constants';
 import { PAYROLL_OFFICE_KEY, PayrollSchoolTab, TimesheetPayrollSummary } from './timesheetTypes';
-import { canEditTimesheet, isPayrollApprover } from './payrollApproval';
+import { canEditTimesheet, canReturnTimesheet, isPayrollApprover } from './payrollApproval';
 import SalaryPaymentModal from './SalaryPaymentModal';
 import { SalaryPaymentSubject, SalaryRecipientOption, salaryRemainingAmount } from './salaryPayment';
 import { canViewEmployeePayroll } from '../payroll/payrollVisibility';
@@ -73,30 +74,36 @@ function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string)
 }
 
 export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehicleType, transferFilter = '', periodMonth, periodYear, onSummaryChange, payrollView = 'timesheet', search = '', userRole, userName, sessionToken }: Props) {
+  const [adding, setAdding] = useState(false);
+  const [addDriverId, setAddDriverId] = useState('');
+  const [addTransferId, setAddTransferId] = useState('');
+  const [addBusy, setAddBusy] = useState(false);
+  const [transferSort, setTransferSort] = useState<'asc' | 'desc' | null>(null);
   const isOffice = schoolKey === PAYROLL_OFFICE_KEY;
   const isTimesheetView = payrollView === 'timesheet';
   const isAdvanceView = payrollView === 'advance';
   const isSalaryView = payrollView === 'salary';
 
+  const { data: payrollTransfers = [], error: transferLoadError } = useQuery({ queryKey: ['payrollTransfers'], queryFn: fetchV2TransfersDashboard, enabled: !isOffice });
   const { data: allDrivers = [], isLoading: driversLoading } = useDriversTable();
-  const { data: allEmployees = [], isLoading: employeesLoading } = useEmployees();
+  const { data: allEmployees = [], isLoading: employeesLoading } = useEmployees({ enabled: isOffice || isSalaryView });
   const { data: entries = [] } = usePayrollEntriesForPeriod(periodMonth, periodYear, sessionToken);
   const { data: employeeAdvances = [] } = useEmployeeAdvances();
   const employeeAdvanceById = useMemo(() => employeeAdvances.filter(row => row.periodMonth === periodMonth && row.periodYear === periodYear).reduce<Record<string, number>>((map, row) => { map[row.employeeId] = (map[row.employeeId] ?? 0) + row.amount; return map; }, {}), [employeeAdvances, periodMonth, periodYear]);
   const { data: rawAdvances = [] } = useDriverAdvancesForPeriod(periodMonth, periodYear);
   const { data: payrollPayments = [] } = usePayrollPaymentsForPeriod(periodMonth, periodYear, sessionToken);
   const { data: approval = null } = usePayrollApproval(schoolKey, periodMonth, periodYear, sessionToken);
-  const loading = driversLoading || employeesLoading;
+  const loading = isOffice ? employeesLoading : driversLoading;
   const [approvalBusy, setApprovalBusy] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [approvalError, setApprovalError] = useState('');
   const [selectedSalaryIds, setSelectedSalaryIds] = useState<Set<string>>(new Set());
   const [paymentSubjects, setPaymentSubjects] = useState<SalaryPaymentSubject[] | null>(null);
   const approvalStatus = approval?.status ?? 'draft';
-  const timesheetEditable = approvalStatus === 'draft' || approvalStatus === 'rejected';
-  const salaryEditable = approvalStatus === 'approved';
+  const timesheetEditable = approvalStatus !== 'pending';
+  const salaryEditable = entries.some(entry => entry.approvalStatus === 'approved');
   const approver = isPayrollApprover(userRole, userName);
-  const timesheetCanEdit = canEditTimesheet(approvalStatus, userRole, userName);
+  const timesheetCanEdit = approvalStatus === 'approved' || canEditTimesheet(approvalStatus, userRole, userName);
 
   const entryBySubject = useMemo(() => {
     const map: Record<string, V2PayrollEntry> = {};
@@ -122,6 +129,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
     const basePenalty = existing?.penaltyAmount ?? 0;
     const next: V2PayrollEntry = {
       id: existing?.id ?? subjectId,
+      payrollTransferId: existing?.payrollTransferId ?? null,
       subjectId,
       subjectType,
       periodMonth,
@@ -156,14 +164,19 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       penaltyAmount: next.penaltyAmount,
       accruedAmount: next.accruedAmount ?? Math.max(0, next.days * next.rate + next.bonusAmount - next.penaltyAmount),
       salaryAmount: next.salaryAmount,
-    }).catch(() => {});
+    }).catch(error => { queryClient.invalidateQueries({ queryKey: QK.payrollEntries(periodMonth, periodYear) }); setApprovalError(error instanceof Error ? error.message : 'Не удалось сохранить строку'); });
   }, [globalDays, globalRate, periodMonth, periodYear]);
 
   // Фильтрация водителей по школе
   const schoolTab = SCHOOL_TABS.find(t => t.key === schoolKey);
   const filteredDrivers = useMemo(() => {
     if (isOffice) return [];
-    let result = allDrivers;
+    let result = allDrivers.map(driver => {
+      const entry = entryBySubject[driver.driverId];
+      const transfer = payrollTransfers.find((item: V2TransferDashboardRow) => item.id === entry?.payrollTransferId);
+      return transfer ? { ...driver, transferNumbers: transfer.transferNumber, transferCount: 1,
+        vehicleType: transfer.vehicleType, branchCodes: [transfer.branchCode], branchNames: [transfer.branchName] } : driver;
+    });
     if (schoolTab && schoolTab.key !== 'ALL') {
       result = result.filter(d =>
         d.branchCodes.some(c => schoolTab.codes.includes(c)) ||
@@ -179,7 +192,31 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
       result = result.filter(d => driverMatchesTransfer(d, transferFilter));
     }
     return result;
-  }, [allDrivers, isOffice, schoolTab, transferFilter, vehicleType]);
+  }, [allDrivers, entryBySubject, payrollTransfers, isOffice, schoolTab, transferFilter, vehicleType]);
+
+  const selectableTransfers = payrollTransfers.filter((transfer: V2TransferDashboardRow) => !schoolTab || schoolTab.key === 'ALL'
+    || schoolTab.codes.includes(transfer.branchCode) || schoolTab.branches.includes(transfer.branchName));
+
+  async function addPayrollDriver() {
+    if (!addDriverId || !addTransferId || addBusy || !timesheetCanEdit) return;
+    const existing = entries.find(entry => entry.subjectType === 'driver' && entry.subjectId === addDriverId);
+    if (existing?.approvalStatus === 'approved' || existing?.approvalStatus === 'pending') {
+      setApprovalError('Табель этого водителя уже отправлен или утверждён.'); return;
+    }
+    if (existing?.payrollTransferId && existing.payrollTransferId !== addTransferId) {
+      setApprovalError('Этот водитель уже добавлен на другой трансфер за выбранный месяц.'); return;
+    }
+    setAddBusy(true); setApprovalError('');
+    try {
+      await upsertV2PayrollEntry({ subjectId: addDriverId, subjectType: 'driver', periodMonth, periodYear,
+        payrollTransferId: addTransferId,
+        ...(!existing ? { days: 0, rate: globalRate, accruedAmount: 0, bonusAmount: 0, penaltyAmount: 0, salaryAmount: 0 } : {}),
+      });
+      setAdding(false); setAddDriverId(''); setAddTransferId('');
+    } catch (error) {
+      setApprovalError(error instanceof Error ? error.message : 'Не удалось добавить водителя');
+    } finally { setAddBusy(false); }
+  }
 
   const filteredEmployees = useMemo(() => (
     isOffice
@@ -249,12 +286,18 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
 
   const visibleRows = useMemo(() => {
     const query = search.trim().toLowerCase().replace(/\s+/g, '');
-    if (!query) return rows;
-    return rows.filter(row => [row.fullName, row.phone, row.transfers]
-      .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query)));
-  }, [rows, search]);
+    const eligible = isSalaryView ? rows.filter(row => entryBySubject[row.driverId]?.approvalStatus === 'approved') : rows;
+    const filtered = query ? eligible.filter(row => [row.fullName, row.phone, row.transfers]
+      .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query))) : eligible;
+    if (!transferSort) return filtered;
+    return [...filtered].sort((a, b) => {
+      const result = a.transfers.localeCompare(b.transfers, 'ru', { numeric: true });
+      return transferSort === 'asc' ? result : -result;
+    });
+  }, [rows, search, transferSort, isSalaryView, entryBySubject]);
 
   useEffect(() => {
+    setAdding(false); setAddDriverId(''); setAddTransferId('');
     setSelectedSalaryIds(new Set());
     setPaymentSubjects(null);
   }, [isSalaryView, periodMonth, periodYear, schoolKey]);
@@ -271,8 +314,8 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
   }, [allDrivers, allEmployees, userRole]);
 
   const selectedSalaryRows = useMemo(
-    () => rows.filter(row => selectedSalaryIds.has(row.driverId) && row.remainingAmount > 0),
-    [rows, selectedSalaryIds],
+    () => rows.filter(row => selectedSalaryIds.has(row.driverId) && row.remainingAmount > 0 && entryBySubject[row.driverId]?.approvalStatus === 'approved'),
+    [rows, selectedSalaryIds, entryBySubject],
   );
 
   const toPaymentSubject = useCallback((row: DriverRow): SalaryPaymentSubject => ({
@@ -308,9 +351,10 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
   }, []);
 
   const setOv = useCallback((driverId: string, patch: RowOverride) => {
+    if (!isSalaryView && entryBySubject[driverId]?.approvalStatus === 'approved') return;
     if ((isSalaryView && !salaryEditable) || (!isSalaryView && !timesheetCanEdit)) return;
     handleEntryChange(driverId, isOffice ? 'employee' : 'driver', patch);
-  }, [handleEntryChange, isOffice, isSalaryView, salaryEditable, timesheetCanEdit]);
+  }, [entryBySubject, handleEntryChange, isOffice, isSalaryView, salaryEditable, timesheetCanEdit]);
 
   const setCalculatedOv = useCallback((row: DriverRow, patch: Pick<RowOverride, 'days' | 'rate' | 'bonusAmount' | 'penaltyAmount'>) => {
     const days = patch.days ?? row.days;
@@ -328,7 +372,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
     setBulkBusy(true);
     setApprovalError('');
     try {
-      await upsertV2PayrollEntries(rows.map(row => ({
+      await upsertV2PayrollEntries(rows.filter(row => entryBySubject[row.driverId]?.approvalStatus !== 'approved').map(row => ({
         subjectId: row.driverId,
         subjectType: isOffice ? 'employee' : 'driver',
         periodMonth,
@@ -345,7 +389,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
     } finally {
       setBulkBusy(false);
     }
-  }, [bulkBusy, globalDays, globalRate, isOffice, periodMonth, periodYear, rows, timesheetCanEdit]);
+  }, [bulkBusy, entryBySubject, globalDays, globalRate, isOffice, periodMonth, periodYear, rows, timesheetCanEdit]);
 
   const totalAccrued = rows.reduce((s, r) => s + r.accrued, 0);
   const totalBonus = rows.reduce((s, r) => s + r.bonusAmount, 0);
@@ -355,8 +399,8 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
   const totalPaid = rows.reduce((s, r) => s + r.paidAmount, 0);
   const totalRemaining = rows.reduce((s, r) => s + r.remainingAmount, 0);
   const totalAdvanceRemaining = totalAccrued - totalAdvance;
-  const totalPending = approvalStatus === 'pending' ? totalAccrued : 0;
-  const totalApproved = approvalStatus === 'approved' ? totalAccrued : 0;
+  const totalPending = rows.filter(row => entryBySubject[row.driverId]?.approvalStatus === 'pending').reduce((sum, row) => sum + row.accrued, 0);
+  const totalApproved = rows.filter(row => entryBySubject[row.driverId]?.approvalStatus === 'approved').reduce((sum, row) => sum + row.accrued, 0);
   const allSubjects = useMemo(() => rows.map(row => ({
     subjectId: row.driverId,
     subjectType: (isOffice ? 'employee' : 'driver') as PayrollSubjectType,
@@ -380,12 +424,12 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
   const changeApprovalStatus = async (status: 'pending' | 'approved' | 'rejected') => {
     let rejectionComment = '';
     if (status === 'pending' && !window.confirm('Отправить табель на согласование? После отправки кассир не сможет его редактировать.')) return;
-    if (status === 'rejected') rejectionComment = window.prompt('Причина возврата на доработку:', '')?.trim() ?? '';
+    if (status === 'rejected') { const comment = window.prompt('Причина возврата на доработку:', ''); if (comment === null) return; rejectionComment = comment.trim(); }
     setApprovalBusy(true);
     setApprovalError('');
     try {
       if (status === 'pending' || status === 'approved') {
-        await Promise.all(rows.map(row => upsertV2PayrollEntry({
+        await Promise.all(rows.filter(row => entryBySubject[row.driverId]?.approvalStatus !== 'approved').map(row => upsertV2PayrollEntry({
           subjectId: row.driverId,
           subjectType: isOffice ? 'employee' : 'driver',
           periodMonth,
@@ -406,6 +450,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         subjects: allSubjects,
       }, sessionToken);
       queryClient.setQueryData(QK.payrollApproval(schoolKey, periodMonth, periodYear), updated);
+      await queryClient.invalidateQueries({ queryKey: QK.payrollEntries(periodMonth, periodYear) });
     } catch (error) {
       setApprovalError(error instanceof Error ? error.message : 'Не удалось изменить статус табеля');
     } finally {
@@ -430,9 +475,12 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         </div>
         <div style={{ marginLeft: 'auto', display: 'flex', gap: 8 }}>
           {isTimesheetView && timesheetEditable && (
-            <button disabled={approvalBusy || rows.length === 0} onClick={() => changeApprovalStatus('pending')} style={{ height: 30, padding: '0 12px', border: 0, borderRadius: 9, background: '#31A4A5', color: '#fff', fontSize: 11, fontWeight: 850, cursor: approvalBusy ? 'default' : 'pointer', opacity: approvalBusy || rows.length === 0 ? .55 : 1 }}>
+            <button disabled={approvalBusy || !rows.some(row => entryBySubject[row.driverId]?.approvalStatus !== 'approved')} onClick={() => changeApprovalStatus('pending')} style={{ height: 30, padding: '0 12px', border: 0, borderRadius: 9, background: '#31A4A5', color: '#fff', fontSize: 11, fontWeight: 850, cursor: approvalBusy ? 'default' : 'pointer', opacity: approvalBusy || rows.length === 0 ? .55 : 1 }}>
               Отправить на согласование
             </button>
+          )}
+          {isTimesheetView && canReturnTimesheet(approvalStatus, userRole, userName) && (
+            <button type="button" disabled={approvalBusy} onClick={() => void changeApprovalStatus('rejected')}>Вернуть на доработку</button>
           )}
           {isTimesheetView && approvalStatus === 'pending' && approver && (
             <button disabled={approvalBusy || rows.length === 0} onClick={() => changeApprovalStatus('approved')} style={{ height: 30, padding: '0 14px', border: 0, borderRadius: 9, background: '#15803D', color: '#fff', fontSize: 11, fontWeight: 850, cursor: approvalBusy ? 'default' : 'pointer', opacity: approvalBusy || rows.length === 0 ? .55 : 1 }}>
@@ -442,7 +490,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
         </div>
       </div>
 
-      {isSalaryView && approvalStatus !== 'approved' ? (
+      {isSalaryView && !salaryEditable ? (
         <div style={{ padding: '48px 20px', borderRadius: 12, background: '#fff', border: '1px solid #EEF2F6', textAlign: 'center' }}>
           <div style={{ fontSize: 15, fontWeight: 850, color: '#17222F' }}>Зарплата ещё не утверждена</div>
           <div style={{ marginTop: 6, fontSize: 12, color: '#7A859D' }}>Цифры появятся после подписи Мамазировой Айгерим или Есенали Кайрата.</div>
@@ -454,11 +502,11 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
           Загрузка...
         </div>
       )}
-      {isTimesheetView && timesheetCanEdit && visibleRows.length > 0 && (
-        <div style={{ display: 'flex', justifyContent: 'flex-end', padding: '8px 12px', borderBottom: '1px solid #F1F5F9' }}>
+      {isTimesheetView && timesheetCanEdit && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, flexWrap: 'wrap', padding: '8px 12px', borderBottom: '1px solid #F1F5F9' }}>
           <button
             onClick={applyToAll}
-            disabled={bulkBusy}
+            disabled={bulkBusy || visibleRows.length === 0}
             title="Проставить текущие дни и ставку всем в списке"
             style={{
               padding: '5px 10px', border: '1px solid #A7F3D0', borderRadius: 8,
@@ -468,6 +516,22 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
           >
             {bulkBusy ? 'Применение…' : 'Применить ко всем'}
           </button>
+          {!isOffice && <>
+          {adding && <>
+            <select aria-label="Водитель для табеля" value={addDriverId} onChange={event => setAddDriverId(event.target.value)} disabled={addBusy}>
+              <option value="">Выберите водителя</option>
+              {allDrivers.filter(driver => driver.status === 'active').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.transferCount === 0 ? ' · Резерв' : ''}</option>)}
+            </select>
+            <select aria-label="Трансфер для табеля" value={addTransferId} onChange={event => setAddTransferId(event.target.value)} disabled={addBusy}>
+              <option value="">Выберите трансфер</option>
+              {selectableTransfers.map((transfer: V2TransferDashboardRow) => <option key={transfer.id} value={transfer.id}>{transfer.branchShort} · Трансфер №{transfer.transferNumber}</option>)}
+            </select>
+            <button type="button" onClick={() => void addPayrollDriver()} disabled={addBusy || !addDriverId || !addTransferId}>{addBusy ? 'Сохранение…' : 'Добавить'}</button>
+            <button type="button" onClick={() => setAdding(false)} disabled={addBusy}>Отмена</button>
+            {transferLoadError && <span>Не удалось загрузить трансферы</span>}
+          </>}
+          {!adding && <button type="button" aria-label="Добавить водителя в табель" title="Добавить водителя в табель" onClick={() => { setApprovalError(''); setAdding(true); }} style={{ width: 32, height: 32, border: 0, borderRadius: 8, background: '#31A4A5', color: '#fff', fontSize: 22, cursor: 'pointer' }}>+</button>}
+          </>}
         </div>
       )}
       {isSalaryView && salaryEditable && visibleRows.length > 0 && (
@@ -496,7 +560,11 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
               ) : '#'}
             </th>
             <th style={{ ...HEAD_STYLE, textAlign: 'left' }}>Имя</th>
-            <th style={{ ...HEAD_STYLE, textAlign: 'center' }}>{isOffice ? 'Должность' : 'Трансфер'}</th>
+            <th aria-sort={transferSort === 'asc' ? 'ascending' : transferSort === 'desc' ? 'descending' : 'none'} style={{ ...HEAD_STYLE, textAlign: 'center' }}>
+              <button type="button" onClick={() => setTransferSort(current => current === 'asc' ? 'desc' : 'asc')} style={{ border: 0, background: 'transparent', color: 'inherit', font: 'inherit', cursor: 'pointer', textTransform: 'inherit' }}>
+                {isOffice ? 'Должность' : 'Трансфер'} {transferSort === 'asc' ? '↑' : transferSort === 'desc' ? '↓' : '↕'}
+              </button>
+            </th>
             {isTimesheetView && <th style={{ ...HEAD_STYLE, textAlign: 'center' }}>К-во дней</th>}
             {isTimesheetView && <th style={{ ...HEAD_STYLE, textAlign: 'center' }}>Ставка</th>}
             {isTimesheetView && <th style={{ ...HEAD_STYLE, textAlign: 'right' }}>Премия</th>}
@@ -538,7 +606,7 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
                   value={row.days}
                   options={[0, ...Array.from({ length: 15 }, (_, i) => i + 1)]}
                   onChange={v => setCalculatedOv(row, { days: v })}
-                  disabled={!timesheetCanEdit}
+                  disabled={!timesheetCanEdit || entryBySubject[row.driverId]?.approvalStatus === 'approved'}
                 />
               </td>}
               {isTimesheetView && <td style={{ ...CELL_STYLE, textAlign: 'center' }}>
@@ -546,18 +614,18 @@ export default function TimesheetTable({ schoolKey, globalDays, globalRate, vehi
                   value={row.rate}
                   options={Array.from({ length: 11 }, (_, i) => 3500 + i * 100)}
                   onChange={v => setCalculatedOv(row, { rate: v })}
-                  disabled={!timesheetCanEdit}
+                  disabled={!timesheetCanEdit || entryBySubject[row.driverId]?.approvalStatus === 'approved'}
                 />
               </td>}
               {isTimesheetView && <td style={{ ...CELL_STYLE, textAlign: 'right' }}>
-                <NumInput value={row.bonusAmount} min={0} onChange={v => setCalculatedOv(row, { bonusAmount: v })} color="#15803D" clearOnEdit disabled={!timesheetCanEdit} />
+                <NumInput value={row.bonusAmount} min={0} onChange={v => setCalculatedOv(row, { bonusAmount: v })} color="#15803D" clearOnEdit disabled={!timesheetCanEdit || entryBySubject[row.driverId]?.approvalStatus === 'approved'} />
               </td>}
               {isTimesheetView && <td style={{ ...CELL_STYLE, textAlign: 'right' }}>
-                <NumInput value={row.penaltyAmount} min={0} onChange={v => setCalculatedOv(row, { penaltyAmount: v })} color="#B42318" clearOnEdit disabled={!timesheetCanEdit} />
+                <NumInput value={row.penaltyAmount} min={0} onChange={v => setCalculatedOv(row, { penaltyAmount: v })} color="#B42318" clearOnEdit disabled={!timesheetCanEdit || entryBySubject[row.driverId]?.approvalStatus === 'approved'} />
               </td>}
               <td style={{ ...CELL_STYLE, textAlign: 'right', fontWeight: 600, color: '#0C7A74' }}>
                 {isTimesheetView ? (
-                  <NumInput value={row.accrued} min={0} onChange={v => setOv(row.driverId, { accruedAmount: v })} color="#0C7A74" clearOnEdit disabled={!timesheetCanEdit} />
+                  <NumInput value={row.accrued} min={0} onChange={v => setOv(row.driverId, { accruedAmount: v })} color="#0C7A74" clearOnEdit disabled={!timesheetCanEdit || entryBySubject[row.driverId]?.approvalStatus === 'approved'} />
                 ) : row.accrued.toLocaleString('ru-RU')}
               </td>
               {(isAdvanceView || isSalaryView) && <td style={{ ...CELL_STYLE, textAlign: 'right', fontWeight: 700, color: row.advanceAmount > 0 ? '#B45309' : '#9AABB0' }}>

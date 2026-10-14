@@ -235,6 +235,7 @@ export default function TabFinance({
                   onSave={updates => onSavePayment(payment, updates)}
                   onDelete={() => onDeletePayment(payment)}
                   onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
+                  canDelete={!readOnly && (isAdmin || isCashier) && ['На проверке', 'Отклонено', 'Черновик'].includes(payment.status)}
                   isAdmin={!readOnly && isAdmin}
                 />
               ))}
@@ -350,7 +351,7 @@ export default function TabFinance({
   );
 }
 
-function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUnconfirm, onSave, onDelete, isAdmin }: {
+function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUnconfirm, onSave, onDelete, isAdmin, canDelete }: {
   payment: FamilyPayment;
   items: PaymentItem[];
   canConfirm: boolean;
@@ -359,6 +360,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
   onUnconfirm?: () => void;
   onSave: (updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDelete: () => Promise<boolean>;
+  canDelete: boolean;
   isAdmin: boolean;
 }) {
   const [editing, setEditing] = useState(false);
@@ -421,6 +423,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
               <X size={13} />
             </button>
           )}
+          {canDelete && !editing && <button type="button" onClick={remove} title="Удалить непроверенный платёж" style={iconBtnStyle}>×</button>}
           {isAdmin && !editing && (
             <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
               <Pencil size={13} />

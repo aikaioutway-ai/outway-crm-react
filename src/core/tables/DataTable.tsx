@@ -99,7 +99,7 @@ function compareRows<T>(a: T, b: T, sorts: SortConfig[], columns: ColumnDef<T>[]
     const rightNumber = parseFloat(right);
     const comparison = !isNaN(leftNumber) && !isNaN(rightNumber)
       ? leftNumber - rightNumber
-      : String(left ?? '').localeCompare(String(right ?? ''), 'ru');
+      : String(left ?? '').localeCompare(String(right ?? ''), 'ru', { numeric: true });
     if (comparison !== 0) return sort.dir === 'asc' ? comparison : -comparison;
   }
   return 0;

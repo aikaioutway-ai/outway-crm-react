@@ -114,19 +114,16 @@ Deno.serve(async req => {
       if (!['pending', 'approved', 'rejected'].includes(status)) return response({ ok: false, error: 'Некорректный статус' }, 400);
       const authorizedApprover = employee.role === 'gen_director'
         || (employee.role === 'admin' && isKairatEsenali(employee.full_name));
-      if ((status === 'approved' || status === 'rejected') && !authorizedApprover) {
-        return response({ ok: false, error: 'Утвердить или вернуть табель могут генеральный директор и Есенали Кайрат' }, 403);
-      }
-
       const { data: current, error: currentError } = await supabase.from('v2_payroll_approvals').select('status')
         .eq('school_key', schoolKey).eq('period_month', periodMonth).eq('period_year', periodYear).maybeSingle();
       if (currentError) throw currentError;
-      if ((status === 'approved' || status === 'rejected') && current?.status !== 'pending') {
-        return response({ ok: false, error: 'Подписать или вернуть можно только табель, ожидающий подписи' }, 409);
-      }
-      if (status === 'pending' && (current?.status === 'pending' || current?.status === 'approved')) {
-        return response({ ok: false, error: current.status === 'approved' ? 'Подписанный табель нельзя отправить повторно' : 'Табель уже ожидает подписи' }, 409);
-      }
+      const cashierReturn = status === 'rejected' && employee.role === 'cashier' && current?.status === 'pending';
+      if ((status === 'approved' || status === 'rejected') && !authorizedApprover && !cashierReturn)
+        return response({ ok: false, error: 'Недостаточно прав для изменения статуса табеля' }, 403);
+      if (status === 'approved' && current?.status !== 'pending')
+        return response({ ok: false, error: 'Табель не ожидает подписи' }, 409);
+      if (status === 'rejected' && !['pending', 'approved'].includes(current?.status ?? ''))
+        return response({ ok: false, error: 'Табель уже доступен для редактирования' }, 409);
 
       const now = new Date().toISOString();
       const payload: Record<string, unknown> = {
@@ -167,6 +164,14 @@ Deno.serve(async req => {
         const subjectId = String(subject?.subjectId ?? '');
         const subjectType = String(subject?.subjectType ?? '');
         if (!subjectId || !['driver', 'employee'].includes(subjectType)) continue;
+        const { data: existing, error: readError } = await supabase.from('v2_payroll_entries')
+          .select('approval_status,salary_amount').eq('subject_id', subjectId).eq('subject_type', subjectType)
+          .eq('period_month', periodMonth).eq('period_year', periodYear).maybeSingle();
+        if (readError) throw readError;
+        if (!existing) continue;
+        if (status === 'pending' && existing.approval_status === 'approved') continue;
+        if (status === 'approved' && existing.approval_status !== 'pending') continue;
+        if (status === 'rejected' && (Number(existing.salary_amount) > 0 || (cashierReturn && existing.approval_status === 'approved'))) continue;
         const { error: entryError } = await supabase.from('v2_payroll_entries').update(entryPatch)
           .eq('subject_id', subjectId).eq('subject_type', subjectType)
           .eq('period_month', periodMonth).eq('period_year', periodYear);

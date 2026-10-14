@@ -1329,7 +1329,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
-    if (userRole === 'cashier') return false;
     try {
       if (['parentName', 'phone', 'secondPhone', 'contactName', 'contactPhone'].includes(key)) {
         const family = await fetchV2Family(row.familyId);
@@ -2726,7 +2725,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           },
         };
       }
-      return userRole === 'cashier' ? { ...configuredColumn, editable: false } : configuredColumn;
+      return configuredColumn;
     });
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
@@ -3404,7 +3403,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }
               } : undefined}
               canRowReject={(row) => row.status !== 'rejected'}
-              onCellSave={userRole === 'cashier' ? undefined : handleCellSave}
+              onCellSave={handleCellSave}
               onExport={mode === 'logistics'
                 ? exportLogisticsRouteSheet
                 : isDirectoryMode
