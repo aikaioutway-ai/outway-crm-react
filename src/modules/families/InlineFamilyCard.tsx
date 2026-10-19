@@ -165,8 +165,16 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function loadAudit() {
     try {
       const { supabase } = await import('../../services/supabase');
-      const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
-        .order('created_at', { ascending: false }).limit(50);
+      const requestedFamilyId = family.id;
+      const data: any[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const result = await supabase.from('v2_audit_log').select('*').eq('entity_id', requestedFamilyId)
+          .order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
+        if (result.error) throw result.error;
+        data.push(...(result.data ?? []));
+        if ((result.data?.length ?? 0) < 500) break;
+      }
+      if (activeFamilyIdRef.current !== requestedFamilyId) return;
       if (data) {
         setAudit(data.map((r: any) => ({
           id: String(r.id), familyId: String(r.entity_id),
@@ -420,12 +428,15 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
   async function handleDeletePayment(payment: FamilyPayment): Promise<boolean> {
     try {
-      await deleteFamilyPayment(payment);
-      await addAudit('Удаление платежа', 'family_payment', money(payment.amount), '-');
+      await deleteFamilyPayment(payment, sessionToken);
       await loadFinance();
       await loadAudit();
+      onUpdated?.();
       return true;
-    } catch { return false; }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось удалить платёж');
+      return false;
+    }
   }
   async function handleDeleteCharge(charge: Charge) {
     if (!window.confirm('Удалить начисление?')) return;

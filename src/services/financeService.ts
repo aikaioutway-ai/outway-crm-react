@@ -341,12 +341,18 @@ export async function cancelConfirmedPayment(paymentId: string, reason: string, 
   invalidateFinanceCache();
 }
 
-export async function deleteFamilyPayment(payment: FamilyPayment): Promise<void> {
-  if (payment.status === 'Подтверждено') {
-    throw new Error('Подтверждённый платёж нельзя удалить простым удалением: используй cancelConfirmedPayment.');
+export async function deleteFamilyPayment(payment: FamilyPayment, sessionToken?: string): Promise<void> {
+  if (!sessionToken) throw new Error('Сессия устарела. Войдите в CRM снова.');
+  const { data, error } = await supabase.functions.invoke('payment-management-api', {
+    body: { action: 'delete', paymentId: payment.id },
+    headers: { 'x-employee-session': sessionToken },
+  });
+  if (error) {
+    let message = error.message;
+    try { message = (await error.context.json())?.error || message; } catch { /* response may not be JSON */ }
+    throw new Error(message);
   }
-  const { error } = await supabase.from('v2_payments').delete().eq('id', payment.id).in('status', ['На проверке', 'Отклонено', 'Черновик']);
-  if (error) throw new Error(error.message);
+  if (!data?.ok) throw new Error(data?.error || 'Не удалось удалить платёж');
   invalidateFinanceCache();
 }
 
