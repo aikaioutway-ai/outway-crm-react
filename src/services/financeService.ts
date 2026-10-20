@@ -273,6 +273,71 @@ export async function updateCharge(chargeId: string, updates: Partial<Charge>): 
   invalidateFinanceCache();
 }
 
+/** Ставит, меняет или убирает (amount = 0) начисление ребёнка. База сразу списывает
+ * сумму с баланса семьи, а при уменьшении ниже оплаченного возвращает разницу на баланс. */
+export async function setChildCharge(input: {
+  childId: string;
+  chargeType: 'monthly' | 'deposit';
+  month: number;
+  year: number;
+  amount: number;
+  actor?: string;
+}): Promise<void> {
+  const { error } = await supabase.rpc('v2_set_child_charge', {
+    p_child_id: input.childId,
+    p_charge_type: input.chargeType,
+    p_month: input.month,
+    p_year: input.year,
+    p_amount: input.amount,
+    p_actor: input.actor || 'CRM',
+  });
+  if (error) throw new Error(error.message);
+  invalidateFinanceCache();
+}
+
+/** «Перенести с прошлого месяца»: детям без начисления в месяце ставит сумму прошлого месяца. */
+export async function copyPreviousMonthCharges(input: {
+  childIds: string[];
+  month: number;
+  year: number;
+  actor?: string;
+}): Promise<{ operationId: string | null; created: number; skipped: number; noSource: number }> {
+  const { data, error } = await supabase.rpc('v2_copy_previous_month_charges', {
+    p_child_ids: input.childIds,
+    p_month: input.month,
+    p_year: input.year,
+    p_actor: input.actor || 'CRM',
+  });
+  if (error) throw new Error(error.message);
+  invalidateFinanceCache();
+  return {
+    operationId: data?.operationId ? String(data.operationId) : null,
+    created: Number(data?.created ?? 0),
+    skipped: Number(data?.skipped ?? 0),
+    noSource: Number(data?.noSource ?? 0),
+  };
+}
+
+/** Отменяет перенос (в тот же день): созданные им начисления убираются, деньги возвращаются на баланс.
+ * Начисления, сумму которых после переноса поменяли вручную, не трогаются. */
+export async function undoCopyPreviousMonthCharges(operationId: string, actor?: string): Promise<{
+  undone: number;
+  changed: number;
+  changedNames: string[];
+}> {
+  const { data, error } = await supabase.rpc('v2_undo_copy_previous_month_charges', {
+    p_operation_id: operationId,
+    p_actor: actor || 'CRM',
+  });
+  if (error) throw new Error(error.message);
+  invalidateFinanceCache();
+  return {
+    undone: Number(data?.undone ?? 0),
+    changed: Number(data?.changed ?? 0),
+    changedNames: Array.isArray(data?.changedNames) ? data.changedNames.map(String) : [],
+  };
+}
+
 export async function deleteCharge(chargeId: string): Promise<void> {
   const { error } = await supabase.from('v2_charges').delete().eq('id', chargeId);
   if (error) throw new Error(error.message);
@@ -438,6 +503,7 @@ export async function unconfirmFamilyPayment(payment: FamilyPayment): Promise<vo
 
 // Начисление при посадке (месяц + депозит) создаёт база — триггер
 // trg_v2_children_charge_on_boarding при переводе ребёнка в «Посажен».
+// Сейчас триггер выключен (миграция 20261020200000_pause_auto_charges) — начисления вручную.
 
 // ─── Возвраты ────────────────────────────────────────────────────────────────
 

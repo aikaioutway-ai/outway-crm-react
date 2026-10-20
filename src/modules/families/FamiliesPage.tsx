@@ -4,22 +4,24 @@ import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ChildStatus, Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
+import { Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
+import { setChildDiscountChoice } from '../../services/discountService';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolVisible
 } from './constants';
-import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
+import AccrualDialog, { AccrualDialogState } from './AccrualDialog';
 import DeleteChildModal from './DeleteChildModal';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
 import { B2B_ORDER_STATUSES, B2BOrder } from '../b2b/B2BOrders';
 import { useB2BOrders } from '../../hooks/useB2BData';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
-import { confirmFamilyPayment, updateFamilyPayment } from '../../services/financeService';
+import { confirmFamilyPayment, copyPreviousMonthCharges, setChildCharge, undoCopyPreviousMonthCharges, updateFamilyPayment } from '../../services/financeService';
 import {
   connectDriverTelegramGroup,
   DriverTelegramGroup,
@@ -116,6 +118,8 @@ export interface ChildRow {
   latitude: number | null;
   longitude: number | null;
   discountAmount: number;
+  discountOverridePercent?: number | null;
+  fixedPrice?: number | null;
   totalCharged: number;
   totalPaid: number;
   paidPaymentCount: number;
@@ -396,8 +400,6 @@ const LOGISTICS_CHART_COLORS = [
 
 type LogisticsDashboardMetric = 'average' | 'count' | 'debtSum' | 'debtorsCount' | 'chargedSum' | 'paidCount' | 'paidSum' | 'balanceSum' | 'pendingSum' | 'pendingAmount' | 'rejectedCount' | 'rejectedSum' | 'allPaymentsCount' | 'allPaymentsSum';
 type LogisticsVehicleFilter = 'all' | VehicleType;
-type DirectoryDateSortField = 'application' | 'seating';
-type DirectoryDateSort = { field: DirectoryDateSortField; direction: 'asc' | 'desc' };
 type TransferCardData = {
   transfer: V2TransferDashboardRow;
   driver?: V2DriverTableRow;
@@ -709,6 +711,28 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
+interface LastAccrualCopy { operationId: string; month: number; year: number; count: number; day: string }
+const LAST_ACCRUAL_COPY_KEY = 'accruals_last_copy_v1';
+function todayKey(): string {
+  return new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bishkek' });
+}
+function readLastAccrualCopy(): LastAccrualCopy | null {
+  try {
+    const value = JSON.parse(localStorage.getItem(LAST_ACCRUAL_COPY_KEY) ?? 'null');
+    return value?.operationId ? value as LastAccrualCopy : null;
+  } catch {
+    return null;
+  }
+}
+function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
+  try {
+    if (value) localStorage.setItem(LAST_ACCRUAL_COPY_KEY, JSON.stringify(value));
+    else localStorage.removeItem(LAST_ACCRUAL_COPY_KEY);
+  } catch {
+    // Без хранилища ссылка на отмену просто пропадёт после перезагрузки.
+  }
+}
+
 export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const canRejectFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
@@ -725,12 +749,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
   const [search, setSearch]       = useState('');
-  const [directoryDateSort, setDirectoryDateSort] = useState<DirectoryDateSort>({ field: 'application', direction: 'desc' });
-  const [bulkStatusMode, setBulkStatusMode] = useState(false);
-  const [bulkSelectedIds, setBulkSelectedIds] = useState<Set<string>>(new Set());
-  const [bulkStatus, setBulkStatus] = useState<ChildStatus>('boarded');
-  const [bulkSaving, setBulkSaving] = useState(false);
-  const [bulkConfirming, setBulkConfirming] = useState(false);
   const roleDefaultChildStatus = userRole === 'cashier' ? '' : 'new';
   const restrictedSchoolKey = allowedSchools && allowedSchools.length === 1 && allowedSchools[0] !== 'ALL' ? allowedSchools[0] : null;
   const [filtersByMode, setFiltersByMode] = useState<Record<FamiliesMode, ModeFilters>>({
@@ -920,10 +938,12 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const tableStorageKey = isRequestsModule
     ? 'families_table_requests_v3'
     : isChargesMode
-      ? accrualsView ? 'families_table_accruals_v1' : 'families_table_charges_v2'
+      ? accrualsView ? 'families_table_accruals_v3' : 'families_table_charges_v2'
       : isPaymentsMode
       ? 'families_table_payments_v2'
-      : settingsScope ? `families_table_${settingsScope}_${mode}` : `families_table_${mode}`;
+      : isDirectoryMode
+        ? settingsScope ? `families_table_${settingsScope}_directory_v2` : 'families_table_directory_v2'
+        : settingsScope ? `families_table_${settingsScope}_${mode}` : `families_table_${mode}`;
   const moduleLabel = settingsScope === 'drivers' ? 'Водители' : MODE_LABEL[mode];
   const setModeFilter = (patch: Partial<ModeFilters>) => {
     setFiltersByMode(prev => ({
@@ -1207,6 +1227,17 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     ?? ALL_PERIODS.find(p => p.key === currentPayrollPeriodKey())!;
   const previousAccrualMonth = accrualPeriod.month === 1 ? 12 : accrualPeriod.month - 1;
   const previousAccrualYear = accrualPeriod.month === 1 ? accrualPeriod.year - 1 : accrualPeriod.year;
+  // Депозит учебного года хранится как начисление за май этого года.
+  const accrualDepositYear = accrualPeriod.month >= 6 ? accrualPeriod.year + 1 : accrualPeriod.year;
+  // Вкладку «Начисления» видят только те, кому App разрешил canAccessManagerAccruals, — они же и правят.
+  const canEditAccruals = accrualsView;
+  const [copyingAccruals, setCopyingAccruals] = useState(false);
+  const [accrualDialog, setAccrualDialog] = useState<AccrualDialogState | null>(null);
+  // Последний перенос — его можно отменить в тот же день, в том числе после перезагрузки страницы.
+  const [lastAccrualCopy, setLastAccrualCopy] = useState<LastAccrualCopy | null>(readLastAccrualCopy);
+  const canUndoAccrualCopy = canEditAccruals && lastAccrualCopy != null
+    && lastAccrualCopy.month === accrualPeriod.month && lastAccrualCopy.year === accrualPeriod.year
+    && lastAccrualCopy.day === todayKey();
   const accrualQuery = useQuery({
     queryKey: ['child-accrual-columns', accrualPeriod.year, accrualPeriod.month],
     enabled: accrualsView,
@@ -1300,33 +1331,111 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     if (family && expandedFamilyRequestRef.current === familyId) setExpandedFamily(family);
   }
 
-  function closeBulkStatus() {
-    setBulkStatusMode(false);
-    setBulkSelectedIds(new Set());
-    setBulkConfirming(false);
+  async function saveAccrualCell(row: ChildRow, key: string, value: any): Promise<boolean> {
+    if (row.rowId.endsWith('_empty')) return false;
+    const showError = (error: unknown, title: string) => setAccrualDialog({
+      title,
+      message: error instanceof Error ? error.message : 'Попробуйте ещё раз',
+    });
+    if (key === 'discountAmount') {
+      try {
+        if (row.fixedPrice != null) throw new Error('У ребёнка фиксированная цена — скидку меняют в карточке');
+        await setChildDiscountChoice(authToken, row.rowId, value === 'auto' ? null : Number(value));
+        await load(false);
+        return true;
+      } catch (error) {
+        showError(error, 'Не удалось изменить скидку');
+        return false;
+      }
+    }
+    const text = String(value ?? '').replace(/\s/g, '').replace(',', '.');
+    const amount = text === '' ? 0 : Number(text);
+    if (!Number.isFinite(amount) || amount < 0) {
+      showError(new Error('Введите сумму числом'), 'Не удалось сохранить начисление');
+      return false;
+    }
+    const target = key === 'accrual_deposit'
+      ? { chargeType: 'deposit' as const, month: 5, year: accrualDepositYear }
+      : key === 'accrual_previous'
+        ? { chargeType: 'monthly' as const, month: previousAccrualMonth, year: previousAccrualYear }
+        : { chargeType: 'monthly' as const, month: accrualPeriod.month, year: accrualPeriod.year };
+    const save = async () => {
+      await setChildCharge({ childId: row.rowId, ...target, amount, actor: userName });
+      await Promise.all([accrualQuery.refetch(), load(false)]);
+    };
+    if (amount === 0) {
+      // Удаление подтверждается в окне CRM; ячейка закрывается сразу.
+      setAccrualDialog({
+        title: 'Убрать начисление',
+        message: `Убрать начисление у ${row.childName}? Оплаченная часть вернётся на баланс семьи.`,
+        confirmLabel: 'Убрать',
+        onConfirm: save,
+      });
+      return true;
+    }
+    try {
+      await save();
+      return true;
+    } catch (error) {
+      showError(error, 'Не удалось сохранить начисление');
+      return false;
+    }
   }
 
-  async function applyBulkStatus() {
-    const ids = Array.from(bulkSelectedIds).filter(id => !id.endsWith('_empty'));
-    if (!ids.length) return;
-    // Подтверждение прямо в панели: window.confirm блокируется встроенными браузерами.
-    if (!bulkConfirming) {
-      setBulkConfirming(true);
-      return;
-    }
-    setBulkSaving(true);
-    try {
-      await updateV2ChildrenStatus(ids, bulkStatus);
-      closeBulkStatus();
-      await load(false);
-    } catch (error) {
-      window.alert('Не удалось изменить статус: ' + (error instanceof Error ? error.message : String(error)));
-    } finally {
-      setBulkSaving(false);
-    }
+  function copyAccrualsFromPreviousMonth(rowsToCopy: ChildRow[]) {
+    const childIds = rowsToCopy.map(row => row.rowId).filter(id => !id.endsWith('_empty'));
+    if (!childIds.length) return;
+    const monthName = (month: number) => new Date(2000, month - 1, 1).toLocaleString('ru-RU', { month: 'long' });
+    setAccrualDialog({
+      title: 'Перенести с прошлого месяца',
+      message: `Перенести начисления за ${monthName(previousAccrualMonth)} в ${monthName(accrualPeriod.month)} для ${childIds.length} детей?\n\n`
+        + `Детям, у которых уже есть начисление за ${monthName(accrualPeriod.month)}, сумма не изменится. `
+        + 'Новые начисления сразу спишутся с баланса семей.',
+      confirmLabel: 'Перенести',
+      onConfirm: async () => {
+        setCopyingAccruals(true);
+        try {
+          const result = await copyPreviousMonthCharges({ childIds, month: accrualPeriod.month, year: accrualPeriod.year, actor: userName });
+          if (result.operationId) {
+            const copy = { operationId: result.operationId, month: accrualPeriod.month, year: accrualPeriod.year, count: result.created, day: todayKey() };
+            setLastAccrualCopy(copy);
+            writeLastAccrualCopy(copy);
+          }
+          await Promise.all([accrualQuery.refetch(), load(false)]);
+          return `Перенесено: ${result.created}.\nУже было начисление: ${result.skipped}.\nНет начисления за прошлый месяц: ${result.noSource}.`;
+        } finally {
+          setCopyingAccruals(false);
+        }
+      },
+    });
+  }
+
+  function undoLastAccrualCopy() {
+    const copy = lastAccrualCopy;
+    if (!copy) return;
+    setAccrualDialog({
+      title: 'Отменить перенос',
+      message: `Отменить последний перенос (${copy.count} начислений)? Списанные за них деньги вернутся на баланс семей.`,
+      confirmLabel: 'Отменить перенос',
+      onConfirm: async () => {
+        setCopyingAccruals(true);
+        try {
+          const result = await undoCopyPreviousMonthCharges(copy.operationId, userName);
+          setLastAccrualCopy(null);
+          writeLastAccrualCopy(null);
+          await Promise.all([accrualQuery.refetch(), load(false)]);
+          return result.changed > 0
+            ? `Отменено: ${result.undone}.\nНе тронуты, потому что сумму меняли вручную: ${result.changedNames.join(', ')}.`
+            : `Отменено: ${result.undone}.`;
+        } finally {
+          setCopyingAccruals(false);
+        }
+      },
+    });
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
+    if (accrualsView && (key === 'discountAmount' || key.startsWith('accrual_'))) return saveAccrualCell(row, key, value);
     try {
       if (['parentName', 'phone', 'secondPhone', 'contactName', 'contactPhone'].includes(key)) {
         const family = await fetchV2Family(row.familyId);
@@ -1395,10 +1504,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         if (key === 'stopNumber') rowPatch.stopNumber = value || null;
         if (key === 'timeMorning') rowPatch.timeMorning = value || null;
 
-        if (key === 'zone' || key === 'vehicleLabel') {
-          const nextZone = (key === 'zone' ? value : row.zone) as Zone;
-          const nextVehicle = (key === 'vehicleLabel' ? value : row.vehicleType) as VehicleType;
-          const base = getPriceByZone(row.schoolCode as any, nextZone, nextVehicle);
+        // Смена типа ТС цену не меняет — пересчёт только при смене зоны.
+        if (key === 'zone') {
+          const base = getPriceByZone(row.schoolCode as any, value as Zone, row.vehicleType as VehicleType);
           // Итоговую цену со скидками пересчитывает база.
           updates.base_price = base;
         }
@@ -1850,7 +1958,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const filteredSorted = useMemo(() => {
     if (isDirectoryMode) {
       const timestamp = (row: ChildRow) => {
-        const value = directoryDateSort.field === 'application' ? row.childCreatedAt : row.transferAssignedAt;
+        // По умолчанию справочник идёт по дате заявки, новые семьи сверху.
+        const value = row.childCreatedAt;
         if (!value) return null;
         const parsed = new Date(value).getTime();
         return Number.isNaN(parsed) ? null : parsed;
@@ -1868,7 +1977,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         if (aTime == null && bTime != null) return 1;
         if (aTime != null && bTime == null) return -1;
         if (aTime != null && bTime != null && aTime !== bTime) {
-          return directoryDateSort.direction === 'desc' ? bTime - aTime : aTime - bTime;
+          return bTime - aTime;
         }
         if (a.familyId === b.familyId) return a.familyIndex - b.familyIndex;
         return a.familyIndex - b.familyIndex;
@@ -1882,7 +1991,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       ? filtered.filter(r => periodFamilyIds.has(r.familyId))
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
-  }, [filtered, accrualsView, isChargesMode, isDirectoryMode, directoryDateSort, chargesPeriodKey, periodStats]);
+  }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats]);
 
   const transferVehicleType = useCallback((transfer: string) => {
     if (!transfer || transfer === 'empty') return 'empty';
@@ -2615,20 +2724,49 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       },
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     }];
+    const dateColumn = (key: 'childCreatedAt' | 'transferAssignedAt', label: string): ColumnDef<ChildRow> => ({
+      key, label, type: 'date', width: 120, visible: true,
+      getValue: row => row[key] ?? '',
+      render: (_value, row) => formatDateShort(row[key] ?? undefined),
+    });
     if (accrualsView) {
-      const monthLabel = (month: number, year: number) => `${String(month).padStart(2, '0')}.${year}`;
-      const amountColumn = (key: 'deposit' | 'previous' | 'current', label: string): ColumnDef<ChildRow> => ({
-        key: `accrual_${key}`, label, type: 'currency', width: 180, visible: true,
+      const ACADEMIC_MONTHS = new Set([1, 2, 3, 4, 5, 9, 10, 11, 12]);
+      const MONTH_NAMES = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
+      const monthLabel = (month: number) => MONTH_NAMES[month - 1] ?? String(month);
+      const amountColumn = (key: 'deposit' | 'previous' | 'current', label: string, editable = canEditAccruals): ColumnDef<ChildRow> => ({
+        key: `accrual_${key}`, label, type: 'currency', width: 180, visible: true, editable,
         getValue: row => accrualQuery.data?.[key].get(row.rowId) ?? 0,
         render: (_value, row) => accrualQuery.isError ? <span title="Не удалось загрузить начисления">Ошибка</span>
           : accrualQuery.isPending ? '…' : money(accrualQuery.data?.[key].get(row.rowId) ?? 0),
       });
+      // Базовая цена = цена в месяц + скидка, поэтому процент считаем от их суммы.
+      const discountPercent = (row: ChildRow) => {
+        const discount = Number(row.discountAmount || 0);
+        const base = Number(row.monthlyPrice || 0) + discount;
+        return base > 0 ? Math.round(discount / base * 1000) / 10 : 0;
+      };
       return [
         { ...COLUMNS.find(column => column.key === 'childName')!, visible: true },
+        dateColumn('childCreatedAt', 'Дата заявки'),
+        dateColumn('transferAssignedAt', 'Дата посадки'),
         { ...COLUMNS.find(column => column.key === 'monthlyPrice')!, label: 'Цена в месяц', visible: true },
-        amountColumn('deposit', 'Начислено: депозит'),
-        amountColumn('previous', `Начислено: ${monthLabel(previousAccrualMonth, previousAccrualYear)}`),
-        amountColumn('current', `Начислено: ${monthLabel(accrualPeriod.month, accrualPeriod.year)}`),
+        {
+          ...COLUMNS.find(column => column.key === 'discountAmount')!,
+          label: 'Скидка, %',
+          type: 'number',
+          visible: true,
+          // Та же скидка, что в карточке ребёнка: она определяет цену в месяц.
+          editable: canEditAccruals,
+          editOptions: [
+            { value: 'auto', label: 'Автоматически' },
+            ...Array.from({ length: 11 }, (_, index) => ({ value: String(index * 5), label: `${index * 5}%` })),
+          ],
+          getValue: row => row.discountOverridePercent == null ? 'auto' : String(row.discountOverridePercent),
+          render: (_value, row) => `${discountPercent(row)}%`,
+        },
+        amountColumn('deposit', 'Депозит'),
+        amountColumn('previous', monthLabel(previousAccrualMonth), canEditAccruals && ACADEMIC_MONTHS.has(previousAccrualMonth)),
+        amountColumn('current', monthLabel(accrualPeriod.month)),
         { ...COLUMNS.find(column => column.key === 'transferNumber')!, visible: true },
       ];
     }
@@ -2668,29 +2806,18 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               } : {}),
             }
           : column;
-      if (isDirectoryMode && configuredColumn.key === 'childName') {
-        return {
-          ...configuredColumn,
-          render: (value: unknown, row: ChildRow) => {
-            const dateValue = directoryDateSort.field === 'application' ? row.childCreatedAt : row.transferAssignedAt;
-            return (
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis' }}>{String(value || '—')}</div>
-                <div style={{ marginTop: 1, fontSize: 9.5, lineHeight: 1.1, color: '#9AA5AE', fontWeight: 650 }}>
-                  {directoryDateSort.field === 'application' ? 'Заявка' : 'Посадка'} · {formatDateShort(dateValue ?? undefined)}
-                </div>
-              </div>
-            );
-          },
-        };
-      }
       return configuredColumn;
     });
+    if (isDirectoryMode) {
+      // Как в «Начислениях»: даты заявки и посадки — отдельные колонки сразу после ребёнка.
+      const childIndex = dataCols.findIndex(column => column.key === 'childName');
+      dataCols.splice(childIndex + 1, 0, dateColumn('childCreatedAt', 'Дата заявки'), dateColumn('transferAssignedAt', 'Дата посадки'));
+    }
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accrualsView, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, directoryDateSort, periodStatsByFamily]);
+  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, periodStatsByFamily]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows
@@ -3371,79 +3498,30 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   ? exportAllDirectoryRouteRows
                   : undefined}
               hideToolbar={tableBarsCollapsed}
-              selectable={bulkStatusMode}
-              selectedKeys={bulkStatusMode ? bulkSelectedIds : undefined}
-              onSelectedKeysChange={bulkStatusMode ? keys => {
-                // Keep selections from other transfers when the current table changes.
-                const visibleIds = new Set(filteredSorted.map(row => row.rowId));
-                setBulkSelectedIds(previous => new Set([
-                  ...Array.from(previous).filter(id => !visibleIds.has(id)),
-                  ...Array.from(keys, String).filter(id => !id.endsWith('_empty')),
-                ]));
-                setBulkConfirming(false);
-              } : undefined}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                  {userRole !== 'cashier' && (bulkStatusMode ? (
-                    <>
-                      <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Выбрано во всех трансферах: {bulkSelectedIds.size}</span>
-                      <select
-                        aria-label="Статус выбранных детей"
-                        value={bulkStatus}
-                        onChange={event => { setBulkStatus(event.target.value as ChildStatus); setBulkConfirming(false); }}
-                        style={{ height: 26, border: '1px solid #31A4A5', borderRadius: 7, fontSize: 11, fontWeight: 700, padding: '0 6px', background: '#fff' }}
-                      >
-                        {CHILD_STATUS_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={applyBulkStatus}
-                        disabled={bulkSaving || bulkSelectedIds.size === 0}
-                        style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: bulkSelectedIds.size === 0 ? '#A7C9CA' : bulkConfirming ? '#D97706' : '#31A4A5', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: bulkSelectedIds.size === 0 ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
-                      >
-                        {bulkSaving
-                          ? 'Сохраняем...'
-                          : bulkConfirming
-                            ? `Да, «${CHILD_STATUS_OPTIONS.find(option => option.value === bulkStatus)?.label}» для ${bulkSelectedIds.size}`
-                            : `Применить (${bulkSelectedIds.size})`}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={closeBulkStatus}
-                        disabled={bulkSaving}
-                        style={{ height: 26, padding: '0 9px', border: '1px solid var(--border)', borderRadius: 7, background: '#fff', color: 'var(--text-2)', fontSize: 10.5, fontWeight: 800, cursor: 'pointer' }}
-                      >
-                        Отмена
-                      </button>
-                    </>
-                  ) : (
+                  {canEditAccruals && (
                     <button
                       type="button"
-                      onClick={() => setBulkStatusMode(true)}
-                      title="Выбрать несколько детей и изменить статус"
-                      style={{ height: 26, padding: '0 9px', border: '1px solid var(--border)', borderRadius: 7, background: '#fff', color: 'var(--text-2)', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      onClick={() => copyAccrualsFromPreviousMonth(filteredSorted)}
+                      disabled={copyingAccruals}
+                      title="Детям без начисления в этом месяце поставить сумму прошлого месяца"
+                      style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: copyingAccruals ? '#A7C9CA' : '#31A4A5', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: copyingAccruals ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
                     >
-                      ☑ Статус
+                      {copyingAccruals ? 'Переносим...' : 'Перенести с прошлого месяца'}
                     </button>
-                  ))}
-                  {isDirectoryMode && ([
-                    { field: 'application' as const, label: 'Дата заявки' },
-                    { field: 'seating' as const, label: 'Дата посадки' },
-                  ]).map(item => {
-                    const active = directoryDateSort.field === item.field;
-                    return (
-                      <button
-                        key={item.field}
-                        type="button"
-                        onClick={() => setDirectoryDateSort(current => current.field === item.field
-                          ? { ...current, direction: current.direction === 'desc' ? 'asc' : 'desc' }
-                          : { field: item.field, direction: 'desc' })}
-                        style={{ height: 26, padding: '0 9px', border: `1px solid ${active ? '#31A4A5' : 'var(--border)'}`, borderRadius: 7, background: active ? '#E8F7F7' : '#fff', color: active ? '#237F81' : 'var(--text-2)', fontSize: 10.5, fontWeight: 800, cursor: 'pointer', whiteSpace: 'nowrap' }}
-                      >
-                        {item.label}{active ? (directoryDateSort.direction === 'desc' ? ' ↓' : ' ↑') : ''}
-                      </button>
-                    );
-                  })}
+                  )}
+                  {canUndoAccrualCopy && (
+                    <button
+                      type="button"
+                      onClick={undoLastAccrualCopy}
+                      disabled={copyingAccruals}
+                      title="Убрать начисления, созданные последним переносом, и вернуть деньги на баланс"
+                      style={{ height: 26, padding: '0 4px', border: 'none', background: 'none', color: '#9AA5AE', fontSize: 10, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                    >
+                      отменить перенос
+                    </button>
+                  )}
 
                 </div>
               )}
@@ -4466,6 +4544,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         />
       )}
 
+      {accrualDialog && <AccrualDialog dialog={accrualDialog} onClose={() => setAccrualDialog(null)} />}
       {childToDelete && (
         <DeleteChildModal
           childName={childToDelete.childName}

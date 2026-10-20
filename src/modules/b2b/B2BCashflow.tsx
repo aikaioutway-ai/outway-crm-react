@@ -4,7 +4,7 @@ import useB2BPayments from '../../hooks/useB2BPayments';
 import { useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сом`;
+const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}`;
 const CATEGORY_LABELS: Record<string, string> = {
   driver_payments: 'Водители', taxes: 'Налоги', salary: 'Зарплата', bonus: 'Премия',
   refunds: 'Возвраты', rent: 'Аренда', marketing: 'Маркетинг', other: 'Прочие расходы',

@@ -61,7 +61,7 @@ export function B2BClientOrderCreateModal({ client, onClose, onCreated }: { clie
       <label><span>Цена за единицу, сом</span><input type="number" min="0" value={form.pricePerUnit} onChange={event => setForm(current => ({ ...current, pricePerUnit: event.target.value }))} placeholder="0" /></label>
       <label className="full"><span>Водитель</span><select value={form.driver} onChange={event => setForm(current => ({ ...current, driver: event.target.value }))} disabled={driversLoading}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Назначить водителя !!!'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
       <label className="full"><span>Статус</span><select value={form.status} onChange={event => setForm(current => ({ ...current, status: event.target.value as OrderStatus }))}>{B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></label>
-      <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(form.transportCount) || 0) * (Number(form.pricePerUnit) || 0)).toLocaleString()} сом</strong></div>
+      <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(form.transportCount) || 0) * (Number(form.pricePerUnit) || 0)).toLocaleString()}</strong></div>
       {error && <div className="b2b-form-error">{error}</div>}
       <div className="b2b-form-actions"><button className="b2b-cancel-button" type="button" onClick={onClose}>Отмена</button><button className="b2b-primary-button" type="submit" disabled={submitting}>{submitting ? 'Создание...' : 'Создать заказ'}</button></div>
     </form>
@@ -109,7 +109,7 @@ export function B2BClientOrderEditModal({ order, onClose }: { order: B2BOrderRec
       <label><span>Количество</span><input type="number" min="1" value={form.transportCount} onChange={event => setForm(current => ({ ...current, transportCount: event.target.value }))} /></label>
       <label><span>Цена за единицу</span><input type="number" min="0" value={form.pricePerUnit} onChange={event => setForm(current => ({ ...current, pricePerUnit: event.target.value }))} /></label>
       <label><span>Статус</span><select value={form.status} onChange={event => setForm(current => ({ ...current, status: event.target.value as OrderStatus }))}>{B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></label>
-      <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(form.transportCount) || 0) * (Number(form.pricePerUnit) || 0)).toLocaleString()} сом</strong></div>
+      <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(form.transportCount) || 0) * (Number(form.pricePerUnit) || 0)).toLocaleString()}</strong></div>
       {error && <div className="b2b-form-error">{error}</div>}
       <div className="b2b-form-actions"><button className="b2b-cancel-button" type="button" onClick={onClose}>Отмена</button><button className="b2b-primary-button" type="submit">Сохранить</button></div>
     </form>

@@ -7,7 +7,7 @@ import {
 } from '../../services/marketService';
 import { MARKET_ORDER_STATUSES, MarketClient, MarketOrder, MarketOrderStatus, MarketProduct, nextMarketOrderStatus } from './marketTypes';
 
-const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} сом`;
+const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}`;
 const displayDate = (value: string | null) => value ? new Date(value).toLocaleDateString('ru-RU') : '—';
 const today = () => {
   const date = new Date();

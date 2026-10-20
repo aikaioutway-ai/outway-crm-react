@@ -23,9 +23,9 @@ test('salary rows separate payroll from ordinary expenses and open the scoped sa
   const open=jest.fn();
   render(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin" sessionToken="session" onOpenSalary={open}/>);
   const officeSalary=await screen.findByRole('row',{name:/ЗП офис/});
-  expect(within(officeSalary).getAllByText(/1\s000 сом/).length).toBeGreaterThan(0);
+  expect(within(officeSalary).getAllByText(/1\s000/).length).toBeGreaterThan(0);
   const officeCosts=screen.getByRole('row',{name:/^Офис/});
-  expect(within(officeCosts).getAllByText('100 сом').length).toBeGreaterThan(0);
+  expect(within(officeCosts).getAllByText('100').length).toBeGreaterThan(0);
   fireEvent.click(within(officeSalary).getByRole('button'));
   expect(open).toHaveBeenCalledWith('office');
   fireEvent.click(within(screen.getByRole('row',{name:/ЗП школа/})).getByRole('button'));

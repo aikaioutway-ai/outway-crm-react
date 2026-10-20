@@ -66,12 +66,12 @@ export default function B2BOrderDocuments({ order }: { order: B2BDocumentOrder &
       <div className="b2b-generated-documents">
         <article>
           <span className="invoice"><ReceiptText size={21} /></span>
-          <div><small>Создан автоматически</small><strong>Счёт на оплату</strong><p>№ {generatedDocumentNumber('invoice', order.number)} · {order.total.toLocaleString()} сом</p></div>
+          <div><small>Создан автоматически</small><strong>Счёт на оплату</strong><p>№ {generatedDocumentNumber('invoice', order.number)} · {order.total.toLocaleString()}</p></div>
           <button type="button" onClick={() => downloadB2BGeneratedDocument('invoice', order)}><Download size={15} /> Скачать PDF</button>
         </article>
         <article>
           <span className="act"><FileCheck2 size={21} /></span>
-          <div><small>Создан автоматически</small><strong>Акт выполненных услуг</strong><p>№ {generatedDocumentNumber('act', order.number)} · {order.total.toLocaleString()} сом</p></div>
+          <div><small>Создан автоматически</small><strong>Акт выполненных услуг</strong><p>№ {generatedDocumentNumber('act', order.number)} · {order.total.toLocaleString()}</p></div>
           <button type="button" onClick={() => downloadB2BGeneratedDocument('act', order)}><Download size={15} /> Скачать PDF</button>
         </article>
       </div>

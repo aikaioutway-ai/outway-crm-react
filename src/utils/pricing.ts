@@ -167,15 +167,13 @@ export function applyChildPricingPatch(child: Child, patch: Partial<Child>): Chi
   }
 
   const shouldReprice = teacherPrice !== teacherWasActive
-    || 'schoolCode' in patch
     || 'zone' in patch
-    || 'vehicleType' in patch
     || 'basePrice' in patch
     || siblingPercentChanged
     || manualPercentChanged
     || manualAmountChanged;
   if ('discountOverridePercent' in patch || next.discountOverridePercent != null) {
-    const basePrice = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch
+    const basePrice = 'zone' in patch
       ? getPriceByZone(next.schoolCode, next.zone, next.vehicleType)
       : Math.max(0, Number(next.basePrice || 0));
     const rules = 'discountOverridePercent' in patch
@@ -187,7 +185,8 @@ export function applyChildPricingPatch(child: Child, patch: Partial<Child>): Chi
   }
   if (!shouldReprice) return { ...next, teacherPrice };
 
-  const tariffChanged = 'schoolCode' in patch || 'zone' in patch || 'vehicleType' in patch;
+  // Смена школы и типа ТС цену не меняет (школа — вручную) — тариф пересчитывается только при смене зоны.
+  const tariffChanged = 'zone' in patch;
   const basePrice = tariffChanged
     ? getPriceByZone(next.schoolCode, next.zone, next.vehicleType)
     : Math.max(0, Number(next.basePrice || 0));
@@ -264,5 +263,5 @@ export function calcChildPrice(rules: ChildPriceRules, period: string): number {
 // ─── ФОРМАТИРОВАНИЕ ──────────────────────────────────────────────────────────
 
 export function money(n: number): string {
-  return n.toLocaleString('ru-RU') + ' сом';
+  return n.toLocaleString('ru-RU') ;
 }

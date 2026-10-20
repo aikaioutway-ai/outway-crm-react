@@ -28,7 +28,7 @@ const STATUS_OPTIONS: { value: EmployeeStatus; label: string }[] = [
   { value: 'active', label: 'Активен' }, { value: 'inactive', label: 'Неактивен' }, { value: 'dismissed', label: 'Уволен' },
 ];
 const SCHOOL_OPTIONS = SCHOOL_TABS.filter(item => item.key !== 'ALL');
-const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} сом`;
+const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}`;
 const today = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60_000).toISOString().slice(0, 10);
 const EMPTY_DRAFT: EmployeeDraft = { fullName: '', login: '', password: '', role: 'manager', position: 'Менеджер', phone1: '', phone2: '', address: '', schoolKeys: ['ALL'], status: 'active', startDate: today(), comment: '' };
 type EmployeeRow = Employee & { missingDocumentCount: number };

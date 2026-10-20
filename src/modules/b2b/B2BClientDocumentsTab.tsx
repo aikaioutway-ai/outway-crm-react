@@ -7,7 +7,7 @@ import { B2BReconciliationTransaction, downloadB2BGeneratedDocument, downloadB2B
 
 const MAX_FILE_SIZE = 20 * 1024 * 1024;
 const sizeLabel = (bytes: number) => bytes < 1024 ? `${bytes} Б` : bytes < 1024 * 1024 ? `${Math.round(bytes / 1024)} КБ` : `${(bytes / 1024 / 1024).toFixed(1)} МБ`;
-const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сом`;
+const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}`;
 const localDateInput = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 const today = new Date();
 const TODAY = localDateInput(today);
@@ -134,7 +134,7 @@ export default function B2BClientDocumentsTab({ client, orders, payments, onOpen
     </section>
 
     {order ? <>
-      <div className="b2b-client-document-toolbar"><label><span>Документы по заказу</span><select value={order.id} onChange={event => setOrderId(event.target.value)}>{orders.map(item => <option key={item.id} value={item.id}>{item.number} · {item.routeFrom} → {item.routeTo}</option>)}</select></label><strong>{order.total.toLocaleString()} сом</strong></div>
+      <div className="b2b-client-document-toolbar"><label><span>Документы по заказу</span><select value={order.id} onChange={event => setOrderId(event.target.value)}>{orders.map(item => <option key={item.id} value={item.id}>{item.number} · {item.routeFrom} → {item.routeTo}</option>)}</select></label><strong>{order.total.toLocaleString()}</strong></div>
       <div className="b2b-client-generated-docs"><button type="button" onClick={() => void downloadB2BGeneratedDocument('invoice', order)}><FileText size={19} /><span><small>PDF</small><b>Счёт на оплату</b></span><Download size={15} /></button><button type="button" onClick={() => void downloadB2BGeneratedDocument('act', order)}><FileCheck2 size={19} /><span><small>PDF</small><b>Акт выполненных услуг</b></span><Download size={15} /></button></div>
       <div className="b2b-client-attachments-head"><div><strong>Вложения к заказу</strong><span>Заявки, договоры, чеки и другие файлы</span></div><input ref={inputRef} hidden type="file" multiple onChange={upload} /><button className="b2b-secondary-button" type="button" disabled={uploading} onClick={() => inputRef.current?.click()}>{uploading ? <LoaderCircle className="spin" size={15} /> : <Paperclip size={15} />}{uploading ? 'Загрузка…' : 'Добавить вложение'}</button></div>
       {error && <div className="b2b-form-error">{error}</div>}

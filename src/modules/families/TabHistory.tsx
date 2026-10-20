@@ -160,7 +160,7 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
                 </div>
               )}
               {deletedPayment && <details style={{ fontSize: 11, marginTop: 6 }}>
-                <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')} сом</summary>
+                <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')}</summary>
                 <p>Дата: {String(deletedPayment.payment_date ?? '—')} · № {String(deletedPayment.payment_number ?? '—')}</p>
                 <p>Комментарий: {String(deletedPayment.comment ?? '—')}</p>
                 {typeof deletedPayment.receipt_url === 'string' && /^https?:\/\//.test(deletedPayment.receipt_url) && <a href={deletedPayment.receipt_url} target="_blank" rel="noreferrer">Открыть удалённый чек</a>}

@@ -14,8 +14,9 @@ test('flags assigned unboarded children only in their school and transfer', () =
     { familyId: 'f', branchFilter: 'TIS', transferNumber: '1', status: 'new', debtAmount: 0 },
   ] });
   render(<SchoolTransferDashboard schoolKey="AES" />);
-  expect(screen.getAllByLabelText('Посадка не подтверждена: 1')).toHaveLength(1);
-  expect(screen.getByLabelText('Посадка не подтверждена: 1').closest('button')).toHaveTextContent('#1');
+  // Ячейка трансфера показывает число неподтверждённых посадок; детали — в подсказке.
+  expect(screen.getAllByTitle(/Посадка не подтверждена: 1$/)).toHaveLength(1);
+  expect(screen.getByTitle(/Посадка не подтверждена: 1$/)).toHaveTextContent('1');
 });
 
 
@@ -41,6 +42,6 @@ test('payment badge counts debtor families instead of unboarded children', () =>
     { familyId: 'b', branchFilter: 'AES', transferNumber: '1', status: 'new', debtAmount: 0 },
   ] });
   render(<SchoolTransferDashboard schoolKey="AES" mode="charges" />);
-  expect(screen.getAllByLabelText('Должников: 1')).toHaveLength(1);
-  expect(screen.queryByLabelText(/Посадка не подтверждена/)).not.toBeInTheDocument();
+  expect(screen.getAllByTitle(/Должников: 1$/)).toHaveLength(1);
+  expect(screen.queryByTitle(/Посадка не подтверждена/)).not.toBeInTheDocument();
 });
