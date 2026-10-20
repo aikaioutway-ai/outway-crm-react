@@ -140,3 +140,26 @@ test('driver advances persist each selected half-month with its own amount',asyn
   expect(createV2DriverAdvance).toHaveBeenCalledWith(expect.objectContaining({amount:400,salaryPeriodKey:expect.stringMatching(/-09-1$/)}));
   expect(createV2DriverAdvance).toHaveBeenCalledWith(expect.objectContaining({amount:600,salaryPeriodKey:expect.stringMatching(/-09-2$/)}));
 });
+
+test('background and Escape close the payment dialog but clicks inside do not',()=>{
+  const close=jest.fn();const {container}=render(<EmployeeAdvanceModal onClose={close} onSaved={jest.fn()}/>);
+  fireEvent.mouseDown(screen.getByRole('dialog',{name:'Новая выплата'}));expect(close).not.toHaveBeenCalled();
+  fireEvent.mouseDown(container.querySelector('.expense-modal-overlay')!);expect(close).toHaveBeenCalledTimes(1);
+  fireEvent.keyDown(screen.getByRole('dialog',{name:'Новая выплата'}),{key:'Escape'});expect(close).toHaveBeenCalledTimes(2);
+});
+
+test('period backdrop closes only the period picker and keeps the payment draft',()=>{
+  const close=jest.fn();const {container}=render(<EmployeeAdvanceModal onClose={close} onSaved={jest.fn()}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Периоды выплаты'}));
+  fireEvent.mouseDown(screen.getByRole('dialog',{name:'Периоды выплаты'}));expect(screen.getByRole('dialog',{name:'Периоды выплаты'})).toBeInTheDocument();
+  fireEvent.mouseDown(container.querySelector('.payment-picker-overlay')!);
+  expect(screen.queryByRole('dialog',{name:'Периоды выплаты'})).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog',{name:'Новая выплата'})).toBeInTheDocument();expect(close).not.toHaveBeenCalled();
+});
+
+test('Escape closes only the topmost picker',()=>{
+  const close=jest.fn();render(<EmployeeAdvanceModal onClose={close} onSaved={jest.fn()}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Периоды выплаты'}));
+  fireEvent.keyDown(screen.getByRole('dialog',{name:'Периоды выплаты'}),{key:'Escape'});
+  expect(close).not.toHaveBeenCalled();expect(screen.getByRole('dialog',{name:'Новая выплата'})).toBeInTheDocument();
+});

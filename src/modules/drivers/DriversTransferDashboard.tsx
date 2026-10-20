@@ -1,3 +1,4 @@
+import { showTaskContextMenu } from '../tasks/TaskContextMenu';
 import TransferCell, { transferCellColor } from '../../core/dashboard/TransferCell';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useMemo } from 'react';
@@ -87,6 +88,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
           selected={selectedKey === cell.filterKey}
           value={cell.count}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
+          onContextMenu={event=>showTaskContextMenu(event,/^\d+$/.test(cell.filterKey)?{type:'transfer',id:'',schoolKey,transferNumber:Number(cell.filterKey),label:`Трансфер № ${cell.filterKey}`} : ['empty','new','rejected'].includes(cell.filterKey)?{type:'group',id:`${schoolKey}:${cell.filterKey==='rejected'?'rejected':'new'}`,schoolKey,group:cell.filterKey==='rejected'?'rejected':'new',label:cell.filterKey==='rejected'?'Отказные заявки':'Новые заявки'}:{type:'school',id:schoolKey,schoolKey,label:schoolKey})}
           title={cell.count > 0 ? `Водителей: ${cell.count}${cell.vehicleType ? ` · ${VT_LABEL[cell.vehicleType] ?? cell.vehicleType}` : ''}` : undefined}
         />
       ))}

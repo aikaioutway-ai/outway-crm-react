@@ -22,13 +22,13 @@ jest.mock('../../services/taskService',()=>({
   ].filter(child=>(!context?.transferId || child.transferId===context.transferId) && (!context?.group || child.group===context.group))}}),
   mutateTask:jest.fn().mockResolvedValue({}),
 }));
-const change=(label:string,value:string)=>fireEvent.change(screen.getByLabelText(label),{target:{value}});
+const change=(label:string,value:string)=>{if(label==='Школа' && !screen.queryByLabelText('Школа'))fireEvent.click(screen.getByRole('button',{name:'Выбрать школу, трансфер или ребёнка'}));fireEvent.change(screen.getByLabelText(label),{target:{value}});};
 function fillResponsible(){change('Отдел ответственного','logistics');change('Ответственный','employee');change('Наблюдатель','observer');}
 beforeEach(()=>jest.clearAllMocks());
 
 test('school-only task leaves transfer and child empty and saves observer',async()=>{
   const close=jest.fn();render(<TaskComposer token="session" onClose={close}/>);
-  expect(screen.getByLabelText('Школа')).toBeRequired();
+  expect(screen.getByLabelText('Привязка')).toHaveValue('general');
   expect(screen.getByLabelText('Ответственный')).toBeDisabled();
   change('Школа','TIS');change('Что нужно сделать','Проверить школу');fillResponsible();
   expect(screen.getByLabelText('Трансфер')).toHaveValue('');expect(screen.getByLabelText('Ребёнок')).toHaveValue('');
@@ -65,7 +65,7 @@ test('observer choices contain only the four requested active leadership roles',
   render(<TaskComposer token="session" onClose={jest.fn()}/>);const observer=within(screen.getByLabelText('Наблюдатель'));
   for(const name of ['Гендиректор Тест','Директор Тест','Начальник Тест','Кассир Тест'])expect(observer.getByRole('option',{name})).toBeInTheDocument();
   for(const name of ['Администратор Тест','Менеджер Тест','Логист Тест','Уволенный'])expect(observer.queryByRole('option',{name})).not.toBeInTheDocument();
-  expect(screen.getByLabelText('Наблюдатель')).toBeRequired();
+  expect(screen.getByLabelText('Наблюдатель')).not.toBeRequired();
 });
 
 test('rescheduling preserves observer and requires reason',async()=>{
@@ -90,4 +90,21 @@ test('resolves toolbar transfer number and filters children before saving',async
   change('Что нужно сделать','Проверить трансфер');fillResponsible();
   fireEvent.click(screen.getByRole('button',{name:'Поставить задачу'}));
   await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','create',expect.objectContaining({target:expect.objectContaining({type:'transfer',id:'transfer',schoolKey:'TIS',transferNumber:3})}),undefined));
+});
+
+
+test('creates a general task without a school or observer',async()=>{
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);
+  change('Что нужно сделать','Подготовить отчёт');
+  change('Отдел ответственного','logistics');change('Ответственный','employee');
+  fireEvent.click(screen.getByRole('button',{name:'Поставить задачу'}));
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','create',expect.objectContaining({observerId:null,target:{type:'general',id:'',label:'Общая задача'}}),undefined));
+});
+
+test('school context has no child search and lists transfers before application groups',()=>{
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);change('Школа','TIS');
+  expect(screen.queryByLabelText('Поиск ребёнка')).not.toBeInTheDocument();
+  const labels=within(screen.getByLabelText('Трансфер')).getAllByRole('option').map(option=>option.textContent);
+  expect(labels.indexOf('TIS · № 3')).toBeLessThan(labels.indexOf('Новые'));
+  expect(labels.indexOf('TIS · № 3')).toBeLessThan(labels.indexOf('Отказные'));
 });

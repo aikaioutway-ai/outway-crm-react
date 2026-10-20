@@ -1,3 +1,5 @@
+import { showTaskContextMenu } from '../tasks/TaskContextMenu';
+import { openTaskComposer } from '../tasks/taskTypes';
 import '../../core/selects/NotionSelect.css';
 import TransferCell, { transferCellColor, VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import React, { useEffect, useMemo, useState } from 'react';
@@ -156,7 +158,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       value={cell.count}
       onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
       onContextMenu={event => {
-        if (!/^\d+$/.test(cell.filterKey)) return;
+        if (!/^\d+$/.test(cell.filterKey)) {showTaskContextMenu(event,cell.filterKey==='rejected' || cell.filterKey==='empty'?{type:'group',id:`${schoolKey}:${cell.filterKey==='rejected'?'rejected':'new'}`,schoolKey,group:cell.filterKey==='rejected'?'rejected':'new',label:cell.filterKey==='rejected'?'Отказные заявки':'Новые заявки'}:{type:'school',id:schoolKey,schoolKey,label:schoolKey});return;}
         event.preventDefault();
         event.stopPropagation();
         setVehicleMenu({
@@ -236,6 +238,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
           <div style={{ padding: '2px 6px 8px', fontSize: 12, fontWeight: 900, color: '#17222F', borderBottom: '1px solid #EEF3F5', marginBottom: 6 }}>
             Трансфер №{vehicleMenu.transferNumber} · тип транспорта
           </div>
+          <button type="button" className="notion-select-option" onClick={()=>{openTaskComposer({type:'transfer',id:'',schoolKey,transferNumber:Number(vehicleMenu.transferNumber),label:`Трансфер № ${vehicleMenu.transferNumber}`});setVehicleMenu(null);}}>＋ Поставить задачу</button>
           {vehicleMenu.targets.length === 0 ? (
             <div style={{ padding: '4px 6px', fontSize: 11, color: '#94A3B8' }}>Нет данных о филиале</div>
           ) : (

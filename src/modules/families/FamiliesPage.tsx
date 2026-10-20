@@ -411,7 +411,7 @@ type TransferCardData = {
     status: string;
   }[];
 };
-type DriverCardTab = 'main' | 'parentCard' | 'documents' | 'finance' | 'b2b' | 'advances';
+type DriverCardTab = 'main' | 'children' | 'parentCard' | 'documents' | 'finance' | 'b2b' | 'advances';
 type DriverDraft = {
   fullName: string;
   phone: string;
@@ -2414,7 +2414,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     selectedDriverId
       ? rows
           .filter(row => row.driverId === selectedDriverId && row.status !== 'rejected' && row.childName)
-          .sort((a, b) => Number(a.stopNumber ?? 999) - Number(b.stopNumber ?? 999))
+          .sort((a, b) => {const stop=(value:string|null)=>value && Number.isFinite(Number(value)) && Number(value)>0?Number(value):Infinity;return stop(a.stopNumber)-stop(b.stopNumber) || a.childName.localeCompare(b.childName,'ru');})
       : []
   ), [rows, selectedDriverId]);
   const selectedDriverTransfer = useMemo(() => (
@@ -3349,6 +3349,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           ) : null}
           {customTableContent ?? (isDriversModule ? (
             <DataTable<V2DriverTableRow>
+              getTaskTarget={row=>({type:'driver',id:row.driverId,label:row.fullName})}
               key="drivers_table"
               columns={DRIVER_COLUMNS}
               data={filteredDriverRows}
@@ -3390,6 +3391,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             />
           ) : isCashierMode ? (
             <DataTable<CashierPaymentRow>
+              getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key={`cashier_table_${cashierView}`}
               columns={cashierColumns}
               data={(cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows).filter(r => {
@@ -3420,6 +3422,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             />
           ) : isPaymentsMode ? (
             <DataTable<PaymentTableRow>
+              getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key="payments_table"
               columns={paymentTableColumns}
               data={paymentRows.filter(r => {
@@ -3459,6 +3462,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             />
           ) : (
             <DataTable<ChildRow>
+              getTaskTarget={row=>!row.rowId.endsWith('_empty') ? {type:'child',id:row.rowId,label:row.childName,familyId:row.familyId,schoolKey:row.branchFilter} : {type:'family',id:row.familyId,label:row.parentName}}
               key={`families_table_${accrualsView ? 'accruals' : mode}`}
               columns={tableColumns}
               data={filteredSorted}
@@ -3668,7 +3672,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             backdropFilter: 'blur(2px)',
           }}
         >
-          <section
+          <section className="driver-card-modal"
             onClick={event => event.stopPropagation()}
             style={{
               width: 'min(1040px, calc(100vw - 32px))',
@@ -3682,7 +3686,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               flexDirection: 'column',
             }}
           >
-            <header style={{
+            <header className="driver-card-header" style={{
               display: 'flex',
               alignItems: 'flex-start',
               justifyContent: 'space-between',
@@ -3690,8 +3694,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               padding: '18px 20px 14px',
               borderBottom: '1px solid #E5EEF1',
             }}>
-              <div style={{ minWidth: 0 }}>
-                <TaskButton target={{type:'driver',id:selectedDriver.driverId,label:selectedDriver.fullName}} />
+              <div className="driver-card-identity" style={{ minWidth: 0 }}>
                 <input
                   value={driverDraft?.fullName ?? ''}
                   onChange={event => setDriverDraftField('fullName', event.target.value)}
@@ -3713,13 +3716,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   <span>ID: {selectedDriver.driverId.slice(0, 8)}</span>
                   <span>{DRIVER_STATUS_OPTIONS.find(option => option.value === driverDraft?.status)?.label ?? 'Статус не указан'}</span>
                 </div>
-                <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: '#17222F', fontSize: 13, fontWeight: 800 }}>
-                  <span>История — во вкладке «Выплаты»</span>
-                  <span>Не хватает документов: {missingDriverDocuments}</span>
-                  <span>Просрочены: {expiredDriverDocuments}</span>
-                </div>
+
               </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+              <div className="driver-card-actions" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                <TaskButton target={{type:'driver',id:selectedDriver.driverId,label:selectedDriver.fullName}} />
+
                 <button
                   onClick={removeSelectedDriver}
                   disabled={savingDriver || deletingDriver}
@@ -3799,11 +3800,10 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             }}>
               {[
                 { key: 'main' as DriverCardTab, label: 'Основная' },
-                { key: 'parentCard' as DriverCardTab, label: 'Для родителей' },
+                { key: 'children' as DriverCardTab, label: 'Дети' },
                 { key: 'documents' as DriverCardTab, label: 'Документы' },
                 { key: 'finance' as DriverCardTab, label: 'Финансы' },
                 { key: 'b2b' as DriverCardTab, label: `B2B${selectedDriverB2BOrders.length ? ` (${selectedDriverB2BOrders.length})` : ''}` },
-                { key: 'advances' as DriverCardTab, label: 'Выплаты' },
               ].map(tabItem => {
                 const active = selectedDriverTab === tabItem.key;
                 return (
@@ -4040,20 +4040,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 </section>
               )}
 
-              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14, marginBottom: 12 }}>
-                <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 9 }}>Район</div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-                  {['Микрорайоны','Центр','Ак-Ордо','Арча-Бешик','Аламедин 1','Дордой','Маевка','Тунгуч','Кок-Жар','Джал','Кара-Жыгач','Пригородный','Новопавловка','Новопакровка','с. Манас','ГЭС 2','Киргизия','Политех','Рабочий'].map(name => {
-                    const active = driverDraft?.districts.includes(name) ?? false;
-                    return (
-                      <button key={name} type="button" onClick={() => setDriverDraftField('districts', active ? (driverDraft?.districts ?? []).filter(d => d !== name) : [...(driverDraft?.districts ?? []), name])} style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? '#31A4A5' : '#DDE9EC'}`, borderRadius: 999, background: active ? '#DFF4F4' : '#fff', color: active ? '#237F81' : '#52606F', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
-                        {name}
-                      </button>
-                    );
-                  })}
-                </div>
-              </section>
 
+              </>
+              ) : selectedDriverTab === 'children' ? (
               <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                 <div style={{
                   height: 42,
@@ -4071,7 +4060,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
-                        {['Ост.', 'ФИО', 'Адрес', 'Телефон', 'Утро', 'Самовыход', 'Координаты'].map(label => (
+                        {['№', 'ФИО', 'Адрес', 'Телефон', 'Остановка', 'Координаты'].map(label => (
                           <th key={label} style={{
                             height: 36,
                             padding: '0 10px',
@@ -4096,12 +4085,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         return (
                           <tr key={child.rowId}>
                             {[
-                              child.stopNumber || '-',
+                              index + 1,
                               child.childName || '-',
                               child.streetAddress || '-',
                               child.phone || child.contactPhone || '-',
-                              child.timeMorning || '-',
-                              child.selfExitAllowed ? 'Да' : 'Нет',
+                              child.stopNumber || '—',
                               coords,
                             ].map((value, cellIndex) => (
                               <td key={cellIndex} style={{
@@ -4123,7 +4111,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         );
                       }) : (
                         <tr>
-                          <td colSpan={7} style={{
+                          <td colSpan={6} style={{
                             height: 58,
                             padding: '0 14px',
                             color: '#7A859D',
@@ -4138,7 +4126,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   </table>
                 </div>
               </section>
-              </>
               ) : selectedDriverTab === 'parentCard' ? (
                 <section style={{ maxWidth: 620, margin: '0 auto', borderRadius: 16, background: '#fff', border: '1px solid #CFE5E7', overflow: 'hidden' }}>
                   <div style={{ minHeight: 54, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
@@ -4256,7 +4243,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 </div>
               </section>
               ) : selectedDriverTab === 'finance' ? (
-                <DriverPaymentsPanel driverId={selectedDriver.driverId} sessionToken={authToken} view="finance" />
+                <DriverPaymentsPanel driverId={selectedDriver.driverId} sessionToken={authToken} view="history" canDeleteAdvance />
               ) : selectedDriverTab === 'b2b' ? (
                 <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                   <div style={{ minHeight: 52, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>

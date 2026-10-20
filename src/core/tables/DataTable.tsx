@@ -1,3 +1,4 @@
+import { openTaskComposer, TaskTarget } from '../../modules/tasks/taskTypes';
 import React, {
   useState, useRef, useEffect, useCallback, useMemo
 } from 'react';
@@ -53,6 +54,7 @@ export interface DataTableProps<T = any> {
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
   onRowOpen?: (row: T) => void;
+  getTaskTarget?: (row: T) => TaskTarget;
   onRowReject?: (row: T) => void;
   canRowReject?: (row: T) => boolean;
   onRowDelete?: (row: T) => void;
@@ -335,6 +337,7 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   onRowOpen,
   onRowReject,
+  getTaskTarget,
   canRowReject,
   onRowDelete,
   canRowDelete,
@@ -1151,6 +1154,7 @@ export function DataTable<T extends Record<string, any>>({
               <span>↗</span> Открыть карточку
             </button>
           )}
+          <button className="dt-ctx-item" onClick={()=>{openTaskComposer(getTaskTarget?.(rowMenu.row) ?? {type:'general',id:'',label:'Общая задача'});setRowMenu(null);}}><span>＋</span> Поставить задачу</button>
           {onRowReject && (canRowReject?.(rowMenu.row) ?? true) && (
             <button className="dt-ctx-item dt-ctx-item--reject" onClick={() => { onRowReject(rowMenu.row); setRowMenu(null); }}>
               <span>×</span> Отказ

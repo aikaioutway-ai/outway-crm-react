@@ -4,35 +4,36 @@ import { useTasks } from '../../services/taskService';
 jest.mock('../../services/taskService',()=>({
   useTasks:jest.fn(()=>({data:{rows:[],total:0},refetch:jest.fn()})),
   useTaskMetadata:()=>({data:{employees:[],canViewAll:true},refetch:jest.fn()}),
-  useTaskSummary:()=>({data:{},refetch:jest.fn()}),
+  useTaskSummary:()=>({data:{open:2,new:1,overdue:1,dueSoon:0,review:0},refetch:jest.fn()}),
 }));
 jest.mock('./TaskComposer',()=>()=>null);
 jest.mock('./TaskDetail',()=>()=>null);
-jest.mock('./TaskTeamOverview',()=>({onSelect}:any)=> <div>Статистика команды<button onClick={()=>onSelect('logistics','')}>Открыть логистику</button></div>);
-
-test('created tab includes completed tasks instead of inheriting the active filter',()=>{
-  render(<TasksModule user={{id:'actor',role:'cashier',name:'Кассир',sessionToken:'session'} as any}/>);
-  fireEvent.click(screen.getByRole('tab',{name:'Поставленные мной'}));
-  expect(useTasks).toHaveBeenLastCalledWith('session',expect.objectContaining({view:'created',status:'all',due:''}),0);
-  expect(screen.getByRole('combobox',{name:'Статус'})).toHaveValue('all');
-});
-
-test('all tasks opens department statistics for cashiers',()=>{
-  render(<TasksModule user={{id:'actor',role:'cashier',name:'Кассир',sessionToken:'session'} as any}/>);
-  fireEvent.click(screen.getByRole('tab',{name:'Все задачи'}));
+jest.mock('./TaskTeamOverview',()=>()=> <div>Статистика команды</div>);
+const user={id:'actor',role:'cashier',name:'Кассир',sessionToken:'session'} as any;
+test('shows dashboard, three task lists and department statistics without filters',()=>{
+  render(<TasksModule user={user}/>);
+  for(const name of ['Мои задачи','Поставленные мной','Наблюдаю','Все задачи']) expect(screen.getByRole('heading',{name})).toBeInTheDocument();
   expect(screen.getByText('Статистика команды')).toBeInTheDocument();
-  expect(useTasks).toHaveBeenLastCalledWith('session',expect.objectContaining({view:'all',status:'all'}),0);
+  expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+  expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Мои открытые 2'})).toBeInTheDocument();
+});
+test('dashboard filters assigned tasks by overdue date',()=>{
+  render(<TasksModule user={user}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Просрочены 1'}));
+  expect(useTasks).toHaveBeenLastCalledWith('session',expect.objectContaining({view:'mine',status:'active',due:'overdue'}),0);
+  fireEvent.click(screen.getByRole('button',{name:'Сбросить фильтр дашборда'}));
+  expect(useTasks).toHaveBeenLastCalledWith('session',expect.objectContaining({view:'mine',status:'active',due:''}),0);
 });
 
-test('department overview stays inline and department tasks open in a window',()=>{
-  render(<TasksModule user={{id:'actor',role:'cashier',name:'Кассир',sessionToken:'session'} as any}/>);
-  fireEvent.click(screen.getByRole('tab',{name:'Все задачи'}));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button',{name:'Открыть логистику'}));
-  expect(screen.getByRole('dialog',{name:'Задачи отдела Логистика'})).toBeInTheDocument();
-  expect(useTasks).toHaveBeenLastCalledWith('session',expect.objectContaining({view:'all',department:'logistics',status:'all'}),0);
-  fireEvent.click(screen.getByRole('button',{name:'Закрыть все задачи'}));
-  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-  expect(screen.getByRole('tab',{name:'Все задачи'})).toHaveAttribute('aria-selected','true');
-  expect(useTasks).toHaveBeenLastCalledWith('session',expect.objectContaining({view:'all',department:'',status:'all'}),0);
+test('department dashboard can be collapsed and expanded',()=>{
+  render(<TasksModule user={user}/>);
+  const toggle=screen.getByRole('button',{name:'Все задачи'});
+  expect(toggle).toHaveAttribute('aria-expanded','false');
+  expect(screen.getByText('Статистика команды')).not.toBeVisible();
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded','true');
+  expect(screen.getByText('Статистика команды')).toBeVisible();
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute('aria-expanded','false');
 });

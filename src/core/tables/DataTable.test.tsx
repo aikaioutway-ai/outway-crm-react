@@ -181,3 +181,12 @@ test('sorts transfer numbers numerically even with a number prefix', async () =>
     expect(values[2]).toContain('№10');
   });
 });
+
+test('right click offers task creation with the selected row target',async()=>{
+  const listener=jest.fn();window.addEventListener('outway-task-compose',listener);
+  render(<DataTable columns={columns} data={[{id:'one',paymentMethod:'cash'}]} rowKey="id" storageKey="task_context_test" getTaskTarget={()=>({type:'school',id:'TIS',label:'TIS'})}/>);
+  fireEvent.contextMenu((await screen.findByText('cash')).closest('tr')!,{clientX:100,clientY:100});
+  fireEvent.click(screen.getByRole('button',{name:/Поставить задачу/}));
+  expect(listener).toHaveBeenCalledWith(expect.objectContaining({detail:{type:'school',id:'TIS',label:'TIS'}}));
+  window.removeEventListener('outway-task-compose',listener);
+});

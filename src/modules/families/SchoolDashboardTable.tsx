@@ -1,3 +1,5 @@
+import { showTaskContextMenu } from '../tasks/TaskContextMenu';
+import { SCHOOL_TABS } from './constants';
 import React from 'react';
 import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
@@ -15,7 +17,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
             <div style={{ fontSize: 'var(--dashboard-label-size, 11px)', fontWeight: 700, color: 'var(--text-2)' }}>{column.label}{sortKey === column.key ? (ascending ? ' ↑' : ' ↓') : ''}</div>
           </button>
         </th>)}</tr></thead>
-        <tbody>{rows.map((row, rowIndex) => <tr key={row.key} style={{ height: 'var(--dashboard-row-height, 56px)', background: rowIndex % 2 ? 'var(--surface-2)' : undefined }}>{columns.map((column, index) => <td key={column.key} onClick={index === 0 && !row.disabled ? () => onSelect(row.key) : undefined} style={{ cursor: index === 0 && !row.disabled ? 'pointer' : undefined, padding: index === 0 && row.isChild ? '0 16px 0 34px' : '0 16px', borderRight: index < columns.length - 1 ? '1px solid var(--border)' : undefined, fontSize: 'var(--dashboard-row-size, 14px)', fontWeight: 700, color: index === 0 ? 'var(--text)' : column.color }}>
+        <tbody>{rows.map((row, rowIndex) => <tr key={row.key} onContextMenu={event=>{const school=SCHOOL_TABS.find(item=>item.key===row.key && item.key!=='ALL');showTaskContextMenu(event,school?{type:'school',id:school.key,label:school.label,schoolKey:school.key}:{type:'general',id:'',label:'Общая задача'});}} style={{ height: 'var(--dashboard-row-height, 56px)', background: rowIndex % 2 ? 'var(--surface-2)' : undefined }}>{columns.map((column, index) => <td key={column.key} onClick={index === 0 && !row.disabled ? () => onSelect(row.key) : undefined} style={{ cursor: index === 0 && !row.disabled ? 'pointer' : undefined, padding: index === 0 && row.isChild ? '0 16px 0 34px' : '0 16px', borderRight: index < columns.length - 1 ? '1px solid var(--border)' : undefined, fontSize: 'var(--dashboard-row-size, 14px)', fontWeight: 700, color: index === 0 ? 'var(--text)' : column.color }}>
           {index === 0 ? <button type="button" disabled={row.disabled} onClick={event => { event.stopPropagation(); onSelect(row.key); }} aria-expanded={row.isGroup ? !!row.expanded : undefined} style={{ display: 'flex', alignItems: 'center', gap: 10, border: 'none', background: 'transparent', color: 'var(--text)', cursor: row.disabled ? 'default' : 'pointer', fontWeight: 700, padding: 0 }}>{row.icon}{showAvatars && <SchoolAvatar logo={row.logo} label={row.label} color="var(--accent)" />}{row.label}<span aria-hidden="true">{row.expanded ? '⌄' : '›'}</span></button> : row.values[column.key]}
         </td>)}</tr>)}</tbody>
       </table>

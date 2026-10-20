@@ -160,10 +160,10 @@ export function ExpenseModal({ initialCategory, expense, userName, sessionToken,
   };
 
   return (
-    <div className="expense-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
+    <div className="expense-modal-overlay" onKeyDown={event=>{if(event.key==='Escape' && !saving){event.stopPropagation();onClose();}}} onMouseDown={event => { if (event.target === event.currentTarget && !saving) onClose(); }}>
       <div className="expense-modal" role="dialog" aria-modal="true" aria-label={expense ? 'Редактирование расхода' : 'Новый расход'}>
         <div className="expense-modal-head"><h2>{expense ? 'Редактировать расход' : 'Новый расход'}</h2><button className="expense-modal-close" onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div>
-        <form className="expense-form" onSubmit={submit}>
+        <form className="expense-form expense-structured-form" onSubmit={submit}><section className="expense-form-section"><h3>Что оплачиваем</h3>
           <div className="expense-field full"><label>Наименование расхода</label><input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="Например, аренда офиса" /></div>
           <div className="expense-field"><label htmlFor="expense-category">Главная категория</label><select id="expense-category" value={category} onChange={event => changeCategory(event.target.value as ExpenseCategory)}>{EXPENSE_CATEGORY_KEYS.filter(key => allowPersonalCategory || key !== 'personal').map(key => <option key={key} value={key}>{EXPENSE_CATEGORIES[key].label}</option>)}</select></div>
           <div className="expense-field"><label htmlFor="expense-subcategory">Подкатегория</label><select id="expense-subcategory" value={subcategory} onChange={event => setSubcategory(event.target.value)}>{EXPENSE_CATEGORIES[category].subcategories.filter(item => item !== 'ЗП' || expense?.subcategory === 'ЗП').map(item => <option key={item}>{item}</option>)}</select></div>
@@ -171,14 +171,14 @@ export function ExpenseModal({ initialCategory, expense, userName, sessionToken,
             {isSchoolSalary ? <div className="expense-field"><label htmlFor="salary-expense-school">Школа</label><select id="salary-expense-school" value={schoolKey} onChange={event => setSchoolKey(event.target.value)} required><option value="">Выберите школу</option>{SCHOOL_TABS.filter(school => school.key !== 'ALL').map(school => <option key={school.key} value={school.key}>{school.label}</option>)}</select></div> : <div className="expense-field"><label htmlFor="salary-expense-department">Отдел</label><select id="salary-expense-department" value={departmentKey} onChange={event => setDepartmentKey(event.target.value)} required><option value="">Выберите отдел</option>{EMPLOYEE_DEPARTMENTS.map(department => <option key={department.key} value={department.key}>{department.label}</option>)}</select></div>}
             <div className="expense-field"><label htmlFor="salary-expense-period">Период зарплаты</label><select id="salary-expense-period" value={salaryPeriodKey} onChange={event => setSalaryPeriodKey(event.target.value)} required><option value="">Выберите период</option>{salaryPeriods.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></div>
           </>}
-          <div className="expense-field"><label>Цена, сом</label><input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder="0" /></div>
+          </section><section className="expense-form-section"><h3>Расчёт суммы</h3><div className="expense-field"><label>Цена, сом</label><input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder="0" /></div>
           <div className="expense-field"><label>Количество</label><input type="number" min="0.01" step="0.01" value={quantity} onChange={event => setQuantity(event.target.value)} /></div>
           <div className="expense-total-preview"><span>Итоговая сумма</span><strong>{money(total)}</strong></div>
-          <div className="expense-field"><label>Фактическая дата расхода</label><input type="date" value={expenseDate} onChange={event => setExpenseDate(event.target.value)} /></div>
+          </section><section className="expense-form-section"><h3>Оплата и реквизиты</h3><div className="expense-field"><label>Фактическая дата расхода</label><input type="date" value={expenseDate} onChange={event => setExpenseDate(event.target.value)} /></div>
           <div className="expense-field"><label>Способ оплаты</label><select value={paymentMethod} onChange={event => setPaymentMethod(event.target.value as ExpensePaymentMethod)}><option value="cash">Наличные</option><option value="cashless">АйКай Мбанк</option></select></div>
           <div className="expense-field"><label>№ платёжного поручения</label><input value={paymentOrderNumber} onChange={event => setPaymentOrderNumber(event.target.value)} placeholder="Необязательно" /></div>
           <div className="expense-field full"><label>Комментарий</label><textarea value={comment} onChange={event => setComment(event.target.value)} placeholder="Необязательно" /></div>
-          {error && <div className="expense-form-error">{error}</div>}
+          </section>{error && <div className="expense-form-error">{error}</div>}
           <div className="expense-form-actions"><button type="button" className="expense-cancel" onClick={onClose}>Отмена</button><button type="submit" className="expense-save" disabled={saving}>{saving ? 'Сохранение…' : expense ? 'Сохранить изменения' : 'Добавить расход'}</button></div>
         </form>
       </div>

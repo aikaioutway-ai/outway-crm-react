@@ -1,3 +1,4 @@
+import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import SalaryExpensesView, { SalaryScope } from './modules/costs/SalaryExpensesView';
 import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
 import LogisticsTabs from './modules/families/LogisticsTabs';
@@ -429,6 +430,7 @@ export default function App() {
     return (
       <Suspense fallback={<SectionLoading />}>
         <MobileApp user={currentUser} onLogout={handleLogout} onOpenDesktop={() => setForceDesktop(true)} onOpenTaskTarget={target => { setForceDesktop(true); void openTaskTarget(target); }} />
+        <TaskContextMenu />
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
       </Suspense>
     );
@@ -823,6 +825,7 @@ export default function App() {
         </Suspense>
       </main>
       <Suspense fallback={null}>
+        <TaskContextMenu />
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
         {taskFamily && <div style={{position:'fixed',inset:0,zIndex:2400,background:'#17374740',padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
       </Suspense>

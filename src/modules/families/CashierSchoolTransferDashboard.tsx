@@ -1,3 +1,4 @@
+import { showTaskContextMenu } from '../tasks/TaskContextMenu';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import TransferCell from '../../core/dashboard/TransferCell';
 import { useMemo } from 'react';
@@ -93,6 +94,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
           value={cell.count}
           alert={/^\d+$/.test(cell.filterKey) && statusFilter === 'pending'}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
+          onContextMenu={event=>showTaskContextMenu(event,/^\d+$/.test(cell.filterKey)?{type:'transfer',id:'',schoolKey,transferNumber:Number(cell.filterKey),label:`Трансфер № ${cell.filterKey}`} : ['empty','new','rejected'].includes(cell.filterKey)?{type:'group',id:`${schoolKey}:${cell.filterKey==='rejected'?'rejected':'new'}`,schoolKey,group:cell.filterKey==='rejected'?'rejected':'new',label:cell.filterKey==='rejected'?'Отказные заявки':'Новые заявки'}:{type:'school',id:schoolKey,schoolKey,label:schoolKey})}
           title={cell.count > 0 ? `${statusFilter === 'confirmed' ? 'Подтверждено' : 'На проверке'}: ${cell.count}` : undefined}
         />
       ))}

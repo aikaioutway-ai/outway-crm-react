@@ -4,7 +4,7 @@ import DriverPaymentPicker, { DriverPayment } from './DriverPaymentPicker';
 import { createExpense } from '../../services/expenseService';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useDriversTable, useEmployees } from '../../hooks/useCrmQueries';
 import { createEmployeeAdvance } from '../../services/employeeService';
@@ -44,6 +44,9 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken }:
   const batch = driverPayments;
   const total = department === 'drivers' ? batch.reduce((sum,row)=>sum+(selectedPeriods.length?periodTotal(periodAmounts(selectedPeriods,row.amount,row.periodAmounts)):Number(row.amount)||0),0) : selectedPeriods.length>1?periodTotal(periodAmounts(selectedPeriods,amount,officeAmounts)):Number(amount)||0;
   const overlayOpen=pickerOpen || periodPickerOpen;
+  const mainDialog=useRef<HTMLDivElement>(null);
+  useEffect(()=>{const previous=document.activeElement as HTMLElement|null;mainDialog.current?.focus();return()=>previous?.focus();},[]);
+  const close=()=>{if(!busy && !overlayOpen)onClose();};
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
     if (inFlight.current) return;
@@ -84,7 +87,10 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken }:
       if(completed.current.size){void queryClient.invalidateQueries({queryKey:['driverPayments']});onSaved();}
     } finally {inFlight.current=false;setBusy(false);}
   };
-  return <div className="expense-modal-overlay"><div className="expense-modal payment-main-modal" role="dialog" aria-modal={!overlayOpen} aria-hidden={overlayOpen || undefined} inert={overlayOpen} aria-label="Новая выплата"><div className="expense-modal-head"><h2>Новая выплата</h2><button className="expense-modal-close" disabled={busy} onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div><form onSubmit={save} className="expense-form"><fieldset disabled={busy || savedCount > 0} style={{ display: 'contents' }}>
+  return <div className="expense-modal-overlay" onMouseDown={event=>{if(event.target===event.currentTarget)close();}} onKeyDown={event=>{
+    if(event.key==='Escape' && !overlayOpen){event.stopPropagation();close();}
+    if(event.key==='Tab' && !overlayOpen && mainDialog.current){const nodes=Array.from(mainDialog.current.querySelectorAll<HTMLElement>('button:not(:disabled),input:not(:disabled),select:not(:disabled),textarea:not(:disabled)'));const first=nodes[0],last=nodes[nodes.length-1];if(event.shiftKey && (document.activeElement===first || document.activeElement===mainDialog.current)){event.preventDefault();last?.focus();}else if(!event.shiftKey && document.activeElement===last){event.preventDefault();first?.focus();}}
+  }}><div ref={mainDialog} tabIndex={-1} className="expense-modal payment-main-modal" role="dialog" aria-modal={!overlayOpen} aria-hidden={overlayOpen || undefined} inert={overlayOpen} aria-label="Новая выплата"><div className="expense-modal-head"><h2>Новая выплата</h2><button className="expense-modal-close" disabled={busy} onClick={close} aria-label="Закрыть"><X size={18} /></button></div><form onSubmit={save} className="expense-form"><fieldset disabled={busy || savedCount > 0} style={{ display: 'contents' }}>
     <div className="expense-field full"><span id="payment-type-label">Тип выплаты</span><div className="payment-segments" role="group" aria-labelledby="payment-type-label">{[{key:'advance',label:'Аванс'},{key:'salary',label:'Зарплата'}].map(item=><button type="button" key={item.key} aria-pressed={paymentType===item.key} onClick={()=>{setPaymentType(item.key);setError('');}}>{item.label}</button>)}</div></div>
     <div className="expense-field full"><span id="payment-department-label">Кому выплачиваем</span><div className="payment-segments" role="group" aria-labelledby="payment-department-label">{[{key:'office',label:'Офис'},{key:'drivers',label:'Водители'}].map(item=><button type="button" key={item.key} aria-pressed={department===item.key} onClick={()=>{if(department===item.key)return;setDepartment(item.key);setError('');}}>{item.label}</button>)}</div></div>
     <label className="expense-field full">Отдел<select required={paymentType==='salary' && department==='office'} value={department==='drivers'?school:officeDepartment} onChange={event=>{if(department==='drivers')setSchool(event.target.value);else{setOfficeDepartment(event.target.value);setEmployeeId('');}}}><option value="">{department==='drivers'?'Все школы':'Все отделы'}</option>{department==='drivers'?SCHOOL_TABS.filter(row=>row.key!=='ALL').map(row=><option key={row.key} value={row.key}>{row.label}</option>):EMPLOYEE_DEPARTMENTS.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
