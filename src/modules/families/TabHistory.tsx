@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { Section } from './DrawerUI';
 
 interface AuditEntry {
   id: string; userName: string; action: string;
@@ -7,6 +6,15 @@ interface AuditEntry {
 }
 
 const ACTION_LABEL: Record<string, string> = {
+  'Платёж': 'Внёс платёж на проверку',
+  'Подтверждение': 'Подтвердил платёж',
+  'Отмена подтверждения': 'Отменил подтверждение платежа',
+  'Возврат': 'Оформил возврат',
+  'Подтверждение возврата': 'Подтвердил возврат',
+  'Отклонение возврата': 'Отклонил возврат',
+  'Редактирование': 'Изменил данные клиента',
+  'Редактирование ребёнка': 'Изменил данные ребёнка',
+  'Начисления': 'Создал начисления',
   // Заявки
   create_application:     'Новая заявка',
   create_family:          'Создана семья',
@@ -43,6 +51,12 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 const FIELD_LABEL: Record<string, string> = {
+  family_payment: 'Платёж', family_refund: 'Возврат',
+  child_route: 'Маршрут ребёнка', charge_discount: 'Скидка на начисление',
+  fullAddress: 'Адрес', parentName: 'Имя родителя', secondPhone: 'Доп. телефон',
+  childName: 'Имя ребёнка', schoolCode: 'Школа', vehicleType: 'Тип транспорта',
+  finalPrice: 'Стоимость', basePrice: 'Тариф', transferNumber: 'Трансфер',
+  stopNumber: 'Остановка', timeMorning: 'Время утром', selfExitAllowed: 'Самостоятельный выход',
   status:           'Статус',
   vehicle_type:     'Тип транспорта',
   zone:             'Зона',
@@ -71,6 +85,8 @@ const FIELD_LABEL: Record<string, string> = {
 };
 
 const VALUE_LABEL: Record<string, string> = {
+  cash: 'Наличные', transfer: 'АйКай Мбанк', card: 'АйКай Мбанк',
+  pending: 'На проверке', confirmed: 'Подтверждено',
   // Статусы семьи
   new:        'Новый',
   active:     'Активный',
@@ -100,93 +116,156 @@ const VALUE_LABEL: Record<string, string> = {
   false: 'Нет',
 };
 
-function humanizeValue(raw: string): string {
-  if (!raw || raw === '""' || raw === 'null' || raw === '{}' || raw === '[]') return '';
-  // Убираем JSON кавычки если простая строка
-  let val = raw;
-  try {
-    const parsed = JSON.parse(raw);
-    if (typeof parsed === 'string') val = parsed;
-    else if (typeof parsed === 'number') val = String(parsed);
-    else if (typeof parsed === 'boolean') val = String(parsed);
-    else if (parsed && typeof parsed === 'object') {
-      // Берём только значимые поля из объекта
-      const keys = ['status', 'amount', 'vehicle_type', 'zone', 'child_name', 'parent_name'];
-      const found = keys.find(k => parsed[k] !== undefined);
-      val = found ? String(parsed[found]) : '';
-    }
-  } catch { /* не JSON — оставляем как есть */ }
+function parseValue(raw: string): unknown {
+  let value: unknown = raw;
+  for (let depth = 0; depth < 3 && typeof value === 'string'; depth += 1) {
+    try { value = JSON.parse(value); } catch { break; }
+  }
+  return value;
+}
 
-  return VALUE_LABEL[val] ?? val;
+function humanizeValue(raw: unknown): string {
+  if (raw == null || raw === '' || raw === '-') return '—';
+  if (typeof raw === 'object') return '';
+  const value = VALUE_LABEL[String(raw)] ?? String(raw);
+  if (value.length > 90 || /^[\[{]/.test(value)) return '';
+  return value;
+}
+
+function conciseAction(entry: AuditEntry): string | null {
+  const before = parseValue(entry.oldValue);
+  const after = parseValue(entry.newValue);
+  const next = after && typeof after === 'object' ? after as Record<string, unknown> : null;
+  const payment = /payment|плат[её]ж|чек/i.test(`${entry.field} ${entry.action}`);
+  const status = String(next?.status ?? after ?? '');
+  if (payment && /^(Отклонено|rejected)$/i.test(status)) return 'Чек отклонён';
+  if (payment && /^(Подтверждено|confirmed)$/i.test(status)) return 'Чек подтверждён';
+  const previous = before && typeof before === 'object' ? before as Record<string, unknown> : null;
+  const commentChanged = previous && next && previous.comment !== next.comment;
+  if (commentChanged && /\[Логистика\]|Трансфер №/.test(`${previous.comment ?? ''} ${next.comment ?? ''}`)) return 'Изменён трансфер';
+  if (/transfer|route/.test(entry.field) || /трансфер|маршрут/i.test(entry.action)) return 'Изменён трансфер';
+  return null;
+}
+
+function routeChangeDetails(entry: AuditEntry): string {
+  const before = parseValue(entry.oldValue);
+  const after = parseValue(entry.newValue);
+  const old = before && typeof before === 'object' ? before as Record<string, unknown> : {};
+  const next = after && typeof after === 'object' ? after as Record<string, unknown> : {};
+  const changes: string[] = [];
+  for (const [label, keys] of [
+    ['Трансфер', ['transferNumber', 'transfer_number']],
+    ['Тип ТС', ['vehicleType', 'vehicle_type']],
+  ] as const) {
+    const oldKey = keys.find(key => key in old);
+    const nextKey = keys.find(key => key in next);
+    if (!nextKey) continue;
+    const previous = oldKey ? old[oldKey] : undefined;
+    const current = next[nextKey];
+    if (previous === current) continue;
+    const display = (value: unknown) => label === 'Трансфер' && value ? `№ ${value}` : humanizeValue(value);
+    changes.push(`${label}: ${display(previous)} → ${display(current)}`);
+  }
+  if (changes.length) return changes.join('; ');
+  if (/^(vehicle_type|vehicleType|transfer_number|transferNumber)$/.test(entry.field)) {
+    return `${/vehicle/.test(entry.field) ? 'Тип ТС' : 'Трансфер'}: ${humanizeValue(before)} → ${humanizeValue(after)}`;
+  }
+  // Older logistics records stored the transition inside the comment.
+  // Extract only explicit vehicle transitions, never the full comment.
+  const comment = `${old.comment ?? ''} ${next.comment ?? ''}`;
+  const pattern = /изначально выбран\s+(microbus|minivan|sedan),?\s+фактически определ[её]н\s+(microbus|minivan|sedan)/gi;
+  const transitions = new Set<string>();
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(comment))) {
+    const from = match[1].toLowerCase();
+    const to = match[2].toLowerCase();
+    if (from !== to) transitions.add(`Тип ТС: ${humanizeValue(from)} → ${humanizeValue(to)}`);
+  }
+  return Array.from(transitions).slice(0, 2).join('; ') || 'Прежние и новые значения не сохранены';
+}
+
+function describeChange(entry: AuditEntry): string {
+  const concise = conciseAction(entry);
+  if (concise === 'Изменён трансфер') return routeChangeDetails(entry);
+  if (concise) return '';
+  const oldValue = parseValue(entry.oldValue);
+  const newValue = parseValue(entry.newValue);
+  if (oldValue && newValue && typeof oldValue === 'object' && typeof newValue === 'object') {
+    const before = oldValue as Record<string, unknown>;
+    const after = newValue as Record<string, unknown>;
+    return Object.keys(after)
+      .filter(key => FIELD_LABEL[key] && key !== 'comment' && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+      .slice(0, 2)
+      .map(key => `${FIELD_LABEL[key]}: ${humanizeValue(before[key])} → ${humanizeValue(after[key])}`)
+      .join('; ');
+  }
+  const oldText = humanizeValue(oldValue);
+  const newText = humanizeValue(newValue);
+  if (!oldText && !newText) return '';
+  return oldText === '—' ? (newText === '—' ? '' : newText) : `${oldText} → ${newText}`;
+}
+
+function actionLabel(entry: AuditEntry): string {
+  const concise = conciseAction(entry);
+  if (concise) return concise;
+  if (ACTION_LABEL[entry.action]) return ACTION_LABEL[entry.action];
+  if (!/[a-z_]/i.test(entry.action)) return entry.action.length > 70 ? 'Изменены данные клиента' : entry.action;
+  const subject = FIELD_LABEL[entry.field] ?? 'Данные клиента';
+  if (/delete|remove|cancel/.test(entry.action)) return `${subject}: удаление или отмена`;
+  if (/confirm|approve/.test(entry.action)) return `${subject}: подтверждение`;
+  if (/create|insert|add|submit/.test(entry.action)) return `${subject}: добавление`;
+  return `${subject}: изменение`;
+}
+
+function formatAuditDate(raw: string): string {
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
   const [deletedOnly, setDeletedOnly] = useState(false);
-  const visibleAudit = deletedOnly ? audit.filter(entry => entry.action === 'payment_delete') : audit;
-  if (audit.length === 0) return (
-    <div style={{ textAlign: 'center', padding: '24px 0' }}>
-      <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
-      <div style={{ color: 'var(--text-2)', fontSize: 12 }}>История изменений пуста</div>
-    </div>
-  );
+  const visibleAudit = (deletedOnly ? audit.filter(entry => entry.action === 'payment_delete') : [...audit])
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  if (audit.length === 0) return <p style={{ color: '#718096', padding: 20 }}>История изменений пуста</p>;
 
   return (
-    <Section title={`История (${audit.length})`}>
-      <button type="button" onClick={() => setDeletedOnly(value => !value)} aria-pressed={deletedOnly} style={{ marginBottom: 10 }}>{deletedOnly ? 'Вся история' : 'Удалённые чеки'}</button>
-      {visibleAudit.length === 0 && <p>Удалённых чеков нет</p>}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {visibleAudit.map(entry => {
-          let deletedPayment: Record<string, unknown> | null = null;
-          if (entry.action === 'payment_delete') {
-            try { deletedPayment = JSON.parse(entry.oldValue)?.payment ?? null; } catch { /* older audit entry */ }
-          }
-          const actionText = ACTION_LABEL[entry.action] ?? entry.action;
-          const fieldText = FIELD_LABEL[entry.field] ?? (entry.field || '');
-          const oldText = humanizeValue(entry.oldValue);
-          const newText = humanizeValue(entry.newValue);
-          const hasChange = oldText || newText;
-
-          return (
-            <div key={entry.id} style={{ background: 'var(--bg)', borderRadius: 8, padding: '8px 12px', border: '1px solid var(--border)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 3 }}>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text)' }}>{actionText}</span>
-                <span style={{ fontSize: 10, color: 'var(--text-2)' }}>
-                  {entry.createdAt?.slice(0, 16).replace('T', ' ')}
-                </span>
-              </div>
-              {fieldText && (
-                <div style={{ fontSize: 10, color: 'var(--text-2)', marginBottom: 2 }}>
-                  <span style={{ fontWeight: 600 }}>{fieldText}</span>
-                </div>
-              )}
-              {deletedPayment && <details style={{ fontSize: 11, marginTop: 6 }}>
-                <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')}</summary>
-                <p>Дата: {String(deletedPayment.payment_date ?? '—')} · № {String(deletedPayment.payment_number ?? '—')}</p>
-                <p>Комментарий: {String(deletedPayment.comment ?? '—')}</p>
-                {typeof deletedPayment.receipt_url === 'string' && /^https?:\/\//.test(deletedPayment.receipt_url) && <a href={deletedPayment.receipt_url} target="_blank" rel="noreferrer">Открыть удалённый чек</a>}
-              </details>}
-              {hasChange && !deletedPayment && (
-                <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10, flexWrap: 'wrap' }}>
-                  {oldText && (
-                    <span style={{ background: '#FFEBEE', color: '#C62828', borderRadius: 4, padding: '2px 6px' }}>
-                      {oldText.length > 60 ? oldText.slice(0, 60) + '...' : oldText}
-                    </span>
-                  )}
-                  {oldText && newText && <span style={{ color: 'var(--text-2)' }}>→</span>}
-                  {newText && (
-                    <span style={{ background: '#E8F5E9', color: '#2E7D32', borderRadius: 4, padding: '2px 6px' }}>
-                      {newText.length > 60 ? newText.slice(0, 60) + '...' : newText}
-                    </span>
-                  )}
-                </div>
-              )}
-              <div style={{ fontSize: 9, color: 'var(--text-2)', marginTop: 4, fontWeight: 500 }}>
-                👤 {entry.userName}
-              </div>
-            </div>
-          );
-        })}
+    <div>
+      <button type="button" onClick={() => setDeletedOnly(value => !value)} aria-pressed={deletedOnly}
+        style={{ marginBottom: 12, border: '1px solid #dce4eb', borderRadius: 7, padding: '7px 11px', background: '#fff', color: '#475467', cursor: 'pointer', fontSize: 12 }}>
+        {deletedOnly ? 'Вся история' : 'Удалённые чеки'}
+      </button>
+      <div style={{ overflowX: 'auto', border: '1px solid #e5eaf0', borderRadius: 10 }}>
+        <table className="family-history-table">
+          <thead><tr><th scope="col">Дата</th><th scope="col">Кто</th><th scope="col">Что сделал</th></tr></thead>
+          <tbody>
+            {visibleAudit.length === 0 && <tr><td colSpan={3}>Удалённых чеков нет</td></tr>}
+            {visibleAudit.map(entry => {
+              let deletedPayment: Record<string, unknown> | null = null;
+              if (entry.action === 'payment_delete') {
+                try { deletedPayment = JSON.parse(entry.oldValue)?.payment ?? null; } catch { /* Older record. */ }
+              }
+              const description = describeChange(entry);
+              return (
+                <tr key={entry.id}>
+                  <td>{formatAuditDate(entry.createdAt)}</td>
+                  <td>{!entry.userName || /^FAM-|^SYS-|^[0-9a-f]{8}-/i.test(entry.userName) ? 'Система' : entry.userName}</td>
+                  <td>
+                    <div style={{ fontWeight: 650 }}>{actionLabel(entry)}</div>
+                    {!deletedPayment && description && <div className="family-history-details">{description}</div>}
+                    {deletedPayment && <details className="family-history-details">
+                      <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')}</summary>
+                      <p>Дата: {String(deletedPayment.payment_date ?? '—')} · № {String(deletedPayment.payment_number ?? '—')}</p>
+                      <p>Комментарий: {String(deletedPayment.comment ?? '—')}</p>
+                      {typeof deletedPayment.receipt_url === 'string' && /^https?:\/\//.test(deletedPayment.receipt_url) && <a href={deletedPayment.receipt_url} target="_blank" rel="noreferrer">Открыть удалённый чек</a>}
+                    </details>}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
-    </Section>
+    </div>
   );
 }

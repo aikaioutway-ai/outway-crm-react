@@ -1,3 +1,109 @@
-.family-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px 24px; border-bottom: 1px solid #e5ecef; background: #fff; flex-shrink: 0; padding: 16px 22px; }
-.family-card-header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
-@media (max-width: 800px) { .family-card-header { grid-template-columns: minmax(0, 1fr); } .family-card-header-actions { justify-content: flex-start; } }
+.family-card { color: #243247; font-size: 13px; }
+.family-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 24px; border-bottom: 1px solid #e6eaf0; background: #fff; flex-shrink: 0; padding: 26px 28px 22px; }
+.family-card-header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+.family-card-avatar { width: 56px; height: 56px; border-radius: 16px; background: #e8f3f2; color: #247b77; display: grid; place-items: center; font-size: 20px; font-weight: 700; flex-shrink: 0; }
+.family-card-eyebrow { font-size: 10px; letter-spacing: 1.4px; color: #8290a2; margin-bottom: 6px; font-weight: 700; }
+.family-card-metrics { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+.family-card-metric { padding: 14px 16px !important; border: 1px solid #e7edf1 !important; border-radius: 12px !important; }
+.family-card-metric > div:last-child { margin-top: 7px !important; font-variant-numeric: tabular-nums; }
+.family-card-navigation { flex-shrink: 0; padding: 0 28px; border-bottom: 1px solid #e6eaf0; background: #fff; overflow-x: auto; }
+.family-card-tabs { display: flex; gap: 22px; min-width: max-content; }
+.family-card-tab { position: relative; display: flex; align-items: center; gap: 7px; padding: 17px 0; background: transparent; border: 0; border-bottom: 2px solid transparent; color: #778397; font-size: 12px; font-weight: 600; cursor: pointer; }
+.family-card-tab:hover { color: #247b77; }
+.family-card-tab.is-active { color: #247b77; border-bottom-color: #278f89; }
+.family-card button:focus-visible, .family-card a:focus-visible, .family-card input:focus-visible, .family-card select:focus-visible, .family-card textarea:focus-visible { outline: 2px solid #278f89; outline-offset: 3px; }
+.family-card-tab-count { border-radius: 5px; background: #edf2f5; padding: 2px 5px; font-size: 10px; }
+.family-card-body { padding: 24px 28px 32px !important; background: #f5f7fa !important; }
+.family-card-section-heading { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 20px; }
+.family-card-section-heading h2 { margin: 0; font-size: 19px; font-weight: 700; letter-spacing: -.3px; }
+.family-card-section-heading p { margin: 5px 0 0; color: #8290a2; font-size: 12px; }
+.family-card-editing { font-size: 11px; color: #946712; background: #fff4d8; padding: 7px 10px; border-radius: 6px; }
+.family-card-overview { display: grid; grid-template-columns: minmax(280px, .8fr) minmax(0, 1.6fr); gap: 20px; align-items: start; }
+.family-card-contacts { display: grid; gap: 16px; }
+.family-card-panel { border: 1px solid #e5eaf0 !important; border-radius: 12px !important; padding: 20px !important; box-shadow: none !important; }
+.family-card-panel > div:first-child { margin-bottom: 15px !important; font-size: 13px !important; font-weight: 700 !important; }
+.family-card .family-detail-row { min-height: 36px !important; padding: 5px 0 !important; border-radius: 0 !important; }
+.family-card .family-detail-row > span:first-child { font-size: 11px !important; font-weight: 500 !important; }
+.family-card .family-detail-rows { min-width: 0; }
+.family-card .family-finance-payments { grid-template-columns: minmax(260px, .8fr) minmax(0, 1.5fr) !important; align-items: start !important; gap: 24px !important; }
+@media (max-width: 900px) {
+  .family-card-header { grid-template-columns: minmax(0, 1fr); padding: 20px; gap: 16px; }
+  .family-card-header-actions { justify-content: flex-start; }
+  .family-card-metrics { gap: 8px; }
+  .family-card-metric { padding: 10px !important; }
+  .family-card-metric > div:last-child { font-size: 19px !important; }
+  .family-card-navigation { padding: 0 20px; }
+  .family-card-body { padding: 20px !important; }
+  .family-card-overview { grid-template-columns: minmax(0, 1fr); }
+  .family-card-contacts { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .family-card-contacts > :last-child { grid-column: 1 / -1; }
+  .family-card .family-finance-payments { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@media (max-width: 550px) {
+  .family-card-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .family-card-contacts { grid-template-columns: minmax(0, 1fr); }
+  .family-card-panel { padding: 14px !important; }
+}
+@media (min-width: 901px) {
+  .family-card-overview { grid-template-areas: 'contact children' 'extra address'; }
+  .family-card-contacts { display: contents; }
+  .family-card-contacts > :nth-child(1) { grid-area: contact; }
+  .family-card-contacts > :nth-child(2) { grid-area: extra; }
+  .family-card-contacts > :nth-child(3) { grid-area: address; }
+  .family-card-overview > .family-card-panel { grid-area: children; }
+}
+.family-card .family-detail-row > div, .family-card .family-detail-row a { overflow-wrap: anywhere; white-space: normal !important; }
+/* Contacts remain one column; each child is expanded beside them. */
+@media (min-width: 901px) {
+  .family-card-overview { grid-template-areas: none; grid-template-columns: minmax(260px, .8fr) minmax(0, 1.6fr); }
+  .family-card-contacts { display: grid; gap: 12px; }
+  .family-card-contacts > :nth-child(n), .family-card-overview > .family-card-panel { grid-area: auto; }
+}
+.family-card-panel { padding: 14px !important; }
+.family-card-panel > div:first-child { margin-bottom: 10px !important; }
+.family-card .family-detail-row { min-height: 29px !important; padding: 3px 0 !important; }
+.family-child-card { border-radius: 9px !important; box-shadow: none !important; }
+.family-money-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 24px; align-items: start; }
+.family-money-form { align-self: stretch; padding: 14px; border: 1px solid #e5eaf0; border-radius: 10px; background: #fff; }
+.family-money-form > div { margin-bottom: 0 !important; }
+.family-money-payment-form { grid-column: 1; grid-row: 1; }
+.family-money-refund-form { grid-column: 2; grid-row: 1; }
+.family-money-payment-list { grid-column: 1; grid-row: 2; }
+.family-money-refund-list { grid-column: 2; grid-row: 2; }
+@media (max-width: 700px) {
+  .family-money-grid { grid-template-columns: minmax(0, 1fr); }
+  .family-money-grid > div { grid-column: 1; grid-row: auto; }
+  .family-money-payment-form { order: 0; }
+  .family-money-payment-list { order: 1; }
+  .family-money-refund-form { order: 2; }
+  .family-money-refund-list { order: 3; }
+}
+.family-history-table { width: 100%; border-collapse: collapse; background: #fff; font-size: 12px; }
+.family-history-table th { padding: 12px 14px; text-align: left; background: #f8fafc; color: #718096; font-size: 11px; font-weight: 600; }
+.family-history-table td { padding: 13px 14px; border-top: 1px solid #e9edf2; vertical-align: top; line-height: 1.5; }
+.family-history-table td:first-child { width: 145px; white-space: nowrap; color: #667085; font-variant-numeric: tabular-nums; }
+.family-history-table td:nth-child(2) { width: 170px; }
+.family-history-details { margin-top: 4px; color: #667085; font-size: 11px; overflow-wrap: anywhere; }
+.family-card-overview { display: block; }
+.family-card-contacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 16px; }
+.family-card-contacts > :nth-child(n) { grid-area: auto; grid-column: auto; }
+.family-children-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 14px; color: #8290a2; font-size: 12px; }
+.family-children-table-wrap { overflow-x: auto; }
+.family-children-table { width: 100%; min-width: 950px; border-collapse: collapse; font-size: 12px; }
+.family-children-table th { text-align: left; padding: 11px 10px; color: #8290a2; font-size: 11px; font-weight: 600; background: #f7f9fb; white-space: nowrap; border-bottom: 1px solid #e5eaf0; }
+.family-children-table td { padding: 14px 10px; border-bottom: 1px solid #edf0f4; vertical-align: middle; }
+.family-children-table th:first-child { width: 22%; }
+.family-children-table tr:last-child td { border-bottom: 0; }
+.family-children-table tbody tr:hover { background: #fafcfc; }
+.family-children-table .is-focused { background: #eff9f7; }
+.family-children-secondary { display: block; margin-top: 4px; color: #8290a2; font-size: 10px; font-weight: 500; }
+.family-children-price { white-space: nowrap; font-variant-numeric: tabular-nums; }
+.family-children-status { padding: 4px 7px; border-radius: 5px; white-space: nowrap; font-size: 10px; }
+.family-children-action { border: 1px solid #dfe7eb; background: #fff; color: #247b77; padding: 6px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; white-space: nowrap; }
+@media (max-width: 900px) { .family-card-contacts { grid-template-columns: minmax(0, 1fr); } }
+.family-card-contacts { grid-template-columns: minmax(280px, 1fr) minmax(0, 1.6fr); align-items: stretch; }
+.family-additional-contact-title { margin: 18px 0 8px; padding-top: 14px; border-top: 1px solid #e9edf2; font-size: 13px; font-weight: 700; color: #243247; }
+.family-transfer-badge { display: inline-flex; align-items: center; justify-content: center; min-width: 36px; padding: 4px 7px; border-radius: 6px; color: #fff; font-size: 11px; font-weight: 750; white-space: nowrap; }
+.family-children-table .family-child-detail-row > td { padding: 0 8px 12px; background: #f8fafc; }
+.family-child-detail-row .family-child-card { border-color: #dce7eb !important; }
+@media (max-width: 700px) { .family-card-contacts { grid-template-columns: minmax(0, 1fr); } }

@@ -1,7 +1,8 @@
 import './InlineFamilyCard.css';
+import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertTriangle, Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
+import { AlertTriangle, Check, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, ChargeDiscount, ChargeDiscountReason, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
 import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
@@ -31,12 +32,14 @@ interface Props {
   family: Family; onClose: () => void; userRole?: string; userName?: string; initialTab?: Tab; onUpdated?: () => void;
   sessionToken?: string;
 }
-type Tab = 'overview' | 'documents' | 'finance' | 'history';
+type Tab = 'children' | 'overview' | 'documents' | 'finance' | 'charges' | 'refunds' | 'history';
 
 const TABS: { key: Tab; label: string; desc: string; icon: React.ReactNode }[] = [
-  { key: 'overview', label: 'Основная', desc: 'контакт, адрес, дети', icon: <LayoutDashboard size={15} /> },
+  { key: 'overview', label: 'Обзор', desc: 'Контакты и адрес', icon: <LayoutDashboard size={15} /> },
+  { key: 'children', label: 'Дети', desc: 'Школа, перевозка и стоимость', icon: <GraduationCap size={16} /> },
+  { key: 'charges', label: 'Начисления', desc: 'Стоимость услуг и скидки', icon: <FileText size={16} /> },
+  { key: 'finance', label: 'Платежи и чеки', desc: 'Поступления, чеки и возвраты', icon: <CreditCard size={16} /> },
   { key: 'documents', label: 'Документы', desc: 'договоры и файлы', icon: <FileText size={15} /> },
-  { key: 'finance', label: 'Финансы', desc: 'платежи и начисления', icon: <CreditCard size={15} /> },
   { key: 'history', label: 'История', desc: 'изменения и события', icon: <Clock size={15} /> },
 ];
 
@@ -56,7 +59,7 @@ function formatInlineDate(value?: string): string {
 }
 
 export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', initialChildId, onUpdated, sessionToken }: Props) {
-  const [tab, setTab] = useState<Tab>(initialTab);
+  const [tab, setTab] = useState<Tab>(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
   const [chargeDiscounts, setChargeDiscounts] = useState<ChargeDiscount[]>([]);
@@ -96,7 +99,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setDraftFamily(family);
     setEditing(false);
     setDeletedChildIds(new Set());
-    setTab(initialTab);
+    setTab(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
     setFinanceLoaded(false);
     setAuditLoaded(false);
     void loadChildren().catch(() => {
@@ -601,11 +604,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
-  const totalPaid = charges.reduce((s, c) => s + c.paidAmount, 0);
-  const totalCharged = charges.reduce((s, c) => s + c.amount, 0);
   const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
-  const depositCharge = charges.find(c => c.chargeType === 'deposit');
-  const depositPaid = depositCharge ? depositCharge.debtAmount <= 0 : false;
   const cardFamily = editing ? draftFamily : savedFamily;
   const cardChildren = editing ? draftChildren : children;
   const cardDocuments = editing ? draftDocuments : savedDocuments;
@@ -629,35 +628,15 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       : '';
 
   return (
-    <div style={modalStyle()}>
-      <aside style={sidebarRailStyle}>
-          <nav style={railNavStyle}>
-            {TABS.filter(item => {
-              if (item.key === 'history') return userRole === 'admin' || userRole === 'gen_director';
-              return true;
-            }).map(item => {
-              const active = tab === item.key;
-              return (
-                <button
-                  key={item.key}
-                  onClick={() => setTab(item.key)}
-                  title={item.label}
-                  style={railButtonStyle(active)}
-                >
-                  {item.icon}
-                  {item.key === 'history' && audit.length > 0 && <span style={railBadgeStyle}>{audit.length > 9 ? '9+' : audit.length}</span>}
-                </button>
-              );
-            })}
-          </nav>
-      </aside>
+    <div className="family-card" style={modalStyle()}>
 
       <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
         <header className="family-card-header">
           <div style={headerInfoStyle}>
-            <div style={avatarStyle}>{initials}</div>
+            <div className="family-card-avatar">{initials}</div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontSize: 14, fontWeight: 900, color: '#111827', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div className="family-card-eyebrow">КАРТОЧКА КЛИЕНТА</div>
+              <div style={{ fontSize: 22, fontWeight: 900, color: '#111827', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatName(cardFamily.parentName)}
               </div>
               <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, color: '#374151', fontSize: 11, fontWeight: 750 }}>
@@ -704,35 +683,48 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             )}
             <button type="button" aria-label="Закрыть карточку" onClick={onClose} style={closeButtonStyle}><X size={16} /></button>
           </div>
-            <div style={headerMetricsStyle}>
-              <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
-              {depositCharge && (
-                <SideMetric
-                  label="Депозит"
-                  value={depositPaid ? money(depositCharge.amount) : `${money(depositCharge.paidAmount)} / ${money(depositCharge.amount)}`}
-                  alert={!depositPaid}
-                />
-              )}
-              <SideMetric label="Платежи" value={money(totalPaid)} />
-              {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
-              <SideMetric label="Баланс" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
-              <SideMetric label="Начислено" value={money(totalCharged)} />
-              <SideMetric label="Оплачено" value={money(totalPaid)} />
-              {totalDebt > 0 && <SideMetric label="Долг" value={money(totalDebt)} alert />}
+            <div className="family-card-metrics">
+              <SideMetric label="Баланс счёта" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
+              <SideMetric label="Стоимость в месяц" value={money(familyMonthlyPrice)} />
+              <SideMetric label="Задолженность" value={financeLoaded ? money(totalDebt) : '…'} alert={totalDebt > 0} />
+              <SideMetric label="Платежи на проверке" value={financeLoaded ? money(pendingAmount) : '…'} pending={pendingAmount > 0} />
             </div>
         </header>
 
-        <div style={contentBodyStyle}>
+      <div className="family-card-navigation">
+          <nav aria-label="Разделы карточки клиента" className="family-card-tabs">
+            {TABS.filter(item => {
+              if (item.key === 'history') return userRole === 'admin' || userRole === 'gen_director';
+              return true;
+            }).map(item => {
+              const active = tab === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setTab(item.key)}
+                  title={item.label}
+                  className={`family-card-tab ${active ? 'is-active' : ''}`}
+                  aria-current={active ? 'page' : undefined}
+                >
+                  {item.icon}<span>{item.label}</span>{item.key === 'children' && <span className="family-card-tab-count">{cardChildren.length}</span>}
+                  {item.key === 'history' && audit.length > 0 && <span className="family-card-tab-count">{audit.length > 9 ? '9+' : audit.length}</span>}
+                </button>
+              );
+            })}
+          </nav>
+      </div>
+
+        <div className="family-card-body" style={contentBodyStyle}>
+          <div className="family-card-section-heading"><div><h2>{TABS.find(item => item.key === tab)?.label}</h2><p>{TABS.find(item => item.key === tab)?.desc}</p></div>{editing && <span className="family-card-editing">Режим редактирования</span>}</div>
           {tab === 'overview' && (
-            <div style={{ display: 'grid', gap: 10 }}>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+            <div className="family-card-overview">
+              <div className="family-card-contacts">
                 <DetailPanel title="Контакт" accent="var(--accent)">
                   <DetailInput editing={editing} label="Родитель" tone="soft" value={cardFamily.parentName} onCommit={value => setDraftFamily(current => ({ ...current, parentName: formatName(value) }))} />
                   <DetailInput editing={editing} label="Телефон 1" tone="soft" whatsapp value={cardFamily.phone} onCommit={value => setDraftFamily(current => ({ ...current, phone: formatPhone(value) }))} />
                   <DetailInput editing={editing} label="Телефон 2" tone="soft" whatsapp value={cardFamily.secondPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, secondPhone: formatPhone(value) }))} />
                   <DetailInput editing={editing} label="Telegram" tone="soft" value={cardFamily.phoneTelegram ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, phoneTelegram: value }))} />
-                </DetailPanel>
-                <DetailPanel title="Доп. контакт" accent="var(--warning)">
+                  <h3 className="family-additional-contact-title">Доп. контакт</h3>
                   <DetailInput editing={editing} label="Имя" tone="soft" value={cardFamily.contactName ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactName: formatName(value) }))} />
                   <DetailInput editing={editing} label="Телефон" tone="soft" whatsapp value={cardFamily.contactPhone ?? ''} placeholder="-" onCommit={value => setDraftFamily(current => ({ ...current, contactPhone: formatPhone(value) }))} />
                 </DetailPanel>
@@ -749,10 +741,12 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                 </DetailPanel>
               </div>
 
+            </div>
+          )}
+          {tab === 'children' && (
               <DetailPanel title={`Дети (${cardChildren.length})`}>
                 <ChildrenOverviewTable focusChildId={initialChildId} children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
-            </div>
           )}
 
           {tab === 'documents' && (
@@ -766,8 +760,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             />
           )}
 
-          {tab === 'finance' && (
+          {(tab === 'finance' || tab === 'charges' || tab === 'refunds') && (
             <TabFinanceLazy
+              mode={tab === 'finance' ? 'payments' : tab}
               loaded={financeLoaded}
               onLoad={() => loadFinance()}
               charges={charges} payments={payments} paymentItems={paymentItems} refunds={refunds}
@@ -1283,14 +1278,14 @@ const familyDocumentValueStyle: React.CSSProperties = { height: 32, borderRadius
 
 function SideMetric({ label, value, alert, pending }: { label: string; value: string; alert?: boolean; pending?: boolean }) {
   return (
-    <div style={{
+    <div className="family-card-metric" style={{
       background: pending ? '#FFFBEB' : '#F5FAFB',
       borderRadius: 8,
       padding: '5px 9px',
       border: alert ? '1px solid #FECACA' : pending ? '1px solid #FDE68A' : '1px solid transparent',
     }}>
-      <div style={{ fontSize: 9, color: pending ? '#92400E' : '#8A94A3', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.02em' }}>{label}</div>
-      <div style={{ fontSize: 11.5, fontWeight: 900, color: alert ? '#B91C1C' : pending ? '#92400E' : '#111827', marginTop: 1 }}>{value}</div>
+      <div style={{ fontSize: 11, color: pending ? '#92400E' : '#8A94A3', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.02em' }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 700, color: alert ? '#B91C1C' : pending ? '#92400E' : '#111827', marginTop: 1 }}>{value}</div>
     </div>
   );
 }
@@ -1309,7 +1304,7 @@ function TabHistoryLazy({ loaded, onLoad, audit }: { loaded: boolean; onLoad: ()
 
 function DetailPanel({ title, children, accent }: { title: string; children: React.ReactNode; accent?: string }) {
   return (
-    <section style={{
+    <section className="family-card-panel" style={{
       background: '#fff',
       border: 'none',
       borderTop: accent ? `3px solid ${accent}` : 'none',
@@ -1407,7 +1402,7 @@ function DetailValue({ label, value }: { label: string; value: string }) {
   return (
     <div className="family-detail-row" style={detailFieldStyle('soft')}>
       <span style={detailLabelStyle}>{label}</span>
-      <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', height: 'auto', minHeight: 24, whiteSpace: 'normal', overflowWrap: 'anywhere' }}>
         {value || '-'}
       </span>
     </div>
@@ -1482,25 +1477,19 @@ function ChildCard({
   canManageDiscount?: boolean;
 }) {
   // новый ребёнок (ещё не сохранён) сразу открыт — его нужно заполнить
-  const [manuallyExpanded, setManuallyExpanded] = React.useState(() => child.id.startsWith('draft-'));
-  const expanded = manuallyExpanded;
+  const expanded = true;
   const s = child.status ?? 'new';
   const col = CHILD_STATUS_COLORS[s] ?? CHILD_STATUS_COLORS.new;
   const basePrice = Number(child.basePrice || child.finalPrice || 0);
   const finalPrice = Number(child.finalPrice || 0);
   const hasDiscount = basePrice > finalPrice;
   const vehicleLabel = VEHICLE_TYPE_OPTIONS.find(item => item.value === child.vehicleType)?.label ?? child.vehicleType;
-  const summary = `${child.branchShort || child.schoolCode || '—'} · ${child.class || '—'} · ${child.zone} · ${vehicleLabel}`;
 
   return (
-    <article style={{ background: '#fff', border: '1px solid #EEF3F4', borderRadius: 13, boxShadow: '0 3px 12px rgba(43, 72, 89, .045)', overflow: 'hidden' }}>
+    <article className="family-child-card" style={{ background: '#fff', border: '1px solid #EEF3F4', borderRadius: 13, boxShadow: '0 3px 12px rgba(43, 72, 89, .045)', overflow: 'hidden' }}>
       {/* Свёрнутая строка — всегда видна, клик разворачивает карточку */}
       <div
-        onClick={() => setManuallyExpanded(v => !v)}
-        role="button"
-        tabIndex={0}
-        onKeyDown={event => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); setManuallyExpanded(v => !v); } }}
-        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '11px 14px', cursor: 'pointer' }}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 12px' }}
       >
         <span style={childCardIndexStyle}>{index + 1}</span>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
@@ -1509,7 +1498,7 @@ function ChildCard({
           <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 650, whiteSpace: 'nowrap' }}>
             CRM: {formatInlineDate(child.createdAt)} · Посадка: {formatInlineDate(child.transferAssignedAt)}
           </span>
-          <span style={{ fontSize: 11, color: '#8A94A3', fontWeight: 650, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{summary}</span>
+
         </div>
         <span style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 10.5, fontWeight: 750, padding: '4px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>
           {CHILD_STATUS_OPTIONS_INLINE.find(item => item.value === s)?.label ?? s}
@@ -1539,7 +1528,6 @@ function ChildCard({
             <Trash2 size={12} />
           </button>
         )}
-        <ChevronDown size={16} color="#8A94A3" style={{ flexShrink: 0, transform: expanded ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }} />
       </div>
 
       {/* Развёрнутая часть — все поля, только когда карточка раскрыта */}
@@ -1589,24 +1577,11 @@ function ChildCard({
               },
               {
                 label: 'Трансфер',
-                content: editing ? <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} /> : <ReadOnlyValue value={child.transferNumber ? `№ ${child.transferNumber}` : '-'} />,
+                content: editing ? <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} /> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : <ReadOnlyValue value="—" />,
               },
               {
                 label: 'Остановка',
                 content: editing ? <EditableSelect value={child.stopNumber ? String(child.stopNumber) : ''} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} width={58} panelWidth={120} /> : <ReadOnlyValue value={child.stopNumber ? String(child.stopNumber) : '-'} />,
-              },
-              {
-                label: 'Утро',
-                content: editing ? <EditableText type="time" value={child.timeMorning ?? ''} onCommit={value => onSaveChild(child, { timeMorning: value || undefined })} /> : <ReadOnlyValue value={child.timeMorning || '-'} />,
-              },
-              {
-                label: 'Самовыход',
-                content: editing ? (
-                  <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 650, cursor: 'pointer' }}>
-                    <input type="checkbox" checked={child.selfExitAllowed} onChange={e => void onSaveChild(child, { selfExitAllowed: e.currentTarget.checked })} />
-                    {child.selfExitAllowed ? 'Да' : 'Нет'}
-                  </label>
-                ) : <ReadOnlyValue value={child.selfExitAllowed ? 'Да' : 'Нет'} />,
               },
               {
                 label: 'Цена (сом)',
@@ -1634,7 +1609,7 @@ function ChildCard({
                 label: 'Итого',
                 content: <ReadOnlyValue value={money(finalPrice)} />,
               },
-            ].map(({ label, content }) => (
+            ].filter(({ label }) => editing || (label !== 'Итого' && (label !== 'Цена (сом)' || hasDiscount))).map(({ label, content }) => (
               <div key={label} style={{ background: '#F8FAFC', borderRadius: 7, padding: '5px 8px' }}>
                 <div style={{ fontSize: 10, color: '#8A94A3', fontWeight: 750, marginBottom: 2 }}>{label}</div>
                 <div style={{ fontSize: 12 }}>{content}</div>
@@ -1672,36 +1647,37 @@ function ChildrenOverviewTable({
   onEditDiscount?: (child: Child) => void;
   canManageDiscount?: boolean;
 }) {
-  const focusedRow = useRef<HTMLDivElement>(null);
+  const focusedRow = useRef<HTMLTableRowElement>(null);
+  const [detailChildId, setDetailChildId] = useState<string | null>(null);
   useEffect(() => { if (focusChildId) focusedRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [focusChildId, children.length]);
   return (
-    <div style={{ display: 'grid', gap: 10 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingBottom: 10, borderBottom: '1px solid #E8EEF1' }}>
-        <span style={{ fontSize: 12, color: '#7B8491', fontWeight: 750 }}>{children.length ? `${children.length} детей` : 'Детей нет'}</span>
-        {editing && <button type="button" onClick={onAddChild} disabled={busy} style={smallAddChildBtnStyle}>
-          {busy ? '...' : '+ Добавить ребёнка'}
-        </button>}
+    <div>
+      <div className="family-children-toolbar">
+        <span>{children.length ? 'Все дети семьи' : 'Детей пока нет'}</span>
+        {editing && <button type="button" onClick={onAddChild} disabled={busy} style={smallAddChildBtnStyle}>+ Добавить ребёнка</button>}
       </div>
-      {children.length === 0 ? (
-        <div style={{ fontSize: 12, color: '#7B8491', padding: '12px 0' }}>Добавьте первого ребёнка</div>
-      ) : (
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, paddingTop: 4 }}>
-          {children.map((child, index) => (
-            <div key={child.id} ref={child.id === focusChildId ? focusedRow : undefined} style={child.id === focusChildId ? { outline: '2px solid var(--accent)', borderRadius: 12, padding: 4 } : undefined}>
-            <ChildCard
-              child={child}
-              index={index}
-              branches={branches}
-              onSaveChild={onSaveChild}
-              onDeleteChild={onDeleteChild}
-              busy={busy}
-              editing={editing}
-              isAdmin={isAdmin}
-              onEditDiscount={onEditDiscount}
-              canManageDiscount={canManageDiscount}
-            />
-            </div>
-          ))}
+      {children.length === 0 ? <p>Добавьте первого ребёнка в режиме редактирования.</p> : (
+        <div className="family-children-table-wrap">
+          <table className="family-children-table">
+            <thead><tr>{['Ребёнок', 'Школа / класс', 'Транспорт', 'Трансфер', 'Остановка', 'Статус', 'В месяц', ''].map((label, index) => <th scope="col" key={index}>{label}</th>)}</tr></thead>
+            <tbody>{children.map((child, index) => (
+              <React.Fragment key={child.id}>
+              <tr ref={child.id === focusChildId ? focusedRow : undefined} className={child.id === focusChildId ? 'is-focused' : ''}>
+                <td>{editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : <strong>{formatName(child.childName)}</strong>}</td>
+                <td><span>{child.branchShort || child.schoolCode}</span><span className="family-children-secondary">{child.class ? (/класс/i.test(child.class) ? child.class : `${child.class} класс`) : 'Класс не указан'}</span></td>
+                <td>{VEHICLE_TYPE_OPTIONS.find(option => option.value === child.vehicleType)?.label || '—'}<span className="family-children-secondary">Зона {child.zone}</span></td>
+                <td>{editing ? <EditableSelect value={String(child.transferNumber || '')} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} /> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : '—'}</td>
+                <td>{editing ? <EditableSelect value={String(child.stopNumber || '')} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} /> : child.stopNumber || '—'}</td>
+                <td>{editing ? <EditableSelect value={child.status || 'new'} options={CHILD_STATUS_OPTIONS_INLINE} onCommit={value => onSaveChild(child, { status: value as Child['status'] })} /> : <span className="family-children-status" style={{ color: (CHILD_STATUS_COLORS[child.status || 'new'] || CHILD_STATUS_COLORS.new).color, background: (CHILD_STATUS_COLORS[child.status || 'new'] || CHILD_STATUS_COLORS.new).bg }}>{CHILD_STATUS_OPTIONS_INLINE.find(option => option.value === (child.status || 'new'))?.label || '—'}</span>}</td>
+                <td className="family-children-price"><strong>{money(Number(child.finalPrice || 0))}</strong>{childDiscountLabel(child) !== '—' && <span className="family-children-secondary">{childDiscountLabel(child)}</span>}</td>
+                <td><div style={{ display: 'flex', gap: 6 }}><button type="button" className="family-children-action" onClick={() => setDetailChildId(detailChildId === child.id ? null : child.id)} aria-expanded={detailChildId === child.id}>{detailChildId === child.id ? 'Скрыть' : editing ? 'Настроить' : 'Подробнее'}</button>{!editing && onEditDiscount && <button type="button" className="family-children-action" onClick={() => onEditDiscount(child)}>Скидка</button>}</div></td>
+              </tr>
+              {detailChildId === child.id && <tr className="family-child-detail-row"><td colSpan={8}>
+                <ChildCard child={child} index={index} branches={branches} onSaveChild={onSaveChild} onDeleteChild={onDeleteChild} busy={busy} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={onEditDiscount} />
+              </td></tr>}
+              </React.Fragment>
+            ))}</tbody>
+          </table>
         </div>
       )}
     </div>
@@ -1817,81 +1793,19 @@ function clampNumber(value: number, min?: number, max?: number, step?: number): 
 function modalStyle(): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '64px minmax(0, 1fr)',
+    gridTemplateColumns: 'minmax(0, 1fr)',
     background: '#fff',
     border: 'none',
     borderRadius: 20,
     boxShadow: '0 28px 70px rgba(8,11,11,0.18)',
-    height: 'min(720px, calc(100vh - 48px))',
-    minHeight: 560,
+    height: 'min(900px, calc(100vh - 48px))',
+    minHeight: 0,
     maxHeight: 'calc(100vh - 48px)',
     overflow: 'hidden',
     width: '100%',
     margin: 0,
   };
 }
-
-const sidebarRailStyle: React.CSSProperties = {
-  borderRight: '1px solid #EEF2F3',
-  padding: '82px 0 12px 8px',
-  display: 'flex',
-  flexDirection: 'column',
-  alignItems: 'stretch',
-  background: '#fff',
-  overflowY: 'auto',
-};
-
-const railNavStyle: React.CSSProperties = {
-  display: 'grid',
-  gap: 8,
-  width: '100%',
-};
-
-function railButtonStyle(active: boolean): React.CSSProperties {
-  return {
-    position: 'relative',
-    width: '100%',
-    height: 42,
-    border: '1px solid transparent',
-    borderRight: active ? 'none' : '1px solid transparent',
-    borderRadius: active ? '12px 0 0 12px' : 12,
-    background: active ? 'var(--active-bg)' : 'transparent',
-    color: active ? '#31A4A5' : '#98A2B3',
-    display: 'grid',
-    placeItems: 'center',
-    cursor: 'pointer',
-    boxShadow: active ? 'inset 3px 0 0 #31A4A5' : 'none',
-  };
-}
-
-const railBadgeStyle: React.CSSProperties = {
-  position: 'absolute',
-  right: 3,
-  top: 3,
-  minWidth: 14,
-  height: 14,
-  borderRadius: 999,
-  background: '#EEF2F5',
-  color: '#475569',
-  display: 'inline-grid',
-  placeItems: 'center',
-  fontSize: 8,
-  fontWeight: 850,
-};
-
-const avatarStyle: React.CSSProperties = {
-  width: 36,
-  height: 36,
-  borderRadius: 12,
-  background: '#D7EEEE',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  fontSize: 12,
-  fontWeight: 850,
-  color: '#237F81',
-  flexShrink: 0,
-};
 
 function detailFieldStyle(_tone: 'soft' | 'clear'): React.CSSProperties {
   return {
@@ -1934,16 +1848,6 @@ const headerInfoStyle: React.CSSProperties = {
   alignItems: 'center',
   gap: 18,
   flexWrap: 'wrap',
-};
-
-const headerMetricsStyle: React.CSSProperties = {
-  display: 'flex',
-  flexWrap: 'wrap',
-  gap: 10,
-  alignItems: 'center',
-  gridColumn: '1 / -1',
-  borderTop: '1px solid #E5ECEF',
-  paddingTop: 14,
 };
 
 const closeButtonStyle: React.CSSProperties = {

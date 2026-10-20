@@ -15,6 +15,7 @@ const PAYMENT_TYPE_LABEL: Record<string, string> = {
 };
 
 interface Props {
+  mode?: 'all' | 'payments' | 'charges' | 'refunds';
   charges: Charge[];
   chargeDiscounts?: ChargeDiscount[];
   canManageDiscounts?: boolean;
@@ -49,6 +50,7 @@ export function canCreateFamilyRefund(isManager: boolean, isAdmin: boolean, isCa
 }
 
 export default function TabFinance({
+  mode = 'all',
   charges,
   chargeDiscounts = [],
   canManageDiscounts = false,
@@ -77,6 +79,7 @@ export default function TabFinance({
   readOnly = false,
 }: Props) {
   const [addingPeriod, setAddingPeriod] = useState(false);
+  const [creatingPeriod, setCreatingPeriod] = useState(false);
   const [newPeriodKey, setNewPeriodKey] = useState('9');
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
@@ -128,11 +131,18 @@ export default function TabFinance({
     }
   }
 
-  function addSelectedPeriod() {
-    const period = ALL_PERIODS.find(p => p.key === newPeriodKey);
-    if (!period) return;
-    onAddCharges(period.month, period.year);
-    setAddingPeriod(false);
+  async function addSelectedPeriod() {
+    const period = availablePeriods.find(p => p.key === newPeriodKey) ?? availablePeriods[0];
+    if (!period || creatingPeriod) return;
+    setCreatingPeriod(true);
+    try {
+      await onAddCharges(period.month, period.year);
+      setAddingPeriod(false);
+    } catch {
+      setMsg('Не удалось создать начисления');
+    } finally {
+      setCreatingPeriod(false);
+    }
   }
 
   async function confirmPayment(payment: FamilyPayment, actualPaymentDate: string) {
@@ -186,17 +196,18 @@ export default function TabFinance({
       )}
 
       <div style={financeLayoutStyle}>
-        <div style={financeTopGridStyle}>
+        {(mode === 'all' || mode === 'payments' || mode === 'refunds') && <div className="family-money-grid">
+          <div className="family-money-form family-money-payment-form">
           {canCreatePayment && (
             <Section title="Новый платёж">
               <div style={paymentPanelStyle}>
                 <div style={newPaymentGridStyle}>
-                  <input type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'} style={inputStyle} />
-                  <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
+                  <input aria-label="Сумма платежа" min="0.01" step="0.01" type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'} style={inputStyle} />
+                  <select aria-label="Способ оплаты" value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
                     <option value="cash">Наличные</option>
                     <option value="transfer">АйКай Мбанк</option>
                   </select>
-                  <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
+                  <input aria-label="Дата платежа" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
                   <input value={paymentOrderNumber} onChange={e => setPaymentOrderNumber(e.target.value)} placeholder="№ платёжного поручения" style={inputStyle} />
                   <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={inputStyle} />
                   <label style={{ ...fileInputStyle, width: '100%', boxSizing: 'border-box' }}>
@@ -221,7 +232,23 @@ export default function TabFinance({
               </div>
             </Section>
           )}
-
+          </div>
+          <div className="family-money-form family-money-refund-form">
+            <Section title="Новый возврат">
+              <div style={paymentPanelStyle}>
+              {canCreateRefund && (
+                <div className="finance-refund-form" style={{ ...newPaymentGridStyle, marginBottom: refunds.length > 0 ? 10 : 0 }}>
+                  <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="Сумма возврата" style={inputStyle} />
+                  <input value={refundComment} onChange={e => setRefundComment(e.target.value)} placeholder="Комментарий" className="finance-refund-comment" style={inputStyle} />
+                  <button onClick={submitRefund} disabled={savingRefund || !refundAmount} style={submitPaymentBtnStyle(savingRefund || !refundAmount)}>
+                    {savingRefund ? 'Сохраняем...' : 'Оформить возврат →'}
+                  </button>
+                </div>
+              )}
+              </div>
+            </Section>
+          </div>
+          <div className="family-money-payment-list">
           <Section title={`Платежи (${payments.length})`}>
             <div style={paymentsListStyle}>
               {sortedPayments.length === 0 ? <Empty text="Платежей нет" /> : sortedPayments.map(payment => (
@@ -241,23 +268,12 @@ export default function TabFinance({
               ))}
             </div>
           </Section>
-        </div>
+          </div>
+          <div className="family-money-refund-list">
+            <Section title={`Возвраты (${refunds.length})`}>
 
-        <div className="finance-adjustments-grid">
-        {(canCreateRefund || refunds.length > 0) && (
-          <Section title="Возвраты">
-            <div className="finance-adjustment-panel" style={paymentPanelStyle}>
-              {canCreateRefund && (
-                <div className="finance-refund-form" style={{ ...newPaymentGridStyle, marginBottom: refunds.length > 0 ? 10 : 0 }}>
-                  <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="Сумма возврата" style={inputStyle} />
-                  <input value={refundComment} onChange={e => setRefundComment(e.target.value)} placeholder="Комментарий" className="finance-refund-comment" style={inputStyle} />
-                  <button onClick={submitRefund} disabled={savingRefund || !refundAmount} style={submitPaymentBtnStyle(savingRefund || !refundAmount)}>
-                    {savingRefund ? 'Сохраняем...' : 'Оформить возврат →'}
-                  </button>
-                </div>
-              )}
               {refunds.length === 0 ? (
-                canCreateRefund ? null : <Empty text="Возвратов нет" />
+                <Empty text="Возвратов нет" />
               ) : refunds.map(refund => (
                 <RefundRow
                   key={refund.id}
@@ -268,25 +284,12 @@ export default function TabFinance({
                   onReject={() => rejectRefund(refund)}
                 />
               ))}
-            </div>
-          </Section>
-        )}
+            </Section>
+          </div>
+        </div>}
 
-        {onAddChargeDiscount && onCancelChargeDiscount && (
-          <ChargeDiscountsSection
-            charges={charges}
-            discounts={chargeDiscounts}
-            children={children}
-            canManage={canManageDiscounts}
-            onAdd={onAddChargeDiscount}
-            onCancel={onCancelChargeDiscount}
-          />
-        )}
-
-        </div>
-
-        <Section
-          title="Месячная таблица"
+        {(mode === 'all' || mode === 'charges') && <Section
+          title="Начисления по периодам"
           action={!readOnly && isAdmin && (
             <button onClick={() => setAddingPeriod(p => !p)} style={smallAccentBtn}>
               <Plus size={11} /> Период
@@ -297,10 +300,10 @@ export default function TabFinance({
             <div style={{ background: '#F7F9FB', borderRadius: 10, padding: 10, marginBottom: 10 }}>
               <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 8 }}>Создать начисления всем детям</div>
               <div style={{ display: 'flex', gap: 7 }}>
-                <select value={newPeriodKey} onChange={e => setNewPeriodKey(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
+                <select aria-label="Период начисления" value={availablePeriods.some(p => p.key === newPeriodKey) ? newPeriodKey : availablePeriods[0]?.key ?? ''} onChange={e => setNewPeriodKey(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
                   {availablePeriods.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
-                <button onClick={addSelectedPeriod} style={smallAccentBtn}>Создать</button>
+                <button onClick={addSelectedPeriod} disabled={creatingPeriod || availablePeriods.length === 0} style={smallAccentBtn}>{creatingPeriod ? 'Создание…' : 'Создать'}</button>
               </div>
             </div>
           )}
@@ -309,26 +312,27 @@ export default function TabFinance({
             <table style={financeTableStyle}>
               <thead>
                 <tr>
-                  {['Месяц', 'Начислено', 'Оплачено', 'Дата списания'].map(label => (
+                  {['Период', 'Начислено', 'Погашено', 'Остаток', 'Дата списания'].map(label => (
                     <th key={label} style={financeThStyle}>{label}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {periodRows.length === 0 ? (
-                  <tr><td colSpan={4} style={financeEmptyCellStyle}>Начислений нет</td></tr>
+                  <tr><td colSpan={5} style={financeEmptyCellStyle}>Начислений нет</td></tr>
                 ) : periodRows.map(row => (
                   <tr key={row.key}>
                     <td style={financeTdStyle}>
                       <div style={{ fontWeight: 900, color: '#17222F' }}>{row.label}</div>
                       <div style={{ fontSize: 10, color: '#8A94A3', marginTop: 2 }}>{row.childrenCount} начисл.</div>
                     </td>
-                    <td style={{ ...financeTdStyle, textAlign: 'right', fontWeight: 900 }}>{money(row.charged)}</td>
-                    <td style={{ ...financeTdStyle, textAlign: 'right' }}>
-                      <div style={{ fontWeight: 900, color: row.debt > 0 ? '#C62828' : '#17222F' }}>
-                        {money(periodPaidDisplayAmount(row))}
+                    <td style={{ ...financeTdStyle, textAlign: 'left', fontWeight: 900 }}>{money(row.charged)}</td>
+                    <td style={{ ...financeTdStyle, textAlign: 'left' }}>
+                      <div style={{ fontWeight: 900, color: '#237F81' }}>
+                        {money(row.paid)}
                       </div>
                     </td>
+                    <td style={{ ...financeTdStyle, textAlign: 'left', color: row.debt > 0 ? '#B42318' : '#667085', fontWeight: 700 }}>{money(row.debt)}</td>
                     <td style={financeTdStyle}>{row.writeOffDate || '-'}</td>
                   </tr>
                 ))}
@@ -337,15 +341,27 @@ export default function TabFinance({
                 <tfoot>
                   <tr>
                     <td style={financeTotalCellStyle}>Итого</td>
-                    <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + row.charged, 0))}</td>
-                    <td style={{ ...financeTotalCellStyle, textAlign: 'right' }}>{money(periodRows.reduce((sum, row) => sum + periodPaidDisplayAmount(row), 0))}</td>
+                    <td style={{ ...financeTotalCellStyle, textAlign: 'left' }}>{money(periodRows.reduce((sum, row) => sum + row.charged, 0))}</td>
+                    <td style={{ ...financeTotalCellStyle, textAlign: 'left' }}>{money(periodRows.reduce((sum, row) => sum + row.paid, 0))}</td>
+                    <td style={{ ...financeTotalCellStyle, textAlign: 'left' }}>{money(periodRows.reduce((sum, row) => sum + row.debt, 0))}</td>
                     <td style={financeTotalCellStyle} />
                   </tr>
                 </tfoot>
               )}
             </table>
           </div>
-        </Section>
+        </Section>}
+        {(mode === 'all' || mode === 'charges') && onAddChargeDiscount && onCancelChargeDiscount && (
+          <ChargeDiscountsSection
+            charges={charges}
+            discounts={chargeDiscounts}
+            children={children}
+            canManage={canManageDiscounts}
+            onAdd={onAddChargeDiscount}
+            onCancel={onCancelChargeDiscount}
+          />
+        )}
+
       </div>
     </div>
   );
@@ -697,13 +713,6 @@ const inputStyle: React.CSSProperties = {
 const financeLayoutStyle: React.CSSProperties = {
   display: 'grid',
   gap: 14,
-};
-
-const financeTopGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 14,
-  alignItems: 'stretch',
 };
 
 const newPaymentGridStyle: React.CSSProperties = {
