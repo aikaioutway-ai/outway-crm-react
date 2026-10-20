@@ -509,8 +509,9 @@ export async function fetchChargesForPeriod(
   periodMonth: number | null,
   periodYear: number | null,
   chargeType: string | null,
+  allPeriods = false,
 ): Promise<PeriodChargeStats[]> {
-  if (!chargeType && (periodMonth === null || periodYear === null)) {
+  if (!allPeriods && !chargeType && (periodMonth === null || periodYear === null)) {
     throw new Error('fetchChargesForPeriod: нужно указать chargeType либо periodMonth+periodYear');
   }
   const data = await fetchAllRows<any>((from, to) => {

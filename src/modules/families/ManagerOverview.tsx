@@ -1,3 +1,5 @@
+import { managerFinancialStats } from './managerFinancialStats';
+import { useQuery } from '@tanstack/react-query';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import DirectorySchoolDashboard from './DirectorySchoolDashboard';
 import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
@@ -30,18 +32,24 @@ export interface SchoolStat {
   pendingSum: number;
   debtSum: number;
   balance: number;
+  debtorsCount?: number;
+  boarded?: number;
+  uncharged?: number;
 }
 
-type SortKey = 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' | 'debtSum' | 'balance';
+type SortKey = 'debtorsCount' | 'boarded' | 'uncharged' | 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' | 'debtSum' | 'balance';
 
 interface ManagerOverviewProps {
   mode: ManagerMode;
+  canViewAccruals?: boolean;
   onModeChange: (mode: ManagerMode) => void;
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
   onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string) => void;
   allowedSchools?: string[];
 }
+
+const EMPTY_PERIOD_STATS: PeriodChargeStats[] = [];
 
 const SCHOOL_COLORS = [
   '#378ADD', '#639922', '#7F77DD', '#3C3489', '#A32D2D', '#185FA5', '#0F6E56', '#085041',
@@ -263,13 +271,12 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ mode, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools }: ManagerOverviewProps) {
+export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools }: ManagerOverviewProps) {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
   const [schoolTier] = useState<SchoolTier>('1.0');
-  const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
@@ -288,19 +295,18 @@ export default function ManagerOverview({ mode, onModeChange, onSelectSchool, on
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  useEffect(() => {
-    if (periodKey === 'ALL') { setPeriodStats([]); return; }
-    const period = ALL_PERIODS.find(p => p.key === periodKey);
-    if (!period) return;
-    let cancelled = false;
-    const isDeposit = period.key === 'deposit';
-    fetchChargesForPeriod(
-      isDeposit ? null : period.month,
-      isDeposit ? null : period.year,
-      isDeposit ? 'deposit' : null,
-    ).then(result => { if (!cancelled) setPeriodStats(result); }).catch(console.error);
-    return () => { cancelled = true; };
-  }, [periodKey]);
+  const periodQuery = useQuery({
+    queryKey: ['manager-charge-stats', periodKey],
+    enabled: mode !== 'directory',
+    queryFn: () => {
+      if (periodKey === 'ALL') return fetchChargesForPeriod(null, null, null, true);
+      const period = ALL_PERIODS.find(p => p.key === periodKey);
+      if (!period) throw new Error('Неизвестный период');
+      const deposit = period.key === 'deposit';
+      return fetchChargesForPeriod(deposit ? null : period.month, deposit ? null : period.year, deposit ? 'deposit' : null);
+    },
+  });
+  const periodStats = periodQuery.data ?? EMPTY_PERIOD_STATS;
 
   const stats = useMemo(
     () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? [])
@@ -309,39 +315,24 @@ export default function ManagerOverview({ mode, onModeChange, onSelectSchool, on
     [allowedSchools, branchStatsQuery.data, schoolTier],
   );
 
-  const displayStats = useMemo(() => {
-    if (periodKey === 'ALL' || periodStats.length === 0) return stats;
-    const familyToSchool = new Map<string, string>();
-    (accessibleRows ?? []).forEach(r => { if (!familyToSchool.has(r.familyId)) familyToSchool.set(r.familyId, r.branchFilter); });
-    const perSchool = new Map<string, { charged: number; paid: number; debt: number }>();
-    periodStats.forEach(s => {
-      const school = familyToSchool.get(s.familyId);
-      if (!school) return;
-      const acc = perSchool.get(school) ?? { charged: 0, paid: 0, debt: 0 };
-      acc.charged += s.charged;
-      acc.paid += s.paid;
-      acc.debt += s.debt;
-      perSchool.set(school, acc);
-    });
-    return stats.map(s => {
-      const period = perSchool.get(s.key);
-      return { ...s, charged: period?.charged ?? 0, paid: period?.paid ?? 0, debtSum: period?.debt ?? 0 };
-    });
-  }, [stats, periodStats, periodKey, accessibleRows]);
+  const displayStats = useMemo(() => managerFinancialStats(stats, accessibleRows ?? [], periodStats, periodKey === 'ALL'), [stats, accessibleRows, periodStats, periodKey]);
 
   const totals = useMemo(() => displayStats.reduce((acc, s) => ({
+    debtorsCount: acc.debtorsCount + (s.debtorsCount ?? 0),
+    boarded: acc.boarded + (s.boarded ?? 0),
+    uncharged: acc.uncharged + (s.uncharged ?? 0),
     childrenCount: acc.childrenCount + s.childrenCount,
     newRequests: acc.newRequests + s.newRequests,
     charged: acc.charged + s.charged,
     paid: acc.paid + s.paid,
     debtSum: acc.debtSum + s.debtSum,
     balance: acc.balance + s.balance,
-  }), { childrenCount: 0, newRequests: 0, charged: 0, paid: 0, debtSum: 0, balance: 0 }), [displayStats]);
+  }), { debtorsCount: 0, boarded: 0, uncharged: 0, childrenCount: 0, newRequests: 0, charged: 0, paid: 0, debtSum: 0, balance: 0 }), [displayStats]);
 
   const displayRows = useMemo(() => buildGroupedRows(
     displayStats,
     expandedGroups,
-    ['childrenCount', 'newRequests', 'charged', 'paid', 'pendingCount', 'pendingSum', 'debtSum', 'balance'],
+    ['debtorsCount', 'boarded', 'uncharged', 'childrenCount', 'newRequests', 'charged', 'paid', 'pendingCount', 'pendingSum', 'debtSum', 'balance'],
     (a, b) => {
       const av = sortState.key === 'school' ? a.label : a.data[sortState.key];
       const bv = sortState.key === 'school' ? b.label : b.data[sortState.key];
@@ -369,9 +360,9 @@ export default function ManagerOverview({ mode, onModeChange, onSelectSchool, on
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         <DashboardTopPanel className="dashboard-control-row">
-          <ManagerModeTabs value={mode} onChange={onModeChange} />
+          <ManagerModeTabs canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-            {mode === 'charges' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
+            {mode !== 'directory' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
           </div>
           <ManagerSearch rows={accessibleRows ?? []} onOpenFamily={onOpenFamily} />
           <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
@@ -401,17 +392,25 @@ export default function ManagerOverview({ mode, onModeChange, onSelectSchool, on
           </button>
         </DashboardTopPanel>
 
-        {mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : (
+        {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : (
         <SchoolDashboardTable
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },
-            { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },
+            ...(mode === 'accruals' ? [
+              { key: 'boarded', label: 'Посажены', total: totals.boarded, color: KPI_COLORS.childrenCount },
+            ] : [
+              { key: 'debtorsCount', label: 'Должников', total: totals.debtorsCount, color: KPI_COLORS.newRequests },
+            ]),
             { key: 'charged', label: 'Начислено', total: money(totals.charged), color: KPI_COLORS.charged },
+            ...(mode === 'accruals' ? [
+              { key: 'uncharged', label: 'Без начислений', total: totals.uncharged, color: '#B45309' },
+            ] : [
             { key: 'paid', label: 'Оплачено', total: money(totals.paid), color: KPI_COLORS.paid },
             { key: 'debtSum', label: 'Сумма долга', total: money(totals.debtSum), color: KPI_COLORS.debtSum },
             { key: 'balance', label: 'Баланс', total: totals.balance.toLocaleString('ru-RU'), color: KPI_COLORS.balance },
+            ]),
           ]}
-          rows={displayRows.map(row => ({ ...row, values: { newRequests: row.data.newRequests, charged: money(row.data.charged), paid: money(row.data.paid), debtSum: money(row.data.debtSum), balance: row.data.balance.toLocaleString('ru-RU') } }))}
+          rows={displayRows.map(row => ({ ...row, values: { debtorsCount: row.data.debtorsCount ?? 0, boarded: row.data.boarded ?? 0, uncharged: row.data.uncharged ?? 0, newRequests: row.data.newRequests, charged: money(row.data.charged), paid: money(row.data.paid), debtSum: money(row.data.debtSum), balance: row.data.balance.toLocaleString('ru-RU') } }))}
           sortKey={sortState.key}
           ascending={sortState.dir === 'asc'}
           onSort={key => handleSort(key as SortKey)}

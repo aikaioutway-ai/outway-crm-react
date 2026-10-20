@@ -3,7 +3,7 @@ import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseType
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
-import ManagerModeTabs from './modules/families/ManagerModeTabs';
+import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
@@ -145,7 +145,15 @@ export default function App() {
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | null>(null);
   const [expenseSubcategory, setExpenseSubcategory] = useState('ALL');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
-  const [managerSchoolMode, setManagerSchoolMode] = useState<'directory' | 'charges'>('directory');
+  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals'>('directory');
+  const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
+  const managerSchoolMode = requestedManagerSchoolMode === 'accruals' && !canViewManagerAccruals ? 'directory' : requestedManagerSchoolMode;
+  const setManagerSchoolMode = (mode: 'directory' | 'charges' | 'accruals') => {
+    setRequestedManagerSchoolMode(mode === 'accruals' && !canViewManagerAccruals ? 'directory' : mode);
+  };
+  useEffect(() => {
+    if (!canViewManagerAccruals) setRequestedManagerSchoolMode(mode => mode === 'accruals' ? 'directory' : mode);
+  }, [canViewManagerAccruals]);
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
   const [managerOpenFamilySearch, setManagerOpenFamilySearch] = useState('');
   const [managerPeriodKey, setManagerPeriodKey] = useState(currentPayrollPeriodKey);
@@ -639,7 +647,7 @@ export default function App() {
                     ← Все школы
                   </button>
                 )}
-                {managerSchoolKey && <ManagerModeTabs compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
+                {managerSchoolKey && <ManagerModeTabs canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
@@ -647,7 +655,7 @@ export default function App() {
             {managerSchoolKey ? (
               <>
                 <DashboardTopPanel>
-                  {managerSchoolMode === 'charges' && (
+                  {managerSchoolMode !== 'directory' && (
                     <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
                         <ManagerPeriodBar periodKey={managerPeriodKey} onPeriodKeyChange={setManagerPeriodKey} />
@@ -656,7 +664,7 @@ export default function App() {
                     </div>
                   )}
                   <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} />
-                  {managerSchoolMode === 'charges' ? (
+                  {managerSchoolMode !== 'directory' ? (
                     <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingTop: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
@@ -668,7 +676,8 @@ export default function App() {
                   )}
                 </DashboardTopPanel>
                 <FamiliesPage
-                  mode={managerSchoolMode}
+                  mode={managerSchoolMode === 'accruals' ? 'charges' : managerSchoolMode}
+                  accrualsView={managerSchoolMode === 'accruals'}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
                   authToken={currentUser?.sessionToken}
@@ -683,12 +692,13 @@ export default function App() {
                   hideTransferBars
                   externalQuickTransfer={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? '' : managerTransferFilter}
                   externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
-                  externalPeriodKey={managerSchoolMode === 'charges' ? managerPeriodKey : undefined}
+                  externalPeriodKey={managerSchoolMode !== 'directory' ? managerPeriodKey : undefined}
                   initialSearch={managerOpenFamilySearch}
                 />
               </>
             ) : (
               <ManagerOverview
+                canViewAccruals={canViewManagerAccruals}
                 mode={managerSchoolMode}
                 onModeChange={setManagerSchoolMode}
                 onSelectSchool={handleManagerSelectSchool}

@@ -1,3 +1,4 @@
+import { useQuery } from '@tanstack/react-query';
 import { isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
@@ -31,7 +32,7 @@ import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
 import { Check, ChevronDown, ChevronUp, Copy, Link2, MessageCircle, RefreshCw, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
 import { formatClassName, formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
-import { ALL_PERIODS, CASHIER_PERIODS, currentCashierPeriodKey } from './constants';
+import { ALL_PERIODS, CASHIER_PERIODS, currentPayrollPeriodKey, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
 import {
   childDebtAmount, compactMoney,
@@ -142,6 +143,7 @@ type FamiliesMode = 'requests' | 'payments' | 'charges' | 'debtors' | 'directory
 interface FamiliesPageProps {
   initialOpenDriverId?: string;
   mode?: FamiliesMode;
+  accrualsView?: boolean;
   userRole?: UserRole;
   userName?: string;
   authToken?: string;
@@ -707,7 +709,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const canRejectFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
@@ -918,7 +920,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const tableStorageKey = isRequestsModule
     ? 'families_table_requests_v3'
     : isChargesMode
-      ? 'families_table_charges_v2'
+      ? accrualsView ? 'families_table_accruals_v1' : 'families_table_charges_v2'
       : isPaymentsMode
       ? 'families_table_payments_v2'
       : settingsScope ? `families_table_${settingsScope}_${mode}` : `families_table_${mode}`;
@@ -1182,7 +1184,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, [onSchoolsSidebarWidthChange, schoolsSidebarReserveWidth]);
 
   useEffect(() => {
-    if (!isChargesMode) return;
+    if (!isChargesMode || accrualsView) return;
     if (chargesPeriodKey === 'ALL') { setPeriodStats([]); return; }
     const period = ALL_PERIODS.find(p => p.key === chargesPeriodKey);
     if (!period) return;
@@ -1199,7 +1201,25 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       if (!cancelled) setLoadingPeriod(false);
     });
     return () => { cancelled = true; };
-  }, [isChargesMode, chargesPeriodKey]);
+  }, [isChargesMode, accrualsView, chargesPeriodKey]);
+
+  const accrualPeriod = ALL_PERIODS.find(p => p.key === chargesPeriodKey && p.key !== 'deposit')
+    ?? ALL_PERIODS.find(p => p.key === currentPayrollPeriodKey())!;
+  const previousAccrualMonth = accrualPeriod.month === 1 ? 12 : accrualPeriod.month - 1;
+  const previousAccrualYear = accrualPeriod.month === 1 ? accrualPeriod.year - 1 : accrualPeriod.year;
+  const accrualQuery = useQuery({
+    queryKey: ['child-accrual-columns', accrualPeriod.year, accrualPeriod.month],
+    enabled: accrualsView,
+    queryFn: async () => {
+      const [deposit, previous, current] = await Promise.all([
+        fetchChargesForPeriod(null, null, 'deposit'),
+        fetchChargesForPeriod(previousAccrualMonth, previousAccrualYear, null),
+        fetchChargesForPeriod(accrualPeriod.month, accrualPeriod.year, null),
+      ]);
+      const byChild = (items: PeriodChargeStats[]) => new Map(items.filter(item => item.childId).map(item => [item.childId, item.charged]));
+      return { deposit: byChild(deposit), previous: byChild(previous), current: byChild(current) };
+    },
+  });
 
   // force — после правок: данные берутся заново (или из уже идущего запроса),
   // без force — из общего кэша, если он ещё свежий.
@@ -1800,7 +1820,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       if ((dashboardMetric === 'allPaymentsCount' || dashboardMetric === 'allPaymentsSum') && !hasAny) return false;
       if (!hasAny) return false;
     }
-    if (mode === 'charges') {
+    if (mode === 'charges' && !accrualsView) {
       if (dashboardMetric === 'count' && !isNewUnassignedRow(r)) return false;
       if (dashboardMetric === 'chargedSum' && Number(r.totalCharged || 0) <= 0) return false;
       if (dashboardMetric === 'paidSum' || dashboardMetric === 'paidCount') {
@@ -1825,7 +1845,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (quickChildStatus && quickChildStatus !== 'new' && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
+  }), [accrualsView, dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
 
   const filteredSorted = useMemo(() => {
     if (isDirectoryMode) {
@@ -1854,7 +1874,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         return a.familyIndex - b.familyIndex;
       });
     }
-    if (!isChargesMode) return filtered;
+    if (!isChargesMode || accrualsView) return filtered;
     const periodFamilyIds = chargesPeriodKey !== 'ALL' && periodStats.length > 0
       ? new Set(periodStats.map(s => s.familyId))
       : null;
@@ -1862,7 +1882,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       ? filtered.filter(r => periodFamilyIds.has(r.familyId))
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
-  }, [filtered, isChargesMode, isDirectoryMode, directoryDateSort, chargesPeriodKey, periodStats]);
+  }, [filtered, accrualsView, isChargesMode, isDirectoryMode, directoryDateSort, chargesPeriodKey, periodStats]);
 
   const transferVehicleType = useCallback((transfer: string) => {
     if (!transfer || transfer === 'empty') return 'empty';
@@ -2595,6 +2615,23 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       },
       getValue: (row) => row.pendingPaymentId ? 'На проверке' : '',
     }];
+    if (accrualsView) {
+      const monthLabel = (month: number, year: number) => `${String(month).padStart(2, '0')}.${year}`;
+      const amountColumn = (key: 'deposit' | 'previous' | 'current', label: string): ColumnDef<ChildRow> => ({
+        key: `accrual_${key}`, label, type: 'currency', width: 180, visible: true,
+        getValue: row => accrualQuery.data?.[key].get(row.rowId) ?? 0,
+        render: (_value, row) => accrualQuery.isError ? <span title="Не удалось загрузить начисления">Ошибка</span>
+          : accrualQuery.isPending ? '…' : money(accrualQuery.data?.[key].get(row.rowId) ?? 0),
+      });
+      return [
+        { ...COLUMNS.find(column => column.key === 'childName')!, visible: true },
+        { ...COLUMNS.find(column => column.key === 'monthlyPrice')!, label: 'Цена в месяц', visible: true },
+        amountColumn('deposit', 'Начислено: депозит'),
+        amountColumn('previous', `Начислено: ${monthLabel(previousAccrualMonth, previousAccrualYear)}`),
+        amountColumn('current', `Начислено: ${monthLabel(accrualPeriod.month, accrualPeriod.year)}`),
+        { ...COLUMNS.find(column => column.key === 'transferNumber')!, visible: true },
+      ];
+    }
     const dataCols = (isRequestsModule ? REQUEST_COLUMNS : isChargesMode ? CHARGES_COLUMNS : isPaymentsMode ? PAYMENTS_COLUMNS : COLUMNS).map(column => {
       const configuredColumn = isRequestsModule
         ? {
@@ -2653,7 +2690,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, directoryDateSort, periodStatsByFamily]);
+  }, [accrualsView, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, directoryDateSort, periodStatsByFamily]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows
@@ -3299,7 +3336,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
             />
           ) : (
             <DataTable<ChildRow>
-              key={`families_table_${mode}`}
+              key={`families_table_${accrualsView ? 'accruals' : mode}`}
               columns={tableColumns}
               data={filteredSorted}
               rowKey="rowId"
