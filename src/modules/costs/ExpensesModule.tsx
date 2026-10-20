@@ -1,3 +1,5 @@
+import { SCHOOL_TABS } from '../families/constants';
+import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Building2, Bus, CircleUserRound, Route, School, ReceiptText, RotateCcw, Gift, Banknote, LockKeyhole, WalletCards, Pencil, Plus, Trash2, X } from 'lucide-react';
 import { createExpense, deleteExpense, updateExpense } from '../../services/expenseService';
@@ -66,7 +68,7 @@ function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
         </tr></thead>
         <tbody>{rows.map(row => (
           <tr key={row.id}>
-            <td className="expense-name">{row.name}</td>
+            <td className="expense-name">{row.name}{row.schoolKey && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey} · {salaryExpensePeriods(Number(row.salaryPeriodKey?.slice(0, 4)) - (Number(row.salaryPeriodKey?.slice(5, 7)) < 9 ? 1 : 0)).find(period => period.key === row.salaryPeriodKey)?.label ?? row.salaryPeriodKey}</div>}</td>
             {showCategory && <td><span className="expense-badge">{EXPENSE_CATEGORIES[row.category].label}</span></td>}
             <td>{row.subcategory}</td>
             <td className="number">{money(row.unitPrice)}</td>
@@ -110,6 +112,10 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
   const [paymentMethod, setPaymentMethod] = useState<ExpensePaymentMethod>(expense?.paymentMethod ?? 'cashless');
   const [paymentOrderNumber, setPaymentOrderNumber] = useState(expense?.paymentOrderNumber ?? '');
   const [comment, setComment] = useState(expense?.comment ?? '');
+  const [schoolKey, setSchoolKey] = useState(expense?.schoolKey ?? '');
+  const [salaryPeriodKey, setSalaryPeriodKey] = useState(expense?.salaryPeriodKey ?? '');
+  const salaryPeriods = salaryExpensePeriods(currentSchoolYear());
+  const isSchoolSalary = category === 'school' && subcategory === 'ЗП';
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const total = Math.max(0, Number(unitPrice) || 0) * Math.max(0, Number(quantity) || 0);
@@ -125,11 +131,13 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
       setError('Заполните наименование, подкатегорию, цену, количество и дату.');
       return;
     }
+    if (isSchoolSalary && (!schoolKey || !salaryPeriods.some(period => period.key === salaryPeriodKey))) { setError('Выберите школу и период зарплаты'); return; }
     setSaving(true);
     setError('');
     try {
       const payload = {
         name, category, subcategory,
+        schoolKey: isSchoolSalary ? schoolKey : undefined, salaryPeriodKey: isSchoolSalary ? salaryPeriodKey : undefined,
         unitPrice: Number(unitPrice), quantity: Number(quantity),
         expenseDate, paymentMethod, paymentOrderNumber: paymentOrderNumber.trim() || undefined, comment, createdBy: userName,
       };
@@ -152,6 +160,10 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
           <div className="expense-field full"><label>Наименование расхода</label><input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="Например, аренда офиса" /></div>
           <div className="expense-field"><label>Главная категория</label><select value={category} onChange={event => changeCategory(event.target.value as ExpenseCategory)}>{EXPENSE_CATEGORY_KEYS.filter(key => allowPersonalCategory || key !== 'personal').map(key => <option key={key} value={key}>{EXPENSE_CATEGORIES[key].label}</option>)}</select></div>
           <div className="expense-field"><label>Подкатегория</label><select value={subcategory} onChange={event => setSubcategory(event.target.value)}>{EXPENSE_CATEGORIES[category].subcategories.map(item => <option key={item}>{item}</option>)}</select></div>
+          {isSchoolSalary && <>
+            <div className="expense-field"><label htmlFor="salary-expense-school">Школа</label><select id="salary-expense-school" value={schoolKey} onChange={event => setSchoolKey(event.target.value)} required><option value="">Выберите школу</option>{SCHOOL_TABS.filter(school => school.key !== 'ALL').map(school => <option key={school.key} value={school.key}>{school.label}</option>)}</select></div>
+            <div className="expense-field"><label htmlFor="salary-expense-period">Период зарплаты</label><select id="salary-expense-period" value={salaryPeriodKey} onChange={event => setSalaryPeriodKey(event.target.value)} required><option value="">Выберите период</option>{salaryPeriods.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></div>
+          </>}
           <div className="expense-field"><label>Цена, сом</label><input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder="0" /></div>
           <div className="expense-field"><label>Количество</label><input type="number" min="0.01" step="0.01" value={quantity} onChange={event => setQuantity(event.target.value)} /></div>
           <div className="expense-total-preview"><span>Итоговая сумма</span><strong>{money(total)}</strong></div>

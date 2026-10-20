@@ -8,6 +8,8 @@ import {
 function mapExpense(row: any): ExpenseRecord {
   return {
     id: String(row.id),
+    schoolKey: row.school_key || undefined,
+    salaryPeriodKey: row.salary_period_key || undefined,
     name: String(row.name ?? ''),
     category: row.category as ExpenseCategory,
     subcategory: String(row.subcategory ?? ''),
@@ -71,4 +73,9 @@ export async function updateExpense(expenseId: string, expense: NewExpenseRecord
 
 export async function deleteExpense(expenseId: string, sessionToken?: string): Promise<void> {
   await callExpenseApi(sessionToken, { action: 'delete', expenseId });
+}
+
+export async function fetchSalaryExpenses(sessionToken?: string): Promise<ExpenseRecord[]> {
+  const data = await callExpenseApi(sessionToken, { action: 'listSalary' });
+  return (data.rows ?? []).map(mapExpense);
 }

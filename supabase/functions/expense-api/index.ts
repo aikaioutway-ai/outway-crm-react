@@ -48,7 +48,13 @@ function expensePayload(rawExpense: unknown, createdBy?: string) {
   if (!name || !subcategory || !ALLOWED_CATEGORIES.has(category) || !ALLOWED_METHODS.has(paymentMethod) || !validDate(expenseDate) || !Number.isFinite(unitPrice) || unitPrice < 0 || !Number.isFinite(quantity) || quantity <= 0) {
     return null;
   }
+  const schoolSalary = category === 'school' && subcategory === 'ЗП';
+  const schoolKey = String(expense.schoolKey ?? '').trim();
+  const salaryPeriodKey = String(expense.salaryPeriodKey ?? '').trim();
+  if (schoolSalary && (!schoolKey || !/^\d{4}-(09|10|11|12|01|02|03|04|05)-[12]$/.test(salaryPeriodKey))) return null;
   return {
+    school_key: schoolSalary ? schoolKey : null,
+    salary_period_key: schoolSalary ? salaryPeriodKey : null,
     name,
     category,
     subcategory,
@@ -73,6 +79,11 @@ Deno.serve(async req => {
 
     const body = await req.json();
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    if (body.action === 'listSalary') {
+      const { data, error } = await supabase.from('v2_expenses').select('*').eq('category', 'school').eq('subcategory', 'ЗП').order('expense_date', { ascending: false });
+      if (error) throw error;
+      return response({ ok: true, rows: data ?? [] });
+    }
     if (body.action === 'list') {
       if (!validDate(body.periodStart) || !validDate(body.periodEnd)) return response({ ok: false, error: 'Некорректный период' }, 400);
       const { data, error } = await supabase.from('v2_expenses').select('*')

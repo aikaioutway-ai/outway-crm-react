@@ -41,6 +41,7 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
   else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
   else sections = ['families'];
+  sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
   return userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
 }
 

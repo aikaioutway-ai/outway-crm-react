@@ -1,4 +1,4 @@
-import FinanceTabs from './modules/costs/FinanceTabs';
+import SalaryExpensesView from './modules/costs/SalaryExpensesView';
 import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
@@ -45,7 +45,6 @@ import './index.css';
 const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
-const PayrollModule = lazy(() => import('./modules/payroll/PayrollModule'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
@@ -107,19 +106,9 @@ export default function App() {
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
-  const [payrollSchoolKey, setPayrollSchoolKey] = useState<string | null>(null);
-  const [payrollTransferFilter, setPayrollTransferFilter] = useState('');
-  const [payrollSearch, setPayrollSearch] = useState('');
-  const [payrollPeriodKey, setPayrollPeriodKey] = useState(currentPayrollPeriodKey);
-  const [salarySchoolKey, setSalarySchoolKey] = useState<string | null>(null);
-  const [salaryTransferFilter, setSalaryTransferFilter] = useState('');
-  const [salarySearch, setSalarySearch] = useState('');
-  const [salaryPeriodKey, setSalaryPeriodKey] = useState(currentPayrollPeriodKey);
+  const [financeView, setFinanceView] = useState<'expenses' | 'salary'>('expenses');
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | null>(null);
   const [expenseSubcategory, setExpenseSubcategory] = useState('ALL');
-  const [financeTab, setFinanceTab] = useState<'expenses' | 'timesheet' | 'salary'>(() => (
-    canAccessFinanceExpenses(currentUserRole) ? 'expenses' : 'timesheet'
-  ));
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
   const [managerSchoolMode, setManagerSchoolMode] = useState<'directory' | 'charges'>('directory');
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
@@ -173,7 +162,6 @@ export default function App() {
     localStorage.setItem('outway_user_role', user.role);
     setCurrentUser(user);
     setSection(getAllowedSections(user.role, user.id)[0]);
-    setFinanceTab(canAccessFinanceExpenses(user.role) ? 'expenses' : 'timesheet');
     return true;
   };
 
@@ -254,21 +242,6 @@ export default function App() {
   useEffect(() => {
     setDriversTransferFilter('');
   }, [driversSchoolKey]);
-
-  useEffect(() => {
-    setPayrollTransferFilter('');
-  }, [payrollSchoolKey]);
-
-  useEffect(() => {
-    setSalaryTransferFilter('');
-  }, [salarySchoolKey]);
-
-  useEffect(() => {
-    if (financeTab === 'expenses' && !canAccessFinanceExpenses(currentUserRole)) {
-      setFinanceTab('timesheet');
-    }
-    if (financeTab === 'expenses') setSchoolSidebarReserveWidth(0);
-  }, [currentUserRole, financeTab]);
 
   // Обновляем сессию если position ещё не загружен (старый localStorage)
   useEffect(() => {
@@ -362,28 +335,6 @@ export default function App() {
     paddingRight: schoolSidebarReserveWidth,
     transition: 'padding-right .18s ease',
   };
-
-  const changeFinanceTab = (next: 'expenses' | 'timesheet' | 'salary') => {
-    if (financeTab !== 'expenses' && next !== 'expenses' && next !== financeTab) {
-      if (next === 'salary') {
-        setSalarySchoolKey(payrollSchoolKey);
-        setSalaryTransferFilter(payrollTransferFilter);
-        setSalarySearch(payrollSearch);
-        setSalaryPeriodKey(payrollPeriodKey);
-      } else {
-        setPayrollSchoolKey(salarySchoolKey);
-        setPayrollTransferFilter(salaryTransferFilter);
-        setPayrollSearch(salarySearch);
-        setPayrollPeriodKey(salaryPeriodKey);
-      }
-    }
-    setFinanceTab(next);
-  };
-
-  const activePayrollSchoolKey = financeTab === 'salary' ? salarySchoolKey : payrollSchoolKey;
-  const activePayrollTransferFilter = financeTab === 'salary' ? salaryTransferFilter : payrollTransferFilter;
-  const activePayrollSearch = financeTab === 'salary' ? salarySearch : payrollSearch;
-  const activePayrollPeriodKey = financeTab === 'salary' ? salaryPeriodKey : payrollPeriodKey;
 
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
@@ -729,66 +680,16 @@ export default function App() {
             </div>
           </div>
         ) : section === 'expenses' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                <div style={{ padding: '0 14px 8px 10px', marginRight: 8 }}>
-                  <div style={{ fontSize: 17, fontWeight: 800, color: '#17222F' }}>Финансы</div>
-                  <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginTop: 2 }}>
-                    {financeTab === 'expenses'
-                      ? ['Расходы', expenseCategory ? EXPENSE_CATEGORIES[expenseCategory].label : 'Категории', expenseSubcategory !== 'ALL' ? expenseSubcategory : ''].filter(Boolean).join(' / ')
-                      : [financeTab === 'timesheet' ? 'Табель' : 'Зарплата', activePayrollSchoolKey ? SCHOOL_TABS.find(school => school.key === activePayrollSchoolKey)?.label ?? (activePayrollSchoolKey === 'OFFICE' ? 'Офис' : activePayrollSchoolKey) : 'Все школы'].join(' / ')}
-                  </div>
-                </div>
-                {financeTab === 'expenses' && expenseCategory && <>
-                  <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>{expenseSubcategory !== 'ALL' ? '← Подкатегории' : '← Категории'}</button>
-                </>}
-                {financeTab !== 'expenses' && activePayrollSchoolKey && <FinanceTabs compact value={financeTab} onChange={changeFinanceTab} showExpenses={false} />}
-                {financeTab !== 'expenses' && activePayrollSchoolKey && (
-                  <button onClick={() => {
-                    if (financeTab === 'salary') {
-                      setSalarySchoolKey(null);
-                      setSalarySearch('');
-                    } else {
-                      setPayrollSchoolKey(null);
-                      setPayrollSearch('');
-                    }
-                  }} style={managerModeTabStyle(false)}>
-                    ← Все школы
-                  </button>
-                )}
-                {extraTabs(true)}
-              </div>
-            </div>
-            {canAccessFinanceExpenses(currentUserRole) && (
-              <div style={{ flex: 1, minHeight: 0, display: financeTab === 'expenses' ? 'flex' : 'none' }}>
-                <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} toolbarContent={!expenseCategory ? <FinanceTabs value={financeTab} onChange={changeFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
-              </div>
-            )}
-            {financeTab !== 'expenses' && (
-              <PayrollModule
-                toolbarContent={!activePayrollSchoolKey ? <FinanceTabs value={financeTab} onChange={changeFinanceTab} showExpenses={canAccessFinanceExpenses(currentUserRole)} /> : undefined}
-                userRole={currentUserRole}
-                userName={currentUser?.name}
-                sessionToken={currentUser?.sessionToken}
-                allowedSchools={currentUser?.schoolKeys}
-                adminFiltersOpen={adminFiltersOpen}
-                onAdminFiltersClose={() => setAdminFiltersOpen(false)}
-                columnsOpen={columnsOpen}
-                onColumnsOpenChange={setColumnsOpen}
-                rightReserveWidth={schoolSidebarReserveWidth}
-                onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
-                schoolKey={activePayrollSchoolKey}
-                transferFilter={activePayrollTransferFilter}
-                schoolTab={financeTab}
-                periodKey={activePayrollPeriodKey}
-                onSelectSchool={financeTab === 'salary' ? setSalarySchoolKey : setPayrollSchoolKey}
-                onTransferFilterChange={financeTab === 'salary' ? setSalaryTransferFilter : setPayrollTransferFilter}
-                onPeriodKeyChange={financeTab === 'salary' ? setSalaryPeriodKey : setPayrollPeriodKey}
-                search={activePayrollSearch}
-                onSearchChange={financeTab === 'salary' ? setSalarySearch : setPayrollSearch}
-              />
-            )}
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+            <div style={tabRowStyle}><div style={tabBarStyle}>
+              {sectionLabel('Финансы')}
+              <button type="button" onClick={() => setFinanceView('expenses')} style={managerModeTabStyle(financeView === 'expenses')}>Расходы</button>
+              <button type="button" onClick={() => setFinanceView('salary')} style={managerModeTabStyle(financeView === 'salary')}>Зарплата</button>
+              {financeView === 'expenses' && expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>← Категории</button>}
+              {extraTabs(true)}
+            </div></div>
+            {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView sessionToken={currentUser?.sessionToken} />}
+            {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
           </div>
         ) : section === 'market' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>

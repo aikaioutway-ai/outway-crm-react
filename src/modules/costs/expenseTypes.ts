@@ -12,10 +12,13 @@ export interface ExpenseRecord {
   expenseDate: string;
   paymentMethod: ExpensePaymentMethod;
   paymentOrderNumber?: string;
+  schoolKey?: string;
+  salaryPeriodKey?: string;
   comment: string;
   createdBy?: string;
   createdAt: string;
   source?: 'manual' | 'salary' | 'advance';
+  recipientType?: 'driver' | 'employee';
 }
 
 export interface NewExpenseRecord {
@@ -27,6 +30,8 @@ export interface NewExpenseRecord {
   expenseDate: string;
   paymentMethod: ExpensePaymentMethod;
   paymentOrderNumber?: string;
+  schoolKey?: string;
+  salaryPeriodKey?: string;
   comment: string;
   createdBy?: string;
 }
@@ -34,7 +39,7 @@ export interface NewExpenseRecord {
 export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; color: string; soft: string; subcategories: string[] }> = {
   school: {
     label: 'Школа', color: '#258B8C', soft: '#E2F5F3',
-    subcategories: ['Промоматериалы', 'Премия', 'Подарки', 'Фонд Школы', 'Возврат', 'Прочее'],
+    subcategories: ['ЗП', 'Промоматериалы', 'Премия', 'Подарки', 'Фонд Школы', 'Возврат', 'Прочее'],
   },
   office: {
     label: 'Офис', color: '#5267A8', soft: '#EDF0FA',

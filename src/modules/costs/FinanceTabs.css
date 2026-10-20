@@ -1,5 +1,0 @@
-.finance-overview-controls { display: flex; align-items: center; gap: 8px; }
-.finance-overview-controls .finance-period-control > div { height: 34px !important; padding: 3px !important; }
-.finance-overview-controls .finance-period-control button { height: 26px !important; }
-.finance-overview-controls .dashboard-search { height: 34px; }
-.finance-overview-controls summary { height: 34px !important; width: 34px !important; box-sizing: border-box; }

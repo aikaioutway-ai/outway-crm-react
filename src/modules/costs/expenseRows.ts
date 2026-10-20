@@ -1,14 +1,12 @@
+import { SCHOOL_TABS } from '../families/constants';
 import { fetchExpenses } from '../../services/expenseService';
 import {
   fetchV2DriverAdvancesForPeriod,
   fetchV2DriversTable,
-  fetchV2PayrollEntriesForPeriod,
   V2DriverAdvance,
   V2DriverTableRow,
-  V2PayrollEntry,
 } from '../../services/crmV2Service';
 import { fetchAllEmployeeAdvances, fetchEmployees } from '../../services/employeeService';
-import { Employee } from '../../types';
 import { ExpenseRecord } from './expenseTypes';
 
 // Расходы за период собираются из ручных записей, зарплат, авансов водителей
@@ -21,46 +19,19 @@ export function periodBounds(month: number, year: number) {
   return { first, last: `${year}-${String(month + 1).padStart(2, '0')}-${lastDay}` };
 }
 
-function payrollPeriodDate(month: number, year: number): string {
-  const day = new Date(year, month, 0).getDate();
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-}
-
 function systemExpenseRows(
-  entries: V2PayrollEntry[],
   advances: V2DriverAdvance[],
   drivers: V2DriverTableRow[],
-  employees: Employee[],
 ): ExpenseRecord[] {
   const driverById = new Map(drivers.map(driver => [driver.driverId, driver]));
-  const employeeById = new Map(employees.map(employee => [employee.id, employee]));
-
-  const salaryRows = entries.filter(entry => entry.salaryAmount > 0).map(entry => {
-    const person = entry.subjectType === 'driver'
-      ? driverById.get(entry.subjectId)?.fullName
-      : employeeById.get(entry.subjectId)?.fullName;
-    const updatedDate = entry.updatedAt?.slice(0, 10) ?? '';
-    const expenseDate = /^\d{4}-\d{2}-\d{2}$/.test(updatedDate)
-      ? updatedDate
-      : payrollPeriodDate(entry.periodMonth, entry.periodYear);
-    return {
-      id: `salary-${entry.id}`,
-      name: `Зарплата — ${person || 'сотрудник'}`,
-      category: entry.subjectType === 'driver' ? 'school' as const : 'office' as const,
-      subcategory: 'Зарплата',
-      unitPrice: entry.salaryAmount,
-      quantity: 1,
-      amount: entry.salaryAmount,
-      expenseDate,
-      paymentMethod: 'cashless' as const,
-      comment: `Системная выплата за ${String(entry.periodMonth).padStart(2, '0')}.${entry.periodYear}`,
-      createdAt: entry.updatedAt,
-      source: 'salary' as const,
-    };
-  });
-
   const advanceRows = advances.filter(advance => advance.amount > 0).map(advance => ({
+    recipientType: 'driver' as const,
     id: `advance-${advance.id}`,
+    schoolKey: (() => {
+      const driver = driverById.get(advance.driverId);
+      const schools = SCHOOL_TABS.filter(school => school.key !== 'ALL' && school.codes.some(code => driver?.branchCodes.includes(code)));
+      return schools.length === 1 ? schools[0].key : undefined;
+    })(),
     name: `Аванс — ${driverById.get(advance.driverId)?.fullName || 'водитель'}`,
     category: 'school' as const,
     subcategory: 'Аванс',
@@ -74,7 +45,7 @@ function systemExpenseRows(
     source: 'advance' as const,
   }));
 
-  return [...salaryRows, ...advanceRows];
+  return advanceRows;
 }
 
 export async function loadExpenseRows(
@@ -82,9 +53,8 @@ export async function loadExpenseRows(
   periods: { month: number; year: number }[],
   sessionToken?: string,
 ): Promise<ExpenseRecord[]> {
-  const [manualRows, payrollEntries, advances, drivers, employees, employeeAdvances] = await Promise.all([
+  const [manualRows, advances, drivers, employees, employeeAdvances] = await Promise.all([
     fetchExpenses(bounds.first, bounds.last, sessionToken),
-    Promise.all(periods.map(period => fetchV2PayrollEntriesForPeriod(period.month, period.year, sessionToken))).then(result => result.flat()),
     Promise.all(periods.map(period => fetchV2DriverAdvancesForPeriod(period.month, period.year))).then(result => result.flat()),
     fetchV2DriversTable(),
     fetchEmployees(),
@@ -92,9 +62,9 @@ export async function loadExpenseRows(
   ]);
   return [
     ...manualRows.map(row => ({ ...row, source: 'manual' as const })),
-    ...systemExpenseRows(payrollEntries, advances, drivers, employees),
+    ...systemExpenseRows(advances, drivers),
     ...employeeAdvances.filter(row => row.date >= bounds.first && row.date <= bounds.last).map(row => ({
-      id: `employee-advance-${row.id}`, name: `Аванс — ${employees.find(employee => employee.id === row.employeeId)?.fullName || 'сотрудник'}`,
+      recipientType: 'employee' as const, schoolKey: row.schoolKey, id: `employee-advance-${row.id}`, name: `Аванс — ${employees.find(employee => employee.id === row.employeeId)?.fullName || 'сотрудник'}`,
       category: row.schoolKey && row.schoolKey !== 'OFFICE' ? 'school' as const : 'office' as const, subcategory: 'Аванс',
       unitPrice: row.amount, quantity: 1, amount: row.amount, expenseDate: row.date,
       paymentMethod: row.paymentMethod === 'cash' ? 'cash' as const : 'cashless' as const, paymentOrderNumber: row.paymentOrderNumber,
