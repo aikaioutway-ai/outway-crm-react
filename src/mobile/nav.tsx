@@ -9,6 +9,8 @@ export type NavEntry =
   | { kind: 'school'; schoolKey: string }
   | { kind: 'transfer'; schoolKey: string; transfer: string }
   | { kind: 'drivers' }
+  | { kind: 'debtSchool'; schoolKey: string }
+  | { kind: 'debtTransfer'; schoolKey: string; transfer: string }
   | { kind: 'employees' }
   | { kind: 'family'; familyId: string; sheet: true }
   | { kind: 'driver'; driverId: string; sheet: true }
@@ -118,7 +120,7 @@ export function Screen({ pageKey, title, subtitle, onBack, action, children }: {
 
   return (
     <>
-      <header className="m-header">
+      <header className={`m-header ${onBack ? 'm-header--nested' : 'm-header--root'}`}>
         {onBack && (
           <button type="button" className="m-header-back" aria-label="Назад" onClick={onBack}>
             <ChevronLeft size={26} />

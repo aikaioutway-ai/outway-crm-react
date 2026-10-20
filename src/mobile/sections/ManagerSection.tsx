@@ -4,11 +4,19 @@ import { isSchoolAllowed } from '../../modules/families/constants';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { ChildList, SchoolCard } from '../cards';
-import { byChildName, groupBySchool, rowMatches, schoolByKey, schoolsFor } from '../data';
+import { byChildName, debtorsFrom, groupBySchool, rowMatches, schoolByKey, schoolsFor } from '../data';
+import { DebtSchoolScreen, DebtsHome, DebtTransferScreen, rowsForDebtTransfer } from '../debts';
 import FamilySheet from '../FamilySheet';
 import { Screen, useNavPosition } from '../nav';
 import { rowsForTransfer, SchoolScreen, TransferScreen } from '../transfers';
-import { ErrorBox, Kpi, SearchField, Skeletons } from '../ui';
+import { ErrorBox, Kpi, SearchField, Segment, Skeletons } from '../ui';
+
+type ManagerHomeTab = 'schools' | 'debts';
+const HOME_TAB_KEY = 'outway_mobile_manager_tab';
+
+function readHomeTab(): ManagerHomeTab {
+  try { return sessionStorage.getItem(HOME_TAB_KEY) === 'debts' ? 'debts' : 'schools'; } catch { return 'schools'; }
+}
 
 export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();
@@ -21,9 +29,16 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const bySchool = useMemo(() => groupBySchool(rows), [rows]);
   const [query, setQuery] = useState('');
   const [schoolQuery, setSchoolQuery] = useState('');
+  const [homeTab, setHomeTabState] = useState<ManagerHomeTab>(readHomeTab);
+  const setHomeTab = (value: ManagerHomeTab) => {
+    setHomeTabState(value);
+    setQuery('');
+    try { sessionStorage.setItem(HOME_TAB_KEY, value); } catch { /* приватный режим */ }
+  };
+  const debtorCount = useMemo(() => debtorsFrom(rows).length, [rows]);
 
   const page = nav.page;
-  const schoolKey = page?.kind === 'school' || page?.kind === 'transfer' ? page.schoolKey : null;
+  const schoolKey = page?.kind === 'school' || page?.kind === 'transfer' || page?.kind === 'debtSchool' || page?.kind === 'debtTransfer' ? page.schoolKey : null;
   const schoolRows = useMemo(() => (schoolKey ? bySchool.get(schoolKey) ?? [] : []), [bySchool, schoolKey]);
   const transferKey = page?.kind === 'transfer' ? page.transfer : null;
   const transferRows = useMemo(() => (transferKey ? rowsForTransfer(schoolRows, transferKey) : []), [schoolRows, transferKey]);
@@ -38,6 +53,43 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
   const sheet = nav.sheet?.kind === 'family' ? (
     <FamilySheet familyId={nav.sheet.familyId} userName={user.name} onClose={nav.back} canEditStatus={user.role !== 'cashier'} showFinance />
   ) : null;
+
+  const openFamilyId = (familyId: string) => nav.push({ kind: 'family', familyId, sheet: true });
+
+  if (page?.kind === 'debtTransfer') {
+    return (
+      <>
+        <DebtTransferScreen
+          schoolKey={page.schoolKey}
+          schoolLabel={schoolLabel}
+          transfer={page.transfer}
+          rows={rowsForDebtTransfer(schoolRows.filter(row => row.debtAmount > 0), page.transfer)}
+          onOpenFamily={openFamilyId}
+          onBack={nav.back}
+        />
+        {sheet}
+      </>
+    );
+  }
+
+  if (page?.kind === 'debtSchool') {
+    return (
+      <>
+        <DebtSchoolScreen
+          schoolKey={page.schoolKey}
+          schoolLabel={schoolLabel}
+          rows={schoolRows}
+          drivers={driverRows}
+          query={schoolQuery}
+          onQueryChange={setSchoolQuery}
+          onOpenTransfer={transfer => nav.push({ kind: 'debtTransfer', schoolKey: page.schoolKey, transfer })}
+          onOpenFamily={openFamilyId}
+          onBack={nav.back}
+        />
+        {sheet}
+      </>
+    );
+  }
 
   if (page?.kind === 'transfer') {
     return (
@@ -84,10 +136,23 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
 
   return (
     <>
-      <Screen pageKey="manager:home" title="Менеджер" subtitle={user.name}>
-        <SearchField value={query} onChange={setQuery} placeholder="Поиск по всем школам: имя или телефон" />
+      <Screen pageKey={`manager:home:${homeTab}`} title="Менеджер" subtitle={user.name}>
+        <Segment value={homeTab} onChange={setHomeTab} options={[{ value: 'schools', label: 'Школы' }, { value: 'debts', label: debtorCount ? `Долги · ${debtorCount}` : 'Долги' }]} />
+        <SearchField
+          value={query}
+          onChange={setQuery}
+          placeholder={homeTab === 'debts' ? 'Родитель, ребёнок или телефон' : 'Поиск по всем школам: имя или телефон'}
+        />
         {error && <ErrorBox>Не удалось загрузить данные. Проверьте интернет и обновите страницу.</ErrorBox>}
-        {isLoading && !data ? <Skeletons /> : query.trim() ? (
+        {isLoading && !data ? <Skeletons /> : homeTab === 'debts' ? (
+          <DebtsHome
+            schools={schools}
+            rows={rows}
+            query={query}
+            onOpenSchool={key => { setSchoolQuery(''); nav.push({ kind: 'debtSchool', schoolKey: key }); }}
+            onOpenFamily={openFamilyId}
+          />
+        ) : query.trim() ? (
           <ChildList rows={searchResults} onOpen={openFamily} emptyText="Ничего не найдено" showSchool showDebt />
         ) : (
           <>
@@ -103,6 +168,7 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
                 <SchoolCard
                   key={school.key}
                   school={school}
+                  progress={list.filter(row => row.status === 'boarded').length / Math.max(1, list.filter(row => row.status !== 'rejected').length)}
                   onClick={() => { setSchoolQuery(''); nav.push({ kind: 'school', schoolKey: school.key }); }}
                   stats={[
                     { label: 'детей', value: list.filter(row => row.status !== 'rejected').length, color: '#7C3AED' },

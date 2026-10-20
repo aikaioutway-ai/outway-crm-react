@@ -1,5 +1,5 @@
 import { FamilyListRow } from '../services/crmV2Service';
-import { isLogisticsWorkRow, rowMatches, schoolsFor } from './data';
+import { debtorsFrom, isLogisticsWorkRow, rowMatches, schoolsFor } from './data';
 
 function row(patch: Partial<FamilyListRow>): FamilyListRow {
   return {
@@ -31,4 +31,18 @@ test('logistics works with everyone except rejected children', () => {
 test('school list respects the employee school access', () => {
   expect(schoolsFor(['TIS']).map(school => school.key)).toEqual(['TIS']);
   expect(schoolsFor(['ALL']).some(school => school.key === 'ALL')).toBe(false);
+});
+
+test('groups debtors by family, biggest debt first', () => {
+  const debtors = debtorsFrom([
+    row({ familyId: 'a', rowId: '1', childName: 'Аман', debtAmount: 5000, pendingPayment: 0, branchFilter: 'TIS' }),
+    row({ familyId: 'a', rowId: '2', childName: 'Алия', debtAmount: 5000, pendingPayment: 0, branchFilter: 'ERU' }),
+    row({ familyId: 'b', rowId: '3', childName: 'Бек', debtAmount: 9000, pendingPayment: 2000 }),
+    row({ familyId: 'c', rowId: '4', childName: 'Чынара', debtAmount: 0 }),
+  ]);
+  expect(debtors.map(debtor => debtor.familyId)).toEqual(['b', 'a']);
+  expect(debtors[1].childNames).toEqual(['Аман', 'Алия']);
+  expect(debtors[1].schoolKeys).toEqual(['TIS', 'ERU']);
+  expect(debtors[1].debt).toBe(5000);
+  expect(debtors[0].pending).toBe(2000);
 });

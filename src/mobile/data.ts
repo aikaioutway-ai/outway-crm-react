@@ -52,3 +52,33 @@ export function byChildName(a: FamilyListRow, b: FamilyListRow): number {
 export function transferSort(a: string, b: string): number {
   return Number(a) - Number(b) || a.localeCompare(b);
 }
+
+/** Семья-должник: долг считается на семью, поэтому дети собраны вместе. */
+export interface Debtor {
+  familyId: string;
+  parentName: string;
+  phone: string;
+  childNames: string[];
+  schoolKeys: string[];
+  debt: number;
+  /** Оплаты, которые семья уже внесла, но кассир ещё не подтвердил. */
+  pending: number;
+  rows: FamilyListRow[];
+}
+
+/** Семьи с долгом больше нуля, самые большие долги сверху. */
+export function debtorsFrom(rows: FamilyListRow[]): Debtor[] {
+  const byFamily = new Map<string, Debtor>();
+  rows.forEach(row => {
+    if (row.debtAmount <= 0) return;
+    let debtor = byFamily.get(row.familyId);
+    if (!debtor) {
+      debtor = { familyId: row.familyId, parentName: row.parentName, phone: row.phone, childNames: [], schoolKeys: [], debt: row.debtAmount, pending: row.pendingPayment, rows: [] };
+      byFamily.set(row.familyId, debtor);
+    }
+    debtor.rows.push(row);
+    if (row.childName.trim()) debtor.childNames.push(row.childName.trim());
+    if (row.branchFilter && !debtor.schoolKeys.includes(row.branchFilter)) debtor.schoolKeys.push(row.branchFilter);
+  });
+  return Array.from(byFamily.values()).sort((a, b) => b.debt - a.debt || a.parentName.localeCompare(b.parentName, 'ru'));
+}

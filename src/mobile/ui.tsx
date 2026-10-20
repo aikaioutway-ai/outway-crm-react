@@ -128,8 +128,12 @@ export function SelectField<T extends string>({ label, value, onChange, options,
 export function Kpi({ label, value, color, icon }: { label: string; value: React.ReactNode; color?: string; icon?: React.ReactNode }) {
   return (
     <div className="m-kpi">
-      <div className="m-kpi-value" style={color ? { color } : undefined}>{icon && <span className="m-kpi-icon">{icon}</span>}{value}</div>
-      <div className="m-kpi-label">{label}</div>
+      <div className="m-kpi-value">{value}</div>
+      <div className="m-kpi-label">
+        {icon ? <span className="m-kpi-icon" style={color ? { color } : undefined}>{icon}</span>
+          : color && <span className="m-kpi-dot" style={{ background: color }} />}
+        {label}
+      </div>
     </div>
   );
 }

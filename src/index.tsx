@@ -4,6 +4,7 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './services/queryClient';
 import './index.css';
 import App from './App';
+import AppUpdater from './core/AppUpdater';
 import ParentTrackingDemoPage from './modules/parentDemo/ParentTrackingDemoPage';
 
 // Демо-прототип родительского интерфейса живёт на отдельном пути и не заходит
@@ -17,7 +18,7 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      {isParentDemoRoute ? <ParentTrackingDemoPage /> : <App />}
+      {isParentDemoRoute ? <ParentTrackingDemoPage /> : <><App /><AppUpdater /></>}
     </QueryClientProvider>
   </React.StrictMode>
 );

@@ -12,7 +12,7 @@ import './mobile.css';
 const ManagerSection = lazy(() => import('./sections/ManagerSection'));
 const LogisticsSection = lazy(() => import('./sections/LogisticsSection'));
 const CashierSection = lazy(() => import('./sections/CashierSection'));
-const TasksModule = lazy(() => import('../modules/tasks/TasksModule'));
+const TasksSection = lazy(() => import('./sections/TasksSection'));
 const TaskFamilySheet = lazy(() => import('./FamilySheet'));
 const EmployeesSection = lazy(() => import('./sections/EmployeesSection'));
 
@@ -24,11 +24,11 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const TABS: { key: MobileTab; label: string; icon: React.ReactNode; sections: NavSection[] }[] = [
-  { key: 'manager', label: 'Менеджер', icon: <Users size={22} />, sections: ['families'] },
-  { key: 'logistics', label: 'Логистика', icon: <Route size={22} />, sections: ['logistics', 'drivers'] },
-  { key: 'cashier', label: 'Кассир', icon: <Wallet size={22} />, sections: ['cashier'] },
-  { key: 'tasks', label: 'Задачи', icon: <ListTodo size={22} />, sections: ['tasks'] },
-  { key: 'more', label: 'Ещё', icon: <Menu size={22} />, sections: [] },
+  { key: 'manager', label: 'Менеджер', icon: <Users size={21} />, sections: ['families'] },
+  { key: 'logistics', label: 'Логистика', icon: <Route size={21} />, sections: ['logistics', 'drivers'] },
+  { key: 'cashier', label: 'Кассир', icon: <Wallet size={21} />, sections: ['cashier'] },
+  { key: 'tasks', label: 'Задачи', icon: <ListTodo size={21} />, sections: ['tasks'] },
+  { key: 'more', label: 'Ещё', icon: <Menu size={21} />, sections: [] },
 ];
 
 const TAB_STORAGE_KEY = 'outway_mobile_tab';
@@ -49,7 +49,7 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
     <Screen pageKey="more:home" title="Ещё">
       <div className="m-card">
         <div className="m-card-row">
-          <div style={{ width: 48, height: 48, borderRadius: 16, background: 'var(--accent-l)', color: 'var(--accent-h)', display: 'grid', placeItems: 'center', fontWeight: 800, fontSize: 17, flexShrink: 0 }}>
+          <div className="m-avatar">
             {user.name.split(/\s+/).map(part => part[0]).slice(0, 2).join('').toUpperCase()}
           </div>
           <div className="m-card-main">
@@ -62,7 +62,7 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
         {canSeeEmployees && (
           <button type="button" className="m-card" onClick={() => nav.push({ kind: 'employees' })}>
             <div className="m-card-row">
-              <UserCog size={22} color="var(--accent-h)" />
+              <span className="m-menu-icon"><UserCog size={18} /></span>
               <div className="m-card-main"><div className="m-card-title">Сотрудники</div></div>
               <ChevronRight className="m-card-chevron" size={20} />
             </div>
@@ -70,7 +70,7 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
         )}
         <button type="button" className="m-card" onClick={onOpenDesktop}>
           <div className="m-card-row">
-            <Monitor size={22} color="var(--accent-h)" />
+            <span className="m-menu-icon"><Monitor size={18} /></span>
             <div className="m-card-main">
               <div className="m-card-title">Открыть полную версию</div>
               <div className="m-card-sub">Все функции, как на компьютере{hasDesktopOnly ? ' (B2B и другие разделы)' : ''}</div>
@@ -79,9 +79,9 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
           </div>
         </button>
         <button type="button" className="m-card" onClick={() => { if (window.confirm('Выйти из CRM?')) onLogout(); }}>
-          <div className="m-card-row" style={{ color: 'var(--danger)' }}>
-            <LogOut size={22} />
-            <div className="m-card-main"><div className="m-card-title">Выйти</div></div>
+          <div className="m-card-row">
+            <span className="m-menu-icon m-menu-icon--danger"><LogOut size={18} /></span>
+            <div className="m-card-main"><div className="m-card-title" style={{ color: 'var(--m-danger)' }}>Выйти</div></div>
           </div>
         </button>
       </div>
@@ -132,7 +132,7 @@ function MobileShell({ user, onLogout, onOpenDesktop, onOpenTaskTarget }: {
   const section = tab === 'manager' ? <ManagerSection user={user} />
     : tab === 'logistics' ? <LogisticsSection user={user} />
     : tab === 'cashier' ? <CashierSection user={user} />
-    : tab === 'tasks' ? <TasksModule user={user} context={taskContext} onClearContext={()=>setTaskContext(undefined)} onOpenTarget={(target: TaskTarget) => { if (target.type === 'family' || target.type === 'child') setTaskFamilyId(target.familyId ?? target.id); else if(onOpenTaskTarget) onOpenTaskTarget(target); else onOpenDesktop(); }} />
+    : tab === 'tasks' ? <TasksSection user={user} context={taskContext} onClearContext={()=>setTaskContext(undefined)} onOpenTarget={(target: TaskTarget) => { if (target.type === 'family' || target.type === 'child') setTaskFamilyId(target.familyId ?? target.id); else if(onOpenTaskTarget) onOpenTaskTarget(target); else onOpenDesktop(); }} />
     : <MoreSection user={user} onLogout={onLogout} onOpenDesktop={onOpenDesktop} />;
 
   return (
@@ -150,8 +150,13 @@ function MobileShell({ user, onLogout, onOpenDesktop, onOpenTaskTarget }: {
             aria-current={item.key === tab ? 'page' : undefined}
             onClick={() => selectTab(item.key)}
           >
-            {item.icon}
-            <span>{item.label}{item.key==='tasks' && Boolean(taskSummary.data?.attention) && <b style={{marginLeft:4,color:'#d37962'}}>{taskSummary.data?.attention}</b>}</span>
+            <span className="m-tab-icon">
+              {item.icon}
+              {item.key === 'tasks' && Boolean(taskSummary.data?.attention) && (
+                <span className="m-tab-badge" aria-label={`Требуют внимания: ${taskSummary.data?.attention}`}>{taskSummary.data?.attention}</span>
+              )}
+            </span>
+            <span className="m-tab-label">{item.label}</span>
           </button>
         ))}
       </nav>
