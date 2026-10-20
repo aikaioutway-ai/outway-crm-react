@@ -1368,23 +1368,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       await setChildCharge({ childId: row.rowId, ...target, amount, actor: userName });
       await Promise.all([accrualQuery.refetch(), load(false)]);
     };
-    if (amount === 0) {
-      // Удаление подтверждается в окне CRM; ячейка закрывается сразу.
-      setAccrualDialog({
-        title: 'Убрать начисление',
-        message: `Убрать начисление у ${row.childName}? Оплаченная часть вернётся на баланс семьи.`,
-        confirmLabel: 'Убрать',
-        onConfirm: save,
-      });
-      return true;
-    }
-    try {
-      await save();
-      return true;
-    } catch (error) {
-      showError(error, 'Не удалось сохранить начисление');
-      return false;
-    }
+    // Любое изменение суммы подтверждается в окне CRM; ячейка закрывается сразу.
+    setAccrualDialog({
+      title: 'Подтверждение',
+      message: `Подтверждаете изменения? ${row.childName}: ${money(currentAmount)} → ${money(amount)}`,
+      confirmLabel: 'Подтвердить',
+      onConfirm: save,
+    });
+    return true;
   }
 
   function copyAccrualsFromPreviousMonth(rowsToCopy: ChildRow[]) {

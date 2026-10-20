@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { iconButtonStyle, noteStyle, overlayStyle, panelStyle, secondaryButtonStyle } from './ChildDiscountModal';
 
@@ -16,6 +16,11 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
+  const panelRef = useRef<HTMLDivElement>(null);
+
+  // Окно открывается по Enter из ячейки таблицы. Фокус ставим на само окно, а не на кнопку,
+  // иначе тот же Enter сразу «нажмёт» её. Подтверждение — только кликом, Esc закрывает.
+  useEffect(() => { panelRef.current?.focus(); }, []);
 
   async function confirm() {
     if (!dialog.onConfirm) return;
@@ -35,7 +40,15 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
   const done = !dialog.confirmLabel || Boolean(result);
   return (
     <div style={overlayStyle} onClick={running ? undefined : onClose}>
-      <div style={panelStyle} onClick={event => event.stopPropagation()} role="dialog" aria-label={dialog.title}>
+      <div
+        ref={panelRef}
+        tabIndex={-1}
+        style={{ ...panelStyle, outline: 'none' }}
+        onClick={event => event.stopPropagation()}
+        onKeyDown={event => { if (event.key === 'Escape' && !running) onClose(); }}
+        role="dialog"
+        aria-label={dialog.title}
+      >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 800 }}>{dialog.title}</div>
           <button type="button" onClick={onClose} disabled={running} style={iconButtonStyle} aria-label="Закрыть"><X size={16} /></button>
@@ -47,11 +60,11 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
           {done ? (
-            <button type="button" autoFocus onClick={onClose} style={{ ...secondaryButtonStyle, background: '#31A4A5', color: '#fff', border: 'none' }}>Готово</button>
+            <button type="button" onClick={onClose} style={{ ...secondaryButtonStyle, background: '#31A4A5', color: '#fff', border: 'none' }}>Готово</button>
           ) : (
             <>
               <button type="button" onClick={onClose} disabled={running} style={{ ...secondaryButtonStyle, color: '#374151' }}>Отмена</button>
-              <button type="button" autoFocus onClick={confirm} disabled={running} style={{ ...secondaryButtonStyle, background: '#31A4A5', color: '#fff', border: 'none' }}>
+              <button type="button" onClick={confirm} disabled={running} style={{ ...secondaryButtonStyle, background: '#31A4A5', color: '#fff', border: 'none' }}>
                 {running ? 'Выполняем...' : dialog.confirmLabel}
               </button>
             </>
