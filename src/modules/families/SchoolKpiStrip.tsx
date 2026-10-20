@@ -1,4 +1,4 @@
-import { DIRECTORY_COLORS, isInTransferWithoutCharge, useCurrentMonthChargedChildIds } from './DirectorySchoolDashboard';
+import { DIRECTORY_COLORS } from './DirectorySchoolDashboard';
 import { ManagerMode } from './ManagerModeTabs';
 import React, { useMemo } from 'react';
 import { useBranchStats, useFamiliesTable } from '../../hooks/useCrmQueries';
@@ -17,7 +17,6 @@ interface SchoolKpiStripProps {
 export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools }: SchoolKpiStripProps) {
   const { data: branches } = useBranchStats();
   const { data: rows } = useFamiliesTable();
-  const chargedChildIds = useCurrentMonthChargedChildIds();
 
   const stat = useMemo(() => (
     branches ? computeSchoolStatsFromBranches(branches).find(s => s.key === schoolKey) : undefined
@@ -32,9 +31,8 @@ export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReser
       ['newRequests', 'Новые заявки', children.filter(row => row.status === 'new' && !row.transferNumber).length],
       ['boarded', 'Посажены', children.filter(row => row.status === 'boarded').length],
       ['rejected', 'Отказ', children.filter(row => row.status === 'rejected').length],
-      ['unboarded', 'В трансфере, не посажены', children.filter(row => isInTransferWithoutCharge(row, chargedChildIds)).length],
     ] as const;
-    return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
+    return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
       <KpiChip iconBackground="transparent" icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} />} label="Школа" value={stat.label} color={stat.color} />
       {metrics.map(([key, label, count]) => <KpiChip key={key} icon={null} label={label} value={String(count)} color={DIRECTORY_COLORS[key]} />)}
     </div>;
