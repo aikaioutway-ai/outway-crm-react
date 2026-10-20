@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
-import { Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { ListTodo, Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks';
 
 interface SidebarProps {
   active: NavSection;
@@ -26,6 +26,7 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={22} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
+  { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
 ];
 
 export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
@@ -41,7 +42,8 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
   else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
   else sections = ['families'];
-  return userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
+  const withMarket: NavSection[] = userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
+  return [...withMarket, 'tasks'];
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
@@ -148,6 +150,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
               key={n.key}
               onClick={() => onChange(n.key)}
               title={collapsed ? n.label : undefined}
+              aria-label={n.label}
               style={{
                 width: isActive && collapsed ? 'calc(100% + 12px)' : '100%',
                 display: 'flex',

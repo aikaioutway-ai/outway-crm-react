@@ -1,0 +1,23 @@
+// School keys mirror src/modules/families/constants.ts.
+export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branches: string[]; logo?: string }[] = [
+  { key: 'TIS',   label: 'TIS',   codes: ['TENSAY'],  branches: [], logo: '/school-logos/TIS.png' },
+  { key: 'ERU',   label: 'ERU',   codes: ['ERUDIT'],  branches: [], logo: '/school-logos/ERU.png' },
+  { key: 'EDI',   label: 'EDI',   codes: ['EDISON'],  branches: [], logo: '/school-logos/EDI.png' },
+  { key: 'EPS',   label: 'EPS',   codes: ['EPSILON'], branches: [], logo: '/school-logos/EPS.png' },
+  { key: 'AES',   label: 'AES',   codes: ['AES'],     branches: [], logo: '/school-logos/AES.png' },
+  { key: 'KAS',   label: 'KAS',   codes: ['KAS'],     branches: [], logo: '/school-logos/KAS.png' },
+  { key: 'GEN2',  label: 'GEN #2',codes: ['GENIUS'],  branches: ['Гениум — Чуйкова','Гениум Чуйкова'], logo: '/school-logos/GEN.png' },
+  { key: 'GEN4',  label: 'GEN #4',codes: ['GENIUS4'], branches: ['Гениум — Авангард','Гениум Авангард'], logo: '/school-logos/GEN.png' },
+  { key: 'NOVA',  label: 'NOVA',  codes: ['NOVA'],    branches: [], logo: '/school-logos/NOVA.png' },
+  { key: 'ING',   label: 'ING',   codes: ['INDIGO'], branches: ['Индиго Kids','Asylkech Girls School','Indigo Prime Academy'], logo: '/school-logos/ING.png' },
+  { key: 'ING_W', label: 'ING_W', codes: ['INDIGO'], branches: ['Indigo West'], logo: '/school-logos/ING.png' },
+  { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: ['Light Academy'], logo: '/school-logos/LA.png' },
+  { key: 'LA_P',  label: 'LA Primary', codes: ['LIGHT'], branches: ['Light Academy Primary'], logo: '/school-logos/LA.png' },
+  { key: 'BKG',   label: 'BKG',   codes: ['BILIM'],   branches: ['Билим Бишкек Kg','Билим Бишкек KG','Билим Бишкек kg'], logo: '/school-logos/BKG.png' },
+  { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
+  { key: 'ABL1',  label: 'ABL #2',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
+  { key: 'ABL2',  label: 'ABL #1',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
+  { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
+  { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
+  { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
+];

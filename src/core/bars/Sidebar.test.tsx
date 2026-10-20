@@ -16,7 +16,7 @@ test('cashier can open expenses while personal details stay handled separately',
   expect(canAccessSection('cashier', 'families', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'expenses', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'b2b', 'cashier')).toBe(true);
-  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'expenses', 'b2b']);
+  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'expenses', 'b2b', 'tasks']);
 });
 
 test('cashier sees Manager in the Sidebar and can open it', () => {

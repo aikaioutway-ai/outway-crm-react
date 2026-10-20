@@ -1,0 +1,3 @@
+.family-card-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 16px 24px; border-bottom: 1px solid #e5ecef; background: #fff; flex-shrink: 0; padding: 16px 22px; }
+.family-card-header-actions { display: flex; align-items: center; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
+@media (max-width: 800px) { .family-card-header { grid-template-columns: minmax(0, 1fr); } .family-card-header-actions { justify-content: flex-start; } }
