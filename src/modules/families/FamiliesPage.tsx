@@ -1338,6 +1338,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       message: error instanceof Error ? error.message : 'Попробуйте ещё раз',
     });
     if (key === 'discountAmount') {
+      const currentChoice = row.discountOverridePercent == null ? 'auto' : String(row.discountOverridePercent);
+      if (String(value) === currentChoice) return true;
       try {
         if (row.fixedPrice != null) throw new Error('У ребёнка фиксированная цена — скидку меняют в карточке');
         await setChildDiscountChoice(authToken, row.rowId, value === 'auto' ? null : Number(value));
@@ -1359,6 +1361,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       : key === 'accrual_previous'
         ? { chargeType: 'monthly' as const, month: previousAccrualMonth, year: previousAccrualYear }
         : { chargeType: 'monthly' as const, month: accrualPeriod.month, year: accrualPeriod.year };
+    // Сумма не изменилась (в том числе пустое поле вместо нуля) — ничего не сохраняем и не спрашиваем.
+    const currentAmount = accrualQuery.data?.[key.replace('accrual_', '') as 'deposit' | 'previous' | 'current'].get(row.rowId) ?? 0;
+    if (amount === currentAmount) return true;
     const save = async () => {
       await setChildCharge({ childId: row.rowId, ...target, amount, actor: userName });
       await Promise.all([accrualQuery.refetch(), load(false)]);
