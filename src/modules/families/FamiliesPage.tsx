@@ -10,6 +10,7 @@ import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2T
 import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
+import DeleteChildModal from './DeleteChildModal';
 import NewFamilyModal from './NewFamilyModal';
 import NewDriverModal from '../drivers/NewDriverModal';
 import { B2B_ORDER_STATUSES, B2BOrder } from '../b2b/B2BOrders';
@@ -770,6 +771,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [expandedInitialTab, setExpandedInitialTab] = useState<'overview' | 'finance'>('overview');
   const [showNewFamily, setShowNewFamily]       = useState(false);
   const [showNewDriver, setShowNewDriver]       = useState(false);
+  const [childToDelete, setChildToDelete]       = useState<ChildRow | null>(null);
   const [driverBranches, setDriverBranches]     = useState<V2BranchOption[]>([]);
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [tableBarsCollapsedByMode, setTableBarsCollapsedByMode] = useState<Record<FamiliesMode, boolean>>({ ...DEFAULT_MODE_COLLAPSED });
@@ -3406,24 +3408,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }
               } : undefined}
               canRowReject={(row) => row.status !== 'rejected'}
-              onRowDelete={userRole === 'admin' ? async (row) => {
-                const reason = window.prompt(
-                  `Удалить ребёнка "${row.childName || 'без имени'}" (${row.familyId}) из CRM?\n`
-                  + 'Запись исчезнет из CRM, но копия останется в истории базы.\n\nУкажите причину (например: дубль FAM-001958):',
-                );
-                if (reason === null) return;
-                if (!reason.trim()) { window.alert('Без причины удалить нельзя.'); return; }
-                try {
-                  await adminDeleteV2Child(row.rowId, reason, authToken);
-                  setRows(prev => {
-                    const next = prev.filter(item => item.rowId !== row.rowId);
-                    familiesRowsCache = next;
-                    return next;
-                  });
-                } catch (e: any) {
-                  window.alert('Не удалось удалить: ' + (e?.message ?? String(e)));
-                }
-              } : undefined}
+              onRowDelete={userRole === 'admin' ? row => setChildToDelete(row) : undefined}
               canRowDelete={(row) => row.rowId !== `${row.familyId}_empty`}
               onCellSave={handleCellSave}
               onExport={mode === 'logistics'
@@ -4679,6 +4664,21 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
         />
       )}
 
+      {childToDelete && (
+        <DeleteChildModal
+          childName={childToDelete.childName}
+          familyId={childToDelete.familyId}
+          onClose={() => setChildToDelete(null)}
+          onDelete={async reason => {
+            await adminDeleteV2Child(childToDelete.rowId, reason, authToken);
+            setRows(prev => {
+              const next = prev.filter(item => item.rowId !== childToDelete.rowId);
+              familiesRowsCache = next;
+              return next;
+            });
+          }}
+        />
+      )}
       {showNewDriver && (
         <NewDriverModal
           branches={driverBranches}

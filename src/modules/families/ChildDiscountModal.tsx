@@ -134,28 +134,28 @@ export default function ChildDiscountModal({ child, onClose, onSave }: {
   );
 }
 
-const overlayStyle: React.CSSProperties = {
+export const overlayStyle: React.CSSProperties = {
   position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .35)', zIndex: 1000,
   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
 };
-const panelStyle: React.CSSProperties = {
+export const panelStyle: React.CSSProperties = {
   background: '#fff', borderRadius: 14, padding: 18, width: 'min(460px, 100%)',
   boxShadow: '0 24px 60px rgba(15, 23, 42, .2)',
 };
 const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 };
-const labelStyle: React.CSSProperties = { display: 'grid', gap: 4, fontSize: 11, fontWeight: 750, color: '#6B7280' };
-const inputStyle: React.CSSProperties = {
+export const labelStyle: React.CSSProperties = { display: 'grid', gap: 4, fontSize: 11, fontWeight: 750, color: '#6B7280' };
+export const inputStyle: React.CSSProperties = {
   border: '1px solid #DDE3E8', borderRadius: 8, padding: '7px 9px', fontSize: 13, fontFamily: 'inherit', color: '#111827',
 };
-const noteStyle: React.CSSProperties = {
+export const noteStyle: React.CSSProperties = {
   background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 650, marginBottom: 10,
 };
-const iconButtonStyle: React.CSSProperties = {
+export const iconButtonStyle: React.CSSProperties = {
   border: 'none', background: '#F3F4F6', borderRadius: 8, width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer',
 };
 const primaryButtonStyle: React.CSSProperties = {
   border: 'none', background: '#111827', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 750, cursor: 'pointer',
 };
-const secondaryButtonStyle: React.CSSProperties = {
+export const secondaryButtonStyle: React.CSSProperties = {
   border: '1px solid #E5E7EB', background: '#fff', color: '#B91C1C', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 750, cursor: 'pointer',
 };
