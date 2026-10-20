@@ -207,7 +207,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
   const changeStatus = async (id: string, status: OrderStatus) => {
     const previous = orders.find(order => order.id === id)?.status;
     setOrders(current => current.map(order => order.id === id ? { ...order, status } : order));
-    queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, current => (current ?? []).map(order => order.id === id ? { ...order, status } : order));
+    queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, (current: B2BOrder[] | undefined) => (current ?? []).map((order: B2BOrder) => order.id === id ? { ...order, status } : order));
     try {
       await updateB2BOrder(id, { status });
       await addB2BAudit({ entityId: id, entityType: 'b2b_order', action: 'status_change', actorName: userName, oldValue: { status: previous }, newValue: { status } });
@@ -216,7 +216,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
     } catch (statusError) {
       if (previous) {
         setOrders(current => current.map(order => order.id === id ? { ...order, status: previous } : order));
-        queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, current => (current ?? []).map(order => order.id === id ? { ...order, status: previous } : order));
+        queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, (current: B2BOrder[] | undefined) => (current ?? []).map((order: B2BOrder) => order.id === id ? { ...order, status: previous } : order));
       }
       setOrderFormError(statusError instanceof Error ? statusError.message : 'Не удалось изменить статус.');
     }
@@ -281,7 +281,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
       const previous = orders.find(order => order.id === editingOrderId);
       await updateB2BOrder(editingOrderId, values);
       setOrders(current => current.map(order => order.id === editingOrderId ? { ...order, ...values } : order));
-      queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, current => (current ?? []).map(order => order.id === editingOrderId ? { ...order, ...values } : order));
+      queryClient.setQueryData<B2BOrder[]>(B2B_QUERY_KEYS.orders, (current: B2BOrder[] | undefined) => (current ?? []).map((order: B2BOrder) => order.id === editingOrderId ? { ...order, ...values } : order));
       await addB2BAudit({ entityId: editingOrderId, entityType: 'b2b_order', action: 'update', actorName: userName, oldValue: previous, newValue: values });
       setAuditRefreshKey(value => value + 1);
       closeOrderForm();

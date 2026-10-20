@@ -5,7 +5,7 @@ test('manager sees business orders without driver prices and client finance', ()
 });
 test('logistics sees driver price but cannot pay or open clients', () => {
   expect(b2bAccess('b2b_logist')).toMatchObject({ tabs: ['logistics', 'calendar'], orderTabs: ['main', 'driver'], driverPrice: true, driverPay: false, openClient: false });
-  expect(getAllowedSections('b2b_logist')).toEqual(['b2b']);
+  expect(getAllowedSections('b2b_logist')).toEqual(['b2b', 'tasks']);
 });
 test('logistics head can access all B2B sections', () => {
   expect(getAllowedSections('senior_logist')).toContain('b2b');

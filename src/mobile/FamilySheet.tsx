@@ -21,7 +21,7 @@ function numberOptions(values: string[], current: string | null, emptyLabel: str
 
 function patchRow(childId: string, patch: Partial<FamilyListRow>) {
   // Показываем изменение сразу, не дожидаясь перезагрузки всей таблицы.
-  queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, current => current?.map(row => (
+  queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, (current: FamilyListRow[] | undefined) => current?.map((row: FamilyListRow) => (
     row.rowId === childId ? { ...row, ...patch } : row
   )));
 }

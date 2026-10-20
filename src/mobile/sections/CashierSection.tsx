@@ -191,7 +191,7 @@ export default function CashierSection({ user }: { user: AuthenticatedUser }) {
 
   // Строки месяца по доступным школам — основа и для сводки, и для списков.
   const pendingBase = useMemo(
-    () => (pending.data ?? [])
+    () => ((pending.data ?? []) as CashierPaymentRow[])
       .filter(row => isSchoolAllowed(schoolKeyOf(row), user.schoolKeys) && matchesPeriod(row, periodKey))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     [pending.data, user.schoolKeys, periodKey],
@@ -225,7 +225,7 @@ export default function CashierSection({ user }: { user: AuthenticatedUser }) {
     [refundBase, schoolKey, activeQuery]);
 
   const openedPayment = nav.sheet?.kind === 'payment'
-    ? (pending.data ?? []).find(row => row.id === (nav.sheet as { paymentId: string }).paymentId)
+    ? ((pending.data ?? []) as CashierPaymentRow[]).find(row => row.id === (nav.sheet as { paymentId: string }).paymentId)
     : undefined;
   const sheet = nav.sheet?.kind === 'family' ? (
     <FamilySheet familyId={nav.sheet.familyId} userName={user.name} onClose={nav.back} canEditStatus={false} showFinance />
