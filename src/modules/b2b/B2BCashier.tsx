@@ -15,7 +15,7 @@ const EMPTY_ORDERS: B2BOrderRecord[] = [];
 const EMPTY_PAYMENTS: B2BPaymentRecord[] = [];
 const EMPTY_PAYOUTS: B2BDriverPayoutRecord[] = [];
 const EMPTY_EXPENSES: B2BExpenseRecord[] = [];
-const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сом`;
+const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}`;
 const displayDate = (value: string) => {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : value || '—';

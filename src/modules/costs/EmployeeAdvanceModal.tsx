@@ -95,7 +95,7 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken }:
     <label className="expense-field">Способ оплаты<select value={method} onChange={event => setMethod(event.target.value)}><option value="cashless">Безналичные</option><option value="cash">Наличные</option></select></label>
     <label className="expense-field">№ платёжного поручения<input value={number} onChange={event => setNumber(event.target.value)} /></label>
     <label className="expense-field">Комментарий<input value={comment} onChange={event => setComment(event.target.value)} /></label>
-    <div className="expense-total-preview"><span>{department==='drivers' ? `К выплате · ${batch.length} водителей` : 'К выплате'}</span><strong>{total.toLocaleString('ru-RU')} сом</strong></div>
+    <div className="expense-total-preview"><span>{department==='drivers' ? `К выплате · ${batch.length} водителей` : 'К выплате'}</span><strong>{total.toLocaleString('ru-RU')}</strong></div>
   </fieldset>
     {(error || loadingError) && <p className="expense-form-error" role="alert">{error || 'Не удалось загрузить получателей выплаты'}</p>}
     <button className="expenses-add" type="submit" disabled={busy || !department || loading || Boolean(loadingError)}>{busy ? `Сохранение… ${savedCount}` : savedCount ? 'Повторить оставшиеся выплаты' : paymentType === 'salary' ? 'Выплатить зарплату' : 'Выдать аванс'}</button>

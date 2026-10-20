@@ -20,7 +20,7 @@ import { B2B_QUERY_KEYS, useB2BExpenses, useB2BOrders } from '../../hooks/useB2B
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { queryClient } from '../../services/queryClient';
 
-const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} сом`;
+const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}`;
 const displayDate = (value: string) => {
   const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
   return match ? `${match[3]}.${match[2]}.${match[1]}` : value || '—';

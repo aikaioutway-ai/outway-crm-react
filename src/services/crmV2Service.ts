@@ -323,6 +323,8 @@ export interface FamilyListRow {
   latitude: number | null;
   longitude: number | null;
   discountAmount: number;
+  discountOverridePercent: number | null;
+  fixedPrice: number | null;
   totalCharged: number;
   totalPaid: number;
   paidPaymentCount: number;
@@ -672,6 +674,8 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
         latitude: child?.latitude == null ? null : Number(child.latitude),
         longitude: child?.longitude == null ? null : Number(child.longitude),
         discountAmount: Math.max(0, Number(child?.base_price ?? 0) - Number(child?.final_price ?? 0)),
+        discountOverridePercent: child?.discount_override_percent == null ? null : Number(child.discount_override_percent),
+        fixedPrice: child?.fixed_price == null ? null : Number(child.fixed_price),
         totalCharged,
         totalPaid,
         paidPaymentCount: Number(s.paid_count ?? 0),
@@ -850,6 +854,8 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
         latitude: child.latitude == null ? null : Number(child.latitude),
         longitude: child.longitude == null ? null : Number(child.longitude),
         discountAmount: Math.max(0, Number(child.base_price ?? 0) - Number(child.final_price ?? 0)),
+        discountOverridePercent: null,
+        fixedPrice: null,
         totalCharged,
         totalPaid,
         paidPaymentCount: Number(first.paid_count ?? 0),

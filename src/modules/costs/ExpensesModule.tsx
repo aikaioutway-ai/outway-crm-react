@@ -37,7 +37,7 @@ const CATEGORY_ICONS: Record<ExpenseCategory, React.ReactNode> = {
   personal: <CircleUserRound size={18} />,
 };
 
-const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} сом`;
+const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}`;
 const displayDate = (date: string) => date ? new Date(`${date}T00:00:00`).toLocaleDateString('ru-RU') : '—';
 const today = () => {
   const date = new Date();

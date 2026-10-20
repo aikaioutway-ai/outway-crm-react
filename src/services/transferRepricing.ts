@@ -1,5 +1,4 @@
 import { SchoolCode, VehicleType, Zone } from '../types';
-import { getPriceByZone, isTeacherPriced, repriceChild, TEACHER_MONTHLY_PRICE } from '../utils/pricing';
 
 export type TransferRepricingSource =
   | 'logistics'
@@ -103,52 +102,25 @@ export function buildTransferRepricingPlan(input: TransferRepricingPlanInput): T
   const updateTransferType = input.updateTransferType !== false;
   if (!input.force && updateTransferType && input.previousTransferVehicleType === input.newVehicleType) return null;
 
-  const children = input.children.map<TransferRepricingChildPlan>(child => {
-    const newBasePrice = getPriceByZone(child.schoolCode, child.zone, input.newVehicleType);
-    const teacherPrice = isTeacherPriced(child);
-    const repriced = repriceChild({
-      basePrice: newBasePrice,
-      siblingDiscountPercent: child.siblingDiscountPercent,
-      manualDiscountPercent: child.manualDiscountPercent,
-      manualDiscountAmount: child.manualDiscountAmount,
-      fixedFinalPrice: teacherPrice ? TEACHER_MONTHLY_PRICE : undefined,
-    });
-    const charges = child.charges
-      .filter(charge => charge.pricingManaged && charge.status !== 'cancelled')
-      .map<TransferRepricingChargePlan>(charge => {
-        const oldExcess = Math.max(0, charge.paidAmount - charge.amount);
-        const newExcess = Math.max(0, charge.paidAmount - repriced.finalPrice);
-        return {
-          id: charge.id,
-          chargeType: charge.chargeType,
-          oldOriginalAmount: charge.originalAmount,
-          newOriginalAmount: repriced.finalPrice,
-          oldAmount: charge.amount,
-          newAmount: repriced.finalPrice,
-          paidAmount: charge.paidAmount,
-          walletDelta: newExcess - oldExcess,
-        };
-      });
-
-    return {
-      id: child.id,
-      familyId: child.familyId,
-      childName: child.childName,
-      oldTransferId: child.transferId ?? null,
-      newTransferId: input.transferId,
-      requestedVehicleType: child.requestedVehicleType ?? child.vehicleType,
-      previousVehicleType: child.vehicleType,
-      newVehicleType: input.newVehicleType,
-      oldBasePrice: child.basePrice,
-      newBasePrice: repriced.basePrice,
-      oldFinalPrice: child.finalPrice,
-      newFinalPrice: repriced.finalPrice,
-      siblingDiscountPercent: child.siblingDiscountPercent,
-      manualDiscountPercent: repriced.manualDiscountPercent,
-      manualDiscountAmount: repriced.manualDiscountAmount,
-      charges,
-    };
-  });
+  // Смена типа ТС не меняет цену: переносим тип и трансфер, цены и начисления остаются прежними.
+  const children = input.children.map<TransferRepricingChildPlan>(child => ({
+    id: child.id,
+    familyId: child.familyId,
+    childName: child.childName,
+    oldTransferId: child.transferId ?? null,
+    newTransferId: input.transferId,
+    requestedVehicleType: child.requestedVehicleType ?? child.vehicleType,
+    previousVehicleType: child.vehicleType,
+    newVehicleType: input.newVehicleType,
+    oldBasePrice: child.basePrice,
+    newBasePrice: child.basePrice,
+    oldFinalPrice: child.finalPrice,
+    newFinalPrice: child.finalPrice,
+    siblingDiscountPercent: child.siblingDiscountPercent,
+    manualDiscountPercent: child.manualDiscountPercent,
+    manualDiscountAmount: child.manualDiscountAmount,
+    charges: [],
+  }));
 
   const changedChildren = children.filter(child => (
     child.previousVehicleType !== child.newVehicleType || child.oldFinalPrice !== child.newFinalPrice

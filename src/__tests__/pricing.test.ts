@@ -157,12 +157,12 @@ describe('getFamilyPrice', () => {
 // ─── money ────────────────────────────────────────────────────────────────────
 
 describe('money', () => {
-  test('форматирует число в сомы', () => {
-    expect(money(5000)).toBe('5 000 сом');
+  test('форматирует число без приставки «сом»', () => {
+    expect(money(5000)).toBe('5 000');
   });
 
   test('ноль', () => {
-    expect(money(0)).toBe('0 сом');
+    expect(money(0)).toBe('0');
   });
 });
 
@@ -257,7 +257,7 @@ describe('repriceChild', () => {
     expect(isTeacherPriced({ ...result, siblingDiscountPercent: 0 })).toBe(true);
   });
 
-  test('цена учителя остаётся 4 800 после смены тарифа', () => {
+  test('смена типа ТС не меняет цену', () => {
     const child = {
       id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
       schoolCode: 'TENSAY', zone: 'B', vehicleType: 'microbus', basePrice: 6800,
@@ -265,9 +265,21 @@ describe('repriceChild', () => {
       finalPrice: 4800, teacherPrice: true,
     } as Child;
     const repriced = applyChildPricingPatch(child, { vehicleType: 'minivan' });
-    expect(repriced.basePrice).toBe(9500);
+    expect(repriced.basePrice).toBe(6800);
     expect(repriced.finalPrice).toBe(4800);
     expect(repriced.teacherPrice).toBe(true);
+  });
+
+  test('смена школы не меняет цену — её меняют вручную', () => {
+    const child = {
+      id: 'child', familyId: 'family', childName: 'Ребёнок', class: '3', selfExitAllowed: false,
+      schoolCode: 'AES', zone: 'B', vehicleType: 'microbus', basePrice: 6100,
+      siblingDiscountPercent: 0, manualDiscountPercent: 0, manualDiscountAmount: 0, finalPrice: 6100,
+    } as Child;
+    const repriced = applyChildPricingPatch(child, { schoolCode: 'EDISON' });
+    expect(repriced.schoolCode).toBe('EDISON');
+    expect(repriced.basePrice).toBe(6100);
+    expect(repriced.finalPrice).toBe(6100);
   });
 
   test('цена учителя доступна только школе Tensay / TIS', () => {

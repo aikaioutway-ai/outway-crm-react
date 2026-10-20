@@ -6,7 +6,7 @@ import { B2B_ORDER_STATUSES } from './B2BOrders';
 import { calculateB2BOrderProfit } from './b2bProfitCalculations';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
-const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })} сом`;
+const money = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 2 })}`;
 const percent = (value: number) => `${value.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%`;
 
 type SortDirection = 'asc' | 'desc';

@@ -9,10 +9,10 @@ function show(view:'finance'|'history') {const client=new QueryClient({defaultOp
 beforeEach(()=>jest.clearAllMocks());
 test('finance reads the selected driver and shows actual monthly payment totals',async()=>{
   (fetchDriverPayments as jest.Mock).mockResolvedValue(rows);show('finance');
-  await screen.findAllByText('700 сом');
+  await screen.findAllByText('700');
   expect(fetchDriverPayments).toHaveBeenCalledWith('selected-driver','session');
-  expect(screen.getAllByText(/1\s000 сом/).length).toBeGreaterThan(0);
-  expect(screen.getAllByText('300 сом').length).toBeGreaterThan(0);
+  expect(screen.getAllByText(/1\s000/).length).toBeGreaterThan(0);
+  expect(screen.getAllByText('300').length).toBeGreaterThan(0);
 });
 test('history shows salary and advance with their own half-month periods',async()=>{
   (fetchDriverPayments as jest.Mock).mockResolvedValue(rows);show('history');
@@ -24,5 +24,5 @@ test('history shows salary and advance with their own half-month periods',async(
 test('a backend failure is visible instead of a misleading zero balance',async()=>{
   (fetchDriverPayments as jest.Mock).mockRejectedValue(new Error('История недоступна'));show('finance');
   await waitFor(()=>expect(screen.getByRole('alert')).toHaveTextContent('История недоступна'));
-  expect(screen.queryByText('0 сом')).not.toBeInTheDocument();
+  expect(screen.queryByText('0')).not.toBeInTheDocument();
 });

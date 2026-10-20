@@ -3,7 +3,7 @@ import { Pencil, Plus, X } from 'lucide-react';
 import { fetchMarketProducts, saveMarketProduct } from '../../services/marketService';
 import { MarketProduct } from './marketTypes';
 
-const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)} сом`;
+const money = (value: number) => `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(value)}`;
 
 interface ProductModalProps {
   product: MarketProduct | null;

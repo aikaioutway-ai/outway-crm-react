@@ -176,7 +176,7 @@ function isQr(method: string | null): boolean {
 }
 
 const sum = (rows: { amount: number }[]) => rows.reduce((total, row) => total + row.amount, 0);
-const som = (value: number) => `${compactMoney(value)} сом`;
+const som = (value: number) => `${compactMoney(value)}`;
 
 export default function CashierSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();

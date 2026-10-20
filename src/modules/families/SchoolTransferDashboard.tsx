@@ -112,7 +112,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
           active={cell.childCount > 0}
           selected={selectedKey === cell.filterKey}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
-          title={cell.childCount > 0 ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')} сом${isTransfer ? ` · ${badgeLabel}: ${cell.unboardedCount}` : ''}` : undefined}
+          title={cell.childCount > 0 ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')}${isTransfer ? ` · ${badgeLabel}: ${cell.unboardedCount}` : ''}` : undefined}
         />;
       })}
       </TransferBarPages>

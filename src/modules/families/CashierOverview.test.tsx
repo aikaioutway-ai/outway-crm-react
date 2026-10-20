@@ -14,12 +14,12 @@ test('cashier totals respect the selected status and hidden schools; whole schoo
   const onSelect = jest.fn();
   const props = { periodKey: '10', onPeriodKeyChange: jest.fn(), onSelectSchool: onSelect, onViewChange: jest.fn() };
   const { rerender } = render(<CashierOverview {...props} view="pending" />);
-  expect(screen.getByRole('columnheader', { name: /100 сом QR/ })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: /100 QR/ })).toBeInTheDocument();
   expect(screen.queryByRole('cell', { name: 'BJ BJ' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('cell', { name: 'AES AES' }));
   expect(onSelect).toHaveBeenCalledTimes(1);
   expect(onSelect).toHaveBeenCalledWith('AES');
   rerender(<CashierOverview {...props} view="confirmed" />);
-  expect(screen.getByRole('columnheader', { name: /200 сом QR/ })).toBeInTheDocument();
-  expect(screen.getByRole('columnheader', { name: /200 сом Подтверждено/ })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: /200 QR/ })).toBeInTheDocument();
+  expect(screen.getByRole('columnheader', { name: /200 Подтверждено/ })).toBeInTheDocument();
 });

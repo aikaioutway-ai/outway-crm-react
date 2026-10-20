@@ -445,7 +445,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
     if (requiresB2BPaymentOrder(driverPayoutForm.method) && !driverPayoutForm.paymentOrderNumber.trim()) return setDriverPayoutFormError('Укажите номер платёжного поручения.');
     const existingAmount = editingDriverPayoutId ? driverPayouts.find(payout => payout.id === editingDriverPayoutId)?.amount ?? 0 : 0;
     const available = selectedDriverDebt + existingAmount;
-    if (amount > available) return setDriverPayoutFormError(`Сумма превышает доступный остаток ${available.toLocaleString()} сом.`);
+    if (amount > available) return setDriverPayoutFormError(`Сумма превышает доступный остаток ${available.toLocaleString()}.`);
     try {
       if (editingDriverPayoutId) {
         if (!access.manageDriverPayouts) return setDriverPayoutFormError('Редактировать выплаты могут только администратор и кассир.');
@@ -461,7 +461,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
   };
 
   const removeDriverPayout = async (payout: B2BDriverPayout) => {
-    if (!access.manageDriverPayouts || !window.confirm(`Удалить выплату ${payout.amount.toLocaleString()} сом водителю ${payout.driverName}?`)) return;
+    if (!access.manageDriverPayouts || !window.confirm(`Удалить выплату ${payout.amount.toLocaleString()} водителю ${payout.driverName}?`)) return;
     setDeletingDriverPayoutId(payout.id);
     setDriverPayoutFormError('');
     try {
@@ -532,8 +532,8 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                 <td className="order-number">{order.number}</td><td className="order-client">{order.client}</td>
                 <td><span className="b2b-order-route">{order.routeFrom}<b>→</b>{order.routeTo}</span></td>
                 <td>{order.requestDate}</td><td>{order.departureDate || '—'}</td><td>{order.transport}</td>
-                <td className="number">{order.transportCount}</td><td className="number">{order.total.toLocaleString()} сом</td>
-                <td className="number paid">{effectivePaid.toLocaleString()} сом</td><td className="number debt">{Math.max(0, order.total - effectivePaid).toLocaleString()} сом</td>
+                <td className="number">{order.transportCount}</td><td className="number">{order.total.toLocaleString()}</td>
+                <td className="number paid">{effectivePaid.toLocaleString()}</td><td className="number debt">{Math.max(0, order.total - effectivePaid).toLocaleString()}</td>
                 <td>
                   <select className={`b2b-order-status status-${order.status}`} value={order.status} onClick={event => event.stopPropagation()} onChange={event => void changeStatus(order.id, event.target.value as OrderStatus)}>
                     {B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}
@@ -576,7 +576,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                 <section><h3><UserRound size={16} /> Клиент</h3>{selectedClient && access.openClient ? <button type="button" className="b2b-related-record-link" onClick={() => setRelatedProfile('client')}>{selectedOrder.client}</button> : <strong>{selectedOrder.client}</strong>}<span>{selectedClient && access.openClient ? 'Открыть карточку клиента' : 'Корпоративный заказчик'}</span></section>
                 <section><h3><CalendarDays size={16} /> Даты</h3><div><span>Заявка</span><strong>{selectedOrder.requestDate}</strong></div><div><span>Дата выезда</span><strong>{selectedOrder.departureDate || 'Не указана'}</strong></div><div><span>Время выезда</span><strong>{selectedOrder.departureTime || 'Не указано'}</strong></div></section>
                 <section className="wide"><h3><MapPin size={16} /> Маршрут</h3><div className="b2b-order-card-route"><span><i>A</i>{selectedOrder.routeFrom}</span><b /><span><i>B</i>{selectedOrder.routeTo}</span></div></section>
-                <section className="wide"><h3><Truck size={16} /> Транспорт</h3><div><span>Вид транспорта</span><strong>{selectedOrder.transport}</strong></div><div><span>Количество</span><strong>{selectedOrder.transportCount}</strong></div><div><span>Цена за единицу</span><strong>{selectedOrder.pricePerUnit.toLocaleString()} сом</strong></div><div><span>Общая сумма</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></div></section>
+                <section className="wide"><h3><Truck size={16} /> Транспорт</h3><div><span>Вид транспорта</span><strong>{selectedOrder.transport}</strong></div><div><span>Количество</span><strong>{selectedOrder.transportCount}</strong></div><div><span>Цена за единицу</span><strong>{selectedOrder.pricePerUnit.toLocaleString()}</strong></div><div><span>Общая сумма</span><strong>{selectedOrder.total.toLocaleString()}</strong></div></section>
               </div>
             )}
 
@@ -585,9 +585,9 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                 {paymentFormError && !paymentFormOpen && <p className="b2b-form-error" role="alert">{paymentFormError}</p>}
                 <div className="b2b-payment-panel-head">
                   <div className="b2b-payment-summary">
-                    <div><span>Итого по заказу</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></div>
-                    <div className="paid"><span>Подтверждено</span><strong>{selectedPaid.toLocaleString()} сом</strong></div>
-                    <div className="debt"><span>Остаток</span><strong>{Math.max(0, selectedOrder.total - selectedPaid).toLocaleString()} сом</strong></div>
+                    <div><span>Итого по заказу</span><strong>{selectedOrder.total.toLocaleString()}</strong></div>
+                    <div className="paid"><span>Подтверждено</span><strong>{selectedPaid.toLocaleString()}</strong></div>
+                    <div className="debt"><span>Остаток</span><strong>{Math.max(0, selectedOrder.total - selectedPaid).toLocaleString()}</strong></div>
                   </div>
                   <button className="b2b-primary-button" type="button" onClick={() => openPaymentForm()}><Plus size={16} /> Добавить оплату</button>
                 </div>
@@ -600,9 +600,9 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                       <div className="b2b-payment-history-row" key={payment.id}>
                         <span className="b2b-payment-method"><CircleDollarSign size={16} />{formatB2BPaymentMethod(payment.method)}</span>
                         <span>{payment.paymentDate}</span>
-                        <strong>{payment.amount.toLocaleString()} сом</strong>
+                        <strong>{payment.amount.toLocaleString()}</strong>
                         <span className={`b2b-payment-state ${payment.status}`}>{payment.status === 'pending' ? 'На проверке' : payment.status === 'confirmed' ? 'Подтверждено' : 'Отклонено'}</span>
-                        <button className="b2b-history-edit" type="button" onClick={() => openPaymentForm(payment)} aria-label={`Редактировать оплату ${payment.amount.toLocaleString()} сом`}><Pencil size={14} /></button>
+                        <button className="b2b-history-edit" type="button" onClick={() => openPaymentForm(payment)} aria-label={`Редактировать оплату ${payment.amount.toLocaleString()}`}><Pencil size={14} /></button>
                         {access.reviewPayments && payment.status === 'pending' && <div className="b2b-payment-review-actions"><button type="button" disabled={reviewingPaymentId === payment.id} onClick={() => void reviewPayment(payment.id, 'confirmed')}>Подтвердить</button><button type="button" disabled={reviewingPaymentId === payment.id} onClick={() => void reviewPayment(payment.id, 'rejected')}>Отклонить</button></div>}
                       </div>
                     ))}
@@ -619,7 +619,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                   <label><span>Количество</span><input value={selectedOrder.transportCount} readOnly /></label>
                   {access.driverPrice && <label><span>Цена водителю за единицу, сом</span><input type="number" min="0" value={selectedOrder.driverPricePerUnit ?? ''} onChange={event => setDriverPrice(event.target.value)} placeholder="0" disabled={savingDriverAssignment} /></label>}
                   {access.driverPrice && <div className="b2b-driver-save-row">
-                    <div aria-live="polite">{driverAssignmentError ? <span className="error">{driverAssignmentError}</span> : driverAssignmentSaved ? <span className="saved"><Check size={14} /> Данные водителя сохранены</span> : <span>Начисление: {selectedDriverTotal.toLocaleString()} сом</span>}</div>
+                    <div aria-live="polite">{driverAssignmentError ? <span className="error">{driverAssignmentError}</span> : driverAssignmentSaved ? <span className="saved"><Check size={14} /> Данные водителя сохранены</span> : <span>Начисление: {selectedDriverTotal.toLocaleString()}</span>}</div>
                     <button className="b2b-primary-button" type="button" onClick={() => void saveDriverPrice()} disabled={savingDriverAssignment || !selectedOrder.driverId}><Save size={15} />{savingDriverAssignment ? 'Сохранение...' : 'Сохранить'}</button>
                   </div>}
                 </div>
@@ -627,9 +627,9 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                 {access.driverPrice && <>
                 <div className="b2b-driver-finance-head">
                   <div className="b2b-payment-summary">
-                    <div><span>Начислено водителю</span><strong>{selectedDriverTotal.toLocaleString()} сом</strong></div>
-                    <div className="paid"><span>Выплачено</span><strong>{selectedDriverPaid.toLocaleString()} сом</strong></div>
-                    <div className={selectedDriverBalance > 0 ? 'debt' : selectedDriverBalance < 0 ? 'credit' : undefined}><span>Остаток</span><strong>{selectedDriverBalance.toLocaleString()} сом</strong></div>
+                    <div><span>Начислено водителю</span><strong>{selectedDriverTotal.toLocaleString()}</strong></div>
+                    <div className="paid"><span>Выплачено</span><strong>{selectedDriverPaid.toLocaleString()}</strong></div>
+                    <div className={selectedDriverBalance > 0 ? 'debt' : selectedDriverBalance < 0 ? 'credit' : undefined}><span>Остаток</span><strong>{selectedDriverBalance.toLocaleString()}</strong></div>
                   </div>
                   {access.driverPay && <button className="b2b-primary-button" type="button" onClick={() => openDriverPayoutForm()} disabled={!selectedOrder.driverId || selectedDriverDebt <= 0}><Plus size={16} /> Добавить выплату</button>}
                 </div>
@@ -642,8 +642,8 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                     {selectedDriverPayouts.map(payout => (
                       <div className="b2b-driver-payout-row" key={payout.id}>
                         <span className="b2b-payment-method"><CircleDollarSign size={16} />{formatB2BPaymentMethod(payout.method)}</span>
-                        <span>{payout.paymentDate}</span><strong>{payout.amount.toLocaleString()} сом</strong><span title={payout.comment}>{payout.comment || 'Без комментария'}</span>
-                        {access.manageDriverPayouts && <><button className="b2b-history-edit" type="button" onClick={() => openDriverPayoutForm(payout)} aria-label={`Редактировать выплату ${payout.amount.toLocaleString()} сом`}><Pencil size={14} /></button><button className="b2b-history-edit" type="button" disabled={deletingDriverPayoutId === payout.id} onClick={() => void removeDriverPayout(payout)} aria-label={`Удалить выплату ${payout.amount.toLocaleString()} сом`}><Trash2 size={14} /></button></>}
+                        <span>{payout.paymentDate}</span><strong>{payout.amount.toLocaleString()}</strong><span title={payout.comment}>{payout.comment || 'Без комментария'}</span>
+                        {access.manageDriverPayouts && <><button className="b2b-history-edit" type="button" onClick={() => openDriverPayoutForm(payout)} aria-label={`Редактировать выплату ${payout.amount.toLocaleString()}`}><Pencil size={14} /></button><button className="b2b-history-edit" type="button" disabled={deletingDriverPayoutId === payout.id} onClick={() => void removeDriverPayout(payout)} aria-label={`Удалить выплату ${payout.amount.toLocaleString()}`}><Trash2 size={14} /></button></>}
                       </div>
                     ))}
                   </div>
@@ -655,16 +655,16 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
             {access.orderTabs.includes('pnl') && orderCardTab === 'pnl' && (
               <div className="b2b-order-tab-panel b2b-order-pnl">
                 <div className="b2b-order-pnl-summary">
-                  <article><span>Продано</span><strong>{selectedOrder.total.toLocaleString()} сом</strong></article>
-                  <article className="received"><span>Поступило</span><strong>{selectedPaid.toLocaleString()} сом</strong></article>
-                  <article className="costs"><span>Водитель</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('driver')}>{selectedDriverCost.toLocaleString()} сом <Pencil size={12} /></button></article>
-                  <article className="costs"><span>Налог 4%</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('payment')}>{selectedTaxCost.toLocaleString()} сом <Pencil size={12} /></button></article>
-                  <article className="costs"><span>Прочие расходы</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('pnl')}>{selectedOtherCost.toLocaleString()} сом <Pencil size={12} /></button></article>
-                  <article className={selectedOrderBalance < 0 ? 'balance negative' : 'balance'}><span>Остаток</span><strong>{selectedOrderBalance.toLocaleString()} сом</strong></article>
+                  <article><span>Продано</span><strong>{selectedOrder.total.toLocaleString()}</strong></article>
+                  <article className="received"><span>Поступило</span><strong>{selectedPaid.toLocaleString()}</strong></article>
+                  <article className="costs"><span>Водитель</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('driver')}>{selectedDriverCost.toLocaleString()} <Pencil size={12} /></button></article>
+                  <article className="costs"><span>Налог 4%</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('payment')}>{selectedTaxCost.toLocaleString()} <Pencil size={12} /></button></article>
+                  <article className="costs"><span>Прочие расходы</span><button type="button" className="b2b-inline-value-edit" onClick={() => setOrderCardTab('pnl')}>{selectedOtherCost.toLocaleString()} <Pencil size={12} /></button></article>
+                  <article className={selectedOrderBalance < 0 ? 'balance negative' : 'balance'}><span>Остаток</span><strong>{selectedOrderBalance.toLocaleString()}</strong></article>
                 </div>
                 <div className="b2b-order-pnl-secondary">
-                  <article><span>Нам должны</span><strong>{selectedOrderReceivable.toLocaleString()} сом</strong></article>
-                  <article><span>Мы должны водителю</span><strong>{selectedDriverDebt.toLocaleString()} сом</strong></article>
+                  <article><span>Нам должны</span><strong>{selectedOrderReceivable.toLocaleString()}</strong></article>
+                  <article><span>Мы должны водителю</span><strong>{selectedDriverDebt.toLocaleString()}</strong></article>
                   <article className={selectedOrderMargin < 0 ? 'negative' : ''}><span>Маржа</span><strong>{selectedOrderMargin.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}%</strong></article>
                 </div>
                 <div className="b2b-order-pnl-breakdown">
@@ -673,10 +673,10 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                     <div className="b2b-order-pnl-empty">Затрат по заказу пока нет</div>
                   ) : (
                     <table><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
-                      {selectedDriverCost > 0 && <tr><td>Водитель</td><td>{selectedOrder.driverName || 'Начисление водителю'}</td><td>{selectedOrder.departureDate || selectedOrder.requestDate}</td><td className="number">{selectedDriverCost.toLocaleString()} сом</td></tr>}
-                      {selectedTaxCost > 0 && <tr><td>Налог</td><td>4% с подтверждённой выручки на юрсчёт</td><td>По датам оплат</td><td className="number">{selectedTaxCost.toLocaleString()} сом</td></tr>}
-                      {selectedOrderExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()} сом</td></tr>)}
-                    </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()} сом</td></tr></tfoot></table>
+                      {selectedDriverCost > 0 && <tr><td>Водитель</td><td>{selectedOrder.driverName || 'Начисление водителю'}</td><td>{selectedOrder.departureDate || selectedOrder.requestDate}</td><td className="number">{selectedDriverCost.toLocaleString()}</td></tr>}
+                      {selectedTaxCost > 0 && <tr><td>Налог</td><td>4% с подтверждённой выручки на юрсчёт</td><td>По датам оплат</td><td className="number">{selectedTaxCost.toLocaleString()}</td></tr>}
+                      {selectedOrderExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()}</td></tr>)}
+                    </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()}</td></tr></tfoot></table>
                   )}
                 </div>
               </div>
@@ -731,7 +731,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                 <label className="full"><span>Водитель</span><select value={orderForm.driver} onChange={event => setOrderForm(current => ({ ...current, driver: event.target.value }))} disabled={driversLoading}><option value="">{driversLoading ? 'Загрузка водителей...' : 'Назначить водителя !!!'}</option>{drivers.filter(driver => driver.status !== 'inactive').map(driver => <option key={driver.driverId} value={driver.driverId}>{driver.fullName}{driver.vehicleLabel ? ` · ${driver.vehicleLabel}` : ''}{driver.plateNumber ? ` · ${driver.plateNumber}` : ''}</option>)}</select></label>
               )}
               <label className="full"><span>Статус</span><select value={orderForm.status} onChange={event => setOrderForm(current => ({ ...current, status: event.target.value as OrderStatus }))}>{B2B_ORDER_STATUSES.map(status => <option key={status.key} value={status.key}>{status.label}</option>)}</select></label>
-              <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(orderForm.transportCount) || 0) * (Number(orderForm.pricePerUnit) || 0)).toLocaleString()} сом</strong></div>
+              <div className="b2b-new-order-total"><span>Итого</span><strong>{((Number(orderForm.transportCount) || 0) * (Number(orderForm.pricePerUnit) || 0)).toLocaleString()}</strong></div>
               {orderFormError && <div className="b2b-form-error">{orderFormError}</div>}
               <div className="b2b-form-actions"><button className="b2b-cancel-button" type="button" onClick={closeOrderForm}>Отмена</button><button className="b2b-primary-button" type="submit">{editingOrderId ? 'Сохранить изменения' : 'Создать заказ'}</button></div>
             </form>
@@ -768,10 +768,10 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
               <button type="button" onClick={closeDriverPayoutForm} aria-label="Закрыть"><X size={18} /></button>
             </div>
             <form className="b2b-payment-form" onSubmit={submitDriverPayout}>
-              <div className="b2b-payment-notice"><CircleDollarSign size={18} /><div><strong>Долг перед водителем: {selectedDriverDebt.toLocaleString()} сом</strong><span>После сохранения выплата появится в истории заказа.</span></div></div>
+              <div className="b2b-payment-notice"><CircleDollarSign size={18} /><div><strong>Долг перед водителем: {selectedDriverDebt.toLocaleString()}</strong><span>После сохранения выплата появится в истории заказа.</span></div></div>
               <label><span>Сумма выплаты, сом *</span><input autoFocus type="number" min="1" max={selectedDriverDebt + (editingDriverPayoutId ? driverPayouts.find(payout => payout.id === editingDriverPayoutId)?.amount ?? 0 : 0)} value={driverPayoutForm.amount} onChange={event => setDriverPayoutForm(current => ({ ...current, amount: event.target.value }))} placeholder="0" /></label>
               <label><span>Как оплатили *</span><select value={driverPayoutForm.method} onChange={event => setDriverPayoutForm(current => ({ ...current, method: event.target.value as B2BPaymentMethod }))}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select></label>
-              <div className="b2b-tax-preview"><span>Водителю будет перечислена вся сумма <strong>{(Number(driverPayoutForm.amount) || 0).toLocaleString()} сом</strong></span><span>Налог с выплаты не удерживается</span></div>
+              <div className="b2b-tax-preview"><span>Водителю будет перечислена вся сумма <strong>{(Number(driverPayoutForm.amount) || 0).toLocaleString()}</strong></span><span>Налог с выплаты не удерживается</span></div>
               <label><span>№ платёжного поручения{requiresB2BPaymentOrder(driverPayoutForm.method) ? ' *' : ''}</span><input required={requiresB2BPaymentOrder(driverPayoutForm.method)} value={driverPayoutForm.paymentOrderNumber} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentOrderNumber: event.target.value }))} placeholder={requiresB2BPaymentOrder(driverPayoutForm.method) ? 'Обязательно' : 'Для наличных необязательно'} /></label>
               <label><span>Когда оплатили *</span><input type="date" value={driverPayoutForm.paymentDate} onChange={event => setDriverPayoutForm(current => ({ ...current, paymentDate: event.target.value }))} /></label>
               <label className="full"><span>Комментарий</span><textarea value={driverPayoutForm.comment} onChange={event => setDriverPayoutForm(current => ({ ...current, comment: event.target.value }))} placeholder="Примечание к выплате" /></label>
