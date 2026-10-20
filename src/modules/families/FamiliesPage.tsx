@@ -1,3 +1,4 @@
+import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -6,7 +7,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -406,18 +407,6 @@ type TransferCardData = {
   }[];
 };
 type DriverCardTab = 'main' | 'parentCard' | 'documents' | 'finance' | 'b2b' | 'advances';
-type DriverFinanceRow = {
-  month: string;
-  days: number;
-  rate: number;
-  fines: number;
-  penalties: number;
-  accrued: number;
-  advances: number;
-  paid: number;
-  balance: number;
-};
-
 type DriverDraft = {
   fullName: string;
   phone: string;
@@ -432,21 +421,6 @@ type DriverDraft = {
   plateNumber: string;
   seats: string;
 };
-
-const DRIVER_FINANCE_MONTHS = [
-  'Сентябрь',
-  'Октябрь',
-  'Ноябрь',
-  'Декабрь',
-  'Январь',
-  'Февраль',
-  'Март',
-  'Апрель',
-  'Май',
-  'Июнь',
-  'Июль',
-  'Август',
-];
 
 const DRIVER_STATUS_OPTIONS = [
   { value: 'active', label: 'Активен' },
@@ -905,8 +879,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [telegramGroupName, setTelegramGroupName] = useState('');
   const [telegramTransferError, setTelegramTransferError] = useState('');
   const [savingTelegramTransfer, setSavingTelegramTransfer] = useState(false);
-  const [driverAdvances, setDriverAdvances] = useState<V2DriverAdvance[]>([]);
-  const [loadingAdvances, setLoadingAdvances] = useState(false);
   const [tabDefaultFilters, setTabDefaultFilters] = useState<Record<string, { metric: LogisticsDashboardMetric; vehicleFilter: LogisticsVehicleFilter }>>({});
   const [adminFilterOpen, setAdminFilterOpen] = useState<string | null>(null);
   const [adminFilterDraft, setAdminFilterDraft] = useState<{ metric: LogisticsDashboardMetric; vehicleFilter: LogisticsVehicleFilter } | null>(null);
@@ -2243,19 +2215,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       cancelled = true;
     };
   }, [selectedDriverId]);
-  useEffect(() => {
-    if (!selectedDriverId) {
-      setDriverAdvances([]);
-      return;
-    }
-    let cancelled = false;
-    setLoadingAdvances(true);
-    fetchV2DriverAdvances(selectedDriverId)
-      .then(advances => { if (!cancelled) setDriverAdvances(advances); })
-      .catch(error => { console.error('Driver advances load failed', error); })
-      .finally(() => { if (!cancelled) setLoadingAdvances(false); });
-    return () => { cancelled = true; };
-  }, [selectedDriverId]);
   const setDriverDraftField = <K extends keyof DriverDraft>(key: K, value: DriverDraft[K]) => {
     setDriverDraft(prev => prev ? { ...prev, [key]: value } : prev);
   };
@@ -2324,16 +2283,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
       setDeletingDriver(false);
     }
   };
-  const removeDriverAdvance = async (advanceId: string) => {
-    if (!window.confirm('Удалить этот аванс?')) return;
-    try {
-      await deleteV2DriverAdvance(advanceId);
-      setDriverAdvances(prev => prev.filter(a => a.id !== advanceId));
-    } catch (error) {
-      console.error('Advance delete failed', error);
-      alert('Не удалось удалить аванс');
-    }
-  };
   const selectedDriverChildren = useMemo(() => (
     selectedDriverId
       ? rows
@@ -2382,40 +2331,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
           .sort((a, b) => b.departureDate.localeCompare(a.departureDate))
       : []
   ), [b2bOrders, selectedDriverId]);
-  const selectedDriverFinanceRows = useMemo<DriverFinanceRow[]>(() => (
-    DRIVER_FINANCE_MONTHS.map(month => ({
-      month,
-      days: 0,
-      rate: 0,
-      fines: 0,
-      penalties: 0,
-      accrued: 0,
-      advances: 0,
-      paid: 0,
-      balance: 0,
-    }))
-  ), []);
-  const selectedDriverFinanceTotals = useMemo(() => (
-    selectedDriverFinanceRows.reduce((totals, row) => ({
-      days: totals.days + row.days,
-      rate: totals.rate + row.rate,
-      fines: totals.fines + row.fines,
-      penalties: totals.penalties + row.penalties,
-      accrued: totals.accrued + row.accrued,
-      advances: totals.advances + row.advances,
-      paid: totals.paid + row.paid,
-      balance: totals.balance + row.balance,
-    }), {
-      days: 0,
-      rate: 0,
-      fines: 0,
-      penalties: 0,
-      accrued: 0,
-      advances: 0,
-      paid: 0,
-      balance: 0,
-    })
-  ), [selectedDriverFinanceRows]);
   const selectedTransferVehicleType = transferTypeMenu
     ? dashboardTransfers.find(item =>
         item.transferNumber === transferTypeMenu.transferNumber
@@ -3686,7 +3601,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   <span>{DRIVER_STATUS_OPTIONS.find(option => option.value === driverDraft?.status)?.label ?? 'Статус не указан'}</span>
                 </div>
                 <div style={{ marginTop: 12, display: 'flex', gap: 14, flexWrap: 'wrap', color: '#17222F', fontSize: 13, fontWeight: 800 }}>
-                  <span>Наш долг: {money(selectedDriverFinanceTotals.balance)}</span>
+                  <span>История — во вкладке «Выплаты»</span>
                   <span>Не хватает документов: {missingDriverDocuments}</span>
                   <span>Просрочены: {expiredDriverDocuments}</span>
                 </div>
@@ -3775,7 +3690,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 { key: 'documents' as DriverCardTab, label: 'Документы' },
                 { key: 'finance' as DriverCardTab, label: 'Финансы' },
                 { key: 'b2b' as DriverCardTab, label: `B2B${selectedDriverB2BOrders.length ? ` (${selectedDriverB2BOrders.length})` : ''}` },
-                { key: 'advances' as DriverCardTab, label: `Авансы${driverAdvances.length ? ` (${driverAdvances.length})` : ''}` },
+                { key: 'advances' as DriverCardTab, label: 'Выплаты' },
               ].map(tabItem => {
                 const active = selectedDriverTab === tabItem.key;
                 return (
@@ -4228,102 +4143,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 </div>
               </section>
               ) : selectedDriverTab === 'finance' ? (
-                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
-                  <div style={{
-                    height: 42,
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '0 14px',
-                    borderBottom: '1px solid #E5EEF1',
-                    fontSize: 13,
-                    fontWeight: 900,
-                    color: '#17222F',
-                  }}>
-                    Финансы
-                  </div>
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          {['Месяц', 'К-во дней', 'Ставка', 'Штрафы', 'Пеня', 'Начислено', 'Авансы', 'Оплачено', 'Остаток'].map(label => (
-                            <th key={label} style={{
-                              height: 36,
-                              padding: '0 10px',
-                              borderBottom: '1px solid #E5EEF1',
-                              textAlign: label === 'Месяц' ? 'left' : 'right',
-                              fontSize: 11,
-                              fontWeight: 900,
-                              color: '#7A859D',
-                              textTransform: 'uppercase',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {selectedDriverFinanceRows.map((row, index) => (
-                          <tr key={row.month}>
-                            {[
-                              row.month,
-                              row.days,
-                              money(row.rate),
-                              money(row.fines),
-                              money(row.penalties),
-                              money(row.accrued),
-                              money(row.advances),
-                              money(row.paid),
-                              money(row.balance),
-                            ].map((value, cellIndex) => (
-                              <td key={cellIndex} style={{
-                                height: 40,
-                                padding: '0 10px',
-                                borderBottom: index === selectedDriverFinanceRows.length - 1 ? 'none' : '1px solid #EEF4F6',
-                                textAlign: cellIndex === 0 ? 'left' : 'right',
-                                fontSize: 13,
-                                fontWeight: cellIndex === 0 ? 850 : 650,
-                                color: '#17222F',
-                                whiteSpace: 'nowrap',
-                              }}>
-                                {value}
-                              </td>
-                            ))}
-                          </tr>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr>
-                          {[
-                            'Итого',
-                            selectedDriverFinanceTotals.days,
-                            money(selectedDriverFinanceTotals.rate),
-                            money(selectedDriverFinanceTotals.fines),
-                            money(selectedDriverFinanceTotals.penalties),
-                            money(selectedDriverFinanceTotals.accrued),
-                            money(selectedDriverFinanceTotals.advances),
-                            money(selectedDriverFinanceTotals.paid),
-                            money(selectedDriverFinanceTotals.balance),
-                          ].map((value, cellIndex) => (
-                            <td key={cellIndex} style={{
-                              height: 44,
-                              padding: '0 10px',
-                              borderTop: '1px solid #DDE9EC',
-                              background: '#F8FCFC',
-                              textAlign: cellIndex === 0 ? 'left' : 'right',
-                              fontSize: 13,
-                              fontWeight: 900,
-                              color: cellIndex === 8 && selectedDriverFinanceTotals.balance > 0 ? '#B42318' : '#17222F',
-                              whiteSpace: 'nowrap',
-                            }}>
-                              {value}
-                            </td>
-                          ))}
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </section>
+                <DriverPaymentsPanel driverId={selectedDriver.driverId} sessionToken={authToken} view="finance" />
               ) : selectedDriverTab === 'b2b' ? (
                 <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                   <div style={{ minHeight: 52, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
@@ -4359,64 +4179,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                   )}
                 </section>
               ) : selectedDriverTab === 'advances' ? (
-              <>
-              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
-                <div style={{ height: 42, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 14px', borderBottom: '1px solid #E5EEF1', fontSize: 13, fontWeight: 900, color: '#17222F' }}>
-                  <span>История авансов</span>
-                  {driverAdvances.length > 0 && (
-                    <span style={{ fontSize: 12, fontWeight: 800, color: '#237F81' }}>
-                      Итого: {money(driverAdvances.reduce((sum, a) => sum + a.amount, 0))}
-                    </span>
-                  )}
-                </div>
-                {loadingAdvances ? (
-                  <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>
-                ) : driverAdvances.length === 0 ? (
-                  <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Авансов пока нет</div>
-                ) : (
-                  <div style={{ overflowX: 'auto' }}>
-                    <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                      <thead>
-                        <tr>
-                          {['Дата', 'Сумма', 'Комментарий', 'Добавлен', ''].map(label => (
-                            <th key={label} style={{ height: 34, padding: '0 12px', borderBottom: '1px solid #E5EEF1', textAlign: label === 'Сумма' ? 'right' : 'left', fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
-                              {label}
-                            </th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {driverAdvances.map((advance, index) => (
-                          <tr key={advance.id}>
-                            <td style={{ height: 42, padding: '0 12px', borderBottom: index === driverAdvances.length - 1 ? 'none' : '1px solid #EEF4F6', fontSize: 13, fontWeight: 850, color: '#17222F', whiteSpace: 'nowrap' }}>
-                              {advance.date ? new Date(advance.date + 'T00:00:00').toLocaleDateString('ru-RU', { day: '2-digit', month: 'long', year: 'numeric' }) : '—'}
-                            </td>
-                            <td style={{ height: 42, padding: '0 12px', borderBottom: index === driverAdvances.length - 1 ? 'none' : '1px solid #EEF4F6', fontSize: 13, fontWeight: 900, color: '#237F81', textAlign: 'right', whiteSpace: 'nowrap' }}>
-                              {money(advance.amount)}
-                            </td>
-                            <td style={{ height: 42, padding: '0 12px', borderBottom: index === driverAdvances.length - 1 ? 'none' : '1px solid #EEF4F6', fontSize: 13, fontWeight: 650, color: '#52606F' }}>
-                              {advance.comment || '—'}
-                            </td>
-                            <td style={{ height: 42, padding: '0 12px', borderBottom: index === driverAdvances.length - 1 ? 'none' : '1px solid #EEF4F6', fontSize: 12, fontWeight: 650, color: '#7A859D', whiteSpace: 'nowrap' }}>
-                              {advance.createdAt ? new Date(advance.createdAt).toLocaleDateString('ru-RU') : '—'}
-                            </td>
-                            <td style={{ height: 42, padding: '0 8px', borderBottom: index === driverAdvances.length - 1 ? 'none' : '1px solid #EEF4F6', textAlign: 'right' }}>
-                              <button
-                                onClick={() => removeDriverAdvance(advance.id)}
-                                title="Удалить"
-                                style={{ width: 28, height: 28, border: '1px solid #F5C6C6', borderRadius: 8, background: '#FFF5F5', color: '#B42318', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
-                              >
-                                <X size={13} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </section>
-              </>
+                <DriverPaymentsPanel driverId={selectedDriver.driverId} sessionToken={authToken} view="history" canDeleteAdvance/>
               ) : null}
             </div>
           </section>

@@ -15,7 +15,7 @@ export interface TaskSummary { open: number; new: number; overdue: number; dueSo
 export const TASK_STATUS: Record<TaskStatus,string> = { new:'Новая',in_progress:'В работе',review:'На проверке',done:'Выполнена',cancelled:'Отменена' };
 export const TARGET_LABELS: Record<TaskTargetType,string> = {group:'Группа заявок',general:'Общая задача',school:'Школа',transfer:'Трансфер',child:'Ребёнок',family:'Семья',driver:'Водитель'};
 export const ROLE_LABELS: Record<string,string> = {admin:'Администратор',gen_director:'Ген. директор',director:'Директор',manager:'Менеджер',logist:'Логист',senior_logist:'Руководитель логистики',cashier:'Кассир',b2b_manager:'Менеджер B2B',b2b_logist:'Логист B2B'};
-export const TASK_ACTIONS: Record<string,string> = {create:'Задача поставлена',edit:'Задача изменена',accept:'Принята в работу',submit:'Результат отправлен',approve:'Выполнение подтверждено',return:'Возвращена на доработку',cancel:'Задача отменена',reopen:'Задача открыта повторно',comment:'Комментарий'};
+export const TASK_ACTIONS: Record<string,string> = {delete:'Задача удалена',create:'Задача поставлена',edit:'Задача изменена',accept:'Принята в работу',submit:'Результат отправлен',approve:'Выполнение подтверждено',return:'Возвращена на доработку',cancel:'Задача отменена',reopen:'Задача открыта повторно',comment:'Комментарий'};
 export const isTaskOpen = (task: Pick<CrmTask,'status'>) => !['done','cancelled'].includes(task.status);
 export const isTaskOverdue = (task: Pick<CrmTask,'status'|'due_at'>, now=Date.now()) => isTaskOpen(task) && new Date(task.due_at).getTime()<now;
 export const canLeadTasks = (role: string) => ['admin','gen_director','director'].includes(role);
@@ -33,3 +33,6 @@ export const TASK_DEPARTMENTS: Record<string,{label:string;roles:UserRole[]}> = 
 };
 export const TASK_OBSERVER_ROLES: UserRole[] = ['gen_director','director','senior_logist','cashier'];
 export function taskDepartment(role?: UserRole) { return Object.entries(TASK_DEPARTMENTS).find(([,department])=>role && department.roles.includes(role))?.[0] ?? ''; }
+
+export const canViewTeamTasks = (role: string) => ['admin','gen_director','director','senior_logist','cashier'].includes(role);
+export interface TaskCounts { total: number; open: number; completed: number; overdue: number; review: number }

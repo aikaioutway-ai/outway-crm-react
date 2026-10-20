@@ -13,6 +13,10 @@ export interface ExpenseRecord {
   paymentMethod: ExpensePaymentMethod;
   paymentOrderNumber?: string;
   schoolKey?: string;
+  departmentKey?: string;
+  driverId?: string;
+  employeeId?: string;
+  transferId?: string;
   salaryPeriodKey?: string;
   comment: string;
   createdBy?: string;
@@ -31,6 +35,10 @@ export interface NewExpenseRecord {
   paymentMethod: ExpensePaymentMethod;
   paymentOrderNumber?: string;
   schoolKey?: string;
+  departmentKey?: string;
+  driverId?: string;
+  employeeId?: string;
+  transferId?: string;
   salaryPeriodKey?: string;
   comment: string;
   createdBy?: string;
@@ -43,7 +51,7 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; color:
   },
   office: {
     label: 'Офис', color: '#5267A8', soft: '#EDF0FA',
-    subcategories: ['Аренда', 'Коммунальные услуги', 'Канцтовары', 'Премия', 'Подарки', 'Налог', 'Соцфонд', 'Связь и интернет', 'Прочее'],
+    subcategories: ['Аренда', 'ЗП', 'Коммунальные услуги', 'Канцтовары', 'Премия', 'Подарки', 'Налог', 'Соцфонд', 'Связь и интернет', 'Прочее'],
   },
   logistics: {
     label: 'Логистика', color: '#D17B2C', soft: '#FFF1E4',

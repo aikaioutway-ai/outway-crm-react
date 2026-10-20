@@ -43,6 +43,7 @@ export interface EmployeeDocument {
 }
 
 export interface EmployeeAdvance {
+  salaryPeriodKey?: string;
   periodMonth: number;
   periodYear: number;
   schoolKey?: string;
@@ -237,6 +238,7 @@ export async function saveEmployeeDocuments(employeeId: string, documents: Emplo
 
 function mapEmployeeAdvance(row: any): EmployeeAdvance {
   return {
+    salaryPeriodKey: row.salary_period_key ?? undefined,
     periodMonth: Number(row.period_month ?? String(row.date).slice(5, 7)),
     periodYear: Number(row.period_year ?? String(row.date).slice(0, 4)),
     schoolKey: row.school_key ?? undefined,
@@ -257,8 +259,9 @@ export async function fetchEmployeeAdvances(employeeId: string): Promise<Employe
   return (data ?? []).map(mapEmployeeAdvance);
 }
 
-export async function createEmployeeAdvance(employeeId: string, amount: number, date: string, comment: string, details?: { periodMonth: number; periodYear: number; schoolKey: string; paymentMethod: string; paymentOrderNumber?: string }): Promise<EmployeeAdvance> {
+export async function createEmployeeAdvance(employeeId: string, amount: number, date: string, comment: string, details?: { periodMonth: number; periodYear: number; salaryPeriodKey?: string; schoolKey: string; paymentMethod: string; paymentOrderNumber?: string }): Promise<EmployeeAdvance> {
   const { data, error } = await supabase.from('v2_employee_advances').insert({
+    ...(details?.salaryPeriodKey ? { salary_period_key: details.salaryPeriodKey } : {}),
     ...(details ? { period_month: details.periodMonth, period_year: details.periodYear, school_key: details.schoolKey, payment_method: details.paymentMethod, payment_order_number: details.paymentOrderNumber || null } : {}),
     employee_id: employeeId,
     amount,

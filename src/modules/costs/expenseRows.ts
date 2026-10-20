@@ -1,3 +1,4 @@
+import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
 import { SCHOOL_TABS } from '../families/constants';
 import { fetchExpenses } from '../../services/expenseService';
 import {
@@ -25,9 +26,10 @@ function systemExpenseRows(
 ): ExpenseRecord[] {
   const driverById = new Map(drivers.map(driver => [driver.driverId, driver]));
   const advanceRows = advances.filter(advance => advance.amount > 0).map(advance => ({
+    salaryPeriodKey: advance.salaryPeriodKey,
     recipientType: 'driver' as const,
     id: `advance-${advance.id}`,
-    schoolKey: (() => {
+    schoolKey: advance.schoolKey || (() => {
       const driver = driverById.get(advance.driverId);
       const schools = SCHOOL_TABS.filter(school => school.key !== 'ALL' && school.codes.some(code => driver?.branchCodes.includes(code)));
       return schools.length === 1 ? schools[0].key : undefined;
@@ -65,6 +67,8 @@ export async function loadExpenseRows(
     ...manualRows.map(row => ({ ...row, source: 'manual' as const })),
     ...systemExpenseRows(advances, drivers),
     ...employeeAdvances.filter(row => row.date >= bounds.first && row.date <= bounds.last).map(row => ({
+      departmentKey: EMPLOYEE_DEPARTMENTS.find(department => department.roles.includes(employees.find(employee => employee.id === row.employeeId)?.role ?? ''))?.key,
+      salaryPeriodKey: row.salaryPeriodKey,
       recipientType: 'employee' as const, schoolKey: row.schoolKey, id: `employee-advance-${row.id}`, name: `Аванс — ${employees.find(employee => employee.id === row.employeeId)?.fullName || 'сотрудник'}`,
       category: row.schoolKey && row.schoolKey !== 'OFFICE' ? 'school' as const : 'office' as const, subcategory: 'Аванс',
       unitPrice: row.amount, quantity: 1, amount: row.amount, expenseDate: row.date,

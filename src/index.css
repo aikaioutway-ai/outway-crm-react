@@ -243,3 +243,13 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .finance-discount-form > input, .finance-discount-form > select { height: 31px; background: #fff; font-size: 11px; font-weight: 700; border-color: var(--border) !important; }
 .finance-adjustments-grid .finance-adjustment-panel button { height: 31px !important; min-height: 31px; padding: 0 10px !important; border-radius: 7px !important; }
 
+
+/* Shared list stripes; local selection, status and hover styles remain stronger. */
+:where(main table > tbody > tr:nth-child(odd)){background-color:var(--surface,#fff)}
+:where(main table > tbody > tr:nth-child(even)){background-color:var(--surface-2,#f4f8f9)}
+:where(main [role="list"] > [role="listitem"]:nth-child(odd)){background-color:var(--surface,#fff)}
+:where(main [role="list"] > [role="listitem"]:nth-child(even)){background-color:var(--surface-2,#f4f8f9)}
+:is(.b2b-audit-list,.b2b-client-attachment-list,.b2b-attachments-list)>article:nth-of-type(even),
+.b2b-calendar-dialog-list>button:nth-of-type(even),
+.employee-advance-list>div:nth-of-type(even):not(.employee-empty),
+.family-detail-rows>.family-detail-row:nth-of-type(even){background-color:var(--surface-2,#f4f8f9)}

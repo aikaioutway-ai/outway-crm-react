@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUpRight, Check, Clock, MessageSquare, Pencil, Play, RotateCcw, Send, X } from 'lucide-react';
+import { ArrowUpRight, Check, Clock, MessageSquare, Pencil, Play, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { useTaskDetail, mutateTask } from '../../services/taskService';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { canLeadTasks, isTaskOpen, isTaskOverdue, TASK_ACTIONS, TASK_STATUS, TARGET_LABELS, TaskEmployee, TaskTarget, taskDate } from './taskTypes';
 import TaskComposer from './TaskComposer';
-export default function TaskDetail({id,user,employees,onClose,onOpenTarget}:{id:string;user:AuthenticatedUser;employees:TaskEmployee[];onClose:()=>void;onOpenTarget?:(target:TaskTarget)=>void}) {
+export default function TaskDetail({id,user,employees,onClose,onOpenTarget,initialAction=''}:{id:string;user:AuthenticatedUser;employees:TaskEmployee[];onClose:()=>void;onOpenTarget?:(target:TaskTarget)=>void;initialAction?:string}) {
   const detail=useTaskDetail(user.sessionToken,id);
   const task=detail.data?.task;
   const [editing,setEditing]=useState(false);
@@ -12,7 +12,7 @@ export default function TaskDetail({id,user,employees,onClose,onOpenTarget}:{id:
   const [result,setResult]=useState('');
   const [error,setError]=useState('');
   const [busy,setBusy]=useState(false);
-  const [action,setAction]=useState('');
+  const [action,setAction]=useState(initialAction);
   const dialog=useRef<HTMLDivElement>(null);
   const names=new Map(employees.map(employee=>[employee.id,employee.full_name]));
   const editor=Boolean(task && (task.creator_id===user.id || canLeadTasks(user.role)));
@@ -22,10 +22,10 @@ export default function TaskDetail({id,user,employees,onClose,onOpenTarget}:{id:
   useEffect(()=>{if(taskId)setResult(taskResult ?? '');},[taskId,taskResult]); // keep a draft while polling unchanged results
   const run=async(operation:string)=>{
     if(!task || busy)return;
-    if(['cancel','reopen','return','comment'].includes(operation) && !message.trim()){setError('Введите комментарий: он сохранится в истории задачи.');return;}
+    if(['cancel','reopen','return','comment','delete'].includes(operation) && !message.trim()){setError('Введите комментарий: он сохранится в истории задачи.');return;}
     if(operation==='submit' && !result.trim()){setError('Опишите результат выполнения.');return;}
     setBusy(true);setError('');
-    try {await mutateTask(user.sessionToken,operation,{version:task.version,comment:message,result},task.id);setMessage('');setAction('');}
+    try {await mutateTask(user.sessionToken,operation,{version:task.version,comment:message,result},task.id);setMessage('');setAction('');if(operation==='delete')onClose();}
     catch(caught){setError(caught instanceof Error?caught.message:'Не удалось изменить задачу');void detail.refetch();}
     finally{setBusy(false);}
   };
@@ -45,12 +45,13 @@ export default function TaskDetail({id,user,employees,onClose,onOpenTarget}:{id:
           {mine && task.status==='in_progress' && <button type="button" disabled={busy} className="tasks-primary" onClick={()=>setAction('submit')}><Check size={15}/>{task.requires_review && task.creator_id!==user.id?'Отправить на проверку':'Завершить задачу'}</button>}
           {editor && task.status==='review' && <><button type="button" disabled={busy} className="tasks-primary" onClick={()=>void run('approve')}><Check size={15}/>Подтвердить выполнение</button><button type="button" disabled={busy} className="tasks-secondary" onClick={()=>setAction('return')}>На доработку</button></>}
           {editor && isTaskOpen(task) && <button type="button" disabled={busy} className="tasks-secondary" onClick={()=>setEditing(true)}><Pencil size={14}/>Изменить</button>}
+          {editor && <button type="button" disabled={busy} className="tasks-secondary tasks-delete-button" onClick={()=>setAction('delete')}><Trash2 size={14}/>Удалить задачу</button>}
           {editor && <button type="button" disabled={busy} className="tasks-secondary" onClick={()=>setAction(isTaskOpen(task)?'cancel':'reopen')}><RotateCcw size={14}/>{isTaskOpen(task)?'Отменить задачу':'Открыть повторно'}</button>}
           {!editor && mine && isTaskOpen(task) && <button type="button" disabled={busy} className="tasks-secondary" onClick={()=>setAction('reschedule')}><Clock size={14}/>Перенести срок</button>}
         </div>
         {action==='reschedule' ? <Reschedule due={task.due_at} busy={busy} onCancel={()=>setAction('')} onSave={async(due,reason)=>{setBusy(true);setError('');try{await mutateTask(user.sessionToken,'edit',{version:task.version,dueAt:due,comment:reason},task.id);setAction('');}catch(caught){setError(caught instanceof Error?caught.message:'Не удалось перенести срок');void detail.refetch();}finally{setBusy(false);}}}/> : action && <form className="tasks-action-form" onSubmit={event=>{event.preventDefault();void run(action);}}>
-          <label>{action==='submit'?'Что сделано?':'Причина / что нужно доработать'}<textarea required rows={3} maxLength={10000} value={action==='submit'?result:message} onChange={e=>action==='submit'?setResult(e.target.value):setMessage(e.target.value)} disabled={busy}/></label>
-          <div><button type="submit" disabled={busy} className="tasks-primary">{busy?'Сохранение…':action==='submit'?'Сохранить результат':'Подтвердить'}</button><button type="button" disabled={busy} className="tasks-secondary" onClick={()=>setAction('')}>Отмена</button></div>
+          <label>{action==='submit'?'Что сделано?':action==='delete'?'Причина удаления (история сохранится)':'Причина / что нужно доработать'}<textarea required rows={3} maxLength={10000} value={action==='submit'?result:message} onChange={e=>action==='submit'?setResult(e.target.value):setMessage(e.target.value)} disabled={busy}/></label>
+          <div><button type="submit" disabled={busy} className="tasks-primary">{busy?'Сохранение…':action==='submit'?'Сохранить результат':action==='delete'?'Удалить задачу':'Подтвердить'}</button><button type="button" disabled={busy} className="tasks-secondary" onClick={()=>setAction('')}>Отмена</button></div>
         </form>}
         {error && <p className="tasks-error" role="alert">{error}</p>}
         <section className="tasks-history"><h3><MessageSquare size={16}/>Обсуждение и история</h3><form onSubmit={event=>{event.preventDefault();void run('comment');}}><label className="tasks-sr-only" htmlFor="task-comment">Комментарий к задаче</label><textarea id="task-comment" maxLength={10000} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Добавить комментарий…" rows={2} disabled={busy}/><button type="submit" aria-label="Отправить комментарий" className="tasks-primary" disabled={busy || !message.trim()}><Send size={15}/></button></form>

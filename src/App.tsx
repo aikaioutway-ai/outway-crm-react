@@ -35,7 +35,7 @@ import { useFamiliesTable } from './hooks/useCrmQueries';
 import { SCHOOL_TABS, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { fetchV2Family } from './services/crmV2Service';
-import { callTaskApi, useTaskSummary } from './services/taskService';
+import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
@@ -99,9 +99,14 @@ export default function App() {
   taskUserRef.current = currentUser?.id;
   const currentUserRole = currentUser?.role ?? getSavedRole();
   const taskSummary = useTaskSummary(currentUser?.sessionToken);
+  const taskStatistics = useTaskStatistics(currentUser?.sessionToken);
+  const taskBadge = taskStatistics.data ? Object.values(taskStatistics.data.byEmployee).reduce((sum, counts) => sum + counts.open, 0) : taskSummary.data?.attention ?? 0;
   const [taskContext, setTaskContext] = useState<TaskTarget | null>(null);
   const [taskTarget, setTaskTarget] = useState<TaskTarget | null>(null);
   const [taskFamily, setTaskFamily] = useState<Family | null>(null);
+  const taskNavigation = useRef<{ section: 'families' | 'logistics'; transfer: string } | null>(null);
+  const [taskNavigationVersion, setTaskNavigationVersion] = useState(0);
+  const [taskChildId, setTaskChildId] = useState('');
   const [taskDriverId, setTaskDriverId] = useState('');
 
 
@@ -289,8 +294,8 @@ export default function App() {
 
   const badgesQuery = useFamiliesTable({ enabled: !!currentUser });
   const badges: Partial<Record<NavSection, number>> = currentUser && badgesQuery.data
-    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length, tasks: taskSummary.data?.attention ?? 0 }
-    : { tasks: taskSummary.data?.attention ?? 0 };
+    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length, tasks: taskBadge }
+    : { tasks: taskBadge };
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
@@ -367,6 +372,14 @@ export default function App() {
     transition: 'padding-right .18s ease',
   };
 
+  useEffect(() => {
+    const target = taskNavigation.current;
+    if (!target) return;
+    if (target.section === 'logistics') setLogisticsTransferFilter(target.transfer);
+    else setManagerTransferFilter(target.transfer);
+    taskNavigation.current = null;
+  }, [taskNavigationVersion]);
+
   const taskSchool = section === 'families' ? managerSchoolKey : section === 'logistics' ? logisticsSchoolKey : section === 'drivers' ? driversSchoolKey : null;
   const taskTransfer = section === 'families' ? managerTransferFilter : section === 'logistics' ? logisticsTransferFilter : section === 'drivers' ? driversTransferFilter : '';
   const contextTaskTarget: TaskTarget | null = taskSchool ? (/^\d+$/.test(taskTransfer)
@@ -381,17 +394,18 @@ export default function App() {
         const family = await fetchV2Family(resolved.familyId ?? resolved.id);
         if (!family) throw new Error('Семья не найдена');
         if (taskUserRef.current !== requestedUser) return;
+        setTaskChildId(resolved.type === 'child' ? resolved.childId ?? resolved.id : '');
         setTaskFamily(family);
       } else if (resolved.type === 'group' && resolved.schoolKey && canAccessSection(currentUserRole,'families',currentUser?.id)) {
-        setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.group ?? '');setSection('families');
+        taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.group ?? '');setSection('families');
       } else if (resolved.type === 'driver') {
         if (!canAccessSection(currentUserRole,'drivers',currentUser?.id)) throw new Error('Карточка водителя недоступна вашей роли');
         setTaskDriverId(resolved.id);setDriversSchoolKey(resolved.schoolKey ?? null);setDriversSearch(resolved.label);setSection('drivers');
       } else if (resolved.schoolKey) {
         if (canAccessSection(currentUserRole,'logistics',currentUser?.id)) {
-          setLogisticsSchoolKey(resolved.schoolKey);setLogisticsTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setLogisticsView('table');setSection('logistics');
+          taskNavigation.current = { section: 'logistics', transfer: resolved.transferNumber ? String(resolved.transferNumber) : '' };setTaskNavigationVersion(value=>value+1);setLogisticsSearch('');setLogisticsSchoolKey(resolved.schoolKey);setLogisticsTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setLogisticsView('table');setSection('logistics');
         } else if (canAccessSection(currentUserRole,'families',currentUser?.id)) {
-          setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setSection('families');
+          taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setSection('families');
         } else throw new Error('Раздел школы недоступен вашей роли');
       }
     } catch(error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть объект'); }
@@ -800,7 +814,7 @@ export default function App() {
       </main>
       <Suspense fallback={null}>
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
-        {taskFamily && <div style={{position:'fixed',inset:0,zIndex:2400,background:'#17374740',padding:20,overflow:'auto'}}><TaskFamilyCard family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
+        {taskFamily && <div style={{position:'fixed',inset:0,zIndex:2400,background:'#17374740',padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
       </Suspense>
       {isMobileViewport && (
         <button

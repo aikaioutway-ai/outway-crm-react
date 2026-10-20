@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { EMPLOYEE_SESSION_EXPIRED_EVENT, EMPLOYEE_SESSION_EXPIRED_MESSAGE } from './employeeSession';
-import { createExpense, deleteExpense, updateExpense } from './expenseService';
+import { createExpense, deleteExpense, updateExpense, fetchDriverPayments } from './expenseService';
 
 jest.mock('./supabase', () => ({
   supabase: { functions: { invoke: jest.fn() } },
@@ -96,4 +96,27 @@ test('deletes an expense through the protected expense API', async () => {
   expect(invoke).toHaveBeenCalledWith('expense-api', expect.objectContaining({
     body: { action: 'delete', expenseId: 'expense-1' },
   }));
+});
+
+describe('recipient salaries and history',()=>{
+const salaryExpense={name:'ЗП — Водитель',category:'school' as const,subcategory:'ЗП',unitPrice:1000,quantity:1,expenseDate:'2026-10-20',paymentMethod:'cash' as const,comment:'',driverId:'driver'};
+test('an old API cannot silently save a salary without its recipient',async()=>{
+  (supabase.functions.invoke as jest.Mock).mockResolvedValueOnce({data:{ok:false,error:'Неизвестное действие'}});
+  await expect(createExpense(salaryExpense,'session')).rejects.toThrow('после обновления сервера');
+  expect(supabase.functions.invoke).toHaveBeenCalledTimes(1);
+  expect(supabase.functions.invoke).toHaveBeenCalledWith('expense-api',expect.objectContaining({body:{action:'paymentCapabilities'}}));
+});
+test('recipient salary is sent only after API readiness is confirmed',async()=>{
+  (supabase.functions.invoke as jest.Mock).mockResolvedValueOnce({data:{ok:true,recipientDetails:true}}).mockResolvedValueOnce({data:{ok:true,row:{id:'saved',driver_id:'driver'}}});
+  await expect(createExpense(salaryExpense,'session')).resolves.toEqual(expect.objectContaining({id:'saved',driverId:'driver'}));
+  expect(supabase.functions.invoke).toHaveBeenNthCalledWith(2,'expense-api',expect.objectContaining({body:{action:'create',expense:salaryExpense}}));
+});
+
+test('driver history requests and maps only the chosen driver across both payment sources',async()=>{
+  (supabase.functions.invoke as jest.Mock).mockResolvedValueOnce({data:{ok:true,salaries:[{id:'same-id',driver_id:'chosen',expense_date:'2026-10-20',salary_period_key:'2026-10-1',amount:700},{id:'other',driver_id:'other-driver',amount:999}],advances:[{id:'same-id',driver_id:'chosen',date:'2026-10-19',period_month:10,period_year:2026,amount:300}]}});
+  const rows=await fetchDriverPayments('chosen','session');
+  expect(supabase.functions.invoke).toHaveBeenCalledWith('expense-api',expect.objectContaining({body:{action:'listDriverPayments',driverId:'chosen'}}));
+  expect(rows).toEqual([expect.objectContaining({id:'salary-same-id',kind:'salary',periodKey:'2026-10-1',amount:700}),expect.objectContaining({id:'advance-same-id',kind:'advance',periodKey:'2026-10',amount:300})]);
+});
+
 });

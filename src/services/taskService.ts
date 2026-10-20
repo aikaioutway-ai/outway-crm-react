@@ -2,7 +2,7 @@ import { useQuery, UseQueryResult } from '@tanstack/react-query';
 import { supabase } from './supabase';
 import { queryClient } from './queryClient';
 import { EMPLOYEE_SESSION_EXPIRED_EVENT, isEmployeeSessionExpiredMessage } from './employeeSession';
-import type { CrmTask, TaskEmployee, TaskEvent, TaskFilters, TaskSummary, TaskTarget } from '../modules/tasks/taskTypes';
+import type { CrmTask, TaskEmployee, TaskEvent, TaskFilters, TaskSummary, TaskTarget, TaskCounts } from '../modules/tasks/taskTypes';
 
 export async function callTaskApi<T>(sessionToken: string | undefined, body: Record<string,unknown>): Promise<T> {
   if (!sessionToken) throw new Error('Войдите в CRM, чтобы работать с задачами');
@@ -42,4 +42,8 @@ export function useTaskTargets(token: string | undefined,type:string,schoolKey:s
 
 export function useResolvedTaskTarget(token: string | undefined,target:TaskTarget,enabled:boolean): UseQueryResult<{target:TaskTarget}> {
   return useQuery({queryKey:['tasks',token,'resolve',target.type,target.id,target.transferNumber,target.schoolKey],queryFn:()=>callTaskApi<{target:TaskTarget}>(token,{action:'resolveTarget',target}),enabled:Boolean(token && enabled),staleTime:60000,retry:1});
+}
+
+export function useTaskStatistics(token?: string): UseQueryResult<{byEmployee:Record<string,TaskCounts>}> {
+  return useQuery({queryKey:['tasks',token,'statistics'],queryFn:()=>callTaskApi<{byEmployee:Record<string,TaskCounts>}>(token,{action:'statistics'}),enabled:Boolean(token),refetchInterval:60000,retry:1});
 }

@@ -188,7 +188,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
                   height: 18,
                   padding: '0 5px',
                   borderRadius: 999,
-                  background: '#31A4A5',
+                  background: n.key === 'tasks' ? '#DC2626' : '#31A4A5',
                   color: '#fff',
                   display: 'inline-flex',
                   alignItems: 'center',

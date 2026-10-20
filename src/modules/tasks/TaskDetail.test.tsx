@@ -21,3 +21,18 @@ test('creator reviews completed work instead of silently accepting own result',(
   expect(screen.getByRole('button',{name:'Подтвердить выполнение'})).toBeInTheDocument();
   expect(screen.getByText('Адрес подтверждён')).toBeInTheDocument();
 });
+
+test('assignee cannot delete a task created by another person',()=>{
+  render(<TaskDetail id="task" user={user} employees={employees} onClose={jest.fn()}/>);
+  expect(screen.queryByRole('button',{name:'Удалить задачу'})).not.toBeInTheDocument();
+});
+
+test('creator confirms deletion with a reason and the current task version',async()=>{
+  const onClose=jest.fn();
+  render(<TaskDetail id="task" user={{...user,id:'manager',role:'manager'}} employees={employees} onClose={onClose}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Удалить задачу'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Причина удаления (история сохранится)'}),{target:{value:'Ошибочно создана'}});
+  fireEvent.click(screen.getAllByRole('button',{name:'Удалить задачу'}).at(-1)!);
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','delete',expect.objectContaining({version:2,comment:'Ошибочно создана'}),'task'));
+  expect(onClose).toHaveBeenCalled();
+});

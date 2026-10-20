@@ -1,3 +1,4 @@
+import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
 import { Banknote, CheckCircle2, ChevronRight, RefreshCw, School, WalletCards } from 'lucide-react';
 import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
@@ -31,7 +32,7 @@ export default function SalaryExpensesView({ sessionToken }: { sessionToken?: st
       fetchSalaryExpenses(sessionToken),
       loadExpenseRows({ first: `${year}-09-01`, last: `${year + 1}-05-31` }, months, sessionToken),
     ]).then(([salaries, expenses]) => {
-      if (active) setRows([...salaries, ...expenses.filter(row => row.source === 'advance' && row.category === 'school' && row.recipientType === 'driver')]);
+      if (active) setRows([...salaries, ...expenses.filter(row => row.source === 'advance' && (row.category === 'school' || row.category === 'office'))]);
     }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить выплаты'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -41,11 +42,11 @@ export default function SalaryExpensesView({ sessionToken }: { sessionToken?: st
     const month = ALL_PERIODS.find(item => item.key === period);
     return periods.some(item => item.key === key) && (!month || key.startsWith(`${month.year}-${String(month.month).padStart(2, '0')}-`)) && (half === 'ALL' || key.endsWith(`-${half}`));
   });
-  const schools = [...SCHOOL_TABS.filter(item => item.key !== 'ALL').map(item => ({ key: item.key, label: item.label, logo: item.logo })), { key: 'UNASSIGNED', label: 'Без однозначной школы', logo: undefined }];
-  const schoolRows = (key: string) => filtered.filter(row => (row.schoolKey || 'UNASSIGNED') === key);
+  const schools = [...SCHOOL_TABS.filter(item => item.key !== 'ALL').map(item => ({ key: item.key, label: item.label, logo: item.logo })), ...EMPLOYEE_DEPARTMENTS.map(department => ({ key: `OFFICE:${department.key}`, label: department.label, logo: undefined })), { key: 'OFFICE', label: 'Офис · без отдела', logo: undefined }, { key: 'UNASSIGNED', label: 'Без однозначной школы', logo: undefined }];
+  const schoolRows = (key: string) => filtered.filter(row => (row.category === 'office' ? row.departmentKey ? `OFFICE:${row.departmentKey}` : 'OFFICE' : row.schoolKey || 'UNASSIGNED') === key);
   const total = (list: ExpenseRecord[], advances = false) => list.filter(row => advances ? row.source === 'advance' : row.source !== 'advance').reduce((sum, row) => sum + row.amount, 0);
   const selectedRows = school ? schoolRows(school) : [];
-  const sortedSchools = schools.filter(item => (item.key !== 'UNASSIGNED' || schoolRows(item.key).length > 0) && item.label.toLowerCase().includes(search.toLowerCase())).map(item => {
+  const sortedSchools = schools.filter(item => (!['UNASSIGNED', 'OFFICE'].includes(item.key) || schoolRows(item.key).length > 0) && item.label.toLowerCase().includes(search.toLowerCase())).map(item => {
     const list = schoolRows(item.key); const salary = total(list); const advance = total(list, true);
     return { ...item, salary, advance, total: salary + advance };
   }).sort((a, b) => {
@@ -58,9 +59,9 @@ export default function SalaryExpensesView({ sessionToken }: { sessionToken?: st
   return <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 10 }}>
     <DashboardTopPanel>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        {school && <button type="button" className="expense-cancel" onClick={() => { setSchool(null); setHalf('ALL'); setSearch(''); }}>← Все школы</button>}
+        {school && <button type="button" className="expense-cancel" onClick={() => { setSchool(null); setHalf('ALL'); setSearch(''); }}>← Школы и отделы</button>}
         <div style={{ flex: 1, minWidth: 0, display: 'flex' }}><ManagerPeriodBar periodKey={period} onPeriodKeyChange={setPeriod} periods={availablePeriods} showAll={false} /></div>
-        <DashboardSearch width={260} value={search} onChange={setSearch} placeholder={school ? 'Поиск выплаты...' : 'Поиск школы...'} />
+        <DashboardSearch width={260} value={search} onChange={setSearch} placeholder={school ? 'Поиск выплаты...' : 'Поиск школы или отдела...'} />
         <button type="button" style={{ width: 34, height: 34, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Обновить" aria-label="Обновить выплаты" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16} /></button>
       </div>
       {school && <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 10 }}>
@@ -70,7 +71,7 @@ export default function SalaryExpensesView({ sessionToken }: { sessionToken?: st
     </DashboardTopPanel>
     {error && <div role="alert" className="expense-form-error">{error === 'Неизвестное действие' ? 'Загрузка выплат пока недоступна.' : error}</div>}
     {!school ? <DashboardGrid template="minmax(230px, 1.4fr) repeat(3, minmax(150px, 1fr))">
-      <OverviewColumn first sortKey="school" label="Школа" icon={<School size={17} color="#fff" />} value={String(sortedSchools.length)} color="#64748B" sortState={{ key: sort, dir: ascending ? 'asc' : 'desc' }} onSort={handleSort}>
+      <OverviewColumn first sortKey="school" label="Школа / отдел" icon={<School size={17} color="#fff" />} value={String(sortedSchools.length)} color="#64748B" sortState={{ key: sort, dir: ascending ? 'asc' : 'desc' }} onSort={handleSort}>
         {sortedSchools.map((item, index) => <div key={item.key} data-school-row={item.key} onClick={() => { setSchool(item.key); setSearch(''); }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', cursor: 'pointer', background: index % 2 ? 'var(--surface-2)' : undefined }}>
           <SchoolAvatar logo={item.logo} label={item.label} color="var(--accent)" size={26} radius={7} fontSize={11} /><span style={{ fontWeight: 650, fontSize: 14 }}>{item.label}</span><ChevronRight size={14} color="var(--text-2)" />
         </div>)}

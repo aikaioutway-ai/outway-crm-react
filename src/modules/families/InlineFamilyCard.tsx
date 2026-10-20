@@ -27,6 +27,7 @@ interface AuditEntry {
   action: string; field: string; oldValue: string; newValue: string; createdAt: string;
 }
 interface Props {
+  initialChildId?: string;
   family: Family; onClose: () => void; userRole?: string; userName?: string; initialTab?: Tab; onUpdated?: () => void;
   sessionToken?: string;
 }
@@ -54,7 +55,7 @@ function formatInlineDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('ru-RU');
 }
 
-export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', onUpdated, sessionToken }: Props) {
+export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', initialChildId, onUpdated, sessionToken }: Props) {
   const [tab, setTab] = useState<Tab>(initialTab);
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
@@ -749,7 +750,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               </div>
 
               <DetailPanel title={`Дети (${cardChildren.length})`}>
-                <ChildrenOverviewTable children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
+                <ChildrenOverviewTable focusChildId={initialChildId} children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
             </div>
           )}
@@ -1648,6 +1649,7 @@ function ChildCard({
 
 function ChildrenOverviewTable({
   children,
+  focusChildId,
   branches,
   onSaveChild,
   onAddChild,
@@ -1659,6 +1661,7 @@ function ChildrenOverviewTable({
   canManageDiscount,
 }: {
   children: Child[];
+  focusChildId?: string;
   branches: V2BranchOption[];
   onSaveChild: (child: Child, patch: Partial<Child>) => Promise<boolean>;
   onAddChild: () => void;
@@ -1669,6 +1672,8 @@ function ChildrenOverviewTable({
   onEditDiscount?: (child: Child) => void;
   canManageDiscount?: boolean;
 }) {
+  const focusedRow = useRef<HTMLDivElement>(null);
+  useEffect(() => { if (focusChildId) focusedRow.current?.scrollIntoView({ block: 'center', behavior: 'smooth' }); }, [focusChildId, children.length]);
   return (
     <div style={{ display: 'grid', gap: 10 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, paddingBottom: 10, borderBottom: '1px solid #E8EEF1' }}>
@@ -1682,8 +1687,8 @@ function ChildrenOverviewTable({
       ) : (
         <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8, paddingTop: 4 }}>
           {children.map((child, index) => (
+            <div key={child.id} ref={child.id === focusChildId ? focusedRow : undefined} style={child.id === focusChildId ? { outline: '2px solid var(--accent)', borderRadius: 12, padding: 4 } : undefined}>
             <ChildCard
-              key={child.id}
               child={child}
               index={index}
               branches={branches}
@@ -1695,6 +1700,7 @@ function ChildrenOverviewTable({
               onEditDiscount={onEditDiscount}
               canManageDiscount={canManageDiscount}
             />
+            </div>
           ))}
         </div>
       )}

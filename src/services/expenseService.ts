@@ -9,6 +9,10 @@ function mapExpense(row: any): ExpenseRecord {
   return {
     id: String(row.id),
     schoolKey: row.school_key || undefined,
+    departmentKey: row.department_key || undefined,
+    driverId: row.driver_id || undefined,
+    employeeId: row.employee_id || undefined,
+    transferId: row.transfer_id || undefined,
     salaryPeriodKey: row.salary_period_key || undefined,
     name: String(row.name ?? ''),
     category: row.category as ExpenseCategory,
@@ -62,6 +66,15 @@ export async function fetchExpenses(periodStart: string, periodEnd: string, sess
 }
 
 export async function createExpense(expense: NewExpenseRecord, sessionToken?: string): Promise<ExpenseRecord> {
+  if (expense.driverId || expense.employeeId) {
+    try {
+      const capabilities = await callExpenseApi(sessionToken, { action: 'paymentCapabilities' });
+      if (!capabilities.recipientDetails) throw new Error('Сервер выплат ещё не обновлён');
+    } catch (error) {
+      if (error instanceof Error && error.message === 'Неизвестное действие') throw new Error('Сохранение зарплаты с получателем станет доступно после обновления сервера выплат');
+      throw error;
+    }
+  }
   const data = await callExpenseApi(sessionToken, { action: 'create', expense });
   return mapExpense(data.row);
 }
@@ -78,4 +91,17 @@ export async function deleteExpense(expenseId: string, sessionToken?: string): P
 export async function fetchSalaryExpenses(sessionToken?: string): Promise<ExpenseRecord[]> {
   const data = await callExpenseApi(sessionToken, { action: 'listSalary' });
   return (data.rows ?? []).map(mapExpense);
+}
+
+export async function fetchDriverPayments(driverId:string,sessionToken?:string):Promise<import('../modules/drivers/driverPayments').DriverPaymentRecord[]> {
+  let data;
+  try {data=await callExpenseApi(sessionToken,{action:'listDriverPayments',driverId});}
+  catch(error){if(error instanceof Error && error.message==='Неизвестное действие')throw new Error('История выплат станет доступна после обновления сервера выплат');throw error;}
+  const salaryRows=(data.salaries??[]).filter((row:any)=>row.driver_id===driverId).map((row:any)=>({
+    id:`salary-${row.id}`,sourceId:String(row.id),kind:'salary' as const,date:String(row.expense_date??''),amount:Number(row.amount??0),periodKey:String(row.salary_period_key??String(row.expense_date??'').slice(0,7)),schoolKey:row.school_key??undefined,paymentMethod:row.payment_method??undefined,paymentOrderNumber:row.payment_order_number??undefined,comment:String(row.comment??''),createdAt:String(row.created_at??''),
+  }));
+  const advanceRows=(data.advances??[]).filter((row:any)=>row.driver_id===driverId).map((row:any)=>({
+    id:`advance-${row.id}`,sourceId:String(row.id),kind:'advance' as const,date:String(row.date??''),amount:Number(row.amount??0),periodKey:row.salary_period_key || (row.period_year && row.period_month ? `${row.period_year}-${String(row.period_month).padStart(2,'0')}`:String(row.date??'').slice(0,7)),schoolKey:row.school_key??undefined,paymentMethod:row.payment_method??undefined,paymentOrderNumber:row.payment_order_number??undefined,comment:String(row.comment??''),createdAt:String(row.created_at??''),
+  }));
+  return [...salaryRows,...advanceRows].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
 }

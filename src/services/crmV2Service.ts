@@ -172,6 +172,7 @@ export interface UpdateV2DriverInput {
 }
 
 export interface V2DriverAdvance {
+  salaryPeriodKey?: string;
   periodMonth?: number;
   periodYear?: number;
   schoolKey?: string;
@@ -1742,10 +1743,11 @@ export async function deleteV2Driver(driverId: string): Promise<void> {
 
 export async function createV2DriverAdvance(input: {
   driverId: string; amount: number; date: string; comment: string;
-  periodMonth: number; periodYear: number; schoolKey?: string; transferId?: string;
+  periodMonth: number; periodYear: number; salaryPeriodKey?: string; schoolKey?: string; transferId?: string;
   paymentMethod: string; paymentOrderNumber?: string;
 }): Promise<void> {
   const { error } = await supabase.from('v2_driver_advances').insert({
+    ...(input.salaryPeriodKey ? { salary_period_key: input.salaryPeriodKey } : {}),
     driver_id: input.driverId, amount: input.amount, date: input.date,
     comment: input.comment.trim() || null, period_month: input.periodMonth,
     period_year: input.periodYear, school_key: input.schoolKey || null,
@@ -1763,6 +1765,7 @@ export async function fetchV2DriverAdvances(driverId: string): Promise<V2DriverA
     .order('date', { ascending: false });
   if (error) throw new Error(error.message);
   return (data ?? []).map((row: any) => ({
+    salaryPeriodKey: row.salary_period_key ?? undefined,
     periodMonth: row.period_month == null ? undefined : Number(row.period_month),
     periodYear: row.period_year == null ? undefined : Number(row.period_year),
     schoolKey: row.school_key ?? undefined,
@@ -1791,6 +1794,7 @@ export async function fetchV2DriverAdvancesForPeriod(periodMonth: number, period
     .range(from, to));
 
   return data.map((row: any) => ({
+    salaryPeriodKey: row.salary_period_key ?? undefined,
     periodMonth: row.period_month == null ? undefined : Number(row.period_month),
     periodYear: row.period_year == null ? undefined : Number(row.period_year),
     schoolKey: row.school_key ?? undefined,

@@ -1,3 +1,4 @@
+import { taskReadScope, countTask, type TaskCounts } from './access.ts';
 import { SCHOOL_TABS } from './schools.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -103,21 +104,41 @@ Deno.serve(async req => {
     if (!employee || employee.status !== 'active' || !ALLOWED_ROLES.has(employee.role)) return response({ok:false,error:'Нет доступа к задачам'},403);
     const body = await req.json();
     const leader = LEADERS.has(employee.role);
-    const visible = (query: any) => leader ? query : query.or(`creator_id.eq.${employee.id},assignee_id.eq.${employee.id},observer_id.eq.${employee.id}`);
+    const scope = taskReadScope(employee.role);
+    const colleagues = scope.roles.length ? checked(await db.from('v2_employees').select('id').in('role', scope.roles)) ?? [] : [];
+    const colleagueIds = colleagues.map((row: any) => JSON.stringify(String(row.id))).join(',');
+    const visible = (query: any) => scope.all ? query.is('deleted_at', null) : query.is('deleted_at', null).or(`creator_id.eq.${employee.id},assignee_id.eq.${employee.id},observer_id.eq.${employee.id}${colleagueIds ? `,assignee_id.in.(${colleagueIds})` : ''}`);
     if (body.action === 'metadata') {
       const employees = checked(await db.from('v2_employees').select('id,full_name,role,status').neq('role','driver').order('full_name'));
-      return response({ok:true,employees,canViewAll:leader,targetTypes:String(employee.role).startsWith('b2b_')?['general','driver']:['general','school','transfer','child','family','driver','group']});
+      return response({ok:true,employees,canViewAll:scope.team,targetTypes:String(employee.role).startsWith('b2b_')?['general','driver']:['general','school','transfer','child','family','driver','group']});
     }
     if (body.action === 'summary') {
       const summary=checked(await db.rpc('v2_task_summary',{p_actor_id:employee.id}));
       return response({ok:true,summary});
     }
+    if (body.action === 'statistics') {
+      const byEmployee: Record<string, TaskCounts> = {};
+      const tracked = scope.all ? checked(await db.from('v2_employees').select('id').eq('status', 'active').neq('role', 'driver')) ?? [] : colleagues;
+      for (const person of tracked) byEmployee[person.id] = { total: 0, open: 0, completed: 0, overdue: 0, review: 0 };
+      const now = Date.now();
+      for (let offset = 0; ; offset += 1000) {
+        const rows = checked(await visible(db.from('v2_tasks').select('id,assignee_id,status,due_at')).order('id').range(offset, offset + 999)) ?? [];
+        for (const row of rows) {
+          const counts = countTask(row, now);
+          const current = byEmployee[row.assignee_id] ?? { total: 0, open: 0, completed: 0, overdue: 0, review: 0 };
+          for (const key of Object.keys(counts) as Array<keyof TaskCounts>) current[key] += counts[key];
+          byEmployee[row.assignee_id] = current;
+        }
+        if (rows.length < 1000) break;
+      }
+      return response({ ok: true, byEmployee });
+    }
     if (body.action === 'list') {
-      let query = db.from('v2_tasks').select('*',{count:'exact'});
+      let query = visible(db.from('v2_tasks').select('*',{count:'exact'}));
       const filters = body.filters ?? {};
       if (filters.view==='created') query=query.eq('creator_id',employee.id);
       else if (filters.view==='watching') query=query.eq('observer_id',employee.id);
-      else if (filters.view!=='all' || !leader) query=query.eq('assignee_id',employee.id);
+      else if (filters.view!=='all' || !scope.team) query=query.eq('assignee_id',employee.id);
       if (filters.status && filters.status!=='active' && filters.status!=='all') query=query.eq('status',filters.status);
       else if (filters.status!=='all') query=query.in('status',['new','in_progress','review']);
       if (filters.assigneeId) query=query.eq('assignee_id',String(filters.assigneeId));
@@ -192,6 +213,10 @@ Deno.serve(async req => {
     }
     if (body.action==='resolveTarget') return response({ok:true,target:await resolveTarget(db,body.target,employee)});
     if (body.action==='mutate') {
+      if (body.operation !== 'create') {
+        const allowed = checked(await visible(db.from('v2_tasks').select('id').eq('id', String(body.taskId))).maybeSingle());
+        if (!allowed) return response({ok:false,error:'Задача не найдена или нет доступа'},404);
+      }
       const input={...(body.input ?? {})};
       if (input.target) input.target=await resolveTarget(db,input.target,employee);
       if (JSON.stringify(input).length>40000) throw new Error('Слишком большой текст задачи');

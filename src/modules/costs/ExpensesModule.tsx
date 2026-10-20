@@ -1,3 +1,4 @@
+import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
 import { SCHOOL_TABS } from '../families/constants';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
@@ -68,7 +69,7 @@ function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
         </tr></thead>
         <tbody>{rows.map(row => (
           <tr key={row.id}>
-            <td className="expense-name">{row.name}{row.schoolKey && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey} · {salaryExpensePeriods(Number(row.salaryPeriodKey?.slice(0, 4)) - (Number(row.salaryPeriodKey?.slice(5, 7)) < 9 ? 1 : 0)).find(period => period.key === row.salaryPeriodKey)?.label ?? row.salaryPeriodKey}</div>}</td>
+            <td className="expense-name">{row.name}{row.departmentKey && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{EMPLOYEE_DEPARTMENTS.find(department => department.key === row.departmentKey)?.label ?? row.departmentKey} · {salaryExpensePeriods(Number(row.salaryPeriodKey?.slice(0, 4)) - (Number(row.salaryPeriodKey?.slice(5, 7)) < 9 ? 1 : 0)).find(period => period.key === row.salaryPeriodKey)?.label ?? row.salaryPeriodKey}</div>}{row.schoolKey && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 3 }}>{SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey} · {salaryExpensePeriods(Number(row.salaryPeriodKey?.slice(0, 4)) - (Number(row.salaryPeriodKey?.slice(5, 7)) < 9 ? 1 : 0)).find(period => period.key === row.salaryPeriodKey)?.label ?? row.salaryPeriodKey}</div>}</td>
             {showCategory && <td><span className="expense-badge">{EXPENSE_CATEGORIES[row.category].label}</span></td>}
             <td>{row.subcategory}</td>
             <td className="number">{money(row.unitPrice)}</td>
@@ -92,7 +93,7 @@ function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId }: {
   );
 }
 
-function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowPersonalCategory, onClose, onSaved }: {
+export function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowPersonalCategory, onClose, onSaved }: {
   initialCategory: ExpenseCategory | null;
   expense?: ExpenseRecord | null;
   userName?: string;
@@ -104,7 +105,7 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
   const requestedCategory = expense?.category ?? initialCategory ?? 'school';
   const defaultCategory = requestedCategory === 'personal' && !allowPersonalCategory ? 'school' : requestedCategory;
   const [category, setCategory] = useState<ExpenseCategory>(defaultCategory);
-  const [subcategory, setSubcategory] = useState(expense?.subcategory ?? EXPENSE_CATEGORIES[defaultCategory].subcategories[0]);
+  const [subcategory, setSubcategory] = useState(expense?.subcategory ?? EXPENSE_CATEGORIES[defaultCategory].subcategories.find(item=>item!=='ЗП')!);
   const [name, setName] = useState(expense?.name ?? '');
   const [unitPrice, setUnitPrice] = useState(expense ? String(expense.unitPrice) : '');
   const [quantity, setQuantity] = useState(expense ? String(expense.quantity) : '1');
@@ -112,17 +113,20 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
   const [paymentMethod, setPaymentMethod] = useState<ExpensePaymentMethod>(expense?.paymentMethod ?? 'cashless');
   const [paymentOrderNumber, setPaymentOrderNumber] = useState(expense?.paymentOrderNumber ?? '');
   const [comment, setComment] = useState(expense?.comment ?? '');
+  const [departmentKey, setDepartmentKey] = useState(expense?.departmentKey ?? '');
   const [schoolKey, setSchoolKey] = useState(expense?.schoolKey ?? '');
   const [salaryPeriodKey, setSalaryPeriodKey] = useState(expense?.salaryPeriodKey ?? '');
   const salaryPeriods = salaryExpensePeriods(currentSchoolYear());
   const isSchoolSalary = category === 'school' && subcategory === 'ЗП';
+  const isOfficeSalary = category === 'office' && subcategory === 'ЗП';
+  const isSalary = isSchoolSalary || isOfficeSalary;
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const total = Math.max(0, Number(unitPrice) || 0) * Math.max(0, Number(quantity) || 0);
 
   const changeCategory = (next: ExpenseCategory) => {
     setCategory(next);
-    setSubcategory(EXPENSE_CATEGORIES[next].subcategories[0]);
+    setSubcategory(EXPENSE_CATEGORIES[next].subcategories.find(item=>item!=='ЗП')!);
   };
 
   const submit = async (event: FormEvent) => {
@@ -131,13 +135,14 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
       setError('Заполните наименование, подкатегорию, цену, количество и дату.');
       return;
     }
-    if (isSchoolSalary && (!schoolKey || !salaryPeriods.some(period => period.key === salaryPeriodKey))) { setError('Выберите школу и период зарплаты'); return; }
+    if (isSalary && (!(isSchoolSalary ? schoolKey : EMPLOYEE_DEPARTMENTS.some(department => department.key === departmentKey)) || !salaryPeriods.some(period => period.key === salaryPeriodKey))) { setError(isSchoolSalary ? 'Выберите школу и период зарплаты' : 'Выберите отдел и период зарплаты'); return; }
     setSaving(true);
     setError('');
     try {
       const payload = {
         name, category, subcategory,
-        schoolKey: isSchoolSalary ? schoolKey : undefined, salaryPeriodKey: isSchoolSalary ? salaryPeriodKey : undefined,
+        driverId: isSchoolSalary ? expense?.driverId : undefined, employeeId: isOfficeSalary ? expense?.employeeId : undefined, transferId: isSchoolSalary ? expense?.transferId : undefined,
+        schoolKey: isSchoolSalary ? schoolKey : undefined, departmentKey: isOfficeSalary ? departmentKey : undefined, salaryPeriodKey: isSalary ? salaryPeriodKey : undefined,
         unitPrice: Number(unitPrice), quantity: Number(quantity),
         expenseDate, paymentMethod, paymentOrderNumber: paymentOrderNumber.trim() || undefined, comment, createdBy: userName,
       };
@@ -158,10 +163,10 @@ function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowP
         <div className="expense-modal-head"><h2>{expense ? 'Редактировать расход' : 'Новый расход'}</h2><button className="expense-modal-close" onClick={onClose} aria-label="Закрыть"><X size={18} /></button></div>
         <form className="expense-form" onSubmit={submit}>
           <div className="expense-field full"><label>Наименование расхода</label><input autoFocus value={name} onChange={event => setName(event.target.value)} placeholder="Например, аренда офиса" /></div>
-          <div className="expense-field"><label>Главная категория</label><select value={category} onChange={event => changeCategory(event.target.value as ExpenseCategory)}>{EXPENSE_CATEGORY_KEYS.filter(key => allowPersonalCategory || key !== 'personal').map(key => <option key={key} value={key}>{EXPENSE_CATEGORIES[key].label}</option>)}</select></div>
-          <div className="expense-field"><label>Подкатегория</label><select value={subcategory} onChange={event => setSubcategory(event.target.value)}>{EXPENSE_CATEGORIES[category].subcategories.map(item => <option key={item}>{item}</option>)}</select></div>
-          {isSchoolSalary && <>
-            <div className="expense-field"><label htmlFor="salary-expense-school">Школа</label><select id="salary-expense-school" value={schoolKey} onChange={event => setSchoolKey(event.target.value)} required><option value="">Выберите школу</option>{SCHOOL_TABS.filter(school => school.key !== 'ALL').map(school => <option key={school.key} value={school.key}>{school.label}</option>)}</select></div>
+          <div className="expense-field"><label htmlFor="expense-category">Главная категория</label><select id="expense-category" value={category} onChange={event => changeCategory(event.target.value as ExpenseCategory)}>{EXPENSE_CATEGORY_KEYS.filter(key => allowPersonalCategory || key !== 'personal').map(key => <option key={key} value={key}>{EXPENSE_CATEGORIES[key].label}</option>)}</select></div>
+          <div className="expense-field"><label htmlFor="expense-subcategory">Подкатегория</label><select id="expense-subcategory" value={subcategory} onChange={event => setSubcategory(event.target.value)}>{EXPENSE_CATEGORIES[category].subcategories.filter(item => item !== 'ЗП' || expense?.subcategory === 'ЗП').map(item => <option key={item}>{item}</option>)}</select></div>
+          {isSalary && <>
+            {isSchoolSalary ? <div className="expense-field"><label htmlFor="salary-expense-school">Школа</label><select id="salary-expense-school" value={schoolKey} onChange={event => setSchoolKey(event.target.value)} required><option value="">Выберите школу</option>{SCHOOL_TABS.filter(school => school.key !== 'ALL').map(school => <option key={school.key} value={school.key}>{school.label}</option>)}</select></div> : <div className="expense-field"><label htmlFor="salary-expense-department">Отдел</label><select id="salary-expense-department" value={departmentKey} onChange={event => setDepartmentKey(event.target.value)} required><option value="">Выберите отдел</option>{EMPLOYEE_DEPARTMENTS.map(department => <option key={department.key} value={department.key}>{department.label}</option>)}</select></div>}
             <div className="expense-field"><label htmlFor="salary-expense-period">Период зарплаты</label><select id="salary-expense-period" value={salaryPeriodKey} onChange={event => setSalaryPeriodKey(event.target.value)} required><option value="">Выберите период</option>{salaryPeriods.map(period => <option key={period.key} value={period.key}>{period.label}</option>)}</select></div>
           </>}
           <div className="expense-field"><label>Цена, сом</label><input type="number" min="0" step="0.01" value={unitPrice} onChange={event => setUnitPrice(event.target.value)} placeholder="0" /></div>
@@ -297,7 +302,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
         <div className={`expenses-toolbar${toolbarContent ? '' : ' expenses-toolbar-inner'}`}>
           {toolbarContent}
           <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} />
-          <div className="expenses-create-actions"><button className="expenses-add" title="Новый расход" aria-label="Новый расход" onClick={() => { setEditingExpense(null); setModalOpen(true); }}><Plus size={17} /></button><button className="expenses-add" title="Новый аванс" aria-label="Новый аванс" onClick={() => setAdvanceOpen(true)}><WalletCards size={17} /></button></div>
+          <div className="expenses-create-actions"><button className="expenses-add" title="Новый расход" aria-label="Новый расход" onClick={() => { setEditingExpense(null); setModalOpen(true); }}><Plus size={17} /></button><button className="expenses-add" title="Новая выплата" aria-label="Новая выплата" onClick={() => setAdvanceOpen(true)}><WalletCards size={17} />Новая выплата</button></div>
         </div>
 
         {loadError && <div className="expenses-load-error">Не удалось загрузить данные: {loadError}. Проверьте, что миграция расходов применена.</div>}
@@ -334,7 +339,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
         </div>
         {loading ? <div className="expenses-empty">Загрузка…</div> : <ExpensesTable rows={canViewPersonalDetails ? visibleRows : visibleRows.filter(row => row.category !== 'personal')} showCategory={!selectedCategory} onEdit={expense => { setEditingExpense(expense); setModalOpen(true); }} onDelete={handleDelete} deletingId={deletingId} />}
       </div>}
-      {advanceOpen && <EmployeeAdvanceModal onClose={() => setAdvanceOpen(false)} onSaved={() => setRefreshKey(value => value + 1)} />}
+      {advanceOpen && <EmployeeAdvanceModal sessionToken={sessionToken} onClose={() => setAdvanceOpen(false)} onSaved={() => setRefreshKey(value => value + 1)} />}
       {modalOpen && <ExpenseModal initialCategory={selectedCategory} expense={editingExpense} userName={userName} sessionToken={sessionToken} allowPersonalCategory={canViewPersonalDetails} onClose={() => { setModalOpen(false); setEditingExpense(null); }} onSaved={handleSaved} />}
     </div>
   );

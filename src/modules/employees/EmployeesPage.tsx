@@ -1,3 +1,4 @@
+import { EMPLOYEE_DEPARTMENTS } from './employeeDepartments';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Building2, CalendarDays, FileText, Plus, Save, Search, ShieldCheck, Trash2, WalletCards, X } from 'lucide-react';
 import { ColumnDef, DataTable } from '../../core/tables/DataTable';
@@ -14,12 +15,8 @@ const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
   { value: 'manager', label: 'Менеджер' }, { value: 'cashier', label: 'Кассир' }, { value: 'logist', label: 'Логист' },
   { value: 'b2b_manager', label: 'Менеджер B2B' }, { value: 'b2b_logist', label: 'Логист B2B' }, { value: 'senior_logist', label: 'Нач. логистики' }, { value: 'driver', label: 'Водитель' },
 ];
-const DEPARTMENTS = [
-  { key: 'logistics', label: 'Отдел логистики', roles: ['logist', 'senior_logist', 'b2b_logist', 'driver'], icon: <BriefcaseBusiness size={18} /> },
-  { key: 'service', label: 'Отдел клиентского сервиса', roles: ['manager', 'b2b_manager', 'director'], icon: <Building2 size={18} /> },
-  { key: 'finance', label: 'Отдел финансов', roles: ['cashier', 'gen_director'], icon: <WalletCards size={18} /> },
-  { key: 'admin', label: 'Администратор', roles: ['admin'], icon: <ShieldCheck size={18} /> },
-];
+const departmentIcons = [<BriefcaseBusiness size={18} />, <Building2 size={18} />, <WalletCards size={18} />, <ShieldCheck size={18} />];
+const DEPARTMENTS = EMPLOYEE_DEPARTMENTS.map((department, index) => ({ ...department, icon: departmentIcons[index] }));
 const DEPARTMENT_COLUMNS = [
   { key: 'department', label: 'Отдел', color: '#626C8B' },
   { key: 'total', label: 'Сотрудники', color: '#2563EB' },
