@@ -4,7 +4,7 @@ import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs from './modules/families/ManagerModeTabs';
-import React, { lazy, Suspense, useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
@@ -33,7 +33,11 @@ import {
 } from './services/employeeSession';
 import { useFamiliesTable } from './hooks/useCrmQueries';
 import { SCHOOL_TABS, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
-import { UserRole } from './types';
+import { Family, UserRole } from './types';
+import { fetchV2Family } from './services/crmV2Service';
+import { callTaskApi, useTaskSummary } from './services/taskService';
+import { TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
+import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
 import { invalidateFamiliesCache } from './services/crmV2Service';
@@ -48,6 +52,9 @@ const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
+const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
+const TaskComposer = lazy(() => import('./modules/tasks/TaskComposer'));
+const TaskFamilyCard = lazy(() => import('./modules/families/InlineFamilyCard'));
 const MobileApp = lazy(() => import('./mobile/MobileApp'));
 
 function SectionLoading() {
@@ -88,9 +95,31 @@ function getSavedUser(): AuthenticatedUser | null {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => getSavedUser());
+  const taskUserRef = useRef(currentUser?.id);
+  taskUserRef.current = currentUser?.id;
   const currentUserRole = currentUser?.role ?? getSavedRole();
+  const taskSummary = useTaskSummary(currentUser?.sessionToken);
+  const [taskContext, setTaskContext] = useState<TaskTarget | null>(null);
+  const [taskTarget, setTaskTarget] = useState<TaskTarget | null>(null);
+  const [taskFamily, setTaskFamily] = useState<Family | null>(null);
+  const [taskDriverId, setTaskDriverId] = useState('');
+
+
   const isMobileViewport = useIsMobileViewport();
   const [forceDesktop, setForceDesktop] = useForceDesktop();
+  useEffect(() => {
+    let active = true;
+    const compose = (event: Event) => { if (currentUser) setTaskTarget((event as CustomEvent<TaskTarget>).detail); };
+    const view = (event: Event) => {
+      if (!currentUser || (isMobileViewport && !forceDesktop)) return;
+      void callTaskApi<{target:TaskTarget}>(currentUser.sessionToken,{action:'resolveTarget',target:(event as CustomEvent<TaskTarget>).detail})
+        .then(({target})=>{if(active){setTaskContext(target);setSection('tasks');}})
+        .catch(error=>window.alert(error instanceof Error?error.message:'Не удалось открыть задачи'));
+    };
+    window.addEventListener(TASK_COMPOSER_EVENT, compose);
+    window.addEventListener(TASK_VIEW_EVENT, view);
+    return () => { active=false;window.removeEventListener(TASK_COMPOSER_EVENT, compose);window.removeEventListener(TASK_VIEW_EVENT, view); };
+  }, [currentUser,isMobileViewport,forceDesktop]);
   useDesktopViewport(isMobileViewport && forceDesktop && !!currentUser);
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole, currentUser?.id)[0]);
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
@@ -168,12 +197,14 @@ export default function App() {
   const handleLogout = () => {
     localStorage.removeItem(SESSION_KEY);
     setCurrentUser(null);
+      setTaskTarget(null);setTaskFamily(null);setTaskContext(null);setTaskDriverId('');
   };
 
   useEffect(() => {
     const expireSession = () => {
       localStorage.removeItem(SESSION_KEY);
       setCurrentUser(null);
+      setTaskTarget(null);setTaskFamily(null);setTaskContext(null);setTaskDriverId('');
     };
     window.addEventListener(EMPLOYEE_SESSION_EXPIRED_EVENT, expireSession);
 
@@ -258,8 +289,8 @@ export default function App() {
 
   const badgesQuery = useFamiliesTable({ enabled: !!currentUser });
   const badges: Partial<Record<NavSection, number>> = currentUser && badgesQuery.data
-    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length }
-    : {};
+    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length, tasks: taskSummary.data?.attention ?? 0 }
+    : { tasks: taskSummary.data?.attention ?? 0 };
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
@@ -336,6 +367,37 @@ export default function App() {
     transition: 'padding-right .18s ease',
   };
 
+  const taskSchool = section === 'families' ? managerSchoolKey : section === 'logistics' ? logisticsSchoolKey : section === 'drivers' ? driversSchoolKey : null;
+  const taskTransfer = section === 'families' ? managerTransferFilter : section === 'logistics' ? logisticsTransferFilter : section === 'drivers' ? driversTransferFilter : '';
+  const contextTaskTarget: TaskTarget | null = taskSchool ? (/^\d+$/.test(taskTransfer)
+    ? {type:'transfer',id:'',schoolKey:taskSchool,transferNumber:Number(taskTransfer),label:`${taskSchool} · Трансфер № ${taskTransfer}`}
+    : {type:'school',id:taskSchool,label:SCHOOL_TABS.find(s=>s.key===taskSchool)?.label ?? taskSchool,schoolKey:taskSchool}) : null;
+  const openTaskTarget = async (target: TaskTarget) => {
+    try {
+      const requestedUser = currentUser?.id;
+      const resolved = (await callTaskApi<{target:TaskTarget}>(currentUser?.sessionToken,{action:'resolveTarget',target})).target;
+      if (taskUserRef.current !== requestedUser) return;
+      if (resolved.type === 'family' || resolved.type === 'child') {
+        const family = await fetchV2Family(resolved.familyId ?? resolved.id);
+        if (!family) throw new Error('Семья не найдена');
+        if (taskUserRef.current !== requestedUser) return;
+        setTaskFamily(family);
+      } else if (resolved.type === 'group' && resolved.schoolKey && canAccessSection(currentUserRole,'families',currentUser?.id)) {
+        setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.group ?? '');setSection('families');
+      } else if (resolved.type === 'driver') {
+        if (!canAccessSection(currentUserRole,'drivers',currentUser?.id)) throw new Error('Карточка водителя недоступна вашей роли');
+        setTaskDriverId(resolved.id);setDriversSchoolKey(resolved.schoolKey ?? null);setDriversSearch(resolved.label);setSection('drivers');
+      } else if (resolved.schoolKey) {
+        if (canAccessSection(currentUserRole,'logistics',currentUser?.id)) {
+          setLogisticsSchoolKey(resolved.schoolKey);setLogisticsTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setLogisticsView('table');setSection('logistics');
+        } else if (canAccessSection(currentUserRole,'families',currentUser?.id)) {
+          setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setSection('families');
+        } else throw new Error('Раздел школы недоступен вашей роли');
+      }
+    } catch(error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть объект'); }
+  };
+
+
   if (!currentUser) {
     return <LoginPage onLogin={handleLogin} />;
   }
@@ -343,7 +405,8 @@ export default function App() {
   if (isMobileViewport && !forceDesktop) {
     return (
       <Suspense fallback={<SectionLoading />}>
-        <MobileApp user={currentUser} onLogout={handleLogout} onOpenDesktop={() => setForceDesktop(true)} />
+        <MobileApp user={currentUser} onLogout={handleLogout} onOpenDesktop={() => setForceDesktop(true)} onOpenTaskTarget={target => { setForceDesktop(true); void openTaskTarget(target); }} />
+        {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
       </Suspense>
     );
   }
@@ -384,6 +447,7 @@ export default function App() {
                     <CashierViewTabs compact value={cashierView} onChange={setCashierView} />
                   </>
                 )}
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
@@ -487,6 +551,7 @@ export default function App() {
                   </>
                 )}
 
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
@@ -560,6 +625,7 @@ export default function App() {
                   </button>
                 )}
                 {managerSchoolKey && <ManagerModeTabs compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
@@ -628,6 +694,7 @@ export default function App() {
                   </button>
                 )}
                 {driversSchoolKey && <div style={{ marginBottom: 8 }}><LogisticsTabs school value="drivers" onChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }} /></div>}
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
@@ -651,11 +718,14 @@ export default function App() {
                   authToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
                   schoolKey={driversSchoolKey}
+                  initialOpenDriverId={taskDriverId}
                   externalQuickTransfer={driversTransferFilter}
                   initialSearch={driversSearch}
                   onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
                 />
               </>
+            ) : taskDriverId ? (
+              <DriversPage userRole={currentUserRole} userName={currentUser.name} authToken={currentUser.sessionToken} allowedSchools={currentUser.schoolKeys} initialOpenDriverId={taskDriverId} initialSearch={driversSearch} />
             ) : (
               <DriversOverview
                 onSearchChange={setDriversSearch}
@@ -672,6 +742,7 @@ export default function App() {
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Диспетчер')}
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
@@ -680,6 +751,7 @@ export default function App() {
             </div>
           </div>
         ) : section === 'expenses' ? (
+
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={tabRowStyle}><div style={tabBarStyle}>
               {sectionLabel('Финансы')}
@@ -690,22 +762,27 @@ export default function App() {
             </div></div>
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView sessionToken={currentUser?.sessionToken} />}
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
+
           </div>
         ) : section === 'market' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Маркет')}
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
             <MarketModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
           </div>
+        ) : section === 'tasks' ? (
+          <TasksModule user={currentUser} context={taskContext ?? undefined} onClearContext={()=>setTaskContext(null)} onOpenTarget={target => void openTaskTarget(target)} />
         ) : section === 'employees' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
                 {sectionLabel('Сотрудники')}
+                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
@@ -721,6 +798,10 @@ export default function App() {
         )}
         </Suspense>
       </main>
+      <Suspense fallback={null}>
+        {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
+        {taskFamily && <div style={{position:'fixed',inset:0,zIndex:2400,background:'#17374740',padding:20,overflow:'auto'}}><TaskFamilyCard family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
+      </Suspense>
       {isMobileViewport && (
         <button
           type="button"

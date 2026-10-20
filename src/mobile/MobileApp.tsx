@@ -1,18 +1,22 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
-import { ChevronRight, LogOut, Menu, Monitor, Route, UserCog, Users, Wallet } from 'lucide-react';
+import { ListTodo, ChevronRight, LogOut, Menu, Monitor, Route, UserCog, Users, Wallet } from 'lucide-react';
 import { canAccessSection, NavSection } from '../core/bars/Sidebar';
 import { AuthenticatedUser } from '../services/employeeService';
 import { MobileNavProvider, Screen, useMobileNav, useNavPosition } from './nav';
 import { Skeletons } from './ui';
+import { callTaskApi, useTaskSummary } from '../services/taskService';
+import { TASK_VIEW_EVENT, TaskTarget } from '../modules/tasks/taskTypes';
 import { isMobilePreview } from './useIsMobile';
 import './mobile.css';
 
 const ManagerSection = lazy(() => import('./sections/ManagerSection'));
 const LogisticsSection = lazy(() => import('./sections/LogisticsSection'));
 const CashierSection = lazy(() => import('./sections/CashierSection'));
+const TasksModule = lazy(() => import('../modules/tasks/TasksModule'));
+const TaskFamilySheet = lazy(() => import('./FamilySheet'));
 const EmployeesSection = lazy(() => import('./sections/EmployeesSection'));
 
-type MobileTab = 'manager' | 'logistics' | 'cashier' | 'more';
+type MobileTab = 'manager' | 'logistics' | 'cashier' | 'tasks' | 'more';
 
 const ROLE_LABEL: Record<string, string> = {
   admin: 'Админ', gen_director: 'Ген. директор', director: 'Директор', manager: 'Менеджер', cashier: 'Кассир',
@@ -23,6 +27,7 @@ const TABS: { key: MobileTab; label: string; icon: React.ReactNode; sections: Na
   { key: 'manager', label: 'Менеджер', icon: <Users size={22} />, sections: ['families'] },
   { key: 'logistics', label: 'Логистика', icon: <Route size={22} />, sections: ['logistics', 'drivers'] },
   { key: 'cashier', label: 'Кассир', icon: <Wallet size={22} />, sections: ['cashier'] },
+  { key: 'tasks', label: 'Задачи', icon: <ListTodo size={22} />, sections: ['tasks'] },
   { key: 'more', label: 'Ещё', icon: <Menu size={22} />, sections: [] },
 ];
 
@@ -32,6 +37,7 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
   user: AuthenticatedUser;
   onLogout: () => void;
   onOpenDesktop: () => void;
+  onOpenTaskTarget?: (target: TaskTarget) => void;
 }) {
   const nav = useNavPosition();
   const canSeeEmployees = canAccessSection(user.role, 'employees', user.id);
@@ -83,12 +89,16 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
   );
 }
 
-function MobileShell({ user, onLogout, onOpenDesktop }: {
+function MobileShell({ user, onLogout, onOpenDesktop, onOpenTaskTarget }: {
   user: AuthenticatedUser;
   onLogout: () => void;
   onOpenDesktop: () => void;
+  onOpenTaskTarget?: (target: TaskTarget) => void;
 }) {
   const nav = useMobileNav();
+  const taskSummary = useTaskSummary(user.sessionToken);
+  const [taskFamilyId, setTaskFamilyId] = useState('');
+  const [taskContext, setTaskContext] = useState<TaskTarget | undefined>();
   const tabs = TABS.filter(tab => tab.key === 'more' || tab.sections.some(section => canAccessSection(user.role, section, user.id)));
   const [tab, setTab] = useState<MobileTab>(() => {
     let saved: string | null = null;
@@ -109,15 +119,27 @@ function MobileShell({ user, onLogout, onOpenDesktop }: {
     setTab(next);
   };
 
+  useEffect(() => {
+    const view = (event: Event) => {
+      void callTaskApi<{target:TaskTarget}>(user.sessionToken,{action:'resolveTarget',target:(event as CustomEvent<TaskTarget>).detail})
+        .then(({target})=>{setTaskContext(target);setTaskFamilyId('');nav.reset();setTab('tasks');})
+        .catch(error=>window.alert(error instanceof Error?error.message:'Не удалось открыть задачи'));
+    };
+    window.addEventListener(TASK_VIEW_EVENT,view);
+    return()=>window.removeEventListener(TASK_VIEW_EVENT,view);
+  },[user.sessionToken,nav]);
+
   const section = tab === 'manager' ? <ManagerSection user={user} />
     : tab === 'logistics' ? <LogisticsSection user={user} />
     : tab === 'cashier' ? <CashierSection user={user} />
+    : tab === 'tasks' ? <TasksModule user={user} context={taskContext} onClearContext={()=>setTaskContext(undefined)} onOpenTarget={(target: TaskTarget) => { if (target.type === 'family' || target.type === 'child') setTaskFamilyId(target.familyId ?? target.id); else if(onOpenTaskTarget) onOpenTaskTarget(target); else onOpenDesktop(); }} />
     : <MoreSection user={user} onLogout={onLogout} onOpenDesktop={onOpenDesktop} />;
 
   return (
     <div className={`m-app ${isMobilePreview() ? 'm-app--preview' : ''}`}>
       <Suspense fallback={<div className="m-content"><div className="m-page"><Skeletons /></div></div>}>
         {section}
+        {taskFamilyId && <TaskFamilySheet familyId={taskFamilyId} onClose={()=>setTaskFamilyId('')} canEditStatus={false} showFinance={false} userName={user.name} />}
       </Suspense>
       <nav className="m-tabbar" aria-label="Разделы">
         {tabs.map(item => (
@@ -129,7 +151,7 @@ function MobileShell({ user, onLogout, onOpenDesktop }: {
             onClick={() => selectTab(item.key)}
           >
             {item.icon}
-            <span>{item.label}</span>
+            <span>{item.label}{item.key==='tasks' && Boolean(taskSummary.data?.attention) && <b style={{marginLeft:4,color:'#d37962'}}>{taskSummary.data?.attention}</b>}</span>
           </button>
         ))}
       </nav>
@@ -142,6 +164,7 @@ export default function MobileApp(props: {
   user: AuthenticatedUser;
   onLogout: () => void;
   onOpenDesktop: () => void;
+  onOpenTaskTarget?: (target: TaskTarget) => void;
 }) {
   return (
     <MobileNavProvider>

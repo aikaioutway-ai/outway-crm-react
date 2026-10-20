@@ -1,3 +1,4 @@
+import TaskButton from '../modules/tasks/TaskButton';
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { useFamiliesTable } from '../hooks/useCrmQueries';
@@ -115,6 +116,7 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
         <div className="m-empty">Семья не найдена</div>
       ) : (
         <>
+          <TaskButton target={{type:'family',id:familyId,label:family.parentName}} />
           {error && <ErrorBox>{error}</ErrorBox>}
           <div className="m-info">
             <InfoRow label="Родитель" value={family.parentName} />
@@ -164,6 +166,7 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
               <div className="m-card-row">
                 <div className="m-card-main">
                   <div className="m-card-title">{formatName(child.childName) || 'Без имени'}</div>
+                  <TaskButton compact target={{type:'child',id:child.rowId,label:child.childName,familyId}} />
                   <div className="m-card-sub">
                     {[schoolLabel(child.branchFilter), child.childClass ? `${child.childClass} класс` : '', child.vehicleLabel].filter(Boolean).join(' · ')}
                   </div>

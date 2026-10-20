@@ -1,3 +1,5 @@
+import './InlineFamilyCard.css';
+import TaskButton from '../tasks/TaskButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, ChargeDiscount, ChargeDiscountReason, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
@@ -165,8 +167,16 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function loadAudit() {
     try {
       const { supabase } = await import('../../services/supabase');
-      const { data } = await supabase.from('v2_audit_log').select('*').eq('entity_id', family.id)
-        .order('created_at', { ascending: false }).limit(50);
+      const requestedFamilyId = family.id;
+      const data: any[] = [];
+      for (let offset = 0; ; offset += 500) {
+        const result = await supabase.from('v2_audit_log').select('*').eq('entity_id', requestedFamilyId)
+          .order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
+        if (result.error) throw result.error;
+        data.push(...(result.data ?? []));
+        if ((result.data?.length ?? 0) < 500) break;
+      }
+      if (activeFamilyIdRef.current !== requestedFamilyId) return;
       if (data) {
         setAudit(data.map((r: any) => ({
           id: String(r.id), familyId: String(r.entity_id),
@@ -420,12 +430,15 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
   async function handleDeletePayment(payment: FamilyPayment): Promise<boolean> {
     try {
-      await deleteFamilyPayment(payment);
-      await addAudit('Удаление платежа', 'family_payment', money(payment.amount), '-');
+      await deleteFamilyPayment(payment, sessionToken);
       await loadFinance();
       await loadAudit();
+      onUpdated?.();
       return true;
-    } catch { return false; }
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось удалить платёж');
+      return false;
+    }
   }
   async function handleDeleteCharge(charge: Charge) {
     if (!window.confirm('Удалить начисление?')) return;
@@ -639,10 +652,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       </aside>
 
       <section style={{ display: 'flex', flexDirection: 'column', minWidth: 0, overflow: 'hidden' }}>
-        <header style={contentHeaderStyle}>
+        <header className="family-card-header">
           <div style={headerInfoStyle}>
             <div style={avatarStyle}>{initials}</div>
-            <div style={{ minWidth: 160 }}>
+            <div style={{ minWidth: 0 }}>
               <div style={{ fontSize: 14, fontWeight: 900, color: '#111827', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {formatName(cardFamily.parentName)}
               </div>
@@ -665,26 +678,10 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                 ID: {family.id}
               </div>
             </div>
-            <div style={headerMetricsStyle}>
-              <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
-              {depositCharge && (
-                <SideMetric
-                  label="Депозит"
-                  value={depositPaid ? money(depositCharge.amount) : `${money(depositCharge.paidAmount)} / ${money(depositCharge.amount)}`}
-                  alert={!depositPaid}
-                />
-              )}
-              <SideMetric label="Платежи" value={money(totalPaid)} />
-              {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
-              <SideMetric label="Баланс" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
-              <div style={{ width: 10, flexShrink: 0 }} />
-              <SideMetric label="Начислено" value={money(totalCharged)} />
-              <SideMetric label="Оплачено" value={money(totalPaid)} />
-              {totalDebt > 0 && <SideMetric label="Долг" value={money(totalDebt)} alert />}
-            </div>
             {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div className="family-card-header-actions">
+            <TaskButton target={{type:'family',id:family.id,label:cardFamily.parentName}} />
             {canManageDiscount && teacherPricingAvailable && !editing && (
               <button type="button" onClick={toggleTeacherPricing} disabled={savingAll} style={teacherPriceButtonStyle(teacherPricingActive)} title={`Постоянная цена ${money(TEACHER_MONTHLY_PRICE)}`}>
                 <GraduationCap size={14} /> {teacherPricingActive ? `Учитель · ${money(TEACHER_MONTHLY_PRICE)}` : 'Учитель'}
@@ -706,6 +703,22 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             )}
             <button type="button" aria-label="Закрыть карточку" onClick={onClose} style={closeButtonStyle}><X size={16} /></button>
           </div>
+            <div style={headerMetricsStyle}>
+              <SideMetric label="/мес" value={money(familyMonthlyPrice)} />
+              {depositCharge && (
+                <SideMetric
+                  label="Депозит"
+                  value={depositPaid ? money(depositCharge.amount) : `${money(depositCharge.paidAmount)} / ${money(depositCharge.amount)}`}
+                  alert={!depositPaid}
+                />
+              )}
+              <SideMetric label="Платежи" value={money(totalPaid)} />
+              {pendingAmount > 0 && <SideMetric label="На проверке" value={money(pendingAmount)} pending />}
+              <SideMetric label="Баланс" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
+              <SideMetric label="Начислено" value={money(totalCharged)} />
+              <SideMetric label="Оплачено" value={money(totalPaid)} />
+              {totalDebt > 0 && <SideMetric label="Долг" value={money(totalDebt)} alert />}
+            </div>
         </header>
 
         <div style={contentBodyStyle}>
@@ -1491,6 +1504,7 @@ function ChildCard({
         <span style={childCardIndexStyle}>{index + 1}</span>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
           <span style={{ fontSize: 13.5, fontWeight: 850, color: '#111827' }}>{formatName(child.childName) || 'Без имени'}</span>
+          <TaskButton compact target={{type:'child',id:child.id,label:child.childName,familyId:child.familyId}} />
           <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 650, whiteSpace: 'nowrap' }}>
             CRM: {formatInlineDate(child.createdAt)} · Посадка: {formatInlineDate(child.transferAssignedAt)}
           </span>
@@ -1908,16 +1922,6 @@ const detailControlStyle: React.CSSProperties = {
   outline: 'none',
 };
 
-const contentHeaderStyle: React.CSSProperties = {
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'space-between',
-  borderBottom: '1px solid #E5ECEF',
-  background: '#fff',
-  flexShrink: 0,
-  padding: '10px 22px',
-};
-
 const headerInfoStyle: React.CSSProperties = {
   minWidth: 0,
   display: 'flex',
@@ -1929,8 +1933,11 @@ const headerInfoStyle: React.CSSProperties = {
 const headerMetricsStyle: React.CSSProperties = {
   display: 'flex',
   flexWrap: 'wrap',
-  gap: 6,
+  gap: 10,
   alignItems: 'center',
+  gridColumn: '1 / -1',
+  borderTop: '1px solid #E5ECEF',
+  paddingTop: 14,
 };
 
 const closeButtonStyle: React.CSSProperties = {

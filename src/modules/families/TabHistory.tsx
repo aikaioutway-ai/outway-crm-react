@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Section } from './DrawerUI';
 
 interface AuditEntry {
@@ -121,6 +121,8 @@ function humanizeValue(raw: string): string {
 }
 
 export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
+  const [deletedOnly, setDeletedOnly] = useState(false);
+  const visibleAudit = deletedOnly ? audit.filter(entry => entry.action === 'payment_delete') : audit;
   if (audit.length === 0) return (
     <div style={{ textAlign: 'center', padding: '24px 0' }}>
       <div style={{ fontSize: 24, marginBottom: 6 }}>📋</div>
@@ -130,8 +132,14 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
 
   return (
     <Section title={`История (${audit.length})`}>
+      <button type="button" onClick={() => setDeletedOnly(value => !value)} aria-pressed={deletedOnly} style={{ marginBottom: 10 }}>{deletedOnly ? 'Вся история' : 'Удалённые чеки'}</button>
+      {visibleAudit.length === 0 && <p>Удалённых чеков нет</p>}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
-        {audit.map(entry => {
+        {visibleAudit.map(entry => {
+          let deletedPayment: Record<string, unknown> | null = null;
+          if (entry.action === 'payment_delete') {
+            try { deletedPayment = JSON.parse(entry.oldValue)?.payment ?? null; } catch { /* older audit entry */ }
+          }
           const actionText = ACTION_LABEL[entry.action] ?? entry.action;
           const fieldText = FIELD_LABEL[entry.field] ?? (entry.field || '');
           const oldText = humanizeValue(entry.oldValue);
@@ -151,7 +159,13 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
                   <span style={{ fontWeight: 600 }}>{fieldText}</span>
                 </div>
               )}
-              {hasChange && (
+              {deletedPayment && <details style={{ fontSize: 11, marginTop: 6 }}>
+                <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')} сом</summary>
+                <p>Дата: {String(deletedPayment.payment_date ?? '—')} · № {String(deletedPayment.payment_number ?? '—')}</p>
+                <p>Комментарий: {String(deletedPayment.comment ?? '—')}</p>
+                {typeof deletedPayment.receipt_url === 'string' && /^https?:\/\//.test(deletedPayment.receipt_url) && <a href={deletedPayment.receipt_url} target="_blank" rel="noreferrer">Открыть удалённый чек</a>}
+              </details>}
+              {hasChange && !deletedPayment && (
                 <div style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 10, flexWrap: 'wrap' }}>
                   {oldText && (
                     <span style={{ background: '#FFEBEE', color: '#C62828', borderRadius: 4, padding: '2px 6px' }}>

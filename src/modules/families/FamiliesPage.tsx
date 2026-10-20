@@ -1,3 +1,4 @@
+import TaskButton from '../tasks/TaskButton';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChildStatus, Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
@@ -136,6 +137,7 @@ export interface ChildRow {
 type FamiliesMode = 'requests' | 'payments' | 'charges' | 'debtors' | 'directory' | 'cashier' | 'logistics';
 
 interface FamiliesPageProps {
+  initialOpenDriverId?: string;
   mode?: FamiliesMode;
   userRole?: UserRole;
   userName?: string;
@@ -729,7 +731,7 @@ function rowToFamily(row: ChildRow): Family {
   };
 }
 
-export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const canRejectFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
@@ -880,7 +882,8 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
-  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null);
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(initialOpenDriverId ?? null);
+  useEffect(() => { if (initialOpenDriverId) setSelectedDriverId(initialOpenDriverId); }, [initialOpenDriverId]);
   const [selectedDriverTab, setSelectedDriverTab] = useState<DriverCardTab>('main');
   const [driverParentCardCopied, setDriverParentCardCopied] = useState(false);
   const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
@@ -3656,6 +3659,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               borderBottom: '1px solid #E5EEF1',
             }}>
               <div style={{ minWidth: 0 }}>
+                <TaskButton target={{type:'driver',id:selectedDriver.driverId,label:selectedDriver.fullName}} />
                 <input
                   value={driverDraft?.fullName ?? ''}
                   onChange={event => setDriverDraftField('fullName', event.target.value)}
@@ -4456,6 +4460,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 20, fontWeight: 900, color: '#17222F' }}>
                   Трансфер №{selectedTransferCard.transfer.transferNumber}
+                  <TaskButton target={{type:'transfer',id:selectedTransferCard.transfer.id,label:`Трансфер № ${selectedTransferCard.transfer.transferNumber}`}} />
                 </div>
                 <div style={{ marginTop: 4, fontSize: 12, fontWeight: 750, color: '#626C8B' }}>
                   {selectedTransferCard.transfer.branchShort || selectedTransferCard.transfer.branchName || selectedDashboardSchool?.label || 'Школа'} · {VT_LABEL[selectedTransferCard.transfer.vehicleType] ?? selectedTransferCard.transfer.vehicleType}

@@ -235,7 +235,7 @@ export default function TabFinance({
                   onSave={updates => onSavePayment(payment, updates)}
                   onDelete={() => onDeletePayment(payment)}
                   onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
-                  canDelete={!readOnly && (isAdmin || isCashier) && ['На проверке', 'Отклонено', 'Черновик'].includes(payment.status)}
+                  canDelete={!readOnly && (isAdmin || isCashier)}
                   isAdmin={!readOnly && isAdmin}
                 />
               ))}
@@ -391,12 +391,11 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
 
   async function remove() {
     const msg = payment.status === 'Подтверждено'
-      ? 'Отменить подтверждённый платёж? Баланс и начисления будут откатаны.'
-      : 'Удалить платёж?';
-    if (!window.confirm(msg)) return;
+      ? 'Удалить платёж и чек из рабочего списка? Баланс и начисления будут пересчитаны. Данные останутся в истории семьи.'
+      : 'Удалить платёж и чек из рабочего списка? Данные останутся в истории семьи.';
+    if (saving || confirming || !window.confirm(msg)) return;
     setSaving(true);
-    await onDelete();
-    setSaving(false);
+    try { await onDelete(); } finally { setSaving(false); }
   }
 
   return (
@@ -423,7 +422,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
               <X size={13} />
             </button>
           )}
-          {canDelete && !editing && <button type="button" onClick={remove} title="Удалить непроверенный платёж" style={iconBtnStyle}>×</button>}
+          {canDelete && !editing && <button type="button" onClick={remove} title="Удалить платёж и чек" aria-label="Удалить платёж и чек" disabled={saving || confirming} style={{ ...iconBtnStyle, color: '#DC2626' }}><Trash2 size={13} /></button>}
           {isAdmin && !editing && (
             <button onClick={() => setEditing(true)} title="Редактировать" style={iconBtnStyle}>
               <Pencil size={13} />
