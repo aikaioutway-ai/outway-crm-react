@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { VehicleType } from '../../types';
 import { createDefaultV2DriverDocuments, createV2Driver, V2BranchOption, V2DriverDocumentInput } from '../../services/crmV2Service';
-import { VT_LABEL } from '../families/constants';
+import { VT_LABEL, isSchoolVisible } from '../families/constants';
 import { DRIVER_RESERVE_KEY } from './DriversOverview';
 
 const DISTRICTS = [
@@ -202,7 +202,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
                 if (nextBranchId === DRIVER_RESERVE_KEY) setTransferNumber('');
               }}>
                 <option value={DRIVER_RESERVE_KEY}>Резерв</option>
-                {branches.map(branch => <option key={branch.id} value={branch.id}>{branch.shortName || branch.code}</option>)}
+                {branches.filter(branch=>isSchoolVisible(branch.shortName || branch.code) && isSchoolVisible(branch.name)).map(branch => <option key={branch.id} value={branch.id}>{branch.shortName || branch.code}</option>)}
               </select>
             </label>
             <label style={labelStyle}>Трансфер

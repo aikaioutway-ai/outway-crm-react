@@ -2,12 +2,12 @@ import { periodAmounts, periodTotal } from './paymentPeriods';
 import { useEffect, useRef, useState } from 'react';
 import { Search, Users, X } from 'lucide-react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
-import { SCHOOL_TABS } from '../families/constants';
+import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 
 export type DriverPayment = { driverId: string; transferId: string; schoolKey: string; name: string; amount: string; periodAmounts?:Record<string,string> };
 export default function DriverPaymentPicker({drivers,school,initial,salary,periods=[],onClose,onConfirm,transferSchool}:{drivers:V2DriverTableRow[];school:string;initial:DriverPayment[];salary:boolean;periods?:{key:string;label:string}[];onClose:()=>void;onConfirm:(rows:DriverPayment[])=>void;transferSchool:(transfer:V2DriverTableRow['transfers'][number])=>string}) {
-  const orderedTransfers=(driver:V2DriverTableRow,filter=school)=>driver.transfers.filter(transfer=>!filter || transferSchool(transfer)===filter).slice().sort((a,b)=>transferSchool(a).localeCompare(transferSchool(b),'ru',{numeric:true}) || String(a.transferNumber).localeCompare(String(b.transferNumber),'ru',{numeric:true}));
-  const [rows,setRows]=useState(()=>initial.map(row=>{
+  const orderedTransfers=(driver:V2DriverTableRow,filter=school)=>driver.transfers.filter(transfer=>isSchoolVisible(transfer.branchShort) && isSchoolVisible(transferSchool(transfer)) && (!filter || transferSchool(transfer)===filter)).slice().sort((a,b)=>transferSchool(a).localeCompare(transferSchool(b),'ru',{numeric:true}) || String(a.transferNumber).localeCompare(String(b.transferNumber),'ru',{numeric:true}));
+  const [rows,setRows]=useState(()=>initial.filter(row=>isSchoolVisible(row.schoolKey)).map(row=>{
     const driver=drivers.find(driver=>driver.driverId===row.driverId);
     const choices=driver?orderedTransfers(driver):[];
     const current=driver?.transfers.find(transfer=>transfer.id===row.transferId) ?? choices[0] ?? (driver?orderedTransfers(driver,'')[0]:undefined);
@@ -18,7 +18,7 @@ export default function DriverPaymentPicker({drivers,school,initial,salary,perio
   const [error,setError]=useState('');
   const dialog=useRef<HTMLDivElement>(null);
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();return()=>previous?.focus();},[]);
-  const visible=drivers.filter(driver=>(!school || driver.transfers.some(transfer=>transferSchool(transfer)===school)) && driver.fullName.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru'))).sort((a,b)=>{const first=orderedTransfers(a)[0],second=orderedTransfers(b)[0];if(!first)return second?1:a.fullName.localeCompare(b.fullName,'ru');if(!second)return -1;return transferSchool(first).localeCompare(transferSchool(second),'ru',{numeric:true}) || String(first.transferNumber).localeCompare(String(second.transferNumber),'ru',{numeric:true}) || a.fullName.localeCompare(b.fullName,'ru');});
+  const visible=drivers.filter(driver=>(!driver.transfers.length || orderedTransfers(driver,'').length>0) && (!school || driver.transfers.some(transfer=>transferSchool(transfer)===school)) && driver.fullName.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru'))).sort((a,b)=>{const first=orderedTransfers(a)[0],second=orderedTransfers(b)[0];if(!first)return second?1:a.fullName.localeCompare(b.fullName,'ru');if(!second)return -1;return transferSchool(first).localeCompare(transferSchool(second),'ru',{numeric:true}) || String(first.transferNumber).localeCompare(String(second.transferNumber),'ru',{numeric:true}) || a.fullName.localeCompare(b.fullName,'ru');});
   const makeRow=(driver:V2DriverTableRow):DriverPayment=>{
     const choices=orderedTransfers(driver);
     const transfer=choices[0];

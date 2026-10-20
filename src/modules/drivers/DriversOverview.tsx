@@ -1,10 +1,11 @@
+import { isVisibleDriver } from './driverSchoolVisibility';
 import LogisticsTabs, { LogisticsTab } from '../families/LogisticsTabs';
 import HiddenSchoolsList from '../families/HiddenSchoolsList';
 import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import { useEffect, useMemo, useState } from 'react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
+import { isSchoolAllowed, SCHOOL_DIRECTORY, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
 import { DashboardSearch, DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
@@ -15,7 +16,7 @@ export const DRIVER_RESERVE_STATUSES = new Set(['vacation', 'reserve', 'waiting'
 
 export function isReserveDriver(driver: V2DriverTableRow): boolean {
   const status = String(driver.status ?? '').toLowerCase();
-  const matchesKnownSchool = SCHOOL_TABS
+  const matchesKnownSchool = SCHOOL_DIRECTORY
     .filter(tab => tab.key !== 'ALL')
     .some(tab => driverMatchesSchool(driver, tab));
   return driver.transferCount === 0 || !matchesKnownSchool || DRIVER_RESERVE_STATUSES.has(status);
@@ -107,10 +108,10 @@ function computeDriverStats(rows: V2DriverTableRow[], allowedSchools: string[] |
   const schoolStats = SCHOOL_TABS
     .filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (tier === '2.0'))
     .map((tab, index) => {
-      const schoolRows = rows.filter(row => !isReserveDriver(row) && driverMatchesSchool(row, tab));
+      const schoolRows = rows.filter(row => isVisibleDriver(row) && !isReserveDriver(row) && driverMatchesSchool(row, tab));
       return statFromRows(tab.key, tab.label, SCHOOL_COLORS[index % SCHOOL_COLORS.length], schoolRows, tab.logo);
     });
-  const reserveRows = rows.filter(isReserveDriver);
+  const reserveRows = rows.filter(row=>isVisibleDriver(row) && isReserveDriver(row));
   return [
     ...schoolStats,
     statFromRows(DRIVER_RESERVE_KEY, 'Резерв', '#626C8B', reserveRows),
@@ -132,7 +133,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
 
   const stats = useMemo(() => computeDriverStats(rows ?? [], allowedSchools, schoolTier), [rows, allowedSchools, schoolTier]);
   const totals = useMemo(() => {
-    const allRows = (rows ?? []).filter(row => isReserveDriver(row) || SCHOOL_TABS.some(tab => tab.key !== 'ALL' && !SCHOOL_TIER_2_KEYS.includes(tab.key) && isSchoolAllowed(tab.key, allowedSchools) && driverMatchesSchool(row, tab)));
+    const allRows = (rows ?? []).filter(isVisibleDriver).filter(row => isReserveDriver(row) || SCHOOL_TABS.some(tab => tab.key !== 'ALL' && !SCHOOL_TIER_2_KEYS.includes(tab.key) && isSchoolAllowed(tab.key, allowedSchools) && driverMatchesSchool(row, tab)));
     return {
       schools: stats.filter(stat => stat.activeCount + stat.inactiveCount > 0).length,
       activeCount: allRows.filter(row => row.status === 'active').length,

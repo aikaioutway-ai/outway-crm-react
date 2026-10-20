@@ -1,6 +1,6 @@
 // Один источник правды для отображения школ, зон, транспорта
 
-export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branches: string[]; logo?: string }[] = [
+export const SCHOOL_DIRECTORY: { key: string; label: string; codes: string[]; branches: string[]; logo?: string }[] = [
   { key: 'TIS',   label: 'TIS',   codes: ['TENSAY'],  branches: [], logo: '/school-logos/TIS.png' },
   { key: 'ERU',   label: 'ERU',   codes: ['ERUDIT'],  branches: [], logo: '/school-logos/ERU.png' },
   { key: 'EDI',   label: 'EDI',   codes: ['EDISON'],  branches: [], logo: '/school-logos/EDI.png' },
@@ -27,6 +27,15 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
 // небольшой поток и вероятность, что сотрудничество не продолжится.
 // Остальные школы (не в этом списке) — School 1.0.
 export const SCHOOL_TIER_2_KEYS = ['BJ', 'LA_P', 'ING_W'];
+const HIDDEN_SCHOOL_NAMES = new Set([
+  ...SCHOOL_DIRECTORY.filter(school=>SCHOOL_TIER_2_KEYS.includes(school.key)).flatMap(school=>[school.key,school.label,...school.branches]),
+  'LIGHT_PRIMARY','INDIGO_WEST','BILIM_JOLU',
+].map(value=>value.trim().toUpperCase()));
+export function isSchoolVisible(key:string):boolean {
+  return !HIDDEN_SCHOOL_NAMES.has(String(key??'').trim().toUpperCase());
+}
+export const SCHOOL_TABS = SCHOOL_DIRECTORY.filter(school=>isSchoolVisible(school.key));
+
 
 // Школы с несколькими филиалами — схлопываются в один ряд, разворачиваются по клику
 export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; children: string[] }[] = [
@@ -38,6 +47,7 @@ export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; childre
 ];
 
 export function isSchoolAllowed(schoolKey: string, allowedSchools?: string[]): boolean {
+  if(!isSchoolVisible(schoolKey))return false;
   if (!allowedSchools || allowedSchools.length === 0 || allowedSchools.some(key => key.toUpperCase() === 'ALL')) return true;
   const normalizedKey = schoolKey.toUpperCase();
   const normalizedAllowed = new Set(allowedSchools.map(key => key.toUpperCase()));
@@ -254,7 +264,7 @@ export function normalizeSchoolCode(code: unknown): string {
 export function getBranchFilter(branchName: string | null, schoolCode: string): string {
   if (branchName && BRANCH_TO_FILTER[branchName]) return BRANCH_TO_FILTER[branchName];
   const normalizedSchoolCode = normalizeSchoolCode(schoolCode);
-  const matchingTab = SCHOOL_TABS.find(tab => (
+  const matchingTab = SCHOOL_DIRECTORY.find(tab => (
     tab.key !== 'ALL'
     && tab.codes.some(code => normalizeSchoolCode(code) === normalizedSchoolCode)
   ));

@@ -1,5 +1,5 @@
 import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
-import { SCHOOL_TABS } from '../families/constants';
+import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { Building2, Bus, CircleUserRound, Route, School, ReceiptText, RotateCcw, Gift, Banknote, LockKeyhole, WalletCards, Pencil, Plus, Trash2, X } from 'lucide-react';
@@ -10,6 +10,7 @@ import { UserRole } from '../../types';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { CASHIER_PERIODS, currentCashierPeriodKey } from '../families/constants';
 import {
+  isPayrollExpense,
   EXPENSE_CATEGORIES,
   EXPENSE_CATEGORY_KEYS,
   ExpenseCategory,
@@ -21,6 +22,7 @@ import './ExpensesModule.css';
 
 interface ExpensesModuleProps { userName?: string; userRole?: UserRole; sessionToken?: string;
   toolbarContent?: React.ReactNode;
+  onOpenSalary?: (scope:'school'|'office')=>void;
   selectedCategory: ExpenseCategory | null;
   onCategoryChange: (category: ExpenseCategory | null) => void;
   selectedSubcategory: string;
@@ -184,7 +186,7 @@ export function ExpenseModal({ initialCategory, expense, userName, sessionToken,
   );
 }
 
-export default function ExpensesModule({ userName, userRole, sessionToken, toolbarContent, selectedCategory, onCategoryChange: setSelectedCategory, selectedSubcategory, onSubcategoryChange: setSelectedSubcategory }: ExpensesModuleProps) {
+export default function ExpensesModule({ userName, userRole, sessionToken, toolbarContent, selectedCategory, onCategoryChange: setSelectedCategory, selectedSubcategory, onSubcategoryChange: setSelectedSubcategory, onOpenSalary }: ExpensesModuleProps) {
   const [sortKey, setSortKey] = useState('category');
   const [ascending, setAscending] = useState(true);
   const [periodKey, setPeriodKey] = useState(currentCashierPeriodKey);
@@ -226,25 +228,25 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
   }, [bounds.first, bounds.last, selectedPeriods, sessionToken, refreshKey]);
 
   const canViewPersonalDetails = userRole === 'admin' || userRole === 'gen_director';
-  const accessibleRows = useMemo(() => canViewPersonalDetails ? rows : rows.filter(row => row.category !== 'personal'), [rows, canViewPersonalDetails]);
+  const accessibleRows = useMemo(() => rows.filter(row=>(!row.schoolKey || isSchoolVisible(row.schoolKey)) && (canViewPersonalDetails || row.category!=='personal')), [rows, canViewPersonalDetails]);
   useEffect(() => {
     if (selectedCategory === 'personal' && !canViewPersonalDetails) {
       setSelectedCategory(null);
       setSelectedSubcategory('ALL');
     }
   }, [selectedCategory, canViewPersonalDetails, setSelectedCategory, setSelectedSubcategory]);
-  const categoryRows = selectedCategory ? accessibleRows.filter(row => row.category === selectedCategory) : accessibleRows;
+  const categoryRows = selectedCategory ? accessibleRows.filter(row => row.category === selectedCategory && !isPayrollExpense(row)) : accessibleRows;
   const subcategoryTotals = useMemo(() => {
     if (!selectedCategory) return [];
     const subcategories = Array.from(new Set([
-      ...EXPENSE_CATEGORIES[selectedCategory].subcategories,
-      ...accessibleRows.filter(row => row.category === selectedCategory).map(row => row.subcategory),
+      ...EXPENSE_CATEGORIES[selectedCategory].subcategories.filter(subcategory=>!isPayrollExpense({category:selectedCategory,subcategory})),
+      ...categoryRows.map(row => row.subcategory),
     ]));
     return subcategories.map(subcategory => {
-      const matching = accessibleRows.filter(row => row.category === selectedCategory && row.subcategory === subcategory);
+      const matching = categoryRows.filter(row => row.subcategory === subcategory);
       return { subcategory, amount: matching.reduce((sum, row) => sum + row.amount, 0), count: matching.length };
     });
-  }, [accessibleRows, selectedCategory]);
+  }, [categoryRows, selectedCategory]);
   const visibleRows = selectedSubcategory === 'ALL'
     ? categoryRows
     : categoryRows.filter(row => row.subcategory === selectedSubcategory);
@@ -255,9 +257,9 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
 
   const overviewRows = (selectedCategory
     ? subcategoryTotals.map(item => ({ key: item.subcategory, category: selectedCategory, label: item.subcategory }))
-    : EXPENSE_CATEGORY_KEYS.filter(key => canViewPersonalDetails || key !== 'personal').map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label }))
+    : [...EXPENSE_CATEGORY_KEYS.filter(key => canViewPersonalDetails || key !== 'personal').map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label })), {key:'salary-office',category:'office' as const,label:'ЗП офис'}, {key:'salary-school',category:'school' as const,label:'ЗП школа'}]
   ).map(item => {
-    const matching = categoryRows.filter(row => selectedCategory ? row.subcategory === item.key : row.category === item.category);
+    const matching = categoryRows.filter(row => selectedCategory ? row.subcategory === item.key : row.category === item.category && (item.key.startsWith('salary-') ? isPayrollExpense(row) : !isPayrollExpense(row)));
     const meta = EXPENSE_CATEGORIES[item.category];
     const icon = selectedCategory
       ? item.key === 'Возврат' ? <RotateCcw size={18} />
@@ -325,6 +327,8 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
         sortKey={sortKey} ascending={ascending}
         onSort={key => { setAscending(key === sortKey ? !ascending : key === 'category'); setSortKey(key); }}
         onSelect={key => {
+          if(key.startsWith('salary-')){onOpenSalary?.(key==='salary-office'?'office':'school');return;}
+          if (selectedCategory && key==='ЗП' && (selectedCategory==='school' || selectedCategory==='office')){onOpenSalary?.(selectedCategory);return;}
           if (selectedCategory) setSelectedSubcategory(key);
           else if (key !== 'personal' || canViewPersonalDetails) { setSelectedCategory(key as ExpenseCategory); setSelectedSubcategory('ALL'); }
         }}

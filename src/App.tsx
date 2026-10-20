@@ -1,4 +1,4 @@
-import SalaryExpensesView from './modules/costs/SalaryExpensesView';
+import SalaryExpensesView, { SalaryScope } from './modules/costs/SalaryExpensesView';
 import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
@@ -140,6 +140,7 @@ export default function App() {
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
+  const [salaryScope,setSalaryScope]=useState<SalaryScope>('all');
   const [financeView, setFinanceView] = useState<'expenses' | 'salary'>('expenses');
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | null>(null);
   const [expenseSubcategory, setExpenseSubcategory] = useState('ALL');
@@ -769,13 +770,12 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={tabRowStyle}><div style={tabBarStyle}>
               {sectionLabel('Финансы')}
-              <button type="button" onClick={() => setFinanceView('expenses')} style={managerModeTabStyle(financeView === 'expenses')}>Расходы</button>
-              <button type="button" onClick={() => setFinanceView('salary')} style={managerModeTabStyle(financeView === 'salary')}>Зарплата</button>
+              {financeView === 'salary' && <button type="button" onClick={() => setFinanceView('expenses')} style={managerModeTabStyle(false)}>← Расходы</button>}
               {financeView === 'expenses' && expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>← Категории</button>}
               {extraTabs(true)}
             </div></div>
-            {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView sessionToken={currentUser?.sessionToken} />}
-            {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
+            {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
+            {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule onOpenSalary={scope=>{setSalaryScope(scope);setFinanceView('salary');}} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
 
           </div>
         ) : section === 'market' ? (

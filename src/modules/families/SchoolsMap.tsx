@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { fetchV2Branches } from '../../services/crmV2Service';
 import { loadYandexMaps } from '../../utils/yandexMaps';
-import { isSchoolAllowed, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
+import { isSchoolAllowed, isSchoolVisible, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from './constants';
 
 export default function SchoolsMap({ allowedSchools, onSelectSchool }: { allowedSchools?: string[]; onSelectSchool: (key: string) => void }) {
   const container = useRef<HTMLDivElement>(null);
@@ -18,7 +18,7 @@ export default function SchoolsMap({ allowedSchools, onSelectSchool }: { allowed
         '<span style="font:700 12px/16px Arial,sans-serif;color:#243244;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{properties.iconContent}}</span>' +
         '<span style="position:absolute;left:55px;bottom:-10px;width:0;height:0;border-left:7px solid transparent;border-right:7px solid transparent;border-top:9px solid {{properties.markerColor}}"></span></div>'
       );
-      const schools = branches.filter(school => isSchoolAllowed(school.code, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(school.code) && school.latitude != null && school.longitude != null);
+      const schools = branches.filter(school => isSchoolVisible(school.shortName) && isSchoolVisible(school.name) && isSchoolAllowed(school.code, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(school.code) && school.latitude != null && school.longitude != null);
       const colors = ['#2563EB', '#7C3AED', '#059669', '#E11D48', '#D97706', '#0891B2', '#4F46E5', '#C026D3', '#65A30D', '#EA580C', '#0D9488', '#9333EA', '#DC2626', '#0284C7', '#16A34A', '#DB2777'];
       schools.forEach(school => {
         const index = SCHOOL_TABS.findIndex(tab => tab.key === school.code);

@@ -1,5 +1,5 @@
 import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
-import { SCHOOL_TABS } from '../families/constants';
+import { SCHOOL_DIRECTORY } from '../families/constants';
 import { fetchExpenses } from '../../services/expenseService';
 import {
   fetchV2DriverAdvancesForPeriod,
@@ -31,7 +31,8 @@ function systemExpenseRows(
     id: `advance-${advance.id}`,
     schoolKey: advance.schoolKey || (() => {
       const driver = driverById.get(advance.driverId);
-      const schools = SCHOOL_TABS.filter(school => school.key !== 'ALL' && school.codes.some(code => driver?.branchCodes.includes(code)));
+      const exactSchools=SCHOOL_DIRECTORY.filter(school=>school.key!=='ALL' && (driver?.branchShorts.includes(school.label) || driver?.branchNames.some(name=>school.branches.includes(name))));
+      const schools = exactSchools.length?exactSchools:SCHOOL_DIRECTORY.filter(school => school.key !== 'ALL' && school.codes.some(code => driver?.branchCodes.includes(code)));
       return schools.length === 1 ? schools[0].key : undefined;
     })(),
     name: `Аванс — ${driverById.get(advance.driverId)?.fullName || 'водитель'}`,

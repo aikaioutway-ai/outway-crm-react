@@ -1,3 +1,4 @@
+import { isSchoolVisible } from './constants';
 import React, { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
@@ -91,7 +92,7 @@ export default function NewFamilyModal({ onClose }: Props) {
                   border: '1px solid var(--border)',
                   overflow: 'hidden', maxHeight: 360, overflowY: 'auto',
                 }}>
-                  {SCHOOL_LINKS.map((s, i) => (
+                  {SCHOOL_LINKS.filter(school=>isSchoolVisible(school.code)).map((s, i) => (
                     <div
                       key={s.code + i}
                       onClick={() => { setSelected(s.code); setOpen(false); }}

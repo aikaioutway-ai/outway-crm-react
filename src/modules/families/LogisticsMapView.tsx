@@ -21,7 +21,7 @@ import {
   updateRouteZone,
 } from '../../services/routeZoneService';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
-import { SCHOOL_TIER_2_KEYS, SCHOOL_TABS, isSchoolAllowed } from './constants';
+import { SCHOOL_TIER_2_KEYS, SCHOOL_TABS, isSchoolAllowed, isSchoolVisible } from './constants';
 import { SCHOOL_COLORS } from './LogisticsOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -188,7 +188,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
 
   useEffect(() => {
     fetchV2Branches()
-      .then(setBranches)
+      .then(next=>setBranches(next.filter(branch=>isSchoolVisible(branch.shortName) && isSchoolVisible(branch.name))))
       .catch(() => setBranches([]));
   }, []);
 
@@ -576,7 +576,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
 
   const filteredRows = useMemo(() => {
     const query = search.trim().toLowerCase().replace(/\s+/g, '');
-    const baseRows = (rows ?? []).filter(row => (schoolKey ? row.branchFilter === schoolKey : isSchoolAllowed(row.branchFilter, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)) && (!query || phoneMatchesQuery(search, row.phone, row.secondPhone) || [row.parentName, row.childName, row.phone, row.streetAddress]
+    const baseRows = (rows ?? []).filter(row => isSchoolVisible(row.branchFilter) && (schoolKey ? row.branchFilter === schoolKey : isSchoolAllowed(row.branchFilter, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)) && (!query || phoneMatchesQuery(search, row.phone, row.secondPhone) || [row.parentName, row.childName, row.phone, row.streetAddress]
       .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query))));
     if (transferFilter === 'rejected') {
       return baseRows.filter(row => row.status === 'rejected');

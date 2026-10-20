@@ -85,3 +85,7 @@ export const EXPENSE_CATEGORIES: Record<ExpenseCategory, { label: string; color:
 };
 
 export const EXPENSE_CATEGORY_KEYS = Object.keys(EXPENSE_CATEGORIES) as ExpenseCategory[];
+
+export function isPayrollExpense(row: Pick<ExpenseRecord,'category'|'subcategory'|'source'>):boolean {
+  return (row.category==='school' || row.category==='office') && (row.source==='advance' || row.source==='salary' || ['ЗП','Аванс','Зарплата'].includes(row.subcategory));
+}

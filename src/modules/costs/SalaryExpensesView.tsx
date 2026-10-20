@@ -5,20 +5,22 @@ import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import './ExpensesModule.css';
 import { useEffect, useMemo, useState } from 'react';
 import { fetchSalaryExpenses } from '../../services/expenseService';
-import { ALL_PERIODS, SCHOOL_TABS } from '../families/constants';
+import { ALL_PERIODS, SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 import { ExpenseRecord } from './expenseTypes';
 import { loadExpenseRows } from './expenseRows';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import { money } from '../../utils/pricing';
 
-export default function SalaryExpensesView({ sessionToken }: { sessionToken?: string }) {
+export type SalaryScope = 'all' | 'school' | 'office';
+export default function SalaryExpensesView({ sessionToken, scope='all' }: { sessionToken?: string; scope?:SalaryScope }) {
   const [year] = useState(currentSchoolYear);
   const [search, setSearch] = useState('');
   const [half, setHalf] = useState<'ALL' | '1' | '2'>('ALL');
   const [period, setPeriod] = useState(() => { const now = new Date(); return ALL_PERIODS.find(item => item.month === now.getMonth() + 1 && item.year === now.getFullYear())?.key ?? 'ALL'; });
   const [sort, setSort] = useState('school');
   const [ascending, setAscending] = useState(true);
-  const [school, setSchool] = useState<string | null>(null);
+  const [school, setSchool] = useState<string | null>(scope==='office'?'OFFICE':null);
+  const [department,setDepartment]=useState<string|null>(null);
   const [rows, setRows] = useState<ExpenseRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -38,15 +40,20 @@ export default function SalaryExpensesView({ sessionToken }: { sessionToken?: st
     return () => { active = false; };
   }, [year, sessionToken, refresh]);
   const filtered = rows.filter(row => {
+    if(scope!=='all' && row.category!==scope)return false;
+    if(row.category==='school' && row.schoolKey && !isSchoolVisible(row.schoolKey))return false;
     const key = row.salaryPeriodKey ?? `${row.expenseDate.slice(0, 7)}-${Number(row.expenseDate.slice(8, 10)) <= 15 ? 1 : 2}`;
     const month = ALL_PERIODS.find(item => item.key === period);
     return periods.some(item => item.key === key) && (!month || key.startsWith(`${month.year}-${String(month.month).padStart(2, '0')}-`)) && (half === 'ALL' || key.endsWith(`-${half}`));
   });
-  const schools = [...SCHOOL_TABS.filter(item => item.key !== 'ALL').map(item => ({ key: item.key, label: item.label, logo: item.logo })), ...EMPLOYEE_DEPARTMENTS.map(department => ({ key: `OFFICE:${department.key}`, label: department.label, logo: undefined })), { key: 'OFFICE', label: 'Офис · без отдела', logo: undefined }, { key: 'UNASSIGNED', label: 'Без однозначной школы', logo: undefined }];
-  const schoolRows = (key: string) => filtered.filter(row => (row.category === 'office' ? row.departmentKey ? `OFFICE:${row.departmentKey}` : 'OFFICE' : row.schoolKey || 'UNASSIGNED') === key);
+  const schools = [...SCHOOL_TABS.filter(item => item.key !== 'ALL').map(item => ({ key: item.key, label: item.label, logo: item.logo })), ...(scope==='school'?[]:[{key:'OFFICE',label:'Офис',logo:undefined}]), { key: 'UNASSIGNED', label: 'Без однозначной школы', logo: undefined }];
+  const departments=[...EMPLOYEE_DEPARTMENTS.map(item=>({key:`OFFICE:${item.key}`,label:item.label,logo:undefined})),{key:'OFFICE:UNASSIGNED',label:'Без отдела',logo:undefined}];
+  const schoolRows = (key: string) => filtered.filter(row => key==='OFFICE'?row.category==='office':key.startsWith('OFFICE:')?row.category==='office' && (row.departmentKey||'UNASSIGNED')===key.slice(7):row.category==='school' && (row.schoolKey||'UNASSIGNED')===key);
+  const showOverview=!school || (school==='OFFICE' && !department);
+  const overviewItems=school==='OFFICE'?departments:schools;
   const total = (list: ExpenseRecord[], advances = false) => list.filter(row => advances ? row.source === 'advance' : row.source !== 'advance').reduce((sum, row) => sum + row.amount, 0);
-  const selectedRows = school ? schoolRows(school) : [];
-  const sortedSchools = schools.filter(item => (!['UNASSIGNED', 'OFFICE'].includes(item.key) || schoolRows(item.key).length > 0) && item.label.toLowerCase().includes(search.toLowerCase())).map(item => {
+  const selectedRows = department?schoolRows(department):school?schoolRows(school):[];
+  const sortedSchools = overviewItems.filter(item => (!['UNASSIGNED', 'OFFICE:UNASSIGNED'].includes(item.key) || schoolRows(item.key).length > 0) && item.label.toLowerCase().includes(search.toLowerCase())).map(item => {
     const list = schoolRows(item.key); const salary = total(list); const advance = total(list, true);
     return { ...item, salary, advance, total: salary + advance };
   }).sort((a, b) => {
@@ -59,20 +66,20 @@ export default function SalaryExpensesView({ sessionToken }: { sessionToken?: st
   return <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 10 }}>
     <DashboardTopPanel>
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-        {school && <button type="button" className="expense-cancel" onClick={() => { setSchool(null); setHalf('ALL'); setSearch(''); }}>← Школы и отделы</button>}
+        {(department || (school && scope!=='office')) && <button type="button" className="expense-cancel" onClick={() => { if(department)setDepartment(null);else setSchool(null);setHalf('ALL');setSearch(''); }}>← {department?'Офис':'Школы и офис'}</button>}
         <div style={{ flex: 1, minWidth: 0, display: 'flex' }}><ManagerPeriodBar periodKey={period} onPeriodKeyChange={setPeriod} periods={availablePeriods} showAll={false} /></div>
-        <DashboardSearch width={260} value={search} onChange={setSearch} placeholder={school ? 'Поиск выплаты...' : 'Поиск школы или отдела...'} />
+        <DashboardSearch width={260} value={search} onChange={setSearch} placeholder={!showOverview?'Поиск выплаты...':school==='OFFICE'?'Поиск отдела...':'Поиск школы или офиса...'} />
         <button type="button" style={{ width: 34, height: 34, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Обновить" aria-label="Обновить выплаты" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16} /></button>
       </div>
       {school && <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingTop: 10 }}>
-        <strong>{schools.find(item => item.key === school)?.label}</strong>
+        <strong>{department?departments.find(item=>item.key===department)?.label:schools.find(item=>item.key===school)?.label}</strong>
         {(['ALL', '1', '2'] as const).map(value => <button key={value} type="button" onClick={() => setHalf(value)} style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '6px 12px', background: half === value ? 'var(--accent)' : 'var(--surface)', color: half === value ? '#fff' : 'var(--text)' }}>{value === 'ALL' ? 'Весь месяц' : value === '1' ? '1–15' : '16–конец месяца'}</button>)}
       </div>}
     </DashboardTopPanel>
     {error && <div role="alert" className="expense-form-error">{error === 'Неизвестное действие' ? 'Загрузка выплат пока недоступна.' : error}</div>}
-    {!school ? <DashboardGrid template="minmax(230px, 1.4fr) repeat(3, minmax(150px, 1fr))">
-      <OverviewColumn first sortKey="school" label="Школа / отдел" icon={<School size={17} color="#fff" />} value={String(sortedSchools.length)} color="#64748B" sortState={{ key: sort, dir: ascending ? 'asc' : 'desc' }} onSort={handleSort}>
-        {sortedSchools.map((item, index) => <div key={item.key} data-school-row={item.key} onClick={() => { setSchool(item.key); setSearch(''); }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', cursor: 'pointer', background: index % 2 ? 'var(--surface-2)' : undefined }}>
+    {showOverview ? <DashboardGrid template="minmax(230px, 1.4fr) repeat(3, minmax(150px, 1fr))">
+      <OverviewColumn first sortKey="school" label={school==='OFFICE'?'Отдел':scope==='school'?'Школа':'Школа / офис'} icon={<School size={17} color="#fff" />} value={String(sortedSchools.length)} color="#64748B" sortState={{ key: sort, dir: ascending ? 'asc' : 'desc' }} onSort={handleSort}>
+        {sortedSchools.map((item, index) => <div key={item.key} data-school-row={item.key} onClick={() => { if(school==='OFFICE')setDepartment(item.key);else setSchool(item.key);setSearch(''); }} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 10, padding: '0 16px', cursor: 'pointer', background: index % 2 ? 'var(--surface-2)' : undefined }}>
           <SchoolAvatar logo={item.logo} label={item.label} color="var(--accent)" size={26} radius={7} fontSize={11} /><span style={{ fontWeight: 650, fontSize: 14 }}>{item.label}</span><ChevronRight size={14} color="var(--text-2)" />
         </div>)}
       </OverviewColumn>

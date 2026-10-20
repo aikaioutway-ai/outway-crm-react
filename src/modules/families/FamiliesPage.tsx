@@ -1,3 +1,4 @@
+import { isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
@@ -5,7 +6,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ChildStatus, Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from '../../types';
 import { getPriceByZone, money } from '../../utils/pricing';
 import {
-  SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
+  SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolVisible
 } from './constants';
 import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
@@ -1598,6 +1599,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
 
   // Проверяем доступна ли вкладка сотруднику (сравнение без учёта регистра)
   const isTabAllowed = useCallback((tabKey: string) => {
+    if(!isSchoolVisible(tabKey))return false;
     if (!hasSchoolRestriction) return true;
     if (tabKey === 'ALL') return true;
     return allowedSchools!.some(k => k.toLowerCase() === tabKey.toLowerCase());
@@ -1611,6 +1613,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   }, []);
 
   const rowMatchesSchoolTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
+    if(!isSchoolVisible(row.branchFilter))return false;
     if (tabItem.key === 'ALL') {
       if (!hasSchoolRestriction) return true;
       // «Все школы» для ограниченного сотрудника — не «вообще все», а объединение
@@ -1635,8 +1638,6 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const [familiesPageNumber, setFamiliesPageNumber] = useState(0);
   const FAMILIES_PAGE_SIZE = 100;
 
-  const isUnrestrictedAll = (!tab || tab.key === 'ALL') && !hasSchoolRestriction;
-
   const activeTabKeys = useMemo(() => {
     const allTabKeys = SCHOOL_TABS.filter(t => t.key !== 'ALL').map(t => t.key);
     const base = (!tab || tab.key === 'ALL') ? allTabKeys : [tab.key];
@@ -1648,15 +1649,15 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   // конкретные branch_id — RPC ничего не знает про SCHOOL_TABS/BRANCH_TO_FILTER,
   // эта группировка остаётся клиентской (как и в get_branch_stats).
   const branchIdsForPage = useMemo(() => {
-    if (isUnrestrictedAll) return null;
     const branches = branchStatsForPaging.data ?? [];
+    if((!tab || tab.key==='ALL') && !hasSchoolRestriction)return branches.filter(branch=>isSchoolVisible(branch.branchName) && isSchoolVisible(getBranchFilter(branch.branchName,branch.branchCode))).map(branch=>branch.branchId);
     const keySet = new Set(activeTabKeys);
     return branches
       .filter(b => keySet.has(getBranchFilter(b.branchName, b.branchCode)))
       .map(b => b.branchId);
-  }, [isUnrestrictedAll, activeTabKeys, branchStatsForPaging.data]);
+  }, [activeTabKeys, branchStatsForPaging.data, tab, hasSchoolRestriction]);
 
-  const branchesReadyForPaging = isUnrestrictedAll || branchStatsForPaging.isSuccess;
+  const branchesReadyForPaging = branchStatsForPaging.isSuccess;
 
   // quickChildStatus==='transfered' — синтетический статус (row.transferNumber
   // непусто), а не значение колонки status в базе; переводим его отдельно в
@@ -1961,6 +1962,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
   const filteredDriverRows = useMemo(() => {
     const q = search.trim().toLowerCase();
     return driverRows.filter(row => {
+      if(!isVisibleDriver(row))return false;
       const isReserveSelected = selectedDashboardSchool?.key === DRIVER_RESERVE_KEY;
       if (
         selectedDashboardSchool
@@ -2013,7 +2015,7 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
     if (!selectedDriver) return [];
     const currentBranchIds = new Set(selectedDriver.branchIds);
     const currentTransferIds = new Set(selectedDriver.transfers.map(transfer => transfer.id));
-    const sameBranchTransfers = dashboardTransfers.filter(transfer => (
+    const sameBranchTransfers = dashboardTransfers.filter(transfer => isSchoolVisible(transfer.branchShort) && isSchoolVisible(getBranchFilter(transfer.branchShort,transfer.branchCode)) && (
       currentTransferIds.has(transfer.id)
       || currentBranchIds.size === 0
       || (transfer.branchId && currentBranchIds.has(transfer.branchId))

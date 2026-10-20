@@ -4,7 +4,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, ChevronDown, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, ChargeDiscount, ChargeDiscountReason, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
 import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
-import { PERIOD_LABEL } from './constants';
+import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
@@ -1558,7 +1558,7 @@ function ChildCard({
                 content: (
                   editing ? <EditableSelect
                     value={child.branchId ?? ''}
-                    options={branches.map(b => ({ value: b.id, label: b.shortName || b.code }))}
+                    options={branches.filter(branch=>isSchoolVisible(branch.shortName || branch.code) && isSchoolVisible(branch.name)).map(b => ({ value: b.id, label: b.shortName || b.code }))}
                     onCommit={value => {
                       const branch = branches.find(b => b.id === value);
                       if (!branch) return Promise.resolve(false);

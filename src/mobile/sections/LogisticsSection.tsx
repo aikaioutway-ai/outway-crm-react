@@ -1,3 +1,4 @@
+import { isVisibleDriver } from '../../modules/drivers/driverSchoolVisibility';
 import React, { useMemo, useState } from 'react';
 import { Bus, Car, Route, UserPlus, Users, UserX } from 'lucide-react';
 import { useDriversTable, useFamiliesTable } from '../../hooks/useCrmQueries';
@@ -124,7 +125,7 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
     [families.data, user.schoolKeys],
   );
   const bySchool = useMemo(() => groupBySchool(rows), [rows]);
-  const driverList = useMemo(() => drivers.data ?? [], [drivers.data]);
+  const driverList = useMemo(() => (drivers.data ?? []).filter(isVisibleDriver), [drivers.data]);
 
   const page = nav.page;
   const schoolKey = page?.kind === 'school' || page?.kind === 'transfer' ? page.schoolKey : null;
@@ -219,7 +220,6 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
             </div>
             {[
               { title: 'Школы', items: schools.filter(item => !SCHOOL_TIER_2_KEYS.includes(item.school.key)) },
-              { title: 'Школы 2.0', items: schools.filter(item => SCHOOL_TIER_2_KEYS.includes(item.school.key)) },
             ].filter(group => group.items.length).map(group => (
               <React.Fragment key={group.title}>
                 <div className="m-section-title">{group.title}</div>
