@@ -56,6 +56,7 @@ export interface DataTableProps<T = any> {
   onRowReject?: (row: T) => void;
   canRowReject?: (row: T) => boolean;
   onRowDelete?: (row: T) => void;
+  canRowDelete?: (row: T) => boolean;
   onRowEdit?: (row: T) => void;
   onRowPayment?: (row: T) => void;
   onCellSave?: (row: T, key: string, value: any) => Promise<boolean> | boolean;
@@ -336,6 +337,7 @@ export function DataTable<T extends Record<string, any>>({
   onRowReject,
   canRowReject,
   onRowDelete,
+  canRowDelete,
   onRowEdit: _onRowEdit,
   onRowPayment: _onRowPayment,
   onCellSave,
@@ -1151,7 +1153,7 @@ export function DataTable<T extends Record<string, any>>({
               <span>×</span> Отказ
             </button>
           )}
-          {onRowDelete && (
+          {onRowDelete && (canRowDelete?.(rowMenu.row) ?? true) && (
             <button className="dt-ctx-item dt-ctx-item--danger" onClick={() => { onRowDelete(rowMenu.row); setRowMenu(null); }}>
               <span>🗑</span> Удалить
             </button>

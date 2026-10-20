@@ -6,7 +6,7 @@ import { getPriceByZone, money } from '../../utils/pricing';
 import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter
 } from './constants';
-import { CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, deleteV2DriverAdvance, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverAdvances, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildrenStatus, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverAdvance, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -3406,6 +3406,25 @@ export default function FamiliesPage({ mode = 'requests', userRole = 'admin', us
                 }
               } : undefined}
               canRowReject={(row) => row.status !== 'rejected'}
+              onRowDelete={userRole === 'admin' ? async (row) => {
+                const reason = window.prompt(
+                  `Удалить ребёнка "${row.childName || 'без имени'}" (${row.familyId}) из CRM?\n`
+                  + 'Запись исчезнет из CRM, но копия останется в истории базы.\n\nУкажите причину (например: дубль FAM-001958):',
+                );
+                if (reason === null) return;
+                if (!reason.trim()) { window.alert('Без причины удалить нельзя.'); return; }
+                try {
+                  await adminDeleteV2Child(row.rowId, reason, authToken);
+                  setRows(prev => {
+                    const next = prev.filter(item => item.rowId !== row.rowId);
+                    familiesRowsCache = next;
+                    return next;
+                  });
+                } catch (e: any) {
+                  window.alert('Не удалось удалить: ' + (e?.message ?? String(e)));
+                }
+              } : undefined}
+              canRowDelete={(row) => row.rowId !== `${row.familyId}_empty`}
               onCellSave={handleCellSave}
               onExport={mode === 'logistics'
                 ? exportLogisticsRouteSheet

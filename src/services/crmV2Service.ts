@@ -2187,6 +2187,24 @@ export async function rejectV2Family(familyId: string, actorName = 'CRM'): Promi
   invalidateFamiliesCache();
 }
 
+/** Только для администратора: убирает ребёнка (например, дубль) из CRM.
+ * Оригинал сохраняется в v2_audit_log; оплаченные записи сервер удалить не даст. */
+export async function adminDeleteV2Child(childId: string, reason: string, sessionToken?: string): Promise<{ familyDeleted: boolean }> {
+  if (!sessionToken) throw new Error('Сессия устарела. Войдите в CRM снова.');
+  const { data, error } = await supabase.functions.invoke('child-management-api', {
+    body: { action: 'delete', childId, reason },
+    headers: { 'x-employee-session': sessionToken },
+  });
+  if (error) {
+    let message = error.message;
+    try { message = (await error.context.json())?.error || message; } catch { /* response may not be JSON */ }
+    throw new Error(message);
+  }
+  if (!data?.ok) throw new Error(data?.error || 'Не удалось удалить ребёнка');
+  invalidateFamiliesCache();
+  return { familyDeleted: Boolean(data.familyDeleted) };
+}
+
 // crm_page_filters: id uuid pk, mode text, tab_key text, metric text, vehicle_filter text, updated_at timestamptz
 // unique(mode, tab_key)
 export interface PageFilterSettings {

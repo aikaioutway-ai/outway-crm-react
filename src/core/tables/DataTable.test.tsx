@@ -117,6 +117,24 @@ test('shows reject next to delete in the row menu', () => {
   expect(onRowDelete).not.toHaveBeenCalled();
 });
 
+test('hides delete in the row menu for rows that cannot be deleted', () => {
+  render(
+    <DataTable
+      columns={columns}
+      data={[{ id: 'family-1_empty', paymentMethod: 'cash' }]}
+      rowKey="id"
+      onRowDelete={jest.fn()}
+      canRowDelete={row => !String(row.id).endsWith('_empty')}
+      storageKey="family-delete-guard-test"
+    />,
+  );
+
+  const table = screen.getAllByRole('table').at(-1)!;
+  fireEvent.contextMenu(within(table).getAllByRole('row')[1]);
+
+  expect(screen.queryByRole('button', { name: /Удалить/ })).not.toBeInTheDocument();
+});
+
 
 test('keeps selections across transfers when selecting and deselecting the current page', () => {
   const onSelectedKeysChange = jest.fn();
