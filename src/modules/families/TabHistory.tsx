@@ -128,7 +128,7 @@ function humanizeValue(raw: unknown): string {
   if (raw == null || raw === '' || raw === '-') return '—';
   if (typeof raw === 'object') return '';
   const value = VALUE_LABEL[String(raw)] ?? String(raw);
-  if (value.length > 90 || /^[\[{]/.test(value)) return '';
+  if (value.length > 90 || /^[[{]/.test(value)) return '';
   return value;
 }
 
@@ -157,8 +157,9 @@ function routeChangeDetails(entry: AuditEntry): string {
     ['Трансфер', ['transferNumber', 'transfer_number']],
     ['Тип ТС', ['vehicleType', 'vehicle_type']],
   ] as const) {
-    const oldKey = keys.find(key => key in old);
-    const nextKey = keys.find(key => key in next);
+    const keyList: readonly string[] = keys;
+    const oldKey = keyList.find(key => key in old);
+    const nextKey = keyList.find(key => key in next);
     if (!nextKey) continue;
     const previous = oldKey ? old[oldKey] : undefined;
     const current = next[nextKey];

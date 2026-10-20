@@ -4,7 +4,7 @@ import { useFamiliesTable } from '../../hooks/useCrmQueries';
 
 jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn() }));
 
-test('flags assigned unboarded children only in their school and transfer', () => {
+test('directory transfer marker shows how many children are in the transfer', () => {
   (useFamiliesTable as jest.Mock).mockReturnValue({ data: [
     { familyId: 'a', branchFilter: 'AES', transferNumber: '1', status: 'new', debtAmount: 0 },
     { familyId: 'b', branchFilter: 'AES', transferNumber: '1', status: 'boarded', debtAmount: 0 },
@@ -14,9 +14,10 @@ test('flags assigned unboarded children only in their school and transfer', () =
     { familyId: 'f', branchFilter: 'TIS', transferNumber: '1', status: 'new', debtAmount: 0 },
   ] });
   render(<SchoolTransferDashboard schoolKey="AES" />);
-  // Ячейка трансфера показывает число неподтверждённых посадок; детали — в подсказке.
-  expect(screen.getAllByTitle(/Посадка не подтверждена: 1$/)).toHaveLength(1);
-  expect(screen.getByTitle(/Посадка не подтверждена: 1$/)).toHaveTextContent('1');
+  // Трансфер 1: два ребёнка (отказник не считается), трансфер 2: один.
+  expect(screen.getByTitle(/^2 детей/)).toHaveTextContent('21');
+  expect(screen.getAllByTitle(/^1 детей/).some(cell => cell.textContent === '12')).toBe(true);
+  expect(screen.queryByTitle(/Посадка не подтверждена/)).not.toBeInTheDocument();
 });
 
 

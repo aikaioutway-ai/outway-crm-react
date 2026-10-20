@@ -106,13 +106,15 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
         return <TransferCell
           key={cell.filterKey || 'all'}
           label={cell.label}
-          value={isTransfer ? cell.unboardedCount : cell.childCount}
-          alert={isTransfer}
+          // В справочнике маркер трансфера показывает, сколько всего в нём детей;
+          // в оплатах — красный счётчик должников.
+          value={isTransfer && mode !== 'directory' ? cell.unboardedCount : cell.childCount}
+          alert={isTransfer && mode !== 'directory'}
           color={cell.tone ?? '#2DD4BF'}
           active={cell.childCount > 0}
           selected={selectedKey === cell.filterKey}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
-          title={cell.childCount > 0 ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')}${isTransfer ? ` · ${badgeLabel}: ${cell.unboardedCount}` : ''}` : undefined}
+          title={cell.childCount > 0 ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')}${isTransfer && mode !== 'directory' ? ` · ${badgeLabel}: ${cell.unboardedCount}` : ''}` : undefined}
         />;
       })}
       </TransferBarPages>

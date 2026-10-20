@@ -523,7 +523,10 @@ export function DataTable<T extends Record<string, any>>({
   const startCellEdit = (row: T, col: ColumnDef<T>) => {
     if (!col.editable || !onCellSave) return;
     setEditingCell({ rowId: row[rowKey], key: col.key });
-    setDraftValue(String(getCellValue(row, col) ?? ''));
+    // Ноль в числовой ячейке не оставляем в поле, чтобы сумму можно было сразу вводить.
+    const value = getCellValue(row, col);
+    const isNumeric = col.type === 'currency' || col.type === 'number';
+    setDraftValue(isNumeric && Number(value) === 0 && !col.editOptions ? '' : String(value ?? ''));
   };
 
   const commitCellEdit = async (row: T, col: ColumnDef<T>, nextValue = draftValue) => {

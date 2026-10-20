@@ -31,9 +31,8 @@ export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReser
       ['newRequests', 'Новые заявки', children.filter(row => row.status === 'new' && !row.transferNumber).length],
       ['boarded', 'Посажены', children.filter(row => row.status === 'boarded').length],
       ['rejected', 'Отказ', children.filter(row => row.status === 'rejected').length],
-      ['unboarded', 'В трансфере, не посажены', children.filter(row => !!row.transferNumber && row.status !== 'boarded' && row.status !== 'rejected').length],
     ] as const;
-    return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
+    return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
       <KpiChip iconBackground="transparent" icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} />} label="Школа" value={stat.label} color={stat.color} />
       {metrics.map(([key, label, count]) => <KpiChip key={key} icon={null} label={label} value={String(count)} color={DIRECTORY_COLORS[key]} />)}
     </div>;

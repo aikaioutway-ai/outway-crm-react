@@ -3,7 +3,7 @@ import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, Check, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
-import { Family, Child, Charge, ChargeDiscount, ChargeDiscountReason, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
+import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
 import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
@@ -16,7 +16,7 @@ import {
 } from '../../services/financeService';
 import TabFinance from './TabFinance';
 import ChildDiscountModal, { ChildDiscountInput } from './ChildDiscountModal';
-import { addChargeDiscount, cancelChargeDiscount, setChildDiscountChoice, setChildDiscount, setChildrenFixedPrice } from '../../services/discountService';
+import { setChildDiscountChoice, setChildDiscount, setChildrenFixedPrice } from '../../services/discountService';
 import TabHistory from './TabHistory';
 import NotionSelect from '../../core/selects/NotionSelect';
 import { createCustomFamilyDocument, createDefaultFamilyDocuments, FamilyDocument, fetchFamilyDocuments, saveFamilyDocuments } from '../../services/familyDocumentService';
@@ -62,7 +62,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [tab, setTab] = useState<Tab>(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
-  const [chargeDiscounts, setChargeDiscounts] = useState<ChargeDiscount[]>([]);
   const [discountChild, setDiscountChild] = useState<Child | null>(null);
   const [payments, setPayments] = useState<FamilyPayment[]>([]);
   const [paymentItems, setPaymentItems] = useState<PaymentItem[]>([]);
@@ -158,7 +157,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       const snap = await fetchFinanceSnapshot(requestedFamilyId, kids);
       if (activeFamilyIdRef.current !== requestedFamilyId) return;
       setCharges(snap.charges);
-      setChargeDiscounts(snap.chargeDiscounts);
       setPayments(snap.payments);
       setPaymentItems(snap.paymentItems);
       setRefunds(snap.refunds);
@@ -288,20 +286,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   async function saveChildDiscount(child: Child, input: ChildDiscountInput) {
     await setChildDiscount(sessionToken, { childId: child.id, ...input });
     await refreshAfterDiscountChange();
-  }
-
-  async function handleAddChargeDiscount(input: { chargeId: string; amount: number; reasonType: ChargeDiscountReason; comment: string }) {
-    await addChargeDiscount(sessionToken, input);
-    await loadFinance();
-    await loadAudit();
-    onUpdated?.();
-  }
-
-  async function handleCancelChargeDiscount(discount: ChargeDiscount) {
-    await cancelChargeDiscount(sessionToken, discount.id);
-    await loadFinance();
-    await loadAudit();
-    onUpdated?.();
   }
 
   function addDraftChild() {
@@ -766,8 +750,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               loaded={financeLoaded}
               onLoad={() => loadFinance()}
               charges={charges} payments={payments} paymentItems={paymentItems} refunds={refunds}
-              chargeDiscounts={chargeDiscounts} canManageDiscounts={canManageDiscount}
-              onAddChargeDiscount={handleAddChargeDiscount} onCancelChargeDiscount={handleCancelChargeDiscount}
               loading={loadingFinance} family={savedFamily} children={children}
               isAdmin={isAdmin} isCashier={isCashier} isManager={isManager} userRole={userRole as any}
               onSaveCharge={handleSaveCharge} onDeleteCharge={handleDeleteCharge}
