@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render as renderBase, screen, waitFor, within } from '@testing-library/react';
 import { DataTable, type ColumnDef } from './DataTable';
 
 jest.mock('../../services/supabase', () => ({
@@ -30,7 +30,7 @@ const columns: ColumnDef<PaymentRow>[] = [
 test('passes the selected payment method to the cell save handler', async () => {
   const onCellSave = jest.fn().mockResolvedValue(true);
 
-  render(
+  await render(
     <DataTable
       columns={columns}
       data={[{ id: 'payment-1', paymentMethod: 'cash' }]}
@@ -63,7 +63,7 @@ test('sorts families by the first child and keeps siblings together', async () =
     { key: 'childName', label: 'Ребёнок', type: 'text' },
   ];
 
-  render(
+  await render(
     <DataTable
       columns={childColumns}
       data={[
@@ -91,11 +91,11 @@ test('sorts families by the first child and keeps siblings together', async () =
   });
 });
 
-test('shows reject next to delete in the row menu', () => {
+test('shows reject next to delete in the row menu', async () => {
   const onRowReject = jest.fn();
   const onRowDelete = jest.fn();
 
-  render(
+  await render(
     <DataTable
       columns={columns}
       data={[{ id: 'family-1', paymentMethod: 'cash' }]}
@@ -117,8 +117,8 @@ test('shows reject next to delete in the row menu', () => {
   expect(onRowDelete).not.toHaveBeenCalled();
 });
 
-test('hides delete in the row menu for rows that cannot be deleted', () => {
-  render(
+test('hides delete in the row menu for rows that cannot be deleted', async () => {
+  await render(
     <DataTable
       columns={columns}
       data={[{ id: 'family-1_empty', paymentMethod: 'cash' }]}
@@ -136,10 +136,10 @@ test('hides delete in the row menu for rows that cannot be deleted', () => {
 });
 
 
-test('keeps selections across transfers when selecting and deselecting the current page', () => {
+test('keeps selections across transfers when selecting and deselecting the current page', async () => {
   const onSelectedKeysChange = jest.fn();
   const props = { columns, rowKey: 'id' as const, selectable: true, onSelectedKeysChange, storageKey: 'cross-transfer-selection-test' };
-  const { rerender } = render(<DataTable {...props} data={[{ id: 'child-1', paymentMethod: 'cash' }]} selectedKeys={new Set()} />);
+  const { rerender } = await render(<DataTable {...props} data={[{ id: 'child-1', paymentMethod: 'cash' }]} selectedKeys={new Set()} />);
   fireEvent.click(screen.getByTitle('Выбрать всех на странице'));
   expect(onSelectedKeysChange).toHaveBeenLastCalledWith(new Set(['child-1']));
   rerender(<DataTable {...props} data={[{ id: 'child-2', paymentMethod: 'cash' }]} selectedKeys={new Set(['child-1'])} />);
@@ -153,7 +153,7 @@ test('keeps selections across transfers when selecting and deselecting the curre
 
 test('restores the read-only cell when dismissed without selecting', async () => {
   const onCellSave = jest.fn();
-  render(<DataTable columns={columns} data={[{ id: 'dismiss-1', paymentMethod: 'cash' }]} rowKey="id" onCellSave={onCellSave} storageKey="dismiss-select-test" />);
+  await render(<DataTable columns={columns} data={[{ id: 'dismiss-1', paymentMethod: 'cash' }]} rowKey="id" onCellSave={onCellSave} storageKey="dismiss-select-test" />);
   fireEvent.click(screen.getByText('cash'));
   expect(await screen.findByRole('listbox')).toBeInTheDocument();
   fireEvent.mouseDown(document.body);
@@ -169,7 +169,7 @@ test('restores the read-only cell when dismissed without selecting', async () =>
 });
 
 test('sorts transfer numbers numerically even with a number prefix', async () => {
-  render(<DataTable columns={[{ key: 'transfer', label: 'Трансфер', type: 'text' }]}
+  await render(<DataTable columns={[{ key: 'transfer', label: 'Трансфер', type: 'text' }]}
     data={[{ id: 'a', transfer: '№1' }, { id: 'b', transfer: '№10' }, { id: 'c', transfer: '№2' }]}
     rowKey="id" storageKey="transfer-numeric-sort-test" />);
   const table = screen.getAllByRole('table').at(-1)!;
@@ -184,16 +184,22 @@ test('sorts transfer numbers numerically even with a number prefix', async () =>
 
 test('right click offers task creation with the selected row target',async()=>{
   const listener=jest.fn();window.addEventListener('outway-task-compose',listener);
-  render(<DataTable columns={columns} data={[{id:'one',paymentMethod:'cash'}]} rowKey="id" storageKey="task_context_test" getTaskTarget={()=>({type:'school',id:'TIS',label:'TIS'})}/>);
+  await render(<DataTable columns={columns} data={[{id:'one',paymentMethod:'cash'}]} rowKey="id" storageKey="task_context_test" getTaskTarget={()=>({type:'school',id:'TIS',label:'TIS'})}/>);
   fireEvent.contextMenu((await screen.findByText('cash')).closest('tr')!,{clientX:100,clientY:100});
   fireEvent.click(screen.getByRole('button',{name:/Поставить задачу/}));
   expect(listener).toHaveBeenCalledWith(expect.objectContaining({detail:{type:'school',id:'TIS',label:'TIS'}}));
   window.removeEventListener('outway-task-compose',listener);
 });
 
-test('does not start editing a protected row',()=>{
-  render(<DataTable columns={columns} data={[{id:'system-payment',paymentMethod:'cash'}]} rowKey="id" onCellSave={jest.fn()} canEditCell={()=>false}/>);
+test('does not start editing a protected row',async()=>{
+  await render(<DataTable columns={columns} data={[{id:'system-payment',paymentMethod:'cash'}]} rowKey="id" onCellSave={jest.fn()} canEditCell={()=>false}/>);
   fireEvent.click(screen.getByText('cash'));
   expect(screen.queryByRole('option')).not.toBeInTheDocument();
   expect(screen.getByText('cash').closest('td')).not.toHaveClass('dt-td--editable');
 });
+
+async function render(ui: Parameters<typeof renderBase>[0]) {
+ let result!: ReturnType<typeof renderBase>;
+ await act(async()=>{result=renderBase(ui);});
+ return result;
+}

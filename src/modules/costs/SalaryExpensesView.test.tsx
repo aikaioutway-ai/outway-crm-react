@@ -1,3 +1,4 @@
+jest.mock('../../services/supabase',()=>({supabase:{from:jest.fn(()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null,error:null})})})}))}}));
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import SalaryExpensesView from './SalaryExpensesView';
 jest.mock('../../services/expenseService',()=>({fetchSalaryExpenses:jest.fn(async()=>[{id:'salary',name:'ЗП — Кассир',category:'office',departmentKey:'finance',salaryPeriodKey:'2026-10-1',amount:2000,expenseDate:'2026-10-10',paymentMethod:'cash'}])}));
@@ -9,7 +10,7 @@ test('office department opens its salary and advances together', async()=>{
   expect(screen.queryByText('Отдел финансов')).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('Офис'));
   fireEvent.click(screen.getByText('Отдел финансов'));
-  expect(screen.getByText('ЗП — Кассир')).toBeInTheDocument();
+  expect(await screen.findByText('ЗП — Кассир')).toBeInTheDocument();
   expect(screen.getByText('Аванс — Кассир')).toBeInTheDocument();
 });
 
