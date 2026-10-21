@@ -18,8 +18,8 @@ export const SCHOOL_DIRECTORY: { key: string; label: string; codes: string[]; br
   { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
   { key: 'ABL1',  label: 'ABL #2',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'ABL2',  label: 'ABL #1',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
-  { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
-  { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
+  { key: 'SNP',   label: 'SNP', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
+  { key: 'ELP',   label: 'ELP', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
@@ -96,7 +96,7 @@ export const BRANCH_SHORT: Record<string, string> = {
   'Академия будущих лидеров(Мавлянова)':  'ABL #1',
   'Light Academy Primary':         'LA_P',
   'Международная школа Сан Арип':  'SNP',
-  'Ellipse International School':  'ELS',
+  'Ellipse International School':  'ELP',
 };
 
 // Группировка branch_name по school_code для фильтра филиалов
@@ -133,7 +133,7 @@ export const BRANCH_TO_FILTER: Record<string, string> = {
   'Академия будущих лидеров(Мавлянова)':  'ABL2',
   'Light Academy Primary': 'LA_P',
   'Международная школа Сан Арип': 'SNP',
-  'Ellipse International School': 'ELS',
+  'Ellipse International School': 'ELP',
 };
 
 export const SCHOOL_SHORT: Record<string, string> = {
@@ -143,7 +143,7 @@ export const SCHOOL_SHORT: Record<string, string> = {
   INDIGO: 'ING', ERUDIT: 'ERU', TENSAY: 'TIS', EDISON: 'EDI',
   AES_KAS: 'AES',
   ABL1: 'ABL #2', ABL2: 'ABL #1',
-  SANARIP: 'SNP', ELLIPSE: 'ELS',
+  SANARIP: 'SNP', ELLIPSE: 'ELP',
 };
 
 export const SCHOOL_CODE_ALIASES: Record<string, string> = {

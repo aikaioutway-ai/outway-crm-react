@@ -17,7 +17,7 @@ export const SCHOOL_TABS: { key: string; label: string; codes: string[]; branche
   { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
   { key: 'ABL1',  label: 'ABL #2',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'ABL2',  label: 'ABL #1',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
-  { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
-  { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
+  { key: 'SNP',   label: 'SNP', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
+  { key: 'ELP',   label: 'ELP', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
