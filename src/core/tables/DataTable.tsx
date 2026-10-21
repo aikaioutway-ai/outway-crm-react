@@ -309,20 +309,48 @@ function columnConfigSignature<T>(columns: ColumnDef<T>[]): string {
   ].join(':')).join(',');
 }
 
-async function loadColumnSettings(storageKey: string): Promise<{ key: string; visible: boolean; width?: number }[] | null> {
+type SavedColumns = { key: string; visible: boolean; width?: number }[];
+
+// Кэш настроек колонок: в памяти (между страницами) и в localStorage
+// (между перезагрузками). Позволяет с первого рендера показать сохранённую
+// раскладку, а не колонки по умолчанию. Supabase обновляет кэш в фоне.
+const LS_PREFIX = 'dt_cols:';
+const settingsCache = new Map<string, SavedColumns | null>();
+
+function readCachedSettings(storageKey: string): { found: boolean; saved: SavedColumns | null } {
+  if (settingsCache.has(storageKey)) return { found: true, saved: settingsCache.get(storageKey) ?? null };
   try {
-    const { data } = await supabase
+    const raw = localStorage.getItem(LS_PREFIX + storageKey);
+    if (raw !== null) {
+      const saved = JSON.parse(raw) as SavedColumns | null;
+      settingsCache.set(storageKey, saved);
+      return { found: true, saved };
+    }
+  } catch { /* localStorage недоступен или битый JSON */ }
+  return { found: false, saved: null };
+}
+
+function writeCachedSettings(storageKey: string, saved: SavedColumns | null): void {
+  settingsCache.set(storageKey, saved);
+  try { localStorage.setItem(LS_PREFIX + storageKey, JSON.stringify(saved)); } catch { /* ignore */ }
+}
+
+async function loadColumnSettings(storageKey: string): Promise<{ ok: boolean; saved: SavedColumns | null }> {
+  try {
+    const { data, error } = await supabase
       .from('column_settings')
       .select('settings')
       .eq('storage_key', storageKey)
       .maybeSingle();
-    return data?.settings ?? null;
+    if (error) return { ok: false, saved: null };
+    return { ok: true, saved: data?.settings ?? null };
   } catch {
-    return null;
+    return { ok: false, saved: null };
   }
 }
 
-async function saveColumnSettings(storageKey: string, settings: { key: string; visible: boolean; width?: number }[]): Promise<void> {
+async function saveColumnSettings(storageKey: string, settings: SavedColumns): Promise<void> {
+  writeCachedSettings(storageKey, settings);
   const { error } = await supabase
     .from('column_settings')
     .upsert({ storage_key: storageKey, settings, updated_at: new Date().toISOString() }, { onConflict: 'storage_key' });
@@ -368,39 +396,59 @@ export function DataTable<T extends Record<string, any>>({
 }: DataTableProps<T>) {
 
   // ── Persistent column order & visibility ──
-  const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, null));
+  // Раскладка берётся из кэша сразу; если кэша нет — таблица показывает
+  // скелетон, пока не придут настройки из Supabase (settingsReady).
+  const [layoutKey, setLayoutKey] = useState(storageKey);
+  const [cols, setCols] = useState<ColumnDef<T>[]>(() => buildColumns(initialColumns, readCachedSettings(storageKey).saved));
+  const [readyKey, setReadyKey] = useState<string | null>(() => (readCachedSettings(storageKey).found ? storageKey : null));
+  const settingsReady = readyKey === storageKey;
 
-  // Загружаем настройки колонок из Supabase при монтировании
-  const prevColKeysRef = useRef<string>('');
+  // Смена storageKey (тот же DataTable на другой странице): сразу, ещё в
+  // рендере, переключаемся на раскладку новой таблицы, чтобы не мелькнули
+  // колонки предыдущей.
+  if (layoutKey !== storageKey) {
+    const cached = readCachedSettings(storageKey);
+    setLayoutKey(storageKey);
+    setCols(buildColumns(initialColumns, cached.saved));
+    setReadyKey(cached.found ? storageKey : null);
+  }
+
+  const initialColumnsRef = useRef(initialColumns);
+  initialColumnsRef.current = initialColumns;
+  const prevSignatureRef = useRef(columnConfigSignature(initialColumns));
+  // Растёт при каждом сохранении пользователем: ответ Supabase, пришедший
+  // после локальной правки, не должен её затирать.
+  const editVersionRef = useRef(0);
+
+  // Обновляем настройки из Supabase в фоне (один запрос на storageKey).
   useEffect(() => {
     let cancelled = false;
-    loadColumnSettings(storageKey).then(saved => {
+    const versionAtStart = editVersionRef.current;
+    loadColumnSettings(storageKey).then(({ ok, saved }) => {
       if (cancelled) return;
-      setCols(buildColumns(initialColumns, saved));
-      prevColKeysRef.current = columnConfigSignature(initialColumns);
+      if (ok) writeCachedSettings(storageKey, saved);
+      if (editVersionRef.current === versionAtStart) {
+        setCols(buildColumns(initialColumnsRef.current, ok ? saved : readCachedSettings(storageKey).saved));
+      }
+      setReadyKey(storageKey);
     });
     return () => { cancelled = true; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storageKey]);
 
-  // Пересчитываем если изменилась структура колонок в коде (ходим в Supabase
-  // за сохранённым layout), иначе просто подмешиваем свежие render-функции
-  // в уже применённый layout — без похода в БД.
+  // Изменился набор колонок в коде — пересобираем по кэшу настроек;
+  // иначе просто подмешиваем свежие render-функции в текущий layout.
   useEffect(() => {
-    const currentKeys = columnConfigSignature(initialColumns);
-    if (currentKeys !== prevColKeysRef.current) {
-      prevColKeysRef.current = currentKeys;
-      let cancelled = false;
-      loadColumnSettings(storageKey).then(saved => {
-        if (cancelled) return;
-        setCols(buildColumns(initialColumns, saved));
-      });
-      return () => { cancelled = true; };
+    const signature = columnConfigSignature(initialColumns);
+    if (signature !== prevSignatureRef.current) {
+      prevSignatureRef.current = signature;
+      setCols(buildColumns(initialColumns, readCachedSettings(storageKey).saved));
+      return;
     }
     setCols(prevCols => mergeFreshColumns(initialColumns, prevCols));
   }, [initialColumns, storageKey]);
 
   const persistCols = useCallback((next: ColumnDef<T>[]) => {
+    editVersionRef.current += 1;
     saveColumnSettings(storageKey, next.map(c => ({ key: c.key, visible: c.visible ?? true, width: c.width })));
   }, [storageKey]);
 
@@ -910,7 +958,7 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* ── TABLE WRAPPER ── */}
       <div className="dt-wrap" ref={wrapRef}>
-        {loading ? (
+        {loading || !settingsReady ? (
           <div className="dt-skeleton">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="dt-skeleton-row">
