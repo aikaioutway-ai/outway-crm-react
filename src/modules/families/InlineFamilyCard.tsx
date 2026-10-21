@@ -8,7 +8,7 @@ import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPrice
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { formatPhoneDisplay } from './familiesRowHelpers';
-import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
+import { addV2Audit, createV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
@@ -77,7 +77,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const [savedFamily, setSavedFamily] = useState<Family>(family);
   const [draftFamily, setDraftFamily] = useState<Family>(family);
   const [draftChildren, setDraftChildren] = useState<Child[]>([]);
-  const [deletedChildIds, setDeletedChildIds] = useState<Set<string>>(new Set());
   const [editing, setEditing] = useState(false);
   const [savingAll, setSavingAll] = useState(false);
   const [saveMsg, setSaveMsg] = useState('');
@@ -98,7 +97,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setSavedFamily(family);
     setDraftFamily(family);
     setEditing(false);
-    setDeletedChildIds(new Set());
     setTab(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
     setFinanceLoaded(false);
     setAuditLoaded(false);
@@ -214,7 +212,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   function beginEditing() {
     setDraftFamily({ ...savedFamily });
     setDraftChildren(children.map(child => ({ ...child })));
-    setDeletedChildIds(new Set());
     setDraftDocuments(savedDocuments.map(document => ({ ...document, scanFile: null })));
     setEditing(true);
     setSaveMsg('');
@@ -223,7 +220,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   function cancelEditing() {
     setDraftFamily({ ...savedFamily });
     setDraftChildren(children.map(child => ({ ...child })));
-    setDeletedChildIds(new Set());
     setDraftDocuments(savedDocuments.map(document => ({ ...document, scanFile: null })));
     setEditing(false);
   }
@@ -321,10 +317,8 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
 
   function deleteDraftChild(child: Child) {
+    if (!child.id.startsWith('draft-')) return;
     setDraftChildren(current => current.filter(item => item.id !== child.id));
-    if (!child.id.startsWith('draft-')) {
-      setDeletedChildIds(current => new Set(current).add(child.id));
-    }
   }
 
   function patchDraftDocument(index: number, patch: Partial<FamilyDocument>) {
@@ -348,8 +342,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         const ok = await handleSaveFamily(draftFamily);
         if (!ok) throw new Error('family-save-failed');
       }
-
-      for (const childId of Array.from(deletedChildIds)) await deleteV2Child(childId);
 
       for (const draft of draftChildren) {
         if (draft.id.startsWith('draft-')) {
@@ -385,7 +377,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       if (financeLoaded) await loadFinance(nextChildren);
       await addAudit('Сохранение карточки', 'family', 'Черновик', 'Изменения сохранены');
       await loadAudit();
-      setDeletedChildIds(new Set());
       setEditing(false);
       setSaveMsg('Сохранено');
       setTimeout(() => setSaveMsg(''), 2200);
@@ -1486,7 +1477,8 @@ function ChildCard({
             Скидка
           </button>
         )}
-        {editing && (
+        {/* Saved children are removed only from the families row menu (owner-only, with history). */}
+        {editing && child.id.startsWith('draft-') && (
           <button
             type="button"
             onClick={event => { event.stopPropagation(); onDeleteChild(child); }}

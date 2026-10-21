@@ -1795,7 +1795,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     setFamiliesPageNumber(0);
   }, [mode, activeTab, search, quickChildStatus, quickTransfer]);
 
-  const pagedRows = familiesPageQuery.data?.rows ?? EMPTY_CHILD_ROWS;
+  const pagedRows: ChildRow[] = familiesPageQuery.data?.rows ?? EMPTY_CHILD_ROWS;
   const pagedTotalFamilies = familiesPageQuery.data?.totalFamilies ?? 0;
   const pagedTotalPages = Math.max(1, Math.ceil(pagedTotalFamilies / FAMILIES_PAGE_SIZE));
 
