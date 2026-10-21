@@ -25,3 +25,13 @@ test('office scope starts with departments, while school scope hides office and 
   expect(screen.queryByText('LA Primary')).not.toBeInTheDocument();
   expect(screen.queryByText('ING_W')).not.toBeInTheDocument();
 });
+
+test.each(['office','school'] as const)('all expense table is available at the root of %s payroll',async scope=>{
+  render(<SalaryExpensesView sessionToken="session" scope={scope}/>);
+  await waitFor(()=>expect(screen.queryByText('Данные не загружены')).not.toBeInTheDocument());
+  fireEvent.click(screen.getByRole('button',{name:'Все расходы'}));
+  expect(await screen.findByRole('button',{name:'Колонки'})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'К сводке'})).toBeInTheDocument();
+  if(scope==='office')expect(await screen.findByText('Аванс — Кассир')).toBeInTheDocument();
+  else expect(screen.queryByText('Аванс — Кассир')).not.toBeInTheDocument();
+});

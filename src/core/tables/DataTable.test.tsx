@@ -190,3 +190,10 @@ test('right click offers task creation with the selected row target',async()=>{
   expect(listener).toHaveBeenCalledWith(expect.objectContaining({detail:{type:'school',id:'TIS',label:'TIS'}}));
   window.removeEventListener('outway-task-compose',listener);
 });
+
+test('does not start editing a protected row',()=>{
+  render(<DataTable columns={columns} data={[{id:'system-payment',paymentMethod:'cash'}]} rowKey="id" onCellSave={jest.fn()} canEditCell={()=>false}/>);
+  fireEvent.click(screen.getByText('cash'));
+  expect(screen.queryByRole('option')).not.toBeInTheDocument();
+  expect(screen.getByText('cash').closest('td')).not.toHaveClass('dt-td--editable');
+});

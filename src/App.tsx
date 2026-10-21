@@ -786,8 +786,8 @@ export default function App() {
               {financeView === 'expenses' && expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>← Категории</button>}
               {extraTabs(true)}
             </div></div>
-            {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
-            {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule onOpenSalary={scope=>{setSalaryScope(scope);setFinanceView('salary');}} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
+            {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
+            {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} onOpenSalary={scope=>{setSalaryScope(scope);setFinanceView('salary');}} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
 
           </div>
         ) : section === 'market' ? (

@@ -62,6 +62,7 @@ export interface DataTableProps<T = any> {
   onRowEdit?: (row: T) => void;
   onRowPayment?: (row: T) => void;
   onCellSave?: (row: T, key: string, value: any) => Promise<boolean> | boolean;
+  canEditCell?: (row: T, key: string) => boolean;
   storageKey?: string;
   loading?: boolean;
   emptyText?: string;
@@ -344,6 +345,7 @@ export function DataTable<T extends Record<string, any>>({
   onRowEdit: _onRowEdit,
   onRowPayment: _onRowPayment,
   onCellSave,
+  canEditCell,
   storageKey = 'dt_prefs',
   loading = false,
   emptyText = 'Нет данных',
@@ -524,7 +526,7 @@ export function DataTable<T extends Record<string, any>>({
   const { onDragStart, onDragOver, onDragEnd } = useDragList(cols, setCols, persistCols);
 
   const startCellEdit = (row: T, col: ColumnDef<T>) => {
-    if (!col.editable || !onCellSave) return;
+    if (!col.editable || !onCellSave || canEditCell?.(row, col.key) === false) return;
     setEditingCell({ rowId: row[rowKey], key: col.key });
     // Ноль в числовой ячейке не оставляем в поле, чтобы сумму можно было сразу вводить.
     const value = getCellValue(row, col);
@@ -1052,7 +1054,7 @@ export function DataTable<T extends Record<string, any>>({
                     {visibleCols.map(col => (
                       <td
                         key={col.key}
-                        className={`dt-td ${col.editable ? 'dt-td--editable' : ''} ${editingCell?.rowId === id && editingCell.key === col.key ? 'dt-td--editing' : ''}`}
+                        className={`dt-td ${col.editable && canEditCell?.(row, col.key) !== false ? 'dt-td--editable' : ''} ${editingCell?.rowId === id && editingCell.key === col.key ? 'dt-td--editing' : ''}`}
                         onClick={e => {
                           if (col.editable) {
                             e.stopPropagation();

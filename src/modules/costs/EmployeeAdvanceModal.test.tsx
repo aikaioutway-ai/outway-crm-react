@@ -1,10 +1,12 @@
-import { createExpense } from '../../services/expenseService';
+import { ExpenseRecord } from './expenseTypes';
+import { salaryExpensePeriods,currentSchoolYear } from './salaryExpensePeriods';
+import { createExpense, updateExpense } from '../../services/expenseService';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import EmployeeAdvanceModal from './EmployeeAdvanceModal';
 import { createV2DriverAdvance } from '../../services/crmV2Service';
 import { createEmployeeAdvance } from '../../services/employeeService';
 
-jest.mock('../../services/expenseService', () => ({ createExpense: jest.fn().mockResolvedValue({id:'saved'}) }));
+jest.mock('../../services/expenseService', () => ({ createExpense: jest.fn().mockResolvedValue({id:'saved'}),updateExpense:jest.fn().mockImplementation(async(id,row)=>({...row,id})) }));
 jest.mock('../../services/crmV2Service', () => ({ createV2DriverAdvance: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/employeeService', () => ({ createEmployeeAdvance: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
@@ -26,7 +28,7 @@ test('office and drivers retain the same main fields without an inline driver li
   expect(screen.getByRole('combobox',{name:'Отдел'})).toBeInTheDocument();
   expect(screen.getByRole('combobox',{name:'Получатели'})).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Водители'}));
-  expect(screen.getByRole('combobox',{name:'Отдел'})).toBeInTheDocument();
+  expect(screen.getByRole('combobox',{name:'Школа'})).toBeInTheDocument();
   expect(screen.getByRole('option',{name:'Все школы'})).toBeInTheDocument();
   expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
   expect(screen.getByRole('spinbutton',{name:'Сумма, сом'})).toHaveAttribute('readonly');
@@ -68,7 +70,7 @@ test('cancel discards edits and switching office does not discard driver selecti
 test('department field filters schools in the driver picker',()=>{
   render(<EmployeeAdvanceModal onClose={jest.fn()} onSaved={jest.fn()}/>);
   fireEvent.click(screen.getByRole('button',{name:'Водители'}));
-  fireEvent.change(screen.getByRole('combobox',{name:'Отдел'}),{target:{value:'TIS'}});
+  fireEvent.change(screen.getByRole('combobox',{name:'Школа'}),{target:{value:'TIS'}});
   fireEvent.click(screen.getByRole('button',{name:'Получатели'}));
   expect(screen.getByRole('checkbox',{name:/Водитель А/})).toBeInTheDocument();
   expect(screen.queryByRole('checkbox',{name:/Водитель Б/})).not.toBeInTheDocument();
@@ -162,4 +164,77 @@ test('Escape closes only the topmost picker',()=>{
   fireEvent.click(screen.getByRole('button',{name:'Периоды выплаты'}));
   fireEvent.keyDown(screen.getByRole('dialog',{name:'Периоды выплаты'}),{key:'Escape'});
   expect(close).not.toHaveBeenCalled();expect(screen.getByRole('dialog',{name:'Новая выплата'})).toBeInTheDocument();
+});
+
+test('editing salary uses payout fields and updates instead of issuing another payment',async()=>{
+ const period=salaryExpensePeriods(currentSchoolYear())[0].key;
+ const expense={id:'existing',name:'ЗП — Офисный сотрудник',category:'office',subcategory:'ЗП',source:'manual',employeeId:'office',departmentKey:'service',salaryPeriodKey:period,amount:2000,unitPrice:2000,quantity:1,expenseDate:'2026-10-14',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ const saved=jest.fn();
+ render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
+ expect(screen.getByRole('dialog',{name:'Редактирование выплаты'})).toBeInTheDocument();
+ expect(screen.getByRole('combobox',{name:'Получатели'})).toHaveValue('office');
+ fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма, сом'}),{target:{value:'2500'}});
+ fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
+ await waitFor(()=>expect(saved).toHaveBeenCalled());
+ expect(updateExpense).toHaveBeenCalledWith('existing',expect.objectContaining({amount:2500,employeeId:'office',salaryPeriodKey:period}),undefined);
+ expect(createExpense).not.toHaveBeenCalled();
+});
+
+jest.mock('../../services/advanceExpenseService',()=>({updateAdvanceExpense:jest.fn(async(row,next)=>({...row,...next}))}));
+test('editing an advance keeps the payout identity and does not create another advance',async()=>{
+ const expense={id:'employee-advance-original',name:'Аванс — Офисный сотрудник',category:'office',subcategory:'Аванс',source:'advance',employeeId:'office',departmentKey:'service',amount:70000,unitPrice:70000,quantity:1,expenseDate:'2026-10-14',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ const saved=jest.fn();
+ render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
+ expect(screen.getByRole('combobox',{name:'Получатели'})).toHaveValue('office');
+ fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма, сом'}),{target:{value:'75000'}});
+ fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
+ await waitFor(()=>expect(saved).toHaveBeenCalled());
+ const {updateAdvanceExpense}=jest.requireMock('../../services/advanceExpenseService');
+ expect(updateAdvanceExpense).toHaveBeenCalledWith(expense,expect.objectContaining({id:expense.id,employeeId:'office',amount:75000,salaryPeriodKey:'2026-10-1'}));
+ expect(createEmployeeAdvance).not.toHaveBeenCalled();
+});
+
+test('one card keeps payment details while switching between expense, salary and advance',()=>{
+ render(<EmployeeAdvanceModal initialPaymentType="expense" initialCategory="office" onClose={jest.fn()} onSaved={jest.fn()}/>);
+ const dialog=screen.getByRole('dialog');
+ fireEvent.change(screen.getByRole('textbox',{name:'Наименование расхода'}),{target:{value:'Бумага'}});
+ fireEvent.change(screen.getByRole('textbox',{name:'Комментарий'}),{target:{value:'Сохранить комментарий'}});
+ fireEvent.change(screen.getByRole('textbox',{name:'№ платёжного поручения'}),{target:{value:'777'}});
+ fireEvent.click(screen.getByRole('button',{name:'Зарплата'}));
+ expect(screen.getByRole('dialog')).toBe(dialog);
+ expect(screen.getByRole('combobox',{name:'Получатели'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Аванс'}));
+ expect(screen.getByRole('dialog')).toBe(dialog);
+ fireEvent.click(screen.getByRole('button',{name:'Расход'}));
+ expect(screen.getByRole('textbox',{name:'Наименование расхода'})).toHaveValue('Бумага');
+ expect(screen.getByRole('textbox',{name:'Комментарий'})).toHaveValue('Сохранить комментарий');
+ expect(screen.getByRole('textbox',{name:'№ платёжного поручения'})).toHaveValue('777');
+});
+
+test('ordinary expense uses the common card and saves calculated quantity and amount',async()=>{
+ const saved=jest.fn();
+ render(<EmployeeAdvanceModal initialPaymentType="expense" initialCategory="office" onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
+ fireEvent.change(screen.getByRole('textbox',{name:'Наименование расхода'}),{target:{value:'Бумага'}});
+ fireEvent.change(screen.getByRole('spinbutton',{name:'Цена, сом'}),{target:{value:'250'}});
+ fireEvent.change(screen.getByRole('spinbutton',{name:'Количество'}),{target:{value:'3'}});
+ fireEvent.click(screen.getByRole('button',{name:'Добавить расход'}));
+ await waitFor(()=>expect(saved).toHaveBeenCalled());
+ expect(createExpense).toHaveBeenCalledWith(expect.objectContaining({name:'Бумага',category:'office',unitPrice:250,quantity:3}),undefined);
+ expect(createEmployeeAdvance).not.toHaveBeenCalled();
+});
+
+test('converting an ordinary expense to salary updates its category and subcategory',async()=>{
+ const expense={id:'legacy-expense',name:'ЗП Офис',category:'office',subcategory:'Прочее',source:'manual',unitPrice:50000,quantity:1,amount:50000,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ (updateExpense as jest.Mock).mockImplementationOnce(async(id,next)=>{
+   if(next.employeeId && (next.category!=='office' || next.subcategory!=='ЗП'))throw new Error('Проверьте обязательные поля расхода');
+   return {...next,id};
+ });
+ const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Зарплата'}));
+ fireEvent.change(screen.getByRole('combobox',{name:'Отдел'}),{target:{value:'service'}});
+ fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
+ fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
+ await waitFor(()=>expect(saved).toHaveBeenCalled());
+ expect(updateExpense).toHaveBeenCalledWith('legacy-expense',expect.objectContaining({category:'office',subcategory:'ЗП',employeeId:'office',salaryPeriodKey:'2026-10-1'}),undefined);
+ expect(createExpense).not.toHaveBeenCalled();
 });
