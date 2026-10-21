@@ -100,6 +100,7 @@ export interface ChildRow {
   zone: string;
   vehicleType: string;
   vehicleLabel: string;
+  isTestTransfer?: boolean;
   monthlyPrice: number;
   status: string;
   paymentStatus: string;
@@ -2641,7 +2642,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           : column;
       return configuredColumn;
     });
-    if (isDirectoryMode) {
+    if (isDirectoryMode || mode === 'logistics') {
       // Как в «Начислениях»: даты заявки и посадки — отдельные колонки сразу после ребёнка.
       const childIndex = dataCols.findIndex(column => column.key === 'childName');
       dataCols.splice(childIndex + 1, 0, dateColumn('childCreatedAt', 'Дата заявки'), dateColumn('transferAssignedAt', 'Дата посадки'));
@@ -2650,7 +2651,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, userRole, chargesPeriodKey, periodStatsByFamily]);
+  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows

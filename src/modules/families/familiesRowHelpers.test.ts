@@ -1,4 +1,30 @@
-import { isNewUnassignedRow, transferIdentityKey, transferVehicleSummary } from './familiesRowHelpers';
+import { isNewUnassignedRow, matchesLogisticsMapFilter, transferIdentityKey, transferVehicleSummary } from './familiesRowHelpers';
+
+describe('logistics map filters', () => {
+  it('shows only new unassigned children and test transfers in new requests', () => {
+    const rows = [
+      { status: 'new', transferNumber: null },
+      { status: 'boarded', transferNumber: '2', isTestTransfer: true },
+      { status: 'paused', transferNumber: null },
+      { status: 'waiting', transferNumber: null },
+      { status: 'boarded', transferNumber: '2' },
+      { status: 'rejected', transferNumber: null },
+      { status: 'rejected', transferNumber: '2', isTestTransfer: true },
+    ];
+    expect(rows.filter(row => matchesLogisticsMapFilter(row, 'empty'))).toEqual(rows.slice(0, 2));
+  });
+
+  it.each(['', 'empty', 'rejected', '2'])('excludes rejections for filter %s even with a transfer', filter => {
+    expect(matchesLogisticsMapFilter({ status: 'rejected', transferNumber: '2', isTestTransfer: true }, filter)).toBe(false);
+  });
+
+  it('keeps selected routes separate and leaves the rejection map empty', () => {
+    const row = { status: 'boarded', transferNumber: '2' };
+    expect(matchesLogisticsMapFilter(row, '2')).toBe(true);
+    expect(matchesLogisticsMapFilter(row, '3')).toBe(false);
+    expect(matchesLogisticsMapFilter(row, 'rejected')).toBe(false);
+  });
+});
 
 describe('isNewUnassignedRow', () => {
   it('counts a new child without a transfer', () => {

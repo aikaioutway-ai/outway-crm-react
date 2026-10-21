@@ -143,3 +143,13 @@ export function formatDateShort(value?: string): string {
   if (Number.isNaN(date.getTime())) return '-';
   return date.toLocaleDateString('ru-RU');
 }
+
+export function isNewLogisticsRow(row:Pick<ChildRow,'status'|'transferNumber'|'isTestTransfer'>):boolean{
+  return row.status!=='rejected' && (Boolean(row.isTestTransfer) || isNewUnassignedRow(row));
+}
+
+export function matchesLogisticsMapFilter(row: Pick<ChildRow, 'status' | 'transferNumber' | 'isTestTransfer'>, transferFilter: string): boolean {
+  if (row.status === 'rejected' || transferFilter === 'rejected') return false;
+  if (transferFilter === 'empty') return isNewLogisticsRow(row);
+  return !transferFilter || row.transferNumber === transferFilter;
+}

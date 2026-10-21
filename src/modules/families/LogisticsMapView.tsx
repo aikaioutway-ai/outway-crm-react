@@ -27,6 +27,7 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '
 import InlineFamilyCard from './InlineFamilyCard';
 import { ChevronRight, Eye, EyeOff, Route } from 'lucide-react';
 import { addressKey, collectZoneTransfers, rowsForZoneTransfers, schoolLabelFor, zoneTransferKey } from './zoneTransfers';
+import { matchesLogisticsMapFilter } from './familiesRowHelpers';
 
 interface LogisticsMapViewProps {
   schoolKey: string;
@@ -578,13 +579,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
     const query = search.trim().toLowerCase().replace(/\s+/g, '');
     const baseRows = (rows ?? []).filter(row => isSchoolVisible(row.branchFilter) && (schoolKey ? row.branchFilter === schoolKey : isSchoolAllowed(row.branchFilter, allowedSchools) && !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)) && (!query || phoneMatchesQuery(search, row.phone, row.secondPhone) || [row.parentName, row.childName, row.phone, row.streetAddress]
       .some(value => String(value ?? '').toLowerCase().replace(/\s+/g, '').includes(query))));
-    if (transferFilter === 'rejected') {
-      return baseRows.filter(row => row.status === 'rejected');
-    }
-    const activeRows = baseRows.filter(row => row.status !== 'rejected');
-    if (!transferFilter) return activeRows;
-    if (transferFilter === 'empty') return activeRows.filter(row => !row.transferNumber);
-    return activeRows.filter(row => row.transferNumber === transferFilter);
+    return baseRows.filter(row => matchesLogisticsMapFilter(row, transferFilter));
   }, [rows, schoolKey, search, transferFilter, allowedSchools]);
 
   const pointRows = useMemo<PointRow[]>(
