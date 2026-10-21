@@ -78,12 +78,12 @@ export default function ChildDiscountModal({ child, onClose, onSave }: {
   }
 
   return (
-    <div style={overlayStyle} onClick={onClose}>
-      <div style={panelStyle} onClick={event => event.stopPropagation()}>
+    <div className="ow-overlay" style={overlayStyle} onClick={onClose}>
+      <div className="ow-modal" style={panelStyle} onClick={event => event.stopPropagation()}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 800 }}>Постоянная скидка</div>
-            <div style={{ fontSize: 12, color: '#7B8491' }}>{child.childName} · тариф {money(basePrice)}</div>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Постоянная скидка</div>
+            <div style={{ fontSize: 12, color: 'var(--text-2)' }}>{child.childName} · тариф {money(basePrice)}</div>
           </div>
           <button type="button" onClick={onClose} style={iconButtonStyle} aria-label="Закрыть"><X size={16} /></button>
         </div>
@@ -115,15 +115,15 @@ export default function ChildDiscountModal({ child, onClose, onSave }: {
         <div style={{ fontSize: 12, color: '#4B5563', margin: '10px 0' }}>
           Пусто в «С месяца» — действует сразу, пусто в «По месяц» — бессрочно. Ручная скидка отключает семейную 5%.
         </div>
-        <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 12 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 12 }}>
           Цена с {previewMonth}: {money(preview)}
         </div>
 
-        {error && <div style={{ color: '#B91C1C', fontSize: 12, fontWeight: 700, marginBottom: 10 }}>{error}</div>}
+        {error && <div style={{ color: '#B91C1C', fontSize: 12, fontWeight: 600, marginBottom: 10 }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
           {hasCurrentDiscount && (
-            <button type="button" onClick={() => submit(true)} disabled={saving} style={secondaryButtonStyle}>Убрать скидку</button>
+            <button type="button" onClick={() => submit(true)} disabled={saving} style={{ ...secondaryButtonStyle, color: 'var(--danger)' }}>Убрать скидку</button>
           )}
           <button type="button" onClick={() => submit(false)} disabled={saving} style={primaryButtonStyle}>
             {saving ? 'Сохраняем...' : 'Сохранить'}
@@ -135,27 +135,27 @@ export default function ChildDiscountModal({ child, onClose, onSave }: {
 }
 
 export const overlayStyle: React.CSSProperties = {
-  position: 'fixed', inset: 0, background: 'rgba(15, 23, 42, .35)', zIndex: 1000,
+  position: 'fixed', inset: 0, background: 'rgba(15, 23, 32, .42)', zIndex: 1000,
   display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
 };
 export const panelStyle: React.CSSProperties = {
-  background: '#fff', borderRadius: 14, padding: 18, width: 'min(460px, 100%)',
-  boxShadow: '0 24px 60px rgba(15, 23, 42, .2)',
+  background: 'var(--surface)', borderRadius: 12, padding: 20, width: 'min(460px, 100%)',
+  border: '1px solid var(--border)', boxShadow: 'var(--shadow-lg)',
 };
-const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 };
-export const labelStyle: React.CSSProperties = { display: 'grid', gap: 4, fontSize: 11, fontWeight: 750, color: '#6B7280' };
+const gridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 };
+export const labelStyle: React.CSSProperties = { display: 'grid', gap: 6, fontSize: 12.5, fontWeight: 500, color: 'var(--text-2)' };
 export const inputStyle: React.CSSProperties = {
-  border: '1px solid #DDE3E8', borderRadius: 8, padding: '7px 9px', fontSize: 13, fontFamily: 'inherit', color: '#111827',
+  height: 36, border: '1px solid var(--border)', borderRadius: 8, padding: '0 10px', fontSize: 13.5, fontFamily: 'inherit', color: 'var(--text)', background: 'var(--surface)',
 };
 export const noteStyle: React.CSSProperties = {
-  background: '#FEF3C7', color: '#92400E', borderRadius: 8, padding: '7px 10px', fontSize: 12, fontWeight: 650, marginBottom: 10,
+  background: '#FFF8EB', color: '#8A5A12', border: '1px solid #F5DFB5', borderRadius: 8, padding: '8px 10px', fontSize: 12.5, fontWeight: 500, marginBottom: 12,
 };
 export const iconButtonStyle: React.CSSProperties = {
-  border: 'none', background: '#F3F4F6', borderRadius: 8, width: 28, height: 28, display: 'grid', placeItems: 'center', cursor: 'pointer',
+  border: 'none', background: 'transparent', color: 'var(--text-2)', borderRadius: 8, width: 32, height: 32, display: 'grid', placeItems: 'center', cursor: 'pointer',
 };
 const primaryButtonStyle: React.CSSProperties = {
-  border: 'none', background: '#111827', color: '#fff', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 750, cursor: 'pointer',
+  height: 34, border: '1px solid var(--accent-h)', background: 'var(--accent)', color: '#fff', borderRadius: 8, padding: '0 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
 };
 export const secondaryButtonStyle: React.CSSProperties = {
-  border: '1px solid #E5E7EB', background: '#fff', color: '#B91C1C', borderRadius: 8, padding: '8px 14px', fontSize: 13, fontWeight: 750, cursor: 'pointer',
+  height: 34, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--text)', borderRadius: 8, padding: '0 14px', fontSize: 13, fontWeight: 500, cursor: 'pointer',
 };

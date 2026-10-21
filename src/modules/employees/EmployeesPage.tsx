@@ -19,7 +19,7 @@ const ROLE_OPTIONS: { value: EmployeeRole; label: string }[] = [
 const departmentIcons = [<BriefcaseBusiness size={18} />, <Building2 size={18} />, <WalletCards size={18} />, <ShieldCheck size={18} />];
 const DEPARTMENTS = EMPLOYEE_DEPARTMENTS.map((department, index) => ({ ...department, icon: departmentIcons[index] }));
 const DEPARTMENT_COLUMNS = [
-  { key: 'department', label: 'Отдел', color: '#626C8B' },
+  { key: 'department', label: 'Отдел', color: 'var(--text-2)' },
   { key: 'total', label: 'Сотрудники', color: '#2563EB' },
   { key: 'active', label: 'Активные', color: '#008A47' },
   { key: 'inactive', label: 'Неактивные', color: '#B75B75' },

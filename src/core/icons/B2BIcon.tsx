@@ -20,7 +20,7 @@ export default function B2BIcon({ size = 24 }: B2BIconProps) {
         color: '#fff',
         boxShadow: '0 3px 8px rgba(33, 139, 145, .28), inset 0 1px 0 rgba(255, 255, 255, .25)',
         fontSize: Math.max(7, Math.round(size * 0.34)),
-        fontWeight: 900,
+        fontWeight: 600,
         lineHeight: 1,
         letterSpacing: '-0.06em',
       }}

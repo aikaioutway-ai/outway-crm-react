@@ -5,6 +5,7 @@ import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
+import { isInTestTransfer, useTestTransfers } from './testTransfers';
 
 interface LogisticsSchoolKpiStripProps {
   schoolKey: string;
@@ -12,7 +13,7 @@ interface LogisticsSchoolKpiStripProps {
 }
 
 const COLORS = {
-  school: '#626C8B',
+  school: 'var(--text-2)',
   newRequests: '#378ADD',
   average: '#2563EB',
   transfers: '#2DD4BF',
@@ -20,8 +21,9 @@ const COLORS = {
   light: '#15803D',
 };
 
+// Тестовые трансферы — черновики логиста: в статистику трансферов не входят.
 function workRows(rows: FamilyListRow[]): FamilyListRow[] {
-  return rows.filter(row => row.status !== 'rejected');
+  return rows.filter(row => row.status !== 'rejected' && !isInTestTransfer(row));
 }
 
 function transferStats(rows: FamilyListRow[]) {
@@ -49,15 +51,17 @@ function transferStats(rows: FamilyListRow[]) {
 
 export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: LogisticsSchoolKpiStripProps) {
   const { data: rows } = useFamiliesTable();
+  const testMarks = useTestTransfers();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const stats = useMemo(() => {
     const schoolRows = (rows ?? []).filter(row => row.branchFilter === schoolKey);
     return {
-      newRequests: schoolRows.filter(isNewUnassignedRow).length,
+      newRequests: schoolRows.filter(row => isNewUnassignedRow(row) || isInTestTransfer(row)).length,
       ...transferStats(schoolRows),
     };
-  }, [rows, schoolKey]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- testMarks: пересчёт при смене тестовых отметок
+  }, [rows, schoolKey, testMarks]);
 
   if (!school || !rows) return null;
 

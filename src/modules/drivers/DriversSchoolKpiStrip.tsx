@@ -12,7 +12,7 @@ interface DriversSchoolKpiStripProps {
 }
 
 const COLORS = {
-  school: '#626C8B',
+  school: 'var(--text-2)',
   active: 'var(--success)',
   inactive: '#EF7168',
   microbus: '#1D6FA4',

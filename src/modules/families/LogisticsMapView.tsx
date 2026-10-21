@@ -44,7 +44,7 @@ interface LogisticsMapViewProps {
 type PointRow = FamilyListRow & { latitude: number; longitude: number };
 
 const BISHKEK_CENTER: [number, number] = [42.8746, 74.5698];
-const FALLBACK_COLOR = '#626C8B';
+const FALLBACK_COLOR = 'var(--text-2)';
 const DEFAULT_ZONE_COLOR = '#2AA5A5';
 const ZONE_COLORS = ['#2AA5A5', '#5271C4', '#E29B34', '#D85B78', '#7B61C9', '#3A9D65'];
 function plural(count: number, one: string, few: string, many: string): string {
@@ -75,7 +75,7 @@ const toolbarButtonStyle = (active = false): React.CSSProperties => ({
   background: active ? '#E3F7F6' : '#fff',
   color: active ? '#17777A' : '#273444',
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 600,
   cursor: 'pointer',
 });
 
@@ -732,10 +732,10 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
         >
           <span style={{ width: 8, height: 8, borderRadius: 999, background: shown ? previewColor(group.key) : '#C4CED3' }} />
           <span style={{ minWidth: 0 }}>
-            <span style={{ display: 'block', color: '#253342', fontSize: 12.5, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <span style={{ display: 'block', color: '#253342', fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {nested ? '' : `${group.schoolLabel} · `}{group.transferNumber ? `Трансфер №${group.transferNumber}` : 'Без трансфера'}
             </span>
-            <span style={{ display: 'block', marginTop: 1, color: '#7A859D', fontSize: 11 }}>
+            <span style={{ display: 'block', marginTop: 1, color: 'var(--text-2)', fontSize: 11 }}>
               {group.pointsInZone} из {group.totalPoints} точек в зоне · детей {group.childrenInZone}
             </span>
           </span>
@@ -752,23 +752,23 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
       );
     };
     const sectionTitle = (text: string) => (
-      <div style={{ padding: '8px 8px 3px', color: '#7A859D', fontSize: 10.5, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>{text}</div>
+      <div style={{ padding: '8px 8px 3px', color: 'var(--text-2)', fontSize: 11, fontWeight: 600, textTransform: 'none', letterSpacing: '.04em' }}>{text}</div>
     );
 
     return (
       <div style={{ margin: '6px 0 2px', padding: '8px 6px 6px', border: '1px solid #E1E8EA', borderRadius: 10, background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, padding: '0 4px 4px' }}>
-          <span style={{ color: '#253342', fontSize: 12.5, fontWeight: 800 }}>Трансферы в зоне</span>
+          <span style={{ color: '#253342', fontSize: 12.5, fontWeight: 600 }}>Трансферы в зоне</span>
           {previewKeys.length > 0 && (
-            <button type="button" onClick={() => setPreviewKeys([])} style={{ border: 'none', background: 'none', color: '#2A8F90', fontSize: 11.5, fontWeight: 750, cursor: 'pointer', padding: 0 }}>
+            <button type="button" onClick={() => setPreviewKeys([])} style={{ border: 'none', background: 'none', color: '#2A8F90', fontSize: 11.5, fontWeight: 600, cursor: 'pointer', padding: 0 }}>
               Скрыть все
             </button>
           )}
         </div>
         {rows === null ? (
-          <div style={{ padding: '10px 6px', color: '#7A859D', fontSize: 12 }}>Загрузка…</div>
+          <div style={{ padding: '10px 6px', color: 'var(--text-2)', fontSize: 12 }}>Загрузка…</div>
         ) : zoneTransferGroups.length === 0 ? (
-          <div style={{ padding: '10px 6px', color: '#7A859D', fontSize: 12 }}>В этой зоне нет адресов</div>
+          <div style={{ padding: '10px 6px', color: 'var(--text-2)', fontSize: 12 }}>В этой зоне нет адресов</div>
         ) : (
           <>
             {current.length > 0 && sectionTitle('Эта школа')}
@@ -797,15 +797,15 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                       textAlign: 'left',
                     }}
                   >
-                    <ChevronRight size={14} style={{ color: '#7A859D', transition: 'transform 140ms ease', transform: expanded ? 'rotate(90deg)' : 'none' }} />
-                    <span style={{ minWidth: 0, color: '#253342', fontSize: 12.5, fontWeight: 750, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <ChevronRight size={14} style={{ color: 'var(--text-2)', transition: 'transform 140ms ease', transform: expanded ? 'rotate(90deg)' : 'none' }} />
+                    <span style={{ minWidth: 0, color: '#253342', fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {school.label}
-                      <span style={{ marginLeft: 6, color: '#7A859D', fontSize: 11, fontWeight: 600 }}>
+                      <span style={{ marginLeft: 6, color: 'var(--text-2)', fontSize: 11, fontWeight: 600 }}>
                         {school.groups.length} {plural(school.groups.length, 'трансфер', 'трансфера', 'трансферов')} · {school.points} {plural(school.points, 'точка', 'точки', 'точек')}
                       </span>
                     </span>
                     {shownCount > 0 && (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#2A8F90', fontSize: 11, fontWeight: 750 }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 3, color: '#2A8F90', fontSize: 11, fontWeight: 600 }}>
                         <Eye size={12} /> {shownCount}
                       </span>
                     )}
@@ -916,8 +916,8 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
                   <div>
-                    <div style={{ color: '#17222F', fontSize: 15, fontWeight: 800 }}>Зоны маршрута</div>
-                    <div style={{ marginTop: 2, color: '#7A859D', fontSize: 11 }}>Школа: {schoolBranch?.shortName || schoolKey}</div>
+                    <div style={{ color: 'var(--text)', fontSize: 15, fontWeight: 600 }}>Зоны маршрута</div>
+                    <div style={{ marginTop: 2, color: 'var(--text-2)', fontSize: 11 }}>Школа: {schoolBranch?.shortName || schoolKey}</div>
                   </div>
                   <button type="button" aria-label="Закрыть зоны" onClick={() => setZonePanelOpen(false)} style={{ ...toolbarButtonStyle(), minHeight: 30, padding: '3px 9px' }}>×</button>
                 </div>
@@ -934,14 +934,14 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                     </div>
 
                     <div style={{ marginTop: 15, paddingTop: 12, borderTop: '1px solid #E4ECEE' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#59677A', fontSize: 11, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.04em' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', color: '#59677A', fontSize: 11, fontWeight: 600, textTransform: 'none', letterSpacing: '.04em' }}>
                         <span>Сохранённые зоны</span>
                         <span>{zones.length}</span>
                       </div>
                       {zonesLoading ? (
-                        <div style={{ padding: '18px 0', color: '#7A859D', fontSize: 13, textAlign: 'center' }}>Загрузка…</div>
+                        <div style={{ padding: '18px 0', color: 'var(--text-2)', fontSize: 13, textAlign: 'center' }}>Загрузка…</div>
                       ) : zones.length === 0 ? (
-                        <div style={{ padding: '18px 10px 8px', color: '#7A859D', fontSize: 12, lineHeight: 1.45, textAlign: 'center' }}>
+                        <div style={{ padding: '18px 10px 8px', color: 'var(--text-2)', fontSize: 12, lineHeight: 1.45, textAlign: 'center' }}>
                           Пока зон нет. Выберите фигуру выше и нарисуйте её на карте.
                         </div>
                       ) : (
@@ -964,8 +964,8 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                             >
                               <span style={{ width: 10, height: 28, borderRadius: 5, background: zone.fillColor }} />
                               <span style={{ minWidth: 0 }}>
-                                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#253342', fontSize: 13, fontWeight: 750 }}>{zone.name}</span>
-                                <span style={{ display: 'block', marginTop: 2, color: '#7A859D', fontSize: 11 }}>
+                                <span style={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#253342', fontSize: 13, fontWeight: 600 }}>{zone.name}</span>
+                                <span style={{ display: 'block', marginTop: 2, color: 'var(--text-2)', fontSize: 11 }}>
                                   {zone.shapeType === 'rectangle' ? 'Прямоугольник' : 'Многоугольник'}{zone.transferNumber ? ` · Трансфер ${zone.transferNumber}` : ''}
                                 </span>
                               </span>
@@ -996,12 +996,12 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                       {zoneInstruction}
                     </div>
 
-                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 800 }}>
+                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 600 }}>
                       НАЗВАНИЕ
                       <input value={zoneName} onChange={event => setZoneName(event.target.value)} placeholder="Например, Восточная зона" style={{ ...fieldStyle, marginTop: 5 }} />
                     </label>
 
-                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 800 }}>
+                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 600 }}>
                       ТРАНСФЕР
                       <select value={zoneTransfer} onChange={event => setZoneTransfer(event.target.value)} style={{ ...fieldStyle, marginTop: 5 }}>
                         <option value="">Без привязки</option>
@@ -1010,7 +1010,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                     </label>
 
                     <div>
-                      <div style={{ color: '#59677A', fontSize: 11, fontWeight: 800 }}>ЦВЕТ ЗАЛИВКИ</div>
+                      <div style={{ color: '#59677A', fontSize: 11, fontWeight: 600 }}>ЦВЕТ ЗАЛИВКИ</div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 7 }}>
                         {ZONE_COLORS.map(color => (
                           <button
@@ -1025,12 +1025,12 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                       </div>
                     </div>
 
-                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 800 }}>
+                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 600 }}>
                       ПРОЗРАЧНОСТЬ · {Math.round(zoneOpacity * 100)}%
                       <input type="range" min="0.1" max="0.65" step="0.05" value={zoneOpacity} onChange={event => setZoneOpacity(Number(event.target.value))} style={{ width: '100%', marginTop: 7, accentColor: zoneColor }} />
                     </label>
 
-                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 800 }}>
+                    <label style={{ color: '#59677A', fontSize: 11, fontWeight: 600 }}>
                       КОММЕНТАРИЙ
                       <textarea value={zoneComment} onChange={event => setZoneComment(event.target.value)} rows={2} placeholder="Необязательно" style={{ ...fieldStyle, marginTop: 5, resize: 'vertical' }} />
                     </label>
@@ -1054,7 +1054,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
           </div>
           ), zoneOverlayRoot)}
           {rows !== null && pointRows.length === 0 && (
-            <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 12, padding: '9px 14px', borderRadius: 10, color: '#667389', fontSize: 12, fontWeight: 700, background: 'rgba(255,255,255,0.92)', boxShadow: '0 4px 16px rgba(29,55,68,.12)', pointerEvents: 'none' }}>
+            <div style={{ position: 'absolute', top: 14, left: '50%', transform: 'translateX(-50%)', zIndex: 12, padding: '9px 14px', borderRadius: 10, color: '#667389', fontSize: 12, fontWeight: 600, background: 'rgba(255,255,255,0.92)', boxShadow: '0 4px 16px rgba(29,55,68,.12)', pointerEvents: 'none' }}>
               Нет адресов с координатами для отображения
             </div>
           )}

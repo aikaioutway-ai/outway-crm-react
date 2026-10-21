@@ -22,7 +22,7 @@ interface SchoolTransferDashboardProps {
 
 
 const STATUS_CELL_TONE: Record<string, string> = {
-  new: '#31A4A5',
+  new: '#1A7F80',
   rejected: '#64748B',
   all: '#2DD4BF',
 };

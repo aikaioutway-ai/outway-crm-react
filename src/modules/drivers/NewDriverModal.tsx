@@ -48,8 +48,8 @@ const inputStyle: React.CSSProperties = {
   borderRadius: 9,
   padding: '0 10px',
   fontSize: 13,
-  fontWeight: 650,
-  color: '#17222F',
+  fontWeight: 600,
+  color: 'var(--text)',
   outline: 'none',
   background: '#fff',
 };
@@ -58,9 +58,9 @@ const labelStyle: React.CSSProperties = {
   display: 'grid',
   gap: 6,
   fontSize: 11,
-  fontWeight: 900,
-  color: '#7A859D',
-  textTransform: 'uppercase',
+  fontWeight: 600,
+  color: 'var(--text-2)',
+  textTransform: 'none',
 };
 
 export default function NewDriverModal({ branches, initialBranchKey, onClose, onCreated }: Props) {
@@ -146,14 +146,14 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
   }
 
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1300, background: 'rgba(23, 34, 47, 0.22)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
-      <section onClick={event => event.stopPropagation()} style={{ width: 'min(820px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 48px)', overflow: 'hidden', borderRadius: 18, background: '#fff', border: '1px solid #D4E3E7', boxShadow: '0 24px 60px rgba(30, 56, 75, 0.22)', display: 'flex', flexDirection: 'column' }}>
-        <header style={{ minHeight: 64, padding: '14px 18px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+    <div className="ow-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 1300, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <section className="ow-modal" role="dialog" aria-modal="true" aria-label="Новый водитель" onClick={event => event.stopPropagation()} style={{ width: 'min(820px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 48px)', overflow: 'hidden', borderRadius: 18, background: '#fff', border: '1px solid #D4E3E7', boxShadow: '0 24px 60px rgba(30, 56, 75, 0.22)', display: 'flex', flexDirection: 'column' }}>
+        <header className="ow-modal-head">
           <div>
-            <div style={{ fontSize: 18, fontWeight: 900, color: '#17222F' }}>Новый водитель</div>
-            <div style={{ marginTop: 3, fontSize: 12, fontWeight: 700, color: '#7A859D' }}>Для водителя без трансфера выберите школу «Резерв»</div>
+            <h2>Новый водитель</h2>
+            <p style={{ margin: '2px 0 0' }}>Для водителя без трансфера выберите школу «Резерв»</p>
           </div>
-          <button onClick={onClose} style={{ width: 36, height: 36, border: '1px solid #D4E3E7', borderRadius: 12, background: '#fff', color: '#626C8B', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+          <button type="button" className="ow-modal-close" onClick={onClose} aria-label="Закрыть" title="Закрыть" style={{ width: 36, height: 36, border: '1px solid #D4E3E7', borderRadius: 12, background: '#fff', color: 'var(--text-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
             <X size={18} />
           </button>
         </header>
@@ -170,12 +170,12 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
               style={{
                 height: 30,
                 padding: '0 12px',
-                border: `1px solid ${activeTab === tab.key ? '#31A4A5' : '#DDE9EC'}`,
+                border: `1px solid ${activeTab === tab.key ? '#1A7F80' : 'var(--border)'}`,
                 borderRadius: 10,
                 background: activeTab === tab.key ? '#DFF4F4' : '#fff',
-                color: activeTab === tab.key ? '#237F81' : '#52606F',
+                color: activeTab === tab.key ? '#146566' : 'var(--text)',
                 fontSize: 12,
-                fontWeight: 900,
+                fontWeight: 600,
                 cursor: 'pointer',
               }}
             >
@@ -226,12 +226,12 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
           </div>
 
           <div style={{ border: '1px solid #DDE9EC', borderRadius: 12, background: '#fff', padding: 12 }}>
-            <div style={{ fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase', marginBottom: 9 }}>Район</div>
+            <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'none', marginBottom: 9 }}>Район</div>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
               {DISTRICTS.map(name => {
                 const active = districts.includes(name);
                 return (
-                  <button key={name} type="button" onClick={() => toggleDistrict(name)} style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? '#31A4A5' : '#DDE9EC'}`, borderRadius: 999, background: active ? '#DFF4F4' : '#fff', color: active ? '#237F81' : '#52606F', fontSize: 12, fontWeight: 800, cursor: 'pointer' }}>
+                  <button key={name} type="button" onClick={() => toggleDistrict(name)} style={{ height: 28, padding: '0 10px', border: `1px solid ${active ? '#1A7F80' : 'var(--border)'}`, borderRadius: 999, background: active ? '#DFF4F4' : '#fff', color: active ? '#146566' : 'var(--text)', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
                     {name}
                   </button>
                 );
@@ -246,7 +246,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
           ) : (
 
           <div style={{ border: '1px solid #DDE9EC', borderRadius: 12, background: '#fff', overflow: 'hidden' }}>
-            <div style={{ height: 42, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid #E5EEF1', fontSize: 13, fontWeight: 900, color: '#17222F' }}>
+            <div style={{ height: 42, display: 'flex', alignItems: 'center', padding: '0 12px', borderBottom: '1px solid #E5EEF1', fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>
               Документы
             </div>
             <div style={{ overflowX: 'auto' }}>
@@ -254,7 +254,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
                 <thead>
                   <tr>
                     {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
-                      <th key={label} style={{ height: 34, padding: '0 10px', borderBottom: '1px solid #E5EEF1', textAlign: 'left', fontSize: 11, fontWeight: 900, color: '#7A859D', textTransform: 'uppercase', whiteSpace: 'nowrap' }}>
+                      <th key={label} style={{ height: 34, padding: '0 10px', borderBottom: '1px solid #E5EEF1', textAlign: 'left', fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'none', whiteSpace: 'nowrap' }}>
                         {label}
                       </th>
                     ))}
@@ -276,7 +276,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
                         <input type="date" value={document.expiresAt} onChange={event => setDocumentField(index, 'expiresAt', event.target.value)} style={{ ...inputStyle, height: 30, fontSize: 12 }} />
                       </td>
                       <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                        <label style={{ height: 30, padding: '0 9px', border: '1px solid #DDE9EC', borderRadius: 8, background: '#fff', color: '#52606F', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 850, whiteSpace: 'nowrap' }}>
+                        <label style={{ height: 30, padding: '0 9px', border: '1px solid #DDE9EC', borderRadius: 8, background: '#fff', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                           {document.scanFile ? document.scanFile.name : 'Добавить'}
                           <input
                             type="file"
@@ -287,7 +287,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
                         </label>
                       </td>
                       <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 850, color: '#52606F' }}>
+                        <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>
                           <input type="checkbox" checked={document.required} onChange={event => setDocumentField(index, 'required', event.target.checked)} />
                           Да
                         </label>
@@ -302,8 +302,8 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
         </div>
 
         <footer style={{ padding: 14, borderTop: '1px solid #E5EEF1', display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-          <button onClick={onClose} disabled={saving} style={{ height: 36, padding: '0 14px', border: '1px solid #D4E3E7', borderRadius: 10, background: '#fff', color: '#52606F', fontWeight: 850, cursor: saving ? 'default' : 'pointer' }}>Отмена</button>
-          <button onClick={submit} disabled={saving} style={{ height: 36, padding: '0 16px', border: 'none', borderRadius: 10, background: saving ? '#9CCFD0' : '#31A4A5', color: '#fff', fontWeight: 900, cursor: saving ? 'default' : 'pointer' }}>
+          <button onClick={onClose} disabled={saving} style={{ height: 36, padding: '0 14px', border: '1px solid #D4E3E7', borderRadius: 10, background: '#fff', color: 'var(--text)', fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>Отмена</button>
+          <button onClick={submit} disabled={saving} style={{ height: 36, padding: '0 16px', border: 'none', borderRadius: 10, background: saving ? '#9CCFD0' : '#1A7F80', color: '#fff', fontWeight: 600, cursor: saving ? 'default' : 'pointer' }}>
             {saving ? 'Сохраняю...' : 'Добавить'}
           </button>
         </footer>

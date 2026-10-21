@@ -11,7 +11,7 @@ export function Section({ title, children, action }: {
         display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         minHeight: 33, marginBottom: 8, paddingBottom: 5, borderBottom: '1px solid var(--border)',
       }}>
-        <div style={{ fontSize: 10, fontWeight: 700, color: 'var(--text-2)', textTransform: 'uppercase', letterSpacing: 0.65 }}>
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'none', letterSpacing: 0.65 }}>
           {title}
         </div>
         {action}

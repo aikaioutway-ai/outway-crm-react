@@ -25,7 +25,7 @@ export default function ManagerPeriodBar({
     border: 'none',
     borderRadius: 8,
     cursor: 'pointer',
-    background: active ? '#2DD4BF' : 'transparent',
+    background: active ? 'var(--accent)' : 'transparent',
     color: active ? '#fff' : 'var(--text-2)',
     transition: 'background .15s ease, color .15s ease',
   });
@@ -71,7 +71,7 @@ export default function ManagerPeriodBar({
               title="Депозит"
               aria-label="Депозит"
             >
-              <span style={{ fontSize: 13, fontWeight: 900, lineHeight: 1 }}>D</span>
+              <span style={{ fontSize: 13, fontWeight: 600, lineHeight: 1 }}>D</span>
             </button>
           );
         }
@@ -81,7 +81,7 @@ export default function ManagerPeriodBar({
             onClick={() => onPeriodKeyChange(period.key)}
             title={period.label}
             aria-label={period.label}
-            style={{ flex: 1, minWidth: 34, height: 36, padding: '0 6px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 850 : 700, background: active ? '#2DD4BF' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', transition: 'background .15s ease, color .15s ease' }}
+            style={{ flex: 1, minWidth: 34, height: 36, padding: '0 6px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 850 : 700, background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', transition: 'background .15s ease, color .15s ease' }}
           >
             {String(period.month).padStart(2, '0')}
           </button>

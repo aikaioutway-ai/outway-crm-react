@@ -2,7 +2,6 @@ import { useState } from 'react';
 import { b2bAccess } from './b2bAccess';
 import type { UserRole } from '../../types';
 import { CalendarDays, CircleDollarSign, ReceiptText, Route, UserRound, ClipboardList, WalletCards, BadgeDollarSign } from 'lucide-react';
-import B2BIcon from '../../core/icons/B2BIcon';
 import B2BClients from './B2BClients';
 import B2BOrders, { type B2BOrderCardTab } from './B2BOrders';
 import B2BCalendar from './B2BCalendar';
@@ -53,9 +52,8 @@ export default function B2BModule({ userRole, sessionToken, userName }: { userRo
   return (
     <section className="b2b-module">
       <header className="b2b-header">
-        <span className="b2b-icon"><B2BIcon size={30} /></span>
         <div className="b2b-header-copy">
-          <h1>B2B</h1>
+          <h1 className="ow-page-title">B2B</h1>
           <p>Корпоративные перевозки</p>
         </div>
         <B2BExcelExport activeTab={visibleTab} label={currentTab.label} />

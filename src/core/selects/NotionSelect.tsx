@@ -120,7 +120,7 @@ export default function NotionSelect({
           border: open || isCell ? '1px solid #E5ECEF' : 'none',
           borderRadius: open || isCell ? 12 : 0,
           background: open || isCell ? '#fff' : 'transparent',
-          color: '#17222F',
+          color: 'var(--text)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
@@ -154,7 +154,7 @@ export default function NotionSelect({
                 padding: 0,
                 borderRadius: 0,
                 background: 'transparent',
-                color: '#17222F',
+                color: 'var(--text)',
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
@@ -167,7 +167,7 @@ export default function NotionSelect({
             <span style={{ color: '#8A93A3' }}>{placeholder}</span>
           )}
         </span>
-        <ChevronDown size={14} style={{ flexShrink: 0, color: '#626C8B' }} />
+        <ChevronDown size={14} style={{ flexShrink: 0, color: 'var(--text-2)' }} />
       </button>
 
       {open && createPortal(
@@ -188,7 +188,7 @@ export default function NotionSelect({
           }}
           onClick={event => event.stopPropagation()}
         >
-          <div style={{ color: '#777', fontSize: 13, fontWeight: 700, marginBottom: 10 }}>
+          <div style={{ color: '#777', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
             Выберите вариант
           </div>
           <div style={{ display: 'grid', gap: 7 }}>
@@ -236,7 +236,7 @@ export default function NotionSelect({
                       padding: 0,
                       borderRadius: 0,
                       background: 'transparent',
-                      color: '#17222F',
+                      color: 'var(--text)',
                       fontSize: 14,
                       fontWeight: active ? 750 : 650,
                       whiteSpace: 'nowrap',

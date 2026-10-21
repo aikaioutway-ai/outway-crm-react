@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ListTodo, Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
+import './Sidebar.css';
 
 export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks';
 
@@ -26,7 +27,7 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
   { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
-  { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={22} /> },
+  { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
 ];
 
 export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
@@ -69,218 +70,75 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
       setCollapsedBySection(prev => ({ ...prev, [active]: true }));
     }
   }, [active, collapseSignal]);
-  const w = collapsed ? 72 : 224;
   const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId));
+  const tools = [
+    { label: 'Фильтры', icon: <SlidersHorizontal size={17} />, onClick: onFiltersClick, active: filtersActive },
+    { label: 'Колонки', icon: <Columns3 size={17} />, onClick: onColumnsClick, active: columnsActive },
+  ].filter(item => item.onClick);
 
   return (
-    <aside style={{
-      width: w,
-      height: 'calc(100vh - 20px)',
-      background: '#FFFFFF',
-      borderRight: 'none',
-      display: 'flex',
-      flexDirection: 'column',
-      transition: 'width 0.2s ease',
-      overflow: 'hidden',
-      flexShrink: 0,
-      position: 'relative',
-      margin: 10,
-      marginRight: 0,
-      borderRadius: 22,
-      boxShadow: 'none',
-    }}>
-
-      {/* Logo + Toggle в одной строке */}
-      <div style={{
-        padding: collapsed ? '16px 0' : '18px 14px',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: collapsed ? 'center' : 'space-between',
-        gap: 8,
-        minHeight: 56,
-      }}>
-        {!collapsed ? (
-          <>
-            <OutWayLogo />
-            {/* 005 — кнопка сворачивания вверху */}
-            <button
-              onClick={() => setCollapsed(true)}
-              title="Свернуть"
-              style={{
-                background: '#F5FAFB',
-                border: '1px solid var(--border)',
-                borderRadius: 12,
-                color: 'var(--text-2)',
-                cursor: 'pointer',
-                padding: '5px 7px',
-                display: 'flex',
-                alignItems: 'center',
-                transition: 'all 0.15s',
-              }}
-            >
-              <ChevronLeft size={16} />
-            </button>
-          </>
-        ) : (
-          <button
-            onClick={() => setCollapsed(false)}
-            title="Развернуть"
-            style={{
-              background: '#F5FAFB',
-              border: '1px solid var(--border)',
-              borderRadius: 12,
-              color: 'var(--text-2)',
-              cursor: 'pointer',
-              padding: '5px 7px',
-              display: 'flex',
-              alignItems: 'center',
-              transition: 'all 0.15s',
-            }}
-          >
-            <ChevronRight size={16} />
-          </button>
-        )}
+    <aside className={`ow-sidebar${collapsed ? ' is-collapsed' : ''}`}>
+      <div className="ow-sidebar-head">
+        {!collapsed && <OutWayLogo />}
+        <button
+          type="button"
+          className="ow-sidebar-toggle"
+          onClick={() => setCollapsed(!collapsed)}
+          title={collapsed ? 'Развернуть' : 'Свернуть'}
+          aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
+        >
+          {collapsed ? <ChevronRight size={16} /> : <ChevronLeft size={16} />}
+        </button>
       </div>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, padding: '14px 0 14px 12px' }}>
+      <nav className="ow-sidebar-nav" aria-label="Разделы">
+        {!collapsed && <div className="ow-sidebar-caption">Разделы</div>}
         {navItems.map(n => {
           const isActive = active === n.key;
           const badge = n.key === 'logistics' ? 0 : (badges[n.key] ?? 0);
           return (
             <button
               key={n.key}
+              type="button"
+              className={`ow-nav-item${isActive ? ' is-active' : ''}`}
               onClick={() => onChange(n.key)}
-              title={collapsed ? n.label : undefined}
+              title={n.label}
               aria-label={n.label}
-              style={{
-                width: isActive && collapsed ? 'calc(100% + 12px)' : '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                gap: 10,
-                padding: collapsed ? '11px 0' : '11px 14px',
-                borderRadius: isActive ? '18px 0 0 18px' : 16,
-                border: '1px solid transparent',
-                background: isActive ? 'var(--active-bg)' : 'transparent',
-                color: isActive ? '#17222F' : 'var(--text-2)',
-                fontWeight: isActive ? 800 : 600,
-                fontSize: 13,
-                marginBottom: 6,
-                marginRight: isActive ? 0 : 12,
-                position: 'relative',
-                zIndex: isActive ? 2 : 1,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-                borderLeft: '1px solid transparent',
-                boxShadow: isActive ? 'inset 4px 0 0 #31A4A5' : 'none',
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-              }}
+              aria-current={isActive ? 'page' : undefined}
             >
-              <span style={{ flexShrink: 0 }}>{n.icon}</span>
-              {!collapsed && <span>{n.label}</span>}
+              <span className="ow-nav-icon">{n.icon}</span>
+              {!collapsed && <span className="ow-nav-label">{n.label}</span>}
               {badge > 0 && (
-                <span style={{
-                  marginLeft: collapsed ? 0 : 'auto',
-                  minWidth: 18,
-                  height: 18,
-                  padding: '0 5px',
-                  borderRadius: 999,
-                  background: n.key === 'tasks' ? '#DC2626' : '#31A4A5',
-                  color: '#fff',
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: 10,
-                  fontWeight: 800,
-                  lineHeight: 1,
-                }}>
-                  {badge > 99 ? '99+' : badge}
-                </span>
+                <span className={`ow-nav-badge${n.key === 'tasks' ? ' is-alert' : ''}`}>{badge > 99 ? '99+' : badge}</span>
               )}
             </button>
           );
         })}
       </nav>
 
-      {/* Filters + Columns buttons */}
-      {(onFiltersClick || onColumnsClick) && (
-        <div style={{ padding: collapsed ? '4px 0 4px 12px' : '4px 0 4px 12px', borderTop: '1px solid var(--border)' }}>
-          {[
-            { label: 'Фильтры', icon: <SlidersHorizontal size={17} />, onClick: onFiltersClick, active: filtersActive },
-            { label: 'Колонки', icon: <Columns3 size={17} />, onClick: onColumnsClick, active: columnsActive },
-          ].map(item => (
+      {tools.length > 0 && (
+        <div className="ow-sidebar-section">
+          {tools.map(item => (
             <button
               key={item.label}
+              type="button"
+              className={`ow-nav-item${item.active ? ' is-toggled' : ''}`}
               onClick={item.onClick}
-              title={collapsed ? item.label : undefined}
-              style={{
-                width: '100%',
-                height: 38,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: collapsed ? 'center' : 'flex-start',
-                gap: 10,
-                padding: collapsed ? 0 : '0 14px',
-                borderRadius: 14,
-                border: item.active ? '1px solid #2DD4BF' : '1px solid transparent',
-                background: item.active ? '#E6FAF8' : 'transparent',
-                color: item.active ? '#2DD4BF' : 'var(--text-2)',
-                fontSize: 13,
-                fontWeight: item.active ? 800 : 600,
-                cursor: 'pointer',
-                marginBottom: 2,
-                whiteSpace: 'nowrap',
-                overflow: 'hidden',
-                transition: 'all 0.15s',
-              }}
+              title={item.label}
+              aria-pressed={!!item.active}
             >
-              <span style={{ flexShrink: 0 }}>{item.icon}</span>
-              {!collapsed && <span>{item.label}</span>}
+              <span className="ow-nav-icon">{item.icon}</span>
+              {!collapsed && <span className="ow-nav-label">{item.label}</span>}
             </button>
           ))}
         </div>
       )}
 
-      {/* Bottom */}
-      <div style={{
-        padding: collapsed ? '10px 8px' : '10px 12px',
-        borderTop: '1px solid var(--border)',
-      }}>
-        <button
-          onClick={onLogout}
-          title={collapsed ? 'Выйти' : undefined}
-          style={{
-            width: '100%',
-            height: 38,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-            gap: 10,
-            padding: collapsed ? 0 : '0 10px',
-            borderRadius: 14,
-            border: '1px solid transparent',
-            background: 'transparent',
-            color: 'var(--text-2)',
-            fontSize: 13,
-            fontWeight: 750,
-            cursor: 'pointer',
-          }}
-        >
-          <LogOut size={17} />
-          {!collapsed && <span>Выйти</span>}
+      <div className="ow-sidebar-section">
+        <button type="button" className="ow-nav-item" onClick={onLogout} title="Выйти">
+          <span className="ow-nav-icon"><LogOut size={17} /></span>
+          {!collapsed && <span className="ow-nav-label">Выйти</span>}
         </button>
-        {!collapsed && (
-          <div style={{
-            padding: '8px 8px 0',
-            fontSize: 11,
-            color: 'var(--text-2)',
-          }}>
-            OutWay CRM · 2026
-          </div>
-        )}
       </div>
     </aside>
   );
@@ -291,10 +149,10 @@ export function OutWayLogo({ width = 92, height = 24 }: { width?: number; height
     <svg width={width} height={height} viewBox="0 0 292 68" role="img" aria-label="OutWay" style={{ display: 'block', flexShrink: 0 }}>
       <text x="0" y="53" fontFamily="Arial Black, Arial, sans-serif" fontSize="50" fontWeight="900" fill="#17222F" letterSpacing="5">OUTW</text>
       <g transform="translate(180 8)">
-        <path d="M16 0h22l17 52H0L16 0Z" fill="#31A4A5" />
+        <path d="M16 0h22l17 52H0L16 0Z" fill="#1A7F80" />
         <path d="M22 0h4v52h-4V0Z" fill="#FFFFFF" opacity="0.95" />
         <path d="M30 0h4v52h-4V0Z" fill="#FFFFFF" opacity="0.95" />
-        <path d="M26 11h4v9h-4v-9ZM26 28h4v10h-4V28Z" fill="#31A4A5" />
+        <path d="M26 11h4v9h-4v-9ZM26 28h4v10h-4V28Z" fill="#1A7F80" />
       </g>
       <text x="236" y="53" fontFamily="Arial Black, Arial, sans-serif" fontSize="50" fontWeight="900" fill="#17222F" letterSpacing="5">Y</text>
     </svg>

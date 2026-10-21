@@ -50,7 +50,7 @@ export function B2BClientOrderCreateModal({ client, onClose, onCreated }: { clie
   };
 
   return <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><div className="b2b-order-form-modal" role="dialog" aria-modal="true">
-    <div className="b2b-modal-head"><div><h2>Новый заказ</h2><p>{client.companyName || client.contactName}</p></div><button type="button" onClick={onClose}><X size={18} /></button></div>
+    <div className="b2b-modal-head"><div><h2>Новый заказ</h2><p>{client.companyName || client.contactName}</p></div><button type="button" onClick={onClose} aria-label="Закрыть" title="Закрыть"><X size={18} aria-hidden="true" /></button></div>
     <form className="b2b-new-order-form" onSubmit={submit}>
       <label><span>Откуда *</span><input autoFocus value={form.routeFrom} onChange={event => setForm(current => ({ ...current, routeFrom: event.target.value }))} placeholder="Адрес отправления" /></label>
       <label><span>Куда *</span><input value={form.routeTo} onChange={event => setForm(current => ({ ...current, routeTo: event.target.value }))} placeholder="Адрес назначения" /></label>
@@ -99,7 +99,7 @@ export function B2BClientOrderEditModal({ order, onClose }: { order: B2BOrderRec
   };
 
   return <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}><div className="b2b-order-form-modal" role="dialog" aria-modal="true">
-    <div className="b2b-modal-head"><div><h2>Редактировать заказ</h2><p>{order.number} · {order.client}</p></div><button type="button" onClick={onClose}><X size={18} /></button></div>
+    <div className="b2b-modal-head"><div><h2>Редактировать заказ</h2><p>{order.number} · {order.client}</p></div><button type="button" onClick={onClose} aria-label="Закрыть" title="Закрыть"><X size={18} aria-hidden="true" /></button></div>
     <form className="b2b-new-order-form" onSubmit={submit}>
       <label><span>Откуда *</span><input autoFocus value={form.routeFrom} onChange={event => setForm(current => ({ ...current, routeFrom: event.target.value }))} /></label>
       <label><span>Куда *</span><input value={form.routeTo} onChange={event => setForm(current => ({ ...current, routeTo: event.target.value }))} /></label>

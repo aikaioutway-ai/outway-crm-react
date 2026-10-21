@@ -73,13 +73,13 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
   }
 
   const columns = useMemo((): ColumnDef<RefundTableRow>[] => [
-    { key: 'parentName', label: 'Родитель', type: 'text', category: 'Возврат', width: 180, render: (val) => <span style={{ fontWeight: 700, fontSize: 13 }}>{val || '—'}</span> },
+    { key: 'parentName', label: 'Родитель', type: 'text', category: 'Возврат', width: 180, render: (val) => <span style={{ fontWeight: 600, fontSize: 13 }}>{val || '—'}</span> },
     { key: 'childrenNames', label: 'Дети', type: 'text', category: 'Возврат', width: 160, render: (val) => {
       const names = String(val || '').split(',').map(n => n.trim()).filter(Boolean);
       if (!names.length) return <span style={{ fontSize: 12, color: '#9AA7AE' }}>—</span>;
       return <span style={{ fontSize: 12, lineHeight: 1.5 }}>{names.join(', ')}</span>;
     }},
-    { key: 'amount', label: 'Сумма', type: 'currency', category: 'Возврат', width: 120, render: (val) => <span style={{ fontWeight: 700, color: '#B91C1C' }}>{money(Number(val ?? 0))}</span> },
+    { key: 'amount', label: 'Сумма', type: 'currency', category: 'Возврат', width: 120, render: (val) => <span style={{ fontWeight: 600, color: '#B91C1C' }}>{money(Number(val ?? 0))}</span> },
     { key: 'comment', label: 'Комментарий', type: 'text', category: 'Возврат', width: 200, sortable: false, filterable: false, render: (val) => <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{val || '—'}</span> },
     { key: 'requestedAt', label: 'Дата заявки', type: 'text', category: 'Возврат', width: 120, sortable: false, filterable: false, render: (val) => <span style={{ fontSize: 12 }}>{val ? new Date(String(val)).toLocaleDateString('ru-RU') : '—'}</span> },
     {
@@ -87,14 +87,14 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
       render: (val, row) => {
         if (val === 'confirmed') {
           return (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 700, color: 'var(--success)', background: 'rgba(16,185,129,.1)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, color: 'var(--success)', background: 'rgba(16,185,129,.1)' }}>
               ✓ Подтверждено
             </span>
           );
         }
         if (val === 'rejected') {
           return (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 700, color: '#991B1B', background: '#FEE2E2' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, color: '#991B1B', background: '#FEE2E2' }}>
               ✕ Отклонено
             </span>
           );
@@ -132,19 +132,19 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
               title="Подтвердить"
               disabled={busy}
               onClick={() => confirm(row)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 800, color: '#fff', background: busy ? '#A7E4D3' : 'var(--success)', cursor: busy ? 'not-allowed' : 'pointer' }}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 600, color: '#fff', background: busy ? '#A7E4D3' : 'var(--success)', cursor: busy ? 'not-allowed' : 'pointer' }}
             >✓</button>
             <button
               title="Отклонить"
               disabled={busy}
               onClick={() => reject(row)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 800, color: '#991B1B', background: '#FEE2E2', cursor: busy ? 'not-allowed' : 'pointer' }}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 600, color: '#991B1B', background: '#FEE2E2', cursor: busy ? 'not-allowed' : 'pointer' }}
             >✕</button>
             <button
               title="Отмена"
               disabled={busy}
               onClick={() => setEditingId(null)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 12, fontWeight: 700, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: busy ? 'not-allowed' : 'pointer' }}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: busy ? 'not-allowed' : 'pointer' }}
             >×</button>
           </div>
         );
