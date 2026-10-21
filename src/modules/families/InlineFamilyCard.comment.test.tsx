@@ -6,7 +6,6 @@ import { Family } from '../../types';
 jest.mock('../../services/crmV2Service', () => ({
   addV2Audit: jest.fn().mockResolvedValue(undefined),
   createV2Child: jest.fn(),
-  deleteV2Child: jest.fn(),
   fetchV2Branches: jest.fn().mockResolvedValue([]),
   fetchV2Children: jest.fn().mockResolvedValue([]),
   updateV2Child: jest.fn(),

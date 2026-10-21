@@ -2146,12 +2146,6 @@ export async function clearV2TransferVehicleType(params: {
   invalidateFamiliesCache();
 }
 
-export async function deleteV2Child(childId: string): Promise<void> {
-  const { error } = await supabase.from('v2_children').delete().eq('id', childId);
-  if (error) throw new Error(error.message);
-  invalidateFamiliesCache();
-}
-
 export async function addV2Audit(params: {
   actorName?: string;
   action: string;
