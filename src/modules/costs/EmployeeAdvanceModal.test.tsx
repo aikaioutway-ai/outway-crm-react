@@ -238,3 +238,28 @@ test('converting an ordinary expense to salary updates its category and subcateg
  expect(updateExpense).toHaveBeenCalledWith('legacy-expense',expect.objectContaining({category:'office',subcategory:'ЗП',employeeId:'office',salaryPeriodKey:'2026-10-1'}),undefined);
  expect(createExpense).not.toHaveBeenCalled();
 });
+
+test('legacy expense can switch to driver advance and exposes advance in subcategories',async()=>{
+ const expense={id:'legacy-advance',name:'Аванс Водителям',category:'school',subcategory:'Прочее',source:'manual',amount:5000,unitPrice:5000,quantity:1,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()}/>);
+ expect(screen.getByRole('option',{name:'Аванс'})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Аванс'})).toBeEnabled();
+ fireEvent.change(screen.getByRole('combobox',{name:'Подкатегория'}),{target:{value:'Аванс'}});
+ expect(screen.getByRole('button',{name:'Аванс'})).toHaveAttribute('aria-pressed','true');
+ expect(screen.getByRole('button',{name:'Водители'})).toBeEnabled();
+ fireEvent.click(screen.getByRole('button',{name:'Офис'}));
+ expect(screen.getByRole('combobox',{name:'Получатели'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:'Водители'}));
+ expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
+});
+
+test('reclassifies a manual expense as an advance without creating a duplicate payout',async()=>{
+ const expense={id:'legacy',name:'Расход',category:'office',subcategory:'Прочее',source:'manual',amount:5000,unitPrice:5000,quantity:1,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Аванс'}));
+ fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
+ fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
+ await waitFor(()=>expect(saved).toHaveBeenCalled());
+ expect(updateExpense).toHaveBeenCalledWith('legacy',expect.objectContaining({subcategory:'Аванс',category:'office',employeeId:undefined,driverId:undefined}),undefined);
+ expect(createEmployeeAdvance).not.toHaveBeenCalled();
+});

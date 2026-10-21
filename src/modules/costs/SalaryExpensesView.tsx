@@ -44,7 +44,7 @@ export default function SalaryExpensesView({ sessionToken, scope='all', columnsO
       fetchSalaryExpenses(sessionToken),
       loadExpenseRows({ first: `${year}-09-01`, last: `${year + 1}-05-31` }, months, sessionToken),
     ]).then(([salaries, expenses]) => {
-      if (active) setRows([...salaries.map(row=>({...row,source:'manual' as const,unitPrice:row.unitPrice ?? row.amount,quantity:row.quantity ?? 1})), ...expenses.filter(row => row.source === 'advance' && (row.category === 'school' || row.category === 'office'))]);
+      if (active) setRows([...salaries.map(row=>({...row,source:'manual' as const,unitPrice:row.unitPrice ?? row.amount,quantity:row.quantity ?? 1})), ...expenses.filter(row => (row.source === 'advance' || row.subcategory === 'Аванс') && (row.category === 'school' || row.category === 'office'))]);
     }).catch(reason => { if (active) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить выплаты'); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
@@ -61,7 +61,7 @@ export default function SalaryExpensesView({ sessionToken, scope='all', columnsO
   const schoolRows = (key: string) => filtered.filter(row => key==='OFFICE'?row.category==='office':key.startsWith('OFFICE:')?row.category==='office' && (row.departmentKey||'UNASSIGNED')===key.slice(7):row.category==='school' && (row.schoolKey||'UNASSIGNED')===key);
   const showOverview=!school || (school==='OFFICE' && !department);
   const overviewItems=school==='OFFICE'?departments:schools;
-  const total = (list: ExpenseRecord[], advances = false) => list.filter(row => advances ? row.source === 'advance' : row.source !== 'advance').reduce((sum, row) => sum + row.amount, 0);
+  const total = (list: ExpenseRecord[], advances = false) => list.filter(row => advances ? row.source === 'advance' || row.subcategory === 'Аванс' : row.source !== 'advance' && row.subcategory !== 'Аванс').reduce((sum, row) => sum + row.amount, 0);
   const selectedRows = department?schoolRows(department):school?schoolRows(school):filtered;
   const sortedSchools = overviewItems.filter(item => (!['UNASSIGNED', 'OFFICE:UNASSIGNED'].includes(item.key) || schoolRows(item.key).length > 0) && item.label.toLowerCase().includes(search.toLowerCase())).map(item => {
     const list = schoolRows(item.key); const salary = total(list); const advance = total(list, true);
