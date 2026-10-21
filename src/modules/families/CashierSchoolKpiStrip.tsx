@@ -15,7 +15,7 @@ interface CashierSchoolKpiStripProps {
 
 const COLORS = {
   school: '#378ADD',
-  payments: '#626C8B',
+  payments: 'var(--text-2)',
   pendingCount: '#7C3AED',
   pendingAmount: '#2563EB',
   confirmed: 'var(--success)',

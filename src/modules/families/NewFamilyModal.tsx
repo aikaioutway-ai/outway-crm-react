@@ -36,8 +36,8 @@ export default function NewFamilyModal({ onClose }: Props) {
 
   return (
     <>
-      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 500 }} />
-      <div style={{
+      <div className="ow-overlay" onClick={onClose} style={{ position: 'fixed', inset: 0, zIndex: 500 }} />
+      <div className="ow-modal" role="dialog" aria-modal="true" aria-label="Новая заявка" style={{
         position: 'fixed', top: '50%', left: '50%',
         transform: 'translate(-50%, -50%)',
         width: 420, background: '#fff', zIndex: 501,
@@ -45,12 +45,12 @@ export default function NewFamilyModal({ onClose }: Props) {
         overflow: 'visible',
       }}>
         {/* Header */}
-        <div style={{ background: 'var(--accent)', padding: '18px 22px', borderRadius: '16px 16px 0 0', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div className="ow-modal-head" style={{ borderRadius: '12px 12px 0 0' }}>
           <div>
-            <div style={{ fontSize: 17, fontWeight: 700, color: '#fff' }}>Новая заявка</div>
-            <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.65)', marginTop: 3 }}>Выберите школу</div>
+            <h2>Новая заявка</h2>
+            <p style={{ margin: '2px 0 0' }}>Выберите школу</p>
           </div>
-          <button onClick={onClose} style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
+          <button type="button" className="ow-modal-close" onClick={onClose} aria-label="Закрыть" title="Закрыть" style={{ background: 'rgba(255,255,255,0.15)', border: 'none', borderRadius: 8, width: 34, height: 34, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', color: '#fff' }}>
             <X size={16} />
           </button>
         </div>
@@ -65,8 +65,9 @@ export default function NewFamilyModal({ onClose }: Props) {
               style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 padding: '0 14px', height: 48,
-                border: `2px solid ${open ? 'var(--accent)' : 'var(--border)'}`,
-                borderRadius: 10, cursor: 'pointer', background: '#fff',
+                border: `1px solid ${open ? 'var(--accent)' : 'var(--border)'}`,
+                boxShadow: open ? '0 0 0 3px rgba(26, 127, 128, .14)' : 'var(--shadow-xs)',
+                borderRadius: 8, cursor: 'pointer', background: '#fff',
                 transition: 'border-color 0.15s',
               }}
             >
@@ -99,12 +100,12 @@ export default function NewFamilyModal({ onClose }: Props) {
                       style={{
                         display: 'flex', alignItems: 'center', gap: 12,
                         padding: '10px 14px', cursor: 'pointer',
-                        background: selected === s.code ? '#EEF2FF' : i % 2 === 0 ? '#fff' : '#F8F9FF',
+                        background: selected === s.code ? 'var(--accent-l)' : i % 2 === 0 ? '#fff' : 'var(--surface-2)',
                         borderLeft: selected === s.code ? '3px solid var(--accent)' : '3px solid transparent',
                         transition: 'background 0.1s',
                       }}
-                      onMouseEnter={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = '#F0F4FF'; }}
-                      onMouseLeave={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = i % 2 === 0 ? '#fff' : '#F8F9FF'; }}
+                      onMouseEnter={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = '#F2F7F7'; }}
+                      onMouseLeave={e => { if (selected !== s.code) (e.currentTarget as HTMLDivElement).style.background = i % 2 === 0 ? '#fff' : 'var(--surface-2)'; }}
                     >
                       <img src={s.logo} alt="" style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'contain', background: '#fff', border: '1px solid var(--border)', flexShrink: 0 }} />
                       <span style={{ fontSize: 13, fontWeight: selected === s.code ? 700 : 500, color: 'var(--text)' }}>{s.name}</span>
@@ -121,11 +122,11 @@ export default function NewFamilyModal({ onClose }: Props) {
             onClick={handleOpen}
             disabled={!school}
             style={{
-              width: '100%', height: 48,
-              background: school ? 'var(--accent)' : '#E5E7EB',
-              color: school ? '#fff' : '#9CA3AF',
-              border: 'none', borderRadius: 10,
-              fontSize: 14, fontWeight: 700, cursor: school ? 'pointer' : 'not-allowed',
+              width: '100%', height: 40,
+              background: school ? 'var(--accent)' : 'var(--surface-3)',
+              color: school ? '#fff' : 'var(--text-3)',
+              border: 'none', borderRadius: 8,
+              fontSize: 13.5, fontWeight: 500, cursor: school ? 'pointer' : 'not-allowed',
               transition: 'background 0.15s',
               display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
             }}

@@ -3,36 +3,42 @@
 html, body, #root { height: 100%; }
 
 :root {
-  --bg:        #E9F1F5;
+  /* Нейтральная основа: всё серое, бирюза — только для действий и выбора. */
+  --bg:        #F3F5F7;
   --white:     #FFFFFF;
-  --accent:    #31A4A5;
-  --accent-h:  #237F81;
-  --accent-l:  #D7EEEE;
-  --active-bg:  #D7EEEE;
+  --accent:    #1A7F80;
+  --accent-h:  #146566;
+  --accent-l:  #E5F3F3;
+  --active-bg: #F3F5F7;
   --surface:   #FFFFFF;
-  --surface-2: #F5FAFB;
-  --surface-3: #DDECEF;
-  --text:      #17222F;
-  --text-2:    #626C8B;
-  --border:    #D4E3E7;
-  --danger:    #D94D4D;
-  --success:   #159A6A;
-  --warning:   #C9861A;
-  --info:      #31A4A5;
-  --shadow:    0 18px 46px rgba(43, 72, 89, .12);
-  --radius:    18px;
+  --surface-2: #F7F9FA;
+  --surface-3: #EDF1F3;
+  --text:      #111B24;
+  --text-2:    #5A6673;
+  --text-3:    #8B95A1;
+  --border:    #E2E7EB;
+  --border-strong: #CFD7DD;
+  --danger:    #C93838;
+  --success:   #13865C;
+  --warning:   #B7791F;
+  --info:      #1A7F80;
+  --shadow-xs: 0 1px 2px rgba(16, 24, 40, .05);
+  --shadow:    0 1px 2px rgba(16, 24, 40, .04), 0 4px 12px rgba(16, 24, 40, .05);
+  --shadow-lg: 0 12px 32px rgba(16, 24, 40, .12);
+  --radius:    10px;
+  --radius-sm: 7px;
   --font:      Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
 }
 
 body {
-  background:
-    linear-gradient(135deg, rgba(170, 212, 212, .42), transparent 34%),
-    linear-gradient(315deg, rgba(49, 164, 165, .13), transparent 32%),
-    var(--bg);
+  background: var(--bg);
   color: var(--text);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.5;
+  font-feature-settings: "cv11", "ss03";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 button { cursor: pointer; font-family: var(--font); }
@@ -40,27 +46,17 @@ input, select, textarea { font-family: var(--font); }
 button, input, select, textarea { letter-spacing: 0; }
 a { color: var(--accent); text-decoration: none; }
 
-/* Мягкое приближение карточек — визуальная навигация в духе macOS Dock. */
+/* Карточки и кнопки-плитки: спокойный отклик без «прыжков». */
 .dock-hover-card {
   position: relative;
-  transform: translateZ(0);
-  transform-origin: center bottom;
-  transition: transform .2s cubic-bezier(.2, .8, .2, 1), box-shadow .2s ease, border-color .2s ease;
-  will-change: transform;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
 }
 .dock-hover-card:hover {
-  z-index: 8;
-  transform: translateY(-4px) scale(1.045);
-  box-shadow: 0 15px 30px rgba(43, 72, 89, .16) !important;
+  box-shadow: 0 0 0 1px var(--border-strong), var(--shadow-xs) !important;
 }
-.dock-hover-card--compact:hover {
-  transform: translateY(-3px) scale(1.1);
-  box-shadow: 0 11px 22px rgba(43, 72, 89, .18) !important;
-}
-.dock-hover-card:active { transform: translateY(-1px) scale(1.015); }
-@media (hover: none), (prefers-reduced-motion: reduce) {
+.dock-hover-card:active { transform: translateY(.5px); }
+@media (prefers-reduced-motion: reduce) {
   .dock-hover-card { transition: none; }
-  .dock-hover-card:hover, .dock-hover-card--compact:hover { transform: none; }
 }
 
 .login-page {
@@ -173,9 +169,9 @@ a { color: var(--accent); text-decoration: none; }
   align-items: center;
   justify-content: center;
   gap: 9px;
-  border: 1px solid #237F81;
+  border: 1px solid #146566;
   border-radius: 14px;
-  background: #31A4A5;
+  background: #1A7F80;
   color: #FFFFFF;
   font-size: 14px;
   font-weight: 850;
@@ -183,7 +179,7 @@ a { color: var(--accent); text-decoration: none; }
 }
 
 .login-submit:hover {
-  background: #237F81;
+  background: #146566;
 }
 
 .login-submit:active {
@@ -264,3 +260,341 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .driver-card-identity{flex:1;min-width:0}.driver-card-identity>input{width:100%!important;max-width:620px;height:42px!important;font-size:22px!important}.driver-card-identity>div{gap:8px 16px!important;margin-top:10px!important;font-size:12px!important}.driver-card-identity>div:last-child{padding-top:10px;border-top:1px solid #edf1f4}.driver-card-identity>div:last-child>span{padding:6px 9px;background:#f3f7fa;border-radius:8px}.driver-card-actions{flex-wrap:wrap;justify-content:flex-end;max-width:440px}.driver-card-modal>div{min-height:0}.driver-card-modal input,.driver-card-modal select{font-size:13px!important}
 @media(max-width:800px){.expense-modal:not(.payment-picker):not(.payment-period-picker),.employee-card-modal,.driver-card-modal{width:calc(100vw - 24px)!important;height:calc(100dvh - 24px);max-height:calc(100dvh - 24px)!important}.expense-modal:not(.payment-picker):not(.payment-period-picker)>.expense-modal-head,.employee-card-header,.driver-card-header{padding:18px!important}.driver-card-header{flex-direction:column}.driver-card-actions{max-width:none;width:100%}.expense-modal:not(.payment-picker):not(.payment-period-picker)>.expense-form,.employee-card-content{padding:18px!important}.employee-card-section{padding:14px!important}.employee-card-actions{width:100%}.expense-modal:not(.payment-picker):not(.payment-period-picker)>.expense-form{grid-template-columns:minmax(0,1fr)}.payment-main-modal .expense-field.full{grid-column:1/-1}}
 .payment-main-modal .expense-form>.expenses-add{grid-column:1/-1;justify-self:end;min-width:220px;margin-top:4px}.expense-modal-head h2{margin:0;font-size:21px}.employee-card-summary>b,.employee-card-summary>span{display:inline-flex;align-items:center}.driver-card-actions>span{margin:0!important}.employee-card-modal .employee-card-section textarea{width:100%;max-width:none!important}
+
+/* ── Видимый фокус с клавиатуры (WCAG 2.4.7) ───────────────────── */
+:where(button, a, summary, [role="button"], [role="tab"], [role="menuitem"], [role="option"], [tabindex]:not([tabindex="-1"])):focus-visible {
+  outline: 2px solid var(--accent) !important;
+  outline-offset: 2px;
+}
+:where(input, textarea):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+/* Поиски, где поле без рамки лежит внутри «капсулы»: подсвечиваем капсулу. */
+:is(.finance-search, .b2b-calendar-search, .b2b-logistics-filters, .b2b-expenses-search,
+    .b2b-client-search, .b2b-orders-search, .b2b-finance-filters label.search, .payment-picker-search):focus-within {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+/* ── Общие элементы шапки: кнопки и сегментированные вкладки ───── */
+.ow-btn {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  box-shadow: var(--shadow-xs);
+  transition: background .12s ease, border-color .12s ease, color .12s ease;
+}
+.ow-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+.ow-btn--ghost { border-color: transparent; background: transparent; box-shadow: none; color: var(--text-2); padding: 0 8px; }
+.ow-btn--ghost:hover { background: var(--surface-3); color: var(--text); border-color: transparent; }
+.ow-btn--sm { height: 26px; padding: 0 8px; font-size: 12px; }
+
+.ow-seg {
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  background: var(--surface-3);
+  flex-shrink: 0;
+}
+.ow-seg-btn {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  transition: background .12s ease, color .12s ease, box-shadow .12s ease;
+}
+.ow-seg-btn:hover { color: var(--text); }
+.ow-seg-btn[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--text);
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, .08), 0 0 0 1px rgba(16, 24, 40, .04);
+}
+
+.ow-page-title {
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  white-space: nowrap;
+  margin-right: 8px;
+}
+.ow-user { display: flex; align-items: center; gap: 10px; margin-left: auto; }
+.ow-user-meta { text-align: right; line-height: 1.25; }
+.ow-user-role { font-size: 11.5px; color: var(--text-3); font-weight: 500; }
+.ow-user-name { font-size: 13px; color: var(--text); font-weight: 600; }
+.ow-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  background: var(--accent-l);
+  color: var(--accent-h);
+  font-size: 12px;
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px rgba(26, 127, 128, .18);
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Модальные окна — единый вид для всех модулей.
+   ════════════════════════════════════════════════════════════════ */
+@keyframes ow-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes ow-modal-in { from { opacity: 0; transform: translateY(6px) scale(.985); } to { opacity: 1; transform: none; } }
+
+:is(.ow-overlay, .b2b-modal-overlay, .market-modal-overlay, .expense-modal-overlay,
+    .tasks-overlay, .employee-modal-overlay) {
+  background: rgba(15, 23, 32, .42) !important;
+  backdrop-filter: blur(2px);
+  animation: ow-fade-in .14s ease-out;
+}
+
+:is(.ow-modal, .b2b-modal, .b2b-export-modal, .b2b-order-form-modal, .b2b-payment-form-modal,
+    .b2b-logistics-dialog, .b2b-calendar-dialog, .b2b-calendar-order-card, .market-modal,
+    .expense-modal, .tasks-dialog, .employee-card-modal, .driver-card-modal) {
+  background: var(--surface) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(16, 24, 40, .04) !important;
+  animation: ow-modal-in .16s cubic-bezier(.2, .8, .2, 1);
+  color: var(--text);
+}
+
+/* Шапка окна */
+:is(.ow-modal-head, .b2b-modal-head, .market-modal-head, .expense-modal-head,
+    .b2b-calendar-dialog > header, .b2b-calendar-order-card > header) {
+  padding: 16px 20px !important;
+  border-bottom: 1px solid var(--border) !important;
+  background: var(--surface) !important;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+:is(.ow-modal-head, .b2b-modal-head, .market-modal-head, .expense-modal-head, .b2b-calendar-dialog > header, .b2b-calendar-order-card > header) :is(h2, h3) {
+  margin: 0;
+  color: var(--text) !important;
+  font-size: 16px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em;
+}
+:is(.ow-modal-head, .b2b-modal-head, .market-modal-head, .expense-modal-head, .b2b-calendar-dialog > header, .b2b-calendar-order-card > header) :is(p, span:not([class])) {
+  color: var(--text-2) !important;
+  font-size: 12.5px !important;
+  font-weight: 400 !important;
+}
+/* Крестик закрытия */
+:is(.ow-modal-close, .market-modal-close, .expense-modal-close),
+:is(.b2b-modal-head, .ow-modal-head, .b2b-calendar-dialog > header, .b2b-calendar-order-card > header) > button:last-child {
+  width: 32px !important;
+  height: 32px !important;
+  flex-shrink: 0;
+  display: grid !important;
+  place-items: center;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--text-2) !important;
+  box-shadow: none !important;
+  transition: background .12s ease, color .12s ease;
+}
+:is(.ow-modal-close, .market-modal-close, .expense-modal-close):hover,
+:is(.b2b-modal-head, .ow-modal-head, .b2b-calendar-dialog > header, .b2b-calendar-order-card > header) > button:last-child:hover {
+  background: var(--surface-3) !important;
+  color: var(--text) !important;
+}
+
+/* Поля внутри окон */
+:is(.ow-modal, .b2b-modal, .b2b-export-modal, .b2b-order-form-modal, .b2b-payment-form-modal, .b2b-logistics-dialog,
+    .market-modal, .expense-modal, .tasks-dialog, .employee-card-modal, .driver-card-modal)
+  :is(input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]), select, textarea) {
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  background-color: var(--surface) !important;
+  color: var(--text) !important;
+  font-size: 13.5px !important;
+  font-weight: 400 !important;
+  box-shadow: var(--shadow-xs);
+  transition: border-color .12s ease, box-shadow .12s ease;
+}
+:is(.ow-modal, .b2b-modal, .b2b-export-modal, .b2b-order-form-modal, .b2b-payment-form-modal, .b2b-logistics-dialog,
+    .market-modal, .expense-modal, .tasks-dialog, .employee-card-modal, .driver-card-modal)
+  :is(input, select, textarea):focus {
+  outline: none !important;
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(26, 127, 128, .14) !important;
+}
+:is(.ow-modal, .b2b-modal, .b2b-export-modal, .b2b-order-form-modal, .b2b-payment-form-modal, .b2b-logistics-dialog,
+    .market-modal, .expense-modal, .tasks-dialog, .employee-card-modal, .driver-card-modal)
+  label > span:first-child {
+  color: var(--text-2) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  text-transform: none !important;
+  letter-spacing: 0 !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :is(.ow-overlay, .ow-modal, .b2b-modal-overlay, .market-modal-overlay, .expense-modal-overlay, .tasks-overlay,
+      .employee-modal-overlay, .b2b-modal, .b2b-export-modal, .market-modal, .expense-modal, .tasks-dialog,
+      .employee-card-modal, .driver-card-modal) { animation: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Карточки (водитель, трансфер, сотрудник, заказ, клиент):
+   шапка → вкладки с подчёркиванием → серое тело → белые секции.
+   ════════════════════════════════════════════════════════════════ */
+.ow-card-body { padding: 20px 24px !important; background: var(--bg) !important; }
+.ow-card-section {
+  padding: 16px 18px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 10px !important;
+  background: var(--surface) !important;
+  box-shadow: none !important;
+}
+.ow-card-section > div:first-child { font-size: 14px !important; font-weight: 600 !important; }
+
+.ow-card-tab {
+  height: 44px !important;
+  padding: 0 10px !important;
+  border: 0 !important;
+  border-bottom: 2px solid transparent !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  color: var(--text-2) !important;
+  font-size: 13.5px !important;
+  font-weight: 500 !important;
+}
+.ow-card-tab:hover { color: var(--text) !important; }
+.ow-card-tab.is-active { color: var(--text) !important; font-weight: 600 !important; border-bottom-color: var(--accent) !important; }
+:has(> .ow-card-tab) { height: auto !important; gap: 4px !important; padding: 0 24px !important; border-bottom: 1px solid var(--border) !important; }
+
+/* Шапка карточки водителя */
+.driver-card-header { padding: 18px 24px 16px !important; border-bottom: 1px solid var(--border) !important; align-items: center !important; }
+.driver-card-identity input {
+  height: 36px !important;
+  margin-left: -9px;
+  padding: 0 9px !important;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  background: transparent !important;
+  color: var(--text) !important;
+  font-size: 20px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+  box-shadow: none !important;
+}
+.driver-card-identity input:hover { border-color: var(--border) !important; }
+.driver-card-identity input:focus { border-color: var(--accent) !important; box-shadow: 0 0 0 3px rgba(26, 127, 128, .14) !important; }
+.driver-card-identity > div { color: var(--text-2) !important; font-size: 13px !important; font-weight: 400 !important; }
+.driver-card-actions button {
+  height: 32px !important;
+  border-radius: 8px !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-xs);
+}
+.driver-card-actions button[title="Удалить водителя"] { background: var(--surface) !important; border: 1px solid var(--border) !important; color: var(--danger) !important; }
+.driver-card-actions button[title="Сохранить"] { border: 1px solid var(--accent-h) !important; }
+.driver-card-actions button[title="Закрыть"] { width: 32px !important; border: 0 !important; background: transparent !important; box-shadow: none; }
+.driver-card-actions button[title="Закрыть"]:hover { background: var(--surface-3) !important; }
+
+/* Таблицы внутри карточек */
+:is(.ow-modal, .driver-card-modal, .employee-card-modal) table th {
+  background: var(--surface-2) !important;
+  color: var(--text-2) !important;
+  font-size: 12.5px !important;
+  font-weight: 500 !important;
+  letter-spacing: 0 !important;
+  border-bottom: 1px solid var(--border) !important;
+}
+:is(.ow-modal, .driver-card-modal, .employee-card-modal) table td { font-size: 13px; border-color: #EEF1F4 !important; }
+
+/* ── Кнопки действий в окнах и карточках: одна пара «основная / вторичная» ── */
+:is(.expense-save, .market-save, .employee-primary, .tasks-primary) {
+  height: 34px !important;
+  padding: 0 14px !important;
+  border: 1px solid var(--accent-h) !important;
+  border-radius: 8px !important;
+  background: var(--accent) !important;
+  color: #fff !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+:is(.expense-save, .market-save, .employee-primary, .tasks-primary, .b2b-primary-button):hover:not(:disabled) { background: var(--accent-h) !important; }
+:is(.expense-cancel, .market-cancel, .b2b-cancel-button, .b2b-secondary-button, .tasks-secondary) {
+  height: 34px !important;
+  padding: 0 14px !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 8px !important;
+  background: var(--surface) !important;
+  color: var(--text) !important;
+  font-size: 13px !important;
+  font-weight: 500 !important;
+  box-shadow: var(--shadow-xs) !important;
+}
+:is(.expense-cancel, .market-cancel, .b2b-cancel-button, .b2b-secondary-button, .tasks-secondary):hover:not(:disabled) {
+  background: var(--surface-2) !important;
+  border-color: var(--border-strong) !important;
+}
+:is(.expense-form-actions, .market-form-actions, .b2b-form-actions, .tasks-detail-actions) {
+  gap: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--border);
+}
+.market-icon-btn { border-radius: 7px !important; }
+
+/* Заголовок-поле в шапке карточек: выглядит как текст, рамка — только при наведении/фокусе.
+   Селектор усилен, чтобы перебить общее правило для полей в окнах. */
+:is(.driver-card-modal .driver-card-identity, .employee-card-modal .employee-card-identity) > input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]) {
+  height: 38px !important;
+  margin-left: -10px;
+  padding: 0 10px !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text) !important;
+  font-size: 21px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.02em;
+}
+:is(.driver-card-modal .driver-card-identity, .employee-card-modal .employee-card-identity) > input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):hover { border-color: var(--border) !important; }
+:is(.driver-card-modal .driver-card-identity, .employee-card-modal .employee-card-identity) > input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="color"]):focus {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 3px rgba(26, 127, 128, .14) !important;
+}
+/* Мета-строка под именем: спокойные «пилюли» без разделительной линии */
+.driver-card-identity > div:last-child, .employee-card-summary { padding-top: 0 !important; border-top: 0 !important; margin-top: 8px !important; }
+.driver-card-identity > div:last-child > span, .employee-card-summary > span {
+  padding: 3px 10px !important;
+  border: 1px solid var(--border);
+  border-radius: 999px !important;
+  background: var(--surface-2) !important;
+  color: var(--text-2);
+  font-size: 12.5px;
+}
+/* Тело карточки тянется на всю высоту окна — без белой пустоты снизу */
+.driver-card-modal > .ow-card-body, .employee-card-modal > .employee-card-content { flex: 1 1 auto; min-height: 0; }
+.driver-card-modal, .employee-card-modal { background: var(--bg) !important; }
+.driver-card-header, .employee-card-header, .driver-card-modal :has(> .ow-card-tab), .employee-card-tabs { background: var(--surface) !important; }

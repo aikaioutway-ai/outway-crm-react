@@ -25,7 +25,7 @@
   box-sizing: border-box;
 }
 .dashboard-search:focus-within {
-  border-color: #31A4A5;
+  border-color: #1A7F80;
   box-shadow: 0 0 0 3px rgba(49, 164, 165, .1);
 }
 .dashboard-search input {
@@ -84,17 +84,17 @@
 .dashboard-kpi-value {
   color: var(--text);
   font-size: 15.5px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 .dashboard-kpi-label, .dashboard-column-label {
   color: var(--text-2);
-  font-size: 10px;
+  font-size: 11px;
   line-height: 13px;
   font-weight: 650;
-  text-transform: uppercase;
+  text-transform: none;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -141,7 +141,7 @@
   gap: 4px;
   color: var(--text);
   font-size: 15.5px;
-  font-weight: 800;
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -190,7 +190,7 @@
   .dashboard-kpi { padding: 8px 10px; gap: 8px; border-radius: 12px; }
   .dashboard-kpi-value { font-size: 15.5px; }
   .dashboard-kpi-label, .dashboard-column-label {
-    font-size: 9px;
+    font-size: 11px;
     line-height: 12px;
     white-space: normal;
   }
@@ -240,4 +240,333 @@
 .dashboard-column-body > [data-school-row] {
   flex: 0 0 var(--dashboard-row-height, 56px) !important;
   box-sizing: border-box;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Редизайн 2026: спокойные плитки, цвет только по смыслу.
+   ════════════════════════════════════════════════════════════════ */
+.dashboard-top-panel {
+  margin-top: 0;
+  padding: 14px 16px 16px !important;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+  margin-bottom: 12px;
+}
+
+/* Показатели */
+.dashboard-kpi {
+  gap: 10px;
+  padding: 10px 14px !important;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px !important;
+  box-shadow: none;
+}
+.dashboard-kpi-copy { display: flex; flex-direction: column; gap: 2px; }
+.dashboard-kpi-label, .dashboard-column-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px !important;
+  line-height: 16px !important;
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+  white-space: nowrap !important;
+}
+.dashboard-kpi-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--kpi-color, var(--text-3));
+}
+.dashboard-kpi-value, .dashboard-column-value {
+  color: var(--text) !important;
+  font-size: 20px !important;
+  line-height: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.dashboard-kpi-icon { width: 36px !important; height: 36px !important; border-radius: 8px; }
+.dashboard-kpi:has(.dashboard-kpi-icon) .dashboard-kpi-value { font-size: 15px !important; }
+
+/* Колонки обзора по школам */
+.dashboard-overview-grid { border-radius: var(--radius); box-shadow: var(--shadow-xs); }
+.dashboard-column-head { padding: 12px 14px !important; }
+.dashboard-column-head.active { background: var(--surface-2); }
+.dashboard-column-body [data-school-row].dashboard-row-hover,
+.school-dashboard-table tbody tr:hover > td,
+.school-dashboard-table tbody tr:focus-within > td { background: var(--surface-2) !important; }
+
+/* Поиск */
+.dashboard-search {
+  height: 40px;
+  border-radius: 8px;
+  border-color: var(--border);
+  box-shadow: var(--shadow-xs);
+}
+.dashboard-search:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(26, 127, 128, .14); }
+.dashboard-search input { font-weight: 400; font-size: 13.5px; }
+.dashboard-search input::placeholder { color: var(--text-3); }
+
+/* Ряд трансферов */
+.ow-transfer-cell {
+  flex: 1;
+  min-width: 0;
+  height: 48px;
+  position: relative;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  padding: 0 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text);
+  overflow: hidden;
+  transition: border-color .12s ease, background-color .12s ease, box-shadow .12s ease;
+}
+.ow-transfer-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: var(--cell-color);
+}
+.ow-transfer-cell-label {
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 18px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.ow-transfer-cell-count {
+  font-size: 11.5px;
+  font-weight: 500;
+  line-height: 14px;
+  color: var(--text-2);
+  font-variant-numeric: tabular-nums;
+}
+.ow-transfer-cell.is-special .ow-transfer-cell-label { font-size: 12.5px; font-weight: 600; }
+.ow-transfer-cell.is-active:hover { border-color: var(--border-strong); background: var(--surface-2); }
+
+.ow-transfer-cell.is-empty {
+  background: transparent;
+  border-style: dashed;
+  color: var(--text-3);
+}
+.ow-transfer-cell.is-empty::before { display: none; }
+.ow-transfer-cell.is-empty .ow-transfer-cell-label { font-weight: 500; }
+.ow-transfer-cell-count:empty { display: none; }
+.ow-transfer-cell.is-empty:hover { border-color: var(--border-strong); color: var(--text-2); }
+
+.ow-transfer-cell.is-alert .ow-transfer-cell-count { color: var(--danger); font-weight: 600; }
+
+.ow-transfer-cell.is-selected {
+  border-color: var(--cell-color);
+  background: color-mix(in srgb, var(--cell-color) 10%, #fff);
+  box-shadow: 0 0 0 1px var(--cell-color);
+}
+.ow-transfer-cell.is-selected::before { height: 4px; }
+.ow-transfer-cell.is-selected .ow-transfer-cell-count { color: var(--text); font-weight: 600; }
+
+.ow-transfer-arrow {
+  flex: 0 0 30px;
+  height: 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 600;
+}
+.ow-transfer-arrow:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.ow-transfer-arrow:disabled { color: var(--border-strong); cursor: default; }
+.ow-transfer-arrow.has-more { color: var(--accent); border-color: rgba(26, 127, 128, .35); }
+
+/* Таблица-обзор по школам */
+.ow-school-table-wrap {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-xs);
+}
+.ow-school-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-variant-numeric: tabular-nums; }
+.ow-school-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 0;
+  text-align: left;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+.ow-school-table th > button {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 12px 16px;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  transition: background .12s ease;
+}
+.ow-school-table th > button:hover { background: var(--surface-2); }
+.ow-school-table th.is-sorted > button { box-shadow: inset 0 -2px 0 var(--accent); }
+.ow-school-table-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.ow-school-table-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--col-color); flex-shrink: 0; }
+.ow-school-table-total { color: var(--text); font-size: 20px; line-height: 26px; font-weight: 600; letter-spacing: -0.02em; }
+
+.ow-school-table td {
+  height: 46px;
+  padding: 0 16px;
+  border-bottom: 1px solid #EEF1F4;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 400;
+}
+.ow-school-table tr:last-child td { border-bottom: 0; }
+.ow-school-table td.is-name { cursor: pointer; }
+.ow-school-table td.is-name > button {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+}
+.ow-school-table tr.is-child td.is-name { padding-left: 36px; }
+.ow-school-table-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ow-school-table td.is-name svg { color: var(--text-3); flex-shrink: 0; }
+.ow-school-table-go { opacity: 0; transition: opacity .12s ease; }
+.ow-school-table tbody tr:hover .ow-school-table-go { opacity: 1; }
+.ow-school-table tbody tr:hover > td { background: #F2F7F7 !important; box-shadow: none !important; }
+.ow-school-table tbody tr:hover > td:first-child { box-shadow: inset 2px 0 var(--accent) !important; }
+
+/* Телефоны в таблицах: чуть компактнее, чтобы номер помещался целиком */
+.dt-td .dt-phone { font-size: 13px !important; letter-spacing: 0; }
+
+/* Меню трансфера (ПКМ по плитке) */
+.ow-vehicle-menu { padding: 4px !important; }
+.ow-vehicle-menu .dt-ctx-section { padding: 8px 10px 4px; color: var(--text-3); font-size: 11.5px; font-weight: 500; }
+.ow-vehicle-menu .dt-ctx-item:disabled { opacity: .5; cursor: default; }
+.ow-vehicle-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin: 0 3px; }
+.ow-vehicle-menu-empty { padding: 6px 10px; color: var(--text-3); font-size: 12.5px; }
+
+/* ── Ряд трансферов: классическое оформление старой CRM в новой форме ──
+   цветная полоса сверху с количеством, цветной номер, цветная рамка;
+   выбранный — залит цветом; пустые — штриховка. */
+.ow-transfer-cell {
+  flex-direction: column !important;
+  justify-content: flex-start;
+  gap: 0;
+  padding: 0;
+  border-radius: 10px;
+  transition: transform .15s cubic-bezier(.2, .8, .2, 1), box-shadow .15s ease, background-color .15s ease;
+}
+.ow-transfer-cell::before { display: none; }
+.ow-transfer-cell-count {
+  flex: 0 0 18px;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cell-color);
+  color: #fff;
+  font-size: 11.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+.ow-transfer-cell-label {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cell-color);
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1;
+}
+.ow-transfer-cell.is-special .ow-transfer-cell-label { font-size: 12.5px; font-weight: 700; }
+
+.ow-transfer-cell.is-active {
+  border: 1.5px solid var(--cell-color);
+  background: var(--surface);
+}
+.ow-transfer-cell.is-active:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 16px color-mix(in srgb, var(--cell-color) 25%, transparent);
+  background: var(--surface);
+  border-color: var(--cell-color);
+}
+
+.ow-transfer-cell.is-selected {
+  background: var(--cell-color) !important;
+  border-color: var(--cell-color);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--cell-color) 60%, transparent);
+}
+.ow-transfer-cell.is-selected .ow-transfer-cell-count {
+  border-bottom: 1px solid rgba(255, 255, 255, .55);
+  color: #fff;
+  font-weight: 700;
+}
+.ow-transfer-cell.is-selected .ow-transfer-cell-label { color: #fff; }
+
+.ow-transfer-cell.is-alert .ow-transfer-cell-count { background: var(--danger); color: #fff; }
+
+.ow-transfer-cell.is-empty {
+  border: 1px solid #E1E8EA;
+  border-style: solid;
+  background: repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px);
+}
+.ow-transfer-cell.is-empty .ow-transfer-cell-label { color: #AEB8C2; font-weight: 600; }
+.ow-transfer-cell.is-empty:hover { border-color: var(--border-strong); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ow-transfer-cell, .ow-transfer-cell.is-active:hover { transition: none; transform: none; }
+}
+.ow-vehicle-check { margin-left: auto; color: var(--accent); }
+
+/* ── Ряд трансферов + поиск: одна высота и одно скругление ── */
+:root { --transfer-row-h: 42px; --transfer-row-r: 6px; }
+.ow-transfer-cell, .ow-transfer-arrow { height: var(--transfer-row-h); border-radius: var(--transfer-row-r); }
+.ow-transfer-cell-count { flex-basis: 16px; font-size: 11px; }
+.ow-transfer-cell-label { font-size: 15px; }
+.ow-transfer-cell.is-special .ow-transfer-cell-label { font-size: 12px; }
+.dashboard-top-panel .dashboard-search {
+  height: var(--transfer-row-h);
+  border-radius: var(--transfer-row-r);
 }

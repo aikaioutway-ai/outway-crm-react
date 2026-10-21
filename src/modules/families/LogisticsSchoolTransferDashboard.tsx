@@ -3,6 +3,8 @@ import { openTaskComposer } from '../tasks/taskTypes';
 import '../../core/selects/NotionSelect.css';
 import TransferCell, { transferCellColor, VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import React, { useEffect, useMemo, useState } from 'react';
+import { Check, ChevronLeft, ChevronRight, ListTodo } from 'lucide-react';
+import { isTestTransfer, setTestTransfer, TEST_TRANSFER_COLOR, useTestTransfers } from './testTransfers';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { clearV2TransferVehicleType, updateV2TransferVehicleType } from '../../services/crmV2Service';
 import { VehicleType } from '../../types';
@@ -17,7 +19,6 @@ interface LogisticsSchoolTransferDashboardProps {
 const TRANSFERS_PER_PAGE = 15;
 
 const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }[] = [
-  { value: 'unassigned', label: 'Не назначен' },
   { value: 'microbus', label: 'Микроавтобус' },
   { value: 'minivan', label: 'Минивэн' },
   { value: 'sedan', label: 'Седан' },
@@ -36,6 +37,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
   const [savingVehicleType, setSavingVehicleType] = useState(false);
   const [vehicleTypeOverrides, setVehicleTypeOverrides] = useState<Record<string, VehicleType | ''>>({});
   const [page, setPage] = useState(0);
+  useTestTransfers(); // перерисовка при смене тестовых отметок
 
   useEffect(() => { setPage(0); }, [schoolKey]);
 
@@ -125,10 +127,13 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
     const savedVehicleType = transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
       ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
       ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType;
+    const test = isTestTransfer(schoolKey, number);
     return {
       filterKey: number,
       label: number,
       count: transferRows.length,
+      test,
+      color: test ? TEST_TRANSFER_COLOR : undefined,
       vehicleType: Object.prototype.hasOwnProperty.call(vehicleTypeOverrides, number)
         ? vehicleTypeOverrides[number]
         : savedVehicleType,
@@ -138,7 +143,8 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
     };
   });
 
-  const noTransferCount = schoolRows.filter(row => !row.transferNumber).length;
+  // Дети тестовых трансферов считаются как без трансфера.
+  const noTransferCount = schoolRows.filter(row => !row.transferNumber || isTestTransfer(schoolKey, row.transferNumber)).length;
   const rejectedCount = allSchoolRows.filter(row => row.status === 'rejected').length;
   const fixedCells = [
     { filterKey: 'empty', label: '—', count: noTransferCount, vehicleType: '' },
@@ -168,39 +174,26 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
           targets: 'targets' in cell ? cell.targets : [],
         });
       }}
-      title={cell.count > 0 ? `Учеников: ${cell.count}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
+      title={cell.count > 0 ? `Учеников: ${cell.count}${'test' in cell && cell.test ? ' · тестовый трансфер' : ''}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
     />
   );
 
   const renderPageArrow = (direction: -1 | 1) => {
     const disabled = direction < 0 ? currentPage === 0 : currentPage >= pageCount - 1;
     const hidden = direction < 0 ? hiddenBefore : hiddenAfter;
-    const color = disabled ? '#C7D0D6' : hidden > 0 ? '#2DD4BF' : '#626C8B';
     return (
       <button
-        className="dock-hover-card dock-hover-card--compact"
+        type="button"
+        className={`ow-transfer-arrow${hidden > 0 && !disabled ? ' has-more' : ''}`}
         disabled={disabled}
         onClick={() => setPage(currentPage + direction)}
+        aria-label={direction < 0 ? 'Предыдущие трансферы' : 'Следующие трансферы'}
         title={disabled ? undefined : direction < 0
           ? `Трансферы ${firstNumber - TRANSFERS_PER_PAGE}–${firstNumber - 1}`
           : `Трансферы ${lastNumber + 1}–${lastNumber + TRANSFERS_PER_PAGE}${hidden > 0 ? ` · учеников дальше: ${hidden}` : ''}`}
-        style={{
-          flex: '0 0 26px',
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: 2,
-          padding: '8px 0',
-          borderRadius: 12,
-          background: '#fff',
-          border: `1px solid ${disabled ? '#E1E8EA' : color}`,
-          color,
-          cursor: disabled ? 'default' : 'pointer',
-        }}
       >
-        <span style={{ fontSize: 16, fontWeight: 800, lineHeight: 1 }}>{direction < 0 ? '‹' : '›'}</span>
-        {!disabled && hidden > 0 && <span style={{ fontSize: 10, fontWeight: 800 }}>{hidden}</span>}
+        {direction < 0 ? <ChevronLeft size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+        {!disabled && hidden > 0 && <span>{hidden}</span>}
       </button>
     );
   };
@@ -220,54 +213,50 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       {fixedCells.map(renderCell)}
       {vehicleMenu && (
         <div
-          className="notion-select-panel"
+          className="dt-ctx-menu ow-vehicle-menu"
+          role="menu"
+          aria-label={`Трансфер №${vehicleMenu.transferNumber}`}
           onClick={event => event.stopPropagation()}
-          style={{
-            position: 'fixed',
-            left: vehicleMenu.x,
-            top: vehicleMenu.y,
-            zIndex: 1600,
-            width: 176,
-            padding: 8,
-            border: '1px solid #D4E3E7',
-            borderRadius: 14,
-            background: '#fff',
-            boxShadow: '0 18px 44px rgba(20, 35, 48, 0.18)',
-          }}
+          style={{ left: vehicleMenu.x, top: vehicleMenu.y, zIndex: 1600, width: 220 }}
         >
-          <div style={{ padding: '2px 6px 8px', fontSize: 12, fontWeight: 900, color: '#17222F', borderBottom: '1px solid #EEF3F5', marginBottom: 6 }}>
-            Трансфер №{vehicleMenu.transferNumber} · тип транспорта
-          </div>
-          <button type="button" className="notion-select-option" onClick={()=>{openTaskComposer({type:'transfer',id:'',schoolKey,transferNumber:Number(vehicleMenu.transferNumber),label:`Трансфер № ${vehicleMenu.transferNumber}`});setVehicleMenu(null);}}>＋ Поставить задачу</button>
+          <div className="dt-ctx-section">Трансфер №{vehicleMenu.transferNumber}</div>
+          <button type="button" role="menuitem" className="dt-ctx-item" onClick={()=>{openTaskComposer({type:'transfer',id:'',schoolKey,transferNumber:Number(vehicleMenu.transferNumber),label:`Трансфер № ${vehicleMenu.transferNumber}`});setVehicleMenu(null);}}>
+            <ListTodo size={14} aria-hidden="true" /> Поставить задачу
+          </button>
+          <hr className="dt-ctx-divider" />
+          <div className="dt-ctx-section">Тип транспорта</div>
           {vehicleMenu.targets.length === 0 ? (
-            <div style={{ padding: '4px 6px', fontSize: 11, color: '#94A3B8' }}>Нет данных о филиале</div>
+            <div className="ow-vehicle-menu-empty">Нет данных о филиале</div>
           ) : (
-            <div style={{ display: 'grid', gap: 3 }}>
-              {VEHICLE_MENU_OPTIONS.map(option => (
-                <button
-                  key={option.value}
-                  className="notion-select-option"
-                  type="button"
-                  disabled={savingVehicleType}
-                  onClick={() => void applyVehicleType(option.value)}
-                  style={{
-                    textAlign: 'left',
-                    padding: '7px 9px',
-                    borderRadius: 9,
-                    border: '1px solid transparent',
-                    background: '#F5FAFB',
-                    color: option.value === 'unassigned' ? '#626C8B' : (VEHICLE_COLOR[option.value] ?? '#17222F'),
-                    fontSize: 12,
-                    fontWeight: 700,
-                    cursor: savingVehicleType ? 'default' : 'pointer',
-                    opacity: savingVehicleType ? 0.6 : 1,
-                  }}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
+            VEHICLE_MENU_OPTIONS.map(option => (
+              <button
+                key={option.value}
+                type="button"
+                role="menuitem"
+                className="dt-ctx-item"
+                disabled={savingVehicleType}
+                onClick={() => void applyVehicleType(option.value)}
+              >
+                <span className="ow-vehicle-dot" style={{ background: VEHICLE_COLOR[option.value] }} aria-hidden="true" />
+                {option.label}
+              </button>
+            ))
           )}
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={isTestTransfer(schoolKey, vehicleMenu.transferNumber)}
+            className="dt-ctx-item"
+            title="Черновик для прикидки: базу и цены не меняет, дети считаются как новые заявки"
+            onClick={() => {
+              setTestTransfer(schoolKey, vehicleMenu.transferNumber, !isTestTransfer(schoolKey, vehicleMenu.transferNumber));
+              setVehicleMenu(null);
+            }}
+          >
+            <span className="ow-vehicle-dot" style={{ background: TEST_TRANSFER_COLOR }} aria-hidden="true" />
+            Тестовый
+            {isTestTransfer(schoolKey, vehicleMenu.transferNumber) && <Check size={14} className="ow-vehicle-check" aria-hidden="true" />}
+          </button>
         </div>
       )}
     </div>

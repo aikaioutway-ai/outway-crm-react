@@ -52,7 +52,7 @@ export function SchoolAvatar({ logo, label, color, size = 26, radius = 7, fontSi
     return <img src={logo} alt={label} style={{ width: size, height: size, borderRadius: radius, objectFit: 'cover', flexShrink: 0 }} />;
   }
   return (
-    <span style={{ width: size, height: size, borderRadius: radius, background: color, color: '#fff', fontSize, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+    <span style={{ width: size, height: size, borderRadius: radius, background: color, color: '#fff', fontSize, fontWeight: 600, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
       {label.slice(0, 2).toUpperCase()}
     </span>
   );
@@ -63,7 +63,7 @@ export function SchoolApplicationCount({ count }: { count?: number }) {
   return (
     <span
       title={`${count.toLocaleString('ru-RU')} заявок без отказов`}
-      style={{ color: 'var(--text-2)', fontSize: 10, fontWeight: 550, opacity: 0.72, whiteSpace: 'nowrap', flexShrink: 0 }}
+      style={{ color: 'var(--text-2)', fontSize: 11, fontWeight: 550, opacity: 0.72, whiteSpace: 'nowrap', flexShrink: 0 }}
     >
       · {count.toLocaleString('ru-RU')} заявок
     </span>
@@ -78,11 +78,11 @@ export function KpiChip({ icon, label, value, color, iconBackground }: {
   iconBackground?: string;
 }) {
   return (
-    <div className="dashboard-kpi dock-hover-card">
+    <div className="dashboard-kpi" style={{ ['--kpi-color' as string]: color } as React.CSSProperties}>
       {icon && <div className="dashboard-kpi-icon" style={{ background: iconBackground ?? color }}>{icon}</div>}
       <div className="dashboard-kpi-copy">
-        <div className="dashboard-kpi-value" title={value} style={{ color: !icon ? color : undefined }}>{value}</div>
-        <div className="dashboard-kpi-label" title={label}>{label}</div>
+        <div className="dashboard-kpi-label" title={label}>{!icon && <span className="dashboard-kpi-dot" aria-hidden="true" />}{label}</div>
+        <div className="dashboard-kpi-value" title={value}>{value}</div>
       </div>
     </div>
   );

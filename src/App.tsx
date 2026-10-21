@@ -6,6 +6,7 @@ import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
@@ -309,68 +310,28 @@ export default function App() {
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
-    alignItems: 'flex-end',
+    alignItems: 'center',
     flex: 1,
     minWidth: 0,
-    background: '#FFFFFF',
-    borderRadius: '14px 14px 0 0',
-    padding: '8px 10px 0',
+    minHeight: 56,
+    padding: '10px 4px',
     gap: 8,
-    marginBottom: 0,
-    marginRight: 0,
     flexShrink: 0,
     position: 'relative',
     zIndex: 2,
   };
 
-  const managerModeTabStyle = (active: boolean): React.CSSProperties => ({
-    height: 34,
-    padding: '0 16px',
-    marginBottom: 8,
-    border: 'none',
-    borderRadius: 10,
-    background: active ? '#31A4A5' : '#fff',
-    color: active ? '#fff' : '#354052',
-    fontSize: 13,
-    fontWeight: active ? 800 : 650,
-    cursor: 'pointer',
-    whiteSpace: 'nowrap',
-    transition: 'background .15s, color .15s, border-color .15s',
-    boxShadow: active ? '0 5px 12px rgba(49, 164, 165, .2)' : '0 5px 16px rgba(43, 72, 89, .06)',
-  });
-
-  const sectionLabel = (label: string) => (
-    <span style={{
-      fontSize: 17,
-      fontWeight: 800,
-      color: '#17222F',
-      paddingLeft: 10,
-      paddingRight: 14,
-      paddingBottom: 10,
-      whiteSpace: 'nowrap' as const,
-      borderRight: 'none',
-      marginRight: 8,
-      letterSpacing: '-0.01em',
-    }}>{label}</span>
-  );
+  const sectionLabel = (label: string) => <h1 className="ow-page-title">{label}</h1>;
 
   const userInitials = (name?: string) => (name ?? '').trim().split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]).join('').toUpperCase();
 
   const extraTabs = (_hasFamiliesPage: boolean) => currentUser ? (
-    <div style={{ display: 'flex', alignItems: 'center', marginLeft: 'auto', paddingRight: 10, paddingBottom: 8, gap: 8 }}>
-      <div style={{ textAlign: 'right' }}>
-        {currentUser.position && (
-          <div style={{ fontSize: 11, fontWeight: 600, color: '#9AABB0', lineHeight: 1.3 }}>{currentUser.position}</div>
-        )}
-        {currentUser.name && (
-          <div style={{ fontSize: 13, fontWeight: 800, color: '#17222F', lineHeight: 1.3 }}>{currentUser.name}</div>
-        )}
+    <div className="ow-user">
+      <div className="ow-user-meta">
+        {currentUser.position && <div className="ow-user-role">{currentUser.position}</div>}
+        {currentUser.name && <div className="ow-user-name">{currentUser.name}</div>}
       </div>
-      {currentUser.name && (
-        <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-          {userInitials(currentUser.name)}
-        </div>
-      )}
+      {currentUser.name && <div className="ow-avatar" aria-hidden="true">{userInitials(currentUser.name)}</div>}
     </div>
   ) : null;
 
@@ -437,7 +398,7 @@ export default function App() {
   }
 
   return (
-    <div style={{ display: 'flex', height: '100%', background: 'var(--active-bg)' }}>
+    <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <Sidebar
         active={section === 'drivers' ? 'logistics' : section}
         onChange={setSection}
@@ -454,7 +415,7 @@ export default function App() {
 
       <main
         onClick={() => setSidebarCollapseSignal(value => value + 1)}
-        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: 10, background: 'var(--active-bg)' }}
+        style={{ flex: 1, display: 'flex', flexDirection: 'column', overflowY: 'auto', overflowX: 'hidden', padding: '0 16px 16px', background: 'var(--bg)' }}
       >
         <Suspense fallback={<SectionLoading />}>
         {section === 'b2b' ? (
@@ -466,8 +427,8 @@ export default function App() {
                 {sectionLabel('Кассир')}
                 {cashierSchoolKey && (
                   <>
-                    <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} style={managerModeTabStyle(false)}>
-                      ← Все школы
+                    <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
+                      <ChevronLeft size={16} aria-hidden="true" />Все школы
                     </button>
                     <CashierViewTabs compact value={cashierView} onChange={setCashierView} />
                   </>
@@ -560,10 +521,10 @@ export default function App() {
                 {sectionLabel('Логистика')}
                 {logisticsSchoolKey && (
                   <>
-                    <button onClick={() => { setLogisticsSchoolKey(null); setLogisticsSearch(''); }} style={managerModeTabStyle(false)}>
-                      ← Все школы
+                    <button onClick={() => { setLogisticsSchoolKey(null); setLogisticsSearch(''); }} className="ow-btn ow-btn--ghost">
+                      <ChevronLeft size={16} aria-hidden="true" />Все школы
                     </button>
-                    <div style={{ marginBottom: 8 }}>
+                    <div>
                       <LogisticsTabs school value={logisticsView} onChange={key => {
                         if (key === 'drivers') {
                           setDriversSchoolKey(logisticsSchoolKey);
@@ -645,8 +606,8 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel('Менеджер')}
                 {managerSchoolKey && (
-                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} style={managerModeTabStyle(false)}>
-                    ← Все школы
+                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
+                    <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
                 {managerSchoolKey && <ManagerModeTabs canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
@@ -716,11 +677,11 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel('Логистика')}
                 {driversSchoolKey && (
-                  <button onClick={() => { setDriversSchoolKey(null); setDriversSearch(''); }} style={managerModeTabStyle(false)}>
-                    ← Все школы
+                  <button onClick={() => { setDriversSchoolKey(null); setDriversSearch(''); }} className="ow-btn ow-btn--ghost">
+                    <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
-                {driversSchoolKey && <div style={{ marginBottom: 8 }}><LogisticsTabs school value="drivers" onChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }} /></div>}
+                {driversSchoolKey && <div><LogisticsTabs school value="drivers" onChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }} /></div>}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
@@ -773,7 +734,7 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: '#7A859D', fontSize: 16, fontWeight: 700 }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: 'var(--text-2)', fontSize: 16, fontWeight: 600 }}>
               {PLACEHOLDERS.dispatch}
             </div>
           </div>
@@ -782,8 +743,8 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={tabRowStyle}><div style={tabBarStyle}>
               {sectionLabel('Финансы')}
-              {financeView === 'salary' && <button type="button" onClick={() => setFinanceView('expenses')} style={managerModeTabStyle(false)}>← Расходы</button>}
-              {financeView === 'expenses' && expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} style={managerModeTabStyle(false)}>← Категории</button>}
+              {financeView === 'salary' && <button type="button" onClick={() => setFinanceView('expenses')} className="ow-btn ow-btn--ghost"><ChevronLeft size={16} aria-hidden="true" />Расходы</button>}
+              {financeView === 'expenses' && expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} className="ow-btn ow-btn--ghost"><ChevronLeft size={16} aria-hidden="true" />Категории</button>}
               {extraTabs(true)}
             </div></div>
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
@@ -827,7 +788,7 @@ export default function App() {
       <Suspense fallback={null}>
         <TaskContextMenu />
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
-        {taskFamily && <div style={{position:'fixed',inset:0,zIndex:2400,background:'#17374740',padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
+        {taskFamily && <div className="ow-overlay" style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
       </Suspense>
       {isMobileViewport && (
         <button
@@ -835,7 +796,7 @@ export default function App() {
           onClick={() => setForceDesktop(false)}
           // Страница здесь шириной 1280px и уменьшена под экран — кнопку увеличиваем,
           // чтобы на телефоне она оставалась обычного размера.
-          style={{ position: 'fixed', zIndex: 2000, left: '50%', bottom: 24, transform: `translateX(-50%) scale(${Math.max(1, 1280 / (window.screen?.width || 1280))})`, transformOrigin: 'bottom center', height: 44, padding: '0 18px', border: 0, borderRadius: 22, background: 'var(--accent-h)', color: '#fff', fontSize: 14, fontWeight: 800, boxShadow: '0 8px 24px rgba(23, 34, 47, .25)' }}
+          style={{ position: 'fixed', zIndex: 2000, left: '50%', bottom: 24, transform: `translateX(-50%) scale(${Math.max(1, 1280 / (window.screen?.width || 1280))})`, transformOrigin: 'bottom center', height: 44, padding: '0 18px', border: 0, borderRadius: 22, background: 'var(--accent-h)', color: '#fff', fontSize: 14, fontWeight: 600, boxShadow: '0 8px 24px rgba(23, 34, 47, .25)' }}
         >
           Мобильная версия
         </button>

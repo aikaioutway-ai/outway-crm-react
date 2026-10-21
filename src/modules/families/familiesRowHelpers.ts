@@ -153,3 +153,12 @@ export function matchesLogisticsMapFilter(row: Pick<ChildRow, 'status' | 'transf
   if (transferFilter === 'empty') return isNewLogisticsRow(row);
   return !transferFilter || row.transferNumber === transferFilter;
 }
+
+/** Только для показа: +996555616136 → +996 555 616 136. Значение в базе не меняется. */
+export function formatPhoneDisplay(value?: string | null): string {
+  const raw = String(value ?? '').trim();
+  const digits = raw.replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('996')) return `+996 ${digits.slice(3, 6)} ${digits.slice(6, 9)} ${digits.slice(9)}`;
+  if (digits.length === 10 && digits.startsWith('0')) return `0${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
+  return raw;
+}

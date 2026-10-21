@@ -35,7 +35,7 @@ export default function ParentMiniAppPreview({ state, transferName, childName, s
     >
       {/* верхняя панель мини-приложения Telegram */}
       <div style={{ flexShrink: 0, background: '#FFFFFF', padding: '10px 12px', display: 'flex', alignItems: 'center', gap: 8, borderBottom: '1px solid var(--border)', zIndex: 3 }}>
-        <button onClick={onClose} style={{ border: 'none', background: 'var(--surface-2)', width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text)' }}>
+        <button type="button" onClick={onClose} aria-label="Назад" style={{ border: 'none', background: 'var(--surface-2)', width: 30, height: 30, borderRadius: 9, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--text)' }}>
           <ChevronLeft size={18} />
         </button>
         <div style={{ minWidth: 0, flex: 1 }}>

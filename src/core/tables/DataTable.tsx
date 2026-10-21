@@ -3,9 +3,27 @@ import React, {
   useState, useRef, useEffect, useCallback, useMemo
 } from 'react';
 import ReactDOM from 'react-dom';
+import { ArrowDown, ArrowUp, Ban, ExternalLink, EyeOff, Plus, Trash2, X } from 'lucide-react';
 import NotionSelect from '../selects/NotionSelect';
 import { supabase } from '../../services/supabase';
 import './DataTable.css';
+
+// Пустые значения в ячейках («-», «–», «—», пустая строка) показываем одинаково:
+// один бледный прочерк, чтобы таблица не рябила разными символами.
+const EMPTY_MARKS = new Set(['', '-', '–', '—']);
+function isEmptyMark(value: unknown): boolean {
+  return (typeof value === 'string' && EMPTY_MARKS.has(value.trim())) || value === null || value === undefined;
+}
+export function normalizeEmptyCell(node: React.ReactNode): React.ReactNode {
+  if (node === null || node === undefined || node === false) return node;
+  const empty = <span className="dt-empty-value" aria-label="нет данных">—</span>;
+  if (typeof node === 'string') return isEmptyMark(node) ? empty : node;
+  if (React.isValidElement(node) && (node.type === 'span' || node.type === 'div')) {
+    const children = (node.props as { children?: React.ReactNode }).children;
+    if (typeof children === 'string' && EMPTY_MARKS.has(children.trim())) return empty;
+  }
+  return node;
+}
 
 // ─── TYPES ────────────────────────────────────────────────────────────────────
 
@@ -696,7 +714,7 @@ export function DataTable<T extends Record<string, any>>({
           title={isVisible ? 'Скрыть колонку' : 'Показать колонку'}
         >
           <span className="dt-props-item-drag">⠿</span>
-          <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 700, color: 'var(--dt-text-2)', width: 18 }}>
+          <span className="dt-props-item-icon" style={{ fontSize: 11, fontWeight: 600, color: 'var(--dt-text-2)', width: 18 }}>
             {TYPE_ICON[col.type] ?? '○'}
           </span>
           <span className="dt-props-item-name">{col.label}</span>
@@ -840,7 +858,7 @@ export function DataTable<T extends Record<string, any>>({
         <div className="dt-compact-panel" style={{ position: "relative", zIndex: 100 }} onClick={e => e.stopPropagation()}>
           <div className="dt-compact-panel-header">
             <span className="dt-compact-panel-title">Фильтры</span>
-            <button className="dt-compact-panel-close" onClick={() => setShowFilterPanel(false)}>✕</button>
+            <button className="dt-compact-panel-close" onClick={() => setShowFilterPanel(false)} aria-label="Закрыть фильтры" title="Закрыть"><X size={14} aria-hidden="true" /></button>
           </div>
           <div className="dt-compact-panel-body">
             {filters.length === 0 && (
@@ -876,7 +894,7 @@ export function DataTable<T extends Record<string, any>>({
                   <input className="dt-input dt-input--sm" placeholder="Значение" value={f.value}
                     onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
                 )}
-                <button className="dt-icon-btn" onClick={() => setFilters(prev => prev.filter(x => x.id !== f.id))}>✕</button>
+                <button className="dt-icon-btn" onClick={() => setFilters(prev => prev.filter(x => x.id !== f.id))} aria-label="Удалить фильтр" title="Удалить фильтр"><X size={13} aria-hidden="true" /></button>
               </div>
             ))}
           </div>
@@ -897,7 +915,7 @@ export function DataTable<T extends Record<string, any>>({
         <div className="dt-compact-panel" style={{ position: "relative", zIndex: 100 }} onClick={e => e.stopPropagation()}>
           <div className="dt-compact-panel-header">
             <span className="dt-compact-panel-title">Сортировка</span>
-            <button className="dt-compact-panel-close" onClick={() => setShowSortPanel(false)}>✕</button>
+            <button className="dt-compact-panel-close" onClick={() => setShowSortPanel(false)} aria-label="Закрыть сортировку" title="Закрыть"><X size={14} aria-hidden="true" /></button>
           </div>
           <div className="dt-compact-panel-body">
             {sorts.length === 0 && (
@@ -928,7 +946,7 @@ export function DataTable<T extends Record<string, any>>({
                     onClick={() => setSorts(prev => prev.map((x, j) => j === i ? { ...x, dir: 'desc' } : x))}
                   >Я→А</button>
                 </div>
-                <button className="dt-icon-btn" onClick={() => setSorts(prev => prev.filter((_, j) => j !== i))}>✕</button>
+                <button className="dt-icon-btn" onClick={() => setSorts(prev => prev.filter((_, j) => j !== i))} aria-label="Удалить сортировку" title="Удалить сортировку"><X size={13} aria-hidden="true" /></button>
               </div>
             ))}
           </div>
@@ -945,11 +963,11 @@ export function DataTable<T extends Record<string, any>>({
 
       {/* ── PROPERTIES PANEL PORTAL (external control) ── */}
       {showPropertiesExternal ? ReactDOM.createPortal(
-        <div
+        <div className="ow-overlay"
           onClick={() => setShowProps(false)}
           style={{ position: 'fixed', inset: 0, zIndex: 1700, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(23,34,47,0.18)', backdropFilter: 'blur(2px)' }}
         >
-          <div onClick={e => e.stopPropagation()} style={{ position: 'relative', borderRadius: 18, overflow: 'hidden', boxShadow: '0 16px 48px rgba(30,56,75,0.18)' }}>
+          <div className="ow-modal" role="dialog" aria-modal="true" aria-label="Колонки" onClick={e => e.stopPropagation()} style={{ position: 'relative', overflow: 'hidden' }}>
             <PropsPanel />
           </div>
         </div>,
@@ -1016,7 +1034,7 @@ export function DataTable<T extends Record<string, any>>({
                         {sortEntry && <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>}
                         {calcResults[col.key] !== undefined && (
                           <span style={{
-                            marginLeft: 5, fontSize: 10, fontWeight: 700,
+                            marginLeft: 5, fontSize: 11, fontWeight: 600,
                             color: 'var(--dt-accent)', background: 'var(--dt-accent-l)',
                             borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap',
                           }}>
@@ -1140,9 +1158,9 @@ export function DataTable<T extends Record<string, any>>({
                               }}
                             />
                           )
-                        ) : col.render ? col.render(getCellValue(row, col), row) : (
+                        ) : normalizeEmptyCell(col.render ? col.render(getCellValue(row, col), row) : (
                           <span className="dt-cell-text">{getCellValue(row, col) ?? '—'}</span>
-                        )}
+                        ))}
                       </td>
                     ))}
                   </tr>
@@ -1169,14 +1187,14 @@ export function DataTable<T extends Record<string, any>>({
           <div className="dt-ctx-section">{cols.find(c => c.key === colMenu.key)?.label ?? 'Колонка'}</div>
           <>
             <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'asc')}>
-              <span>↑</span> Сортировать по возрастанию
+              <ArrowUp size={14} aria-hidden="true" /> Сортировать по возрастанию
             </button>
             <button className="dt-ctx-item" onClick={() => setColumnSort(colMenu.key, 'desc')}>
-              <span>↓</span> Сортировать по убыванию
+              <ArrowDown size={14} aria-hidden="true" /> Сортировать по убыванию
             </button>
             {sorts.some(sort => sort.key === colMenu.key) && (
               <button className="dt-ctx-item" onClick={() => clearColumnSort(colMenu.key)}>
-                <span>×</span> Убрать сортировку
+                <X size={14} aria-hidden="true" /> Убрать сортировку
               </button>
             )}
             <hr className="dt-ctx-divider" />
@@ -1185,7 +1203,7 @@ export function DataTable<T extends Record<string, any>>({
             saveCols(cols.map(c => c.key === colMenu.key ? { ...c, visible: false } : c));
             setColMenu(null);
           }}>
-            <span>○</span> Скрыть колонку
+            <EyeOff size={14} aria-hidden="true" /> Скрыть колонку
           </button>
         </div>
       )}
@@ -1201,18 +1219,18 @@ export function DataTable<T extends Record<string, any>>({
               onExpandedRowKeyChange(isExp ? null : expandKey, isExp ? undefined : row);
               setRowMenu(null);
             }}>
-              <span>↗</span> Открыть карточку
+              <ExternalLink size={14} aria-hidden="true" /> Открыть карточку
             </button>
           )}
-          <button className="dt-ctx-item" onClick={()=>{openTaskComposer(getTaskTarget?.(rowMenu.row) ?? {type:'general',id:'',label:'Общая задача'});setRowMenu(null);}}><span>＋</span> Поставить задачу</button>
+          <button className="dt-ctx-item" onClick={()=>{openTaskComposer(getTaskTarget?.(rowMenu.row) ?? {type:'general',id:'',label:'Общая задача'});setRowMenu(null);}}><Plus size={14} aria-hidden="true" /> Поставить задачу</button>
           {onRowReject && (canRowReject?.(rowMenu.row) ?? true) && (
             <button className="dt-ctx-item dt-ctx-item--reject" onClick={() => { onRowReject(rowMenu.row); setRowMenu(null); }}>
-              <span>×</span> Отказ
+              <Ban size={14} aria-hidden="true" /> Отказ
             </button>
           )}
           {onRowDelete && (canRowDelete?.(rowMenu.row) ?? true) && (
             <button className="dt-ctx-item dt-ctx-item--danger" onClick={() => { onRowDelete(rowMenu.row); setRowMenu(null); }}>
-              <span>🗑</span> Удалить
+              <Trash2 size={14} aria-hidden="true" /> Удалить
             </button>
           )}
         </div>

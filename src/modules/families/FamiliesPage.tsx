@@ -31,7 +31,7 @@ import { ALL_PERIODS, CASHIER_PERIODS, currentPayrollPeriodKey, currentCashierPe
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
 import {
   childDebtAmount, compactMoney,
-  downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort,
+  downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort, formatPhoneDisplay,
   isNewUnassignedRow, logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod,
   uniqueFamilyRows, vehicleTypeShortLabel, XLSX_BRAND,
 } from './familiesRowHelpers';
@@ -198,7 +198,7 @@ const CHILD_STATUS_TONE: Record<string, { bg: string; color: string }> = {
   waiting: { bg: '#FEF3C7', color: '#92400E' },
   boarded: { bg: '#DCFCE7', color: '#166534' },
   paused: { bg: '#EDE9FE', color: '#5B21B6' },
-  rejected: { bg: '#ECEFF3', color: '#52606F' },
+  rejected: { bg: '#ECEFF3', color: 'var(--text)' },
 };
 const PAYMENT_METHOD_OPTIONS: { value: PaymentType; label: string }[] = [
   { value: 'cash', label: 'Наличные' },
@@ -209,14 +209,14 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'parentName', label: 'Родитель', type: 'text', category: 'Клиент', width: 160, editable: true,
     render: (val, row) => row.isFirstChild
-      ? <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{val}</span>
+      ? <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{val}</span>
       : <span style={{ fontSize: 11, color: 'var(--text-2)', paddingLeft: 8 }}>└ #{row.familyId.slice(-4)}</span>,
     getValue: (row) => row.parentName,
   },
   {
-    key: 'phone', label: 'Телефон', type: 'text', category: 'Клиент', width: 125, editable: true,
+    key: 'phone', label: 'Телефон', type: 'text', category: 'Клиент', width: 145, editable: true,
     render: (val, row) => row.isFirstChild
-      ? <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{val}</span>
+      ? <span className="dt-phone">{formatPhoneDisplay(val as string)}</span>
       : null,
   },
   {
@@ -233,7 +233,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
     render: (val) => {
       const tone = CHILD_STATUS_TONE[String(val)] ?? CHILD_STATUS_TONE.new;
       return (
-        <span style={{ display: 'inline-flex', padding: '3px 8px', borderRadius: 7, background: tone.bg, color: tone.color, fontSize: 11, fontWeight: 800, whiteSpace: 'nowrap' }}>
+        <span style={{ display: 'inline-flex', padding: '3px 8px', borderRadius: 7, background: tone.bg, color: tone.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
           {CHILD_STATUS_OPTIONS.find(option => option.value === val)?.label ?? '—'}
         </span>
       );
@@ -254,10 +254,10 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'branchShort', label: 'Школа', type: 'select', category: 'Клиент', width: 80, filterable: false, sortable: false,
     render: (val, row) => (
-      <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>
+      <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>
         {val}
         {['Asylkech Girls School', 'AsylKech Girls School'].includes(row.branchName) && (
-          <span style={{ fontSize: 10, color: 'var(--text-2)', marginLeft: 3 }}>_A</span>
+          <span style={{ fontSize: 11, color: 'var(--text-2)', marginLeft: 3 }}>_A</span>
         )}
       </span>
     ),
@@ -284,7 +284,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
       { value: 'C', label: 'C' },
     ],
     render: (val) => val ? (
-      <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: 6, fontSize: 12, fontWeight: 700, background: ZONE_COLOR[val]?.bg, color: ZONE_COLOR[val]?.color }}>
+      <span style={{ display: 'inline-block', padding: '2px 7px', borderRadius: 6, fontSize: 12, fontWeight: 600, background: ZONE_COLOR[val]?.bg, color: ZONE_COLOR[val]?.color }}>
         {val}
       </span>
     ) : null,
@@ -311,7 +311,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'stopNumber', label: 'Остановка', type: 'select', category: 'Маршрут', width: 95, editable: true,
     editOptions: [{ value: '', label: '—' }, ...STOP_OPTIONS],
-    render: (val) => <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--text)' }}>{val || '—'}</span>,
+    render: (val) => <span style={{ fontVariantNumeric: 'tabular-nums' }}>{val || '—'}</span>,
   },
   {
     key: 'timeMorning', label: 'Время утро', type: 'text', category: 'Маршрут', width: 95, editable: true,
@@ -319,7 +319,7 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   },
   {
     key: 'monthlyPrice', label: 'Сумма/мес', type: 'currency', category: 'Финансы', width: 110,
-    render: (val) => <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{money(val)}</span>,
+    render: (val) => <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{money(val)}</span>,
   },
   { key: 'discountAmount', label: 'Скидка', type: 'currency', category: 'Финансы', width: 95, render: (val) => <span>{money(Number(val ?? 0))}</span> },
   { key: 'debtAmount', label: 'Долг', type: 'currency', category: 'Финансы', width: 95, aggregateByKey: 'familyId', render: (val, row) => <span>{row.isFirstChild ? money(Number(val ?? 0)) : '—'}</span> },
@@ -340,10 +340,10 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
     type: 'text',
     category: 'Водитель',
     width: 190,
-    render: value => <span style={{ fontWeight: 850, color: '#17222F' }}>{value || '—'}</span>,
+    render: value => <span style={{ fontWeight: 600, color: 'var(--text)' }}>{value || '—'}</span>,
   },
-  { key: 'phone', label: 'Телефон', type: 'text', category: 'Водитель', width: 125 },
-  { key: 'secondPhone', label: 'Доп. телефон', type: 'text', category: 'Водитель', width: 125, visible: false },
+  { key: 'phone', label: 'Телефон', type: 'text', category: 'Водитель', width: 145, render: value => <span className="dt-phone">{formatPhoneDisplay(value as string) || '—'}</span> },
+  { key: 'secondPhone', label: 'Доп. телефон', type: 'text', category: 'Водитель', width: 145, visible: false, render: value => <span className="dt-phone">{formatPhoneDisplay(value as string) || '—'}</span> },
   {
     key: 'status',
     label: 'Статус',
@@ -356,9 +356,9 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
         padding: '3px 8px',
         borderRadius: 7,
         background: value === 'active' ? '#E8F5E9' : '#ECEFF3',
-        color: value === 'active' ? '#1B5E20' : '#52606F',
+        color: value === 'active' ? '#1B5E20' : 'var(--text)',
         fontSize: 11,
-        fontWeight: 850,
+        fontWeight: 600,
       }}>
         {value === 'active' ? 'Активен' : value || '—'}
       </span>
@@ -372,7 +372,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
     type: 'select',
     category: 'Авто',
     width: 125,
-    render: value => <span style={{ fontWeight: 800, color: '#17222F' }}>{value || '—'}</span>,
+    render: value => <span style={{ fontWeight: 600, color: 'var(--text)' }}>{value || '—'}</span>,
   },
   { key: 'plateNumber', label: 'Гос. номер', type: 'text', category: 'Авто', width: 105 },
   { key: 'brand', label: 'Марка', type: 'text', category: 'Авто', width: 105, visible: false },
@@ -455,10 +455,10 @@ const LOGISTICS_VEHICLE_FILTERS: { key: LogisticsVehicleFilter; label: string }[
 
 
 const TRANSFER_TONE: Record<string, { bg: string; border: string; text: string; dot: string }> = {
-  microbus: { bg: '#D7EEEE', border: '#AAD4D4', text: '#237F81', dot: '#31A4A5' },
+  microbus: { bg: '#D7EEEE', border: '#AAD4D4', text: '#146566', dot: '#1A7F80' },
   minivan: { bg: '#F3EEFF', border: '#D9C9FE', text: '#6D28D9', dot: '#8B5CF6' },
   sedan: { bg: '#FFF4EB', border: '#FED7AA', text: '#C2410C', dot: '#F97316' },
-  empty: { bg: '#F5FAFB', border: '#D4E3E7', text: '#626C8B', dot: '#AAB5AE' },
+  empty: { bg: '#F5FAFB', border: 'var(--border)', text: 'var(--text-2)', dot: '#AAB5AE' },
 };
 
 const TRANSFER_TABS = [
@@ -523,9 +523,9 @@ const PAYMENT_STATUS_COL: ColumnDef<ChildRow> = {
   sortable: false,
   filterable: false,
   render: (_val: any, row: ChildRow) => {
-    if (row.pendingPaymentCount > 0) return <span style={{ color: '#B45309', fontWeight: 700, fontSize: 11 }}>На проверке</span>;
-    if (row.rejectedPaymentCount > 0) return <span style={{ color: '#C62828', fontWeight: 700, fontSize: 11 }}>Отклонён</span>;
-    if (row.paidPaymentCount > 0) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Подтверждён</span>;
+    if (row.pendingPaymentCount > 0) return <span style={{ color: '#B45309', fontWeight: 600, fontSize: 11 }}>На проверке</span>;
+    if (row.rejectedPaymentCount > 0) return <span style={{ color: '#C62828', fontWeight: 600, fontSize: 11 }}>Отклонён</span>;
+    if (row.paidPaymentCount > 0) return <span style={{ color: '#15803D', fontWeight: 600, fontSize: 11 }}>Подтверждён</span>;
     return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
   },
 };
@@ -542,9 +542,9 @@ const PAYMENT_TYPE_COL: ColumnDef<ChildRow> = {
     const type = row.pendingPaymentType;
     if (!type) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
     const lower = type.toLowerCase();
-    if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
-    if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
-    return <span style={{ fontSize: 11, color: '#52606F', fontWeight: 600 }}>{type}</span>;
+    if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 600, fontSize: 11 }}>АйКай Мбанк</span>;
+    if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 600, fontSize: 11 }}>Наличный</span>;
+    return <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }}>{type}</span>;
   },
 };
 function ReceiptThumb({ url }: { url: string }) {
@@ -555,7 +555,7 @@ function ReceiptThumb({ url }: { url: string }) {
       rel="noreferrer"
       onClick={e => e.stopPropagation()}
       title="Открыть чек"
-      style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: '#237F81' }}
+      style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: '#146566' }}
     >
       <Paperclip size={16} strokeWidth={2.5} />
     </a>
@@ -628,15 +628,15 @@ const PAYMENT_STATUS_COLOR: Record<string, { color: string }> = {
 const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
   {
     key: 'paymentNumber', label: '№', type: 'number', category: 'Платёж', width: 52,
-    render: (val) => <span style={{ fontSize: 12, fontWeight: 800, color: 'var(--text-2)' }}>{val ?? '—'}</span>,
+    render: (val) => <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{val ?? '—'}</span>,
   },
   {
     key: 'parentName', label: 'Родитель', type: 'text', category: 'Клиент', width: 170,
-    render: (val) => <span style={{ fontWeight: 700, fontSize: 13, color: 'var(--text)' }}>{val || '—'}</span>,
+    render: (val) => <span style={{ fontWeight: 600, fontSize: 13, color: 'var(--text)' }}>{val || '—'}</span>,
   },
   {
-    key: 'phone', label: 'Телефон', type: 'text', category: 'Клиент', width: 130,
-    render: (val) => <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{val || '—'}</span>,
+    key: 'phone', label: 'Телефон', type: 'text', category: 'Клиент', width: 145,
+    render: (val) => <span className="dt-phone">{formatPhoneDisplay(val as string) || '—'}</span>,
   },
   {
     key: 'childrenNames', label: 'Дети', type: 'text', category: 'Клиент', width: 200,
@@ -644,13 +644,13 @@ const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
   },
   {
     key: 'amount', label: 'Сумма', type: 'currency', category: 'Платёж', width: 110,
-    render: (val) => <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent)' }}>{money(Number(val ?? 0))}</span>,
+    render: (val) => <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--accent)' }}>{money(Number(val ?? 0))}</span>,
   },
   {
     key: 'status', label: 'Статус', type: 'text', category: 'Платёж', width: 115, sortable: false, filterable: false,
     render: (val) => {
       const s = PAYMENT_STATUS_COLOR[String(val)] ?? { color: '#9AA7AE' };
-      return <span style={{ fontSize: 11, fontWeight: 700, color: s.color }}>{PAYMENT_STATUS_LABEL[String(val)] ?? val}</span>;
+      return <span style={{ fontSize: 11, fontWeight: 600, color: s.color }}>{PAYMENT_STATUS_LABEL[String(val)] ?? val}</span>;
     },
   },
   {
@@ -659,9 +659,9 @@ const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
     render: (val) => {
       if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
       const lower = String(val).toLowerCase();
-      if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
-      if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
-      return <span style={{ fontSize: 11, color: '#52606F' }}>{val}</span>;
+      if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 600, fontSize: 11 }}>АйКай Мбанк</span>;
+      if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 600, fontSize: 11 }}>Наличный</span>;
+      return <span style={{ fontSize: 11, color: 'var(--text)' }}>{val}</span>;
     },
   },
   {
@@ -782,13 +782,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
   const cashierColumns = useMemo((): ColumnDef<CashierPaymentRow>[] => [
     { key: 'id', label: 'ID платежа', type: 'text', category: 'Платёж', width: 140, sortable: false, filterable: false, render: (val) => <span style={{ fontSize: 11, color: 'var(--text-2)', fontFamily: 'monospace', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.4 }}>{String(val)}</span> },
-    { key: 'parentName', label: 'Родитель', type: 'text', category: 'Клиент', width: 160, render: (val) => <span style={{ fontWeight: 700, fontSize: 13 }}>{val || '—'}</span> },
+    { key: 'parentName', label: 'Родитель', type: 'text', category: 'Клиент', width: 160, render: (val) => <span style={{ fontWeight: 600, fontSize: 13 }}>{val || '—'}</span> },
     { key: 'childrenNames', label: 'Дети', type: 'text', category: 'Клиент', width: 160, render: (val) => {
       const names = String(val || '').split(',').map(n => n.trim()).filter(Boolean);
       if (!names.length) return <span style={{ fontSize: 12, color: '#9AA7AE' }}>—</span>;
       return <span style={{ fontSize: 12, lineHeight: 1.5 }}>{names.map((n, i) => <React.Fragment key={i}>{n}{i < names.length - 1 && <br />}</React.Fragment>)}</span>;
     }},
-    { key: 'amount', label: 'Сумма', type: 'currency', category: 'Платёж', width: 110, render: (val) => <span style={{ fontWeight: 700, color: 'var(--accent)' }}>{money(Number(val ?? 0))}</span> },
+    { key: 'amount', label: 'Сумма', type: 'currency', category: 'Платёж', width: 110, render: (val) => <span style={{ fontWeight: 600, color: 'var(--accent)' }}>{money(Number(val ?? 0))}</span> },
     {
       key: 'createdAt', label: 'Дата поступления', type: 'text', category: 'Платёж', width: 130, sortable: false, filterable: false,
       render: (_val, row) => {
@@ -801,7 +801,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       render: (_val, row) => {
         if (cashierView === 'confirmed') {
           return (
-            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 700, color: 'var(--success)', background: 'rgba(16,185,129,.1)' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '5px 10px', borderRadius: 7, fontSize: 12, fontWeight: 600, color: 'var(--success)', background: 'rgba(16,185,129,.1)' }}>
               ✓ Подтверждено
             </span>
           );
@@ -835,19 +835,19 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               title="Подтвердить"
               disabled={busy || !cashierDates[row.id]}
               onClick={() => cashierConfirm(row, cashierDates[row.id] ?? '')}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 800, color: '#fff', background: busy || !cashierDates[row.id] ? '#A7E4D3' : 'var(--success)', cursor: busy || !cashierDates[row.id] ? 'not-allowed' : 'pointer' }}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 600, color: '#fff', background: busy || !cashierDates[row.id] ? '#A7E4D3' : 'var(--success)', cursor: busy || !cashierDates[row.id] ? 'not-allowed' : 'pointer' }}
             >✓</button>
             <button
               title="Отклонить"
               disabled={busy}
               onClick={() => cashierReject(row)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 800, color: '#991B1B', background: '#FEE2E2', cursor: busy ? 'not-allowed' : 'pointer' }}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 600, color: '#991B1B', background: '#FEE2E2', cursor: busy ? 'not-allowed' : 'pointer' }}
             >✕</button>
             <button
               title="Отмена"
               disabled={busy}
               onClick={() => setCashierEditingId(null)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 12, fontWeight: 700, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: busy ? 'not-allowed' : 'pointer' }}
+              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: busy ? 'not-allowed' : 'pointer' }}
             >×</button>
           </div>
         );
@@ -860,8 +860,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       render: (val) => {
         if (!val) return <span style={{ color: '#9AA7AE', fontSize: 11 }}>—</span>;
         const lower = String(val).toLowerCase();
-        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
-        return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
+        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 600, fontSize: 11 }}>АйКай Мбанк</span>;
+        return <span style={{ color: '#15803D', fontWeight: 600, fontSize: 11 }}>Наличный</span>;
       },
     },
     {
@@ -1991,7 +1991,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         label: '?',
         title: 'Новые',
         count: rows.filter(row => isNewUnassignedRow(row) && matchesSchool(row) && matchesSearch(row)).length,
-        tone: '#31A4A5',
+        tone: '#1A7F80',
       },
     ];
     if (!isDirectoryMode) {
@@ -2410,9 +2410,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               border: '1px solid #D4E3E7',
               borderRadius: 6,
               background: '#fff',
-              color: '#237F81',
-              fontSize: 10,
-              fontWeight: 800,
+              color: '#146566',
+              fontSize: 11,
+              fontWeight: 600,
               cursor: 'pointer',
               whiteSpace: 'nowrap',
             }}
@@ -2436,9 +2436,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         const type = row.pendingPaymentType;
         if (!row.isFirstChild || !type) return <span style={{ color: 'var(--text-2)' }}>—</span>;
         const lower = type.toLowerCase();
-        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 700, fontSize: 11 }}>АйКай Мбанк</span>;
-        if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 700, fontSize: 11 }}>Наличный</span>;
-        return <span style={{ fontSize: 11, color: '#52606F', fontWeight: 600 }}>{type}</span>;
+        if (lower === 'transfer' || lower.includes('qr')) return <span style={{ color: '#1D6FA4', fontWeight: 600, fontSize: 11 }}>АйКай Мбанк</span>;
+        if (lower === 'cash' || lower.includes('нал')) return <span style={{ color: '#15803D', fontWeight: 600, fontSize: 11 }}>Наличный</span>;
+        return <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }}>{type}</span>;
       },
       getValue: (row) => row.pendingPaymentType ?? '',
     }, {
@@ -2465,7 +2465,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       width: 125,
       visible: mode === 'cashier',
       render: (_value, row) => row.isFirstChild && row.pendingPaymentId ? (
-        <span style={{ fontSize: 13, fontWeight: 800, color: '#065F46' }}>
+        <span style={{ fontSize: 13, fontWeight: 600, color: '#065F46' }}>
           {money(row.pendingPaymentAmount || row.pendingPayment)}
         </span>
       ) : <span style={{ color: 'var(--text-2)' }}>—</span>,
@@ -2525,7 +2525,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 background: disabled ? '#CBD5E1' : '#10B981',
                 color: '#fff',
                 fontSize: 11,
-                fontWeight: 800,
+                fontWeight: 600,
                 cursor: disabled ? 'default' : 'pointer',
                 whiteSpace: 'nowrap',
               }}
@@ -2546,7 +2546,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 background: disabled ? '#CBD5E1' : '#FEE2E2',
                 color: disabled ? '#fff' : '#991B1B',
                 fontSize: 11,
-                fontWeight: 800,
+                fontWeight: 600,
                 cursor: disabled ? 'default' : 'pointer',
                 whiteSpace: 'nowrap',
               }}
@@ -2976,13 +2976,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               padding: '0 10px',
               borderRadius: '8px 8px 0 0',
               background: '#fff',
-              color: '#17222F',
+              color: 'var(--text)',
               fontSize: 13,
-              fontWeight: 850,
+              fontWeight: 600,
               whiteSpace: 'nowrap',
               flexShrink: 0,
             }}>
-              <span style={{ color: '#31A4A5', fontWeight: 900 }}>{moduleLabel}</span>
+              <span style={{ color: '#1A7F80', fontWeight: 600 }}>{moduleLabel}</span>
               <span style={{ color: '#C8D8DC' }}>·</span>
               {selectedSchoolLabel}
               <span style={{ color: '#C8D8DC' }}>·</span>
@@ -3013,7 +3013,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                       : isActual
                         ? '#F5FAFB'
                         : 'repeating-linear-gradient(-45deg, #F5FAFB 0, #F5FAFB 6px, #E7EFF2 6px, #E7EFF2 8px)',
-                    color: isActive ? '#17222F' : isActual ? '#626C8B' : '#9AA7AE',
+                    color: isActive ? 'var(--text)' : isActual ? 'var(--text-2)' : '#9AA7AE',
                     fontSize: 12,
                     fontWeight: isActive ? 800 : isActual ? 650 : 600,
                     cursor: 'pointer',
@@ -3028,12 +3028,12 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     flexShrink: 0,
                   }}
                 >
-                  <span style={{ lineHeight: 1, fontWeight: 850 }}>#{tabItem.label}</span>
+                  <span style={{ lineHeight: 1, fontWeight: 600 }}>#{tabItem.label}</span>
                   <span style={{
                     minHeight: 8,
                     color: isActual ? tone.dot : '#AEBAB7',
-                    fontSize: 7,
-                    fontWeight: 900,
+                    fontSize: 11,
+                    fontWeight: 600,
                     lineHeight: 1,
                   }}>
                     {vehicleLabel || ' '}
@@ -3069,9 +3069,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                       borderBottomColor: 'transparent',
                       borderRadius: '8px 8px 0 0',
                       background: isActive ? '#fff' : '#F5FAFB',
-                      color: isActive ? item.tone : '#626C8B',
+                      color: isActive ? item.tone : 'var(--text-2)',
                       fontSize: item.key === 'rejected' ? 17 : 13,
-                      fontWeight: 900,
+                      fontWeight: 600,
                       cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
@@ -3101,9 +3101,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   borderBottomColor: 'transparent',
                   borderRadius: '8px 8px 0 0',
                   background: quickTransfer === '' && quickChildStatus === '' ? '#fff' : '#F5FAFB',
-                  color: quickTransfer === '' && quickChildStatus === '' ? '#17222F' : '#626C8B',
+                  color: quickTransfer === '' && quickChildStatus === '' ? 'var(--text)' : 'var(--text-2)',
                   fontSize: 15,
-                  fontWeight: 750,
+                  fontWeight: 600,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
                   flexShrink: 0,
@@ -3120,7 +3120,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   border: '1px solid transparent',
                   borderRadius: '8px 8px 0 0',
                   background: '#F5FAFB',
-                  color: '#626C8B',
+                  color: 'var(--text-2)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -3154,15 +3154,15 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 padding: '0 8px',
                 borderRadius: 8,
                 background: '#fff',
-                color: '#17222F',
+                color: 'var(--text)',
                 fontSize: 12,
-                fontWeight: 850,
+                fontWeight: 600,
                 whiteSpace: 'nowrap',
               }}>
-                <span style={{ color: '#31A4A5' }}>{moduleLabel}</span>
-                <span style={{ color: '#D4E3E7' }}>·</span>
+                <span style={{ color: '#1A7F80' }}>{moduleLabel}</span>
+                <span style={{ color: 'var(--border)' }}>·</span>
                 {selectedSchoolLabel}
-                <span style={{ color: '#D4E3E7' }}>·</span>
+                <span style={{ color: 'var(--border)' }}>·</span>
                 {selectedTransferLabel}
               </span>
               <button
@@ -3174,7 +3174,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   border: 'none',
                   borderRadius: 8,
                   background: 'transparent',
-                  color: '#626C8B',
+                  color: 'var(--text-2)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -3214,7 +3214,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     height: 30,
                     border: 'none',
                     borderRadius: 10,
-                    background: '#31A4A5',
+                    background: '#1A7F80',
                     color: '#fff',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -3344,7 +3344,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                       onClick={() => copyAccrualsFromPreviousMonth(filteredSorted)}
                       disabled={copyingAccruals}
                       title="Детям без начисления в этом месяце поставить сумму прошлого месяца"
-                      style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: copyingAccruals ? '#A7C9CA' : '#31A4A5', color: '#fff', fontSize: 10.5, fontWeight: 800, cursor: copyingAccruals ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: copyingAccruals ? '#A7C9CA' : '#1A7F80', color: '#fff', fontSize: 11, fontWeight: 600, cursor: copyingAccruals ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
                     >
                       {copyingAccruals ? 'Переносим...' : 'Перенести с прошлого месяца'}
                     </button>
@@ -3355,7 +3355,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                       onClick={undoLastAccrualCopy}
                       disabled={copyingAccruals}
                       title="Убрать начисления, созданные последним переносом, и вернуть деньги на баланс"
-                      style={{ height: 26, padding: '0 4px', border: 'none', background: 'none', color: '#9AA5AE', fontSize: 10, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ height: 26, padding: '0 4px', border: 'none', background: 'none', color: '#9AA5AE', fontSize: 11, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
                       отменить перенос
                     </button>
@@ -3372,7 +3372,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         onClick={openDirectoryDriver}
                         disabled={!activeDirectoryDriver}
                         title={activeDirectoryDriver ? `Открыть водителя: ${activeDirectoryDriver.fullName}` : activeDirectoryTransfer ? 'Водитель не назначен' : 'Выберите конкретный трансфер'}
-                        style={{ height: 30, padding: '0 10px', border: `1px solid ${activeDirectoryDriver ? '#31A4A5' : '#D4E3E7'}`, borderRadius: 10, background: activeDirectoryDriver ? '#31A4A5' : '#F5FAFB', color: activeDirectoryDriver ? '#fff' : '#A4B0B7', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, fontWeight: 850, cursor: activeDirectoryDriver ? 'pointer' : 'default', flexShrink: 0 }}
+                        style={{ height: 30, padding: '0 10px', border: `1px solid ${activeDirectoryDriver ? '#1A7F80' : 'var(--border)'}`, borderRadius: 10, background: activeDirectoryDriver ? '#1A7F80' : '#F5FAFB', color: activeDirectoryDriver ? '#fff' : '#A4B0B7', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, fontSize: 11, fontWeight: 600, cursor: activeDirectoryDriver ? 'pointer' : 'default', flexShrink: 0 }}
                       >
                         <UserRound size={14} />
                         Водитель
@@ -3383,7 +3383,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     <button
                       onClick={() => setShowNewFamily(true)}
                       title="Новая заявка"
-                      style={{ width: 30, height: 30, border: 'none', borderRadius: 10, background: '#31A4A5', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
+                      style={{ width: 30, height: 30, border: 'none', borderRadius: 10, background: '#1A7F80', color: '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}
                     >
                       <Plus size={16} />
                     </button>
@@ -3427,7 +3427,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       />
 
       {selectedDriver && (
-        <div
+        <div className="ow-overlay"
           onClick={() => setSelectedDriverId(null)}
           style={{
             position: 'fixed',
@@ -3475,12 +3475,12 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     borderRadius: 10,
                     padding: '0 10px',
                     fontSize: 20,
-                    fontWeight: 900,
-                    color: '#17222F',
+                    fontWeight: 600,
+                    color: 'var(--text)',
                     outline: 'none',
                   }}
                 />
-                <div style={{ marginTop: 5, display: 'flex', gap: 12, flexWrap: 'wrap', color: '#626C8B', fontSize: 13, fontWeight: 750 }}>
+                <div style={{ marginTop: 5, display: 'flex', gap: 12, flexWrap: 'wrap', color: 'var(--text-2)', fontSize: 13, fontWeight: 600 }}>
                   <span>{driverDraft?.phone || 'номер не указан'}</span>
                   <span>ID: {selectedDriver.driverId.slice(0, 8)}</span>
                   <span>{DRIVER_STATUS_OPTIONS.find(option => option.value === driverDraft?.status)?.label ?? 'Статус не указан'}</span>
@@ -3508,7 +3508,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     cursor: savingDriver || deletingDriver ? 'default' : 'pointer',
                     opacity: savingDriver || deletingDriver ? 0.6 : 1,
                     fontSize: 12,
-                    fontWeight: 900,
+                    fontWeight: 600,
                   }}
                 >
                   <Trash2 size={15} />
@@ -3523,7 +3523,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     padding: '0 12px',
                     border: 'none',
                     borderRadius: 12,
-                    background: savingDriver ? '#A7CFCF' : '#31A4A5',
+                    background: savingDriver ? '#A7CFCF' : '#1A7F80',
                     color: '#fff',
                     display: 'inline-flex',
                     alignItems: 'center',
@@ -3531,7 +3531,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     gap: 7,
                     cursor: savingDriver ? 'default' : 'pointer',
                     fontSize: 12,
-                    fontWeight: 900,
+                    fontWeight: 600,
                   }}
                 >
                   <Save size={15} />
@@ -3546,7 +3546,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     border: '1px solid #D4E3E7',
                     borderRadius: 12,
                     background: '#fff',
-                    color: '#626C8B',
+                    color: 'var(--text-2)',
                     display: 'inline-flex',
                     alignItems: 'center',
                     justifyContent: 'center',
@@ -3579,15 +3579,18 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   <button
                     key={tabItem.key}
                     onClick={() => setSelectedDriverTab(tabItem.key)}
+                    className={`ow-card-tab${active ? ' is-active' : ''}`}
+                    role="tab"
+                    aria-selected={active}
                     style={{
                       height: 30,
                       padding: '0 12px',
-                      border: `1px solid ${active ? '#31A4A5' : '#DDE9EC'}`,
+                      border: `1px solid ${active ? '#1A7F80' : 'var(--border)'}`,
                       borderRadius: 10,
                       background: active ? '#DFF4F4' : '#fff',
-                      color: active ? '#237F81' : '#52606F',
+                      color: active ? '#146566' : 'var(--text)',
                       fontSize: 12,
-                      fontWeight: 900,
+                      fontWeight: 600,
                       cursor: 'pointer',
                     }}
                   >
@@ -3597,7 +3600,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               })}
             </div>
 
-            <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
+            <div className="ow-card-body" style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
               {selectedDriverTab === 'main' ? (
               <>
               <div style={{
@@ -3606,16 +3609,16 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 gap: 12,
                 marginBottom: 12,
               }}>
-                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Школа / авто</div>
+                <section className="ow-card-section" style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Школа / авто</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13, alignItems: 'center' }}>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Школа</span>
-                    <span style={{ color: '#17222F', fontWeight: 850 }}>{selectedDriver.branchShorts.join(', ') || '-'}</span>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Трансфер</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Школа</span>
+                    <span style={{ color: 'var(--text)', fontWeight: 600 }}>{selectedDriver.branchShorts.join(', ') || '-'}</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Трансфер</span>
                     <select
                       value={driverTransferDraftId}
                       onChange={event => setDriverTransferDraftId(event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', background: '#fff', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', outline: 'none' }}
                     >
                       <option value="">Без трансфера · Резерв</option>
                       {driverTransferOptions.map(transfer => {
@@ -3631,81 +3634,81 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         );
                       })}
                     </select>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Тип ТС</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Тип ТС</span>
                     <select
                       value={driverDraft?.vehicleType ?? ''}
                       onChange={event => setDriverDraftField('vehicleType', event.target.value as VehicleType | '')}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', background: '#fff', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', outline: 'none' }}
                     >
                       <option value="">Не указан</option>
                       {VEHICLE_TYPE_OPTIONS.map(option => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Марка</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Марка</span>
                     <input
                       value={driverDraft?.brand ?? ''}
                       onChange={event => setDriverDraftField('brand', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Модель</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Модель</span>
                     <input
                       value={driverDraft?.model ?? ''}
                       onChange={event => setDriverDraftField('model', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Гос. номер</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Гос. номер</span>
                     <input
                       value={driverDraft?.plateNumber ?? ''}
                       onChange={event => setDriverDraftField('plateNumber', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Мест</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Мест</span>
                     <input
                       value={driverDraft?.seats ?? ''}
                       onChange={event => setDriverDraftField('seats', event.target.value.replace(/\D/g, ''))}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
                   </div>
                 </section>
 
-                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
-                  <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F', marginBottom: 10 }}>Контакты / адрес</div>
+                <section className="ow-card-section" style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', padding: 14 }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Контакты / адрес</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13, alignItems: 'center' }}>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Телефон</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Телефон</span>
                     <input
                       value={driverDraft?.phone ?? ''}
                       onChange={event => setDriverDraftField('phone', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Доп. контакт</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Доп. контакт</span>
                     <input
                       value={driverDraft?.secondPhone ?? ''}
                       onChange={event => setDriverDraftField('secondPhone', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Статус</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Статус</span>
                     <select
                       value={driverDraft?.status ?? 'active'}
                       onChange={event => setDriverDraftField('status', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', background: '#fff', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', outline: 'none' }}
                     >
                       {DRIVER_STATUS_OPTIONS.map(option => (
                         <option key={option.value} value={option.value}>{option.label}</option>
                       ))}
                     </select>
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Адрес</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Адрес</span>
                     <input
                       value={driverDraft?.address ?? ''}
                       onChange={event => setDriverDraftField('address', event.target.value)}
-                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 750, color: '#17222F', outline: 'none' }}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
                     />
-                    <span style={{ color: '#7A859D', fontWeight: 800 }}>Комментарий</span>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Комментарий</span>
                     <textarea
                       value={driverDraft?.comment ?? ''}
                       onChange={event => setDriverDraftField('comment', event.target.value)}
                       rows={3}
-                      style={{ minHeight: 58, border: '1px solid #DDE9EC', borderRadius: 8, padding: '7px 8px', fontSize: 12, fontWeight: 700, color: '#17222F', outline: 'none', resize: 'vertical' }}
+                      style={{ minHeight: 58, border: '1px solid #DDE9EC', borderRadius: 8, padding: '7px 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none', resize: 'vertical' }}
                     />
                   </div>
                 </section>
@@ -3715,7 +3718,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
               </>
               ) : selectedDriverTab === 'children' ? (
-              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+              <section className="ow-card-section" style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                 <div style={{
                   height: 42,
                   display: 'flex',
@@ -3723,8 +3726,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   padding: '0 14px',
                   borderBottom: '1px solid #E5EEF1',
                   fontSize: 13,
-                  fontWeight: 900,
-                  color: '#17222F',
+                  fontWeight: 600,
+                  color: 'var(--text)',
                 }}>
                   Дети ({selectedDriverChildren.length})
                 </div>
@@ -3739,9 +3742,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                             borderBottom: '1px solid #E5EEF1',
                             textAlign: 'left',
                             fontSize: 11,
-                            fontWeight: 900,
-                            color: '#7A859D',
-                            textTransform: 'uppercase',
+                            fontWeight: 600,
+                            color: 'var(--text-2)',
+                            textTransform: 'none',
                             whiteSpace: 'nowrap',
                           }}>
                             {label}
@@ -3770,7 +3773,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                                 borderBottom: index === selectedDriverChildren.length - 1 ? 'none' : '1px solid #EEF4F6',
                                 fontSize: 13,
                                 fontWeight: cellIndex === 1 ? 850 : 650,
-                                color: '#17222F',
+                                color: 'var(--text)',
                                 whiteSpace: 'nowrap',
                                 maxWidth: cellIndex === 2 ? 260 : undefined,
                                 overflow: cellIndex === 2 ? 'hidden' : undefined,
@@ -3786,9 +3789,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                           <td colSpan={6} style={{
                             height: 58,
                             padding: '0 14px',
-                            color: '#7A859D',
+                            color: 'var(--text-2)',
                             fontSize: 13,
-                            fontWeight: 700,
+                            fontWeight: 600,
                           }}>
                             Детей по этому водителю нет
                           </td>
@@ -3802,31 +3805,31 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 <section style={{ maxWidth: 620, margin: '0 auto', borderRadius: 16, background: '#fff', border: '1px solid #CFE5E7', overflow: 'hidden' }}>
                   <div style={{ minHeight: 54, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
                     <div>
-                      <div style={{ fontSize: 14, fontWeight: 950, color: '#17222F' }}>Краткая карточка для родителей</div>
-                      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 700, color: '#7A859D' }}>Готовый текст для отправки в Telegram или WhatsApp</div>
+                      <div style={{ fontSize: 14, fontWeight: 950, color: 'var(--text)' }}>Краткая карточка для родителей</div>
+                      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Готовый текст для отправки в Telegram или WhatsApp</div>
                     </div>
                     <button
                       type="button"
                       onClick={() => void copyDriverParentCard()}
-                      style={{ height: 34, padding: '0 12px', border: 'none', borderRadius: 10, background: driverParentCardCopied ? '#EAF7EF' : '#31A4A5', color: driverParentCardCopied ? '#2B8952' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 11, fontWeight: 900, cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      style={{ height: 34, padding: '0 12px', border: 'none', borderRadius: 10, background: driverParentCardCopied ? '#EAF7EF' : '#1A7F80', color: driverParentCardCopied ? '#2B8952' : '#fff', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 7, fontSize: 11, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap' }}
                     >
                       {driverParentCardCopied ? <Check size={15} /> : <Copy size={15} />}
                       {driverParentCardCopied ? 'Скопировано' : 'Скопировать'}
                     </button>
                   </div>
                   <div style={{ padding: 18, background: '#F5FAFB' }}>
-                    <div style={{ padding: '16px 18px', borderRadius: 14, background: '#fff', border: '1px solid #DDE9EC', boxShadow: '0 6px 18px rgba(30, 56, 75, 0.06)', color: '#17222F', fontSize: 14, lineHeight: 1.7 }}>
+                    <div style={{ padding: '16px 18px', borderRadius: 14, background: '#fff', border: '1px solid #DDE9EC', boxShadow: '0 6px 18px rgba(30, 56, 75, 0.06)', color: 'var(--text)', fontSize: 14, lineHeight: 1.7 }}>
                       {driverParentCardLines.map((line, index) => (
                         <div key={line} style={{ fontWeight: index === 0 ? 950 : 750, marginBottom: index === 0 && driverParentCardLines.length > 1 ? 8 : 0 }}>{line}</div>
                       ))}
                     </div>
-                    <div style={{ marginTop: 10, color: '#7A859D', fontSize: 11, fontWeight: 700, lineHeight: 1.45 }}>
+                    <div style={{ marginTop: 10, color: 'var(--text-2)', fontSize: 11, fontWeight: 600, lineHeight: 1.45 }}>
                       Пустые поля автоматически не добавляются в сообщение.
                     </div>
                   </div>
                 </section>
               ) : selectedDriverTab === 'documents' ? (
-              <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+              <section className="ow-card-section" style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                 <div style={{
                   height: 42,
                   display: 'flex',
@@ -3836,11 +3839,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   padding: '0 14px',
                   borderBottom: '1px solid #E5EEF1',
                   fontSize: 13,
-                  fontWeight: 900,
-                  color: '#17222F',
+                  fontWeight: 600,
+                  color: 'var(--text)',
                 }}>
                   <span>Документы</span>
-                  <span style={{ color: '#7A859D', fontSize: 11, fontWeight: 850 }}>
+                  <span style={{ color: 'var(--text-2)', fontSize: 11, fontWeight: 600 }}>
                     Не хватает: {missingDriverDocuments} · Просрочены: {expiredDriverDocuments}
                   </span>
                 </div>
@@ -3855,9 +3858,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                             borderBottom: '1px solid #E5EEF1',
                             textAlign: 'left',
                             fontSize: 11,
-                            fontWeight: 900,
-                            color: '#7A859D',
-                            textTransform: 'uppercase',
+                            fontWeight: 600,
+                            color: 'var(--text-2)',
+                            textTransform: 'none',
                             whiteSpace: 'nowrap',
                           }}>
                             {label}
@@ -3872,20 +3875,20 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         return (
                           <tr key={document.type}>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                              <input value={document.title} onChange={event => setDriverDocumentField(index, 'title', event.target.value)} style={{ width: '100%', height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 800, color: '#17222F', outline: 'none' }} />
+                              <input value={document.title} onChange={event => setDriverDocumentField(index, 'title', event.target.value)} style={{ width: '100%', height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }} />
                             </td>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                              <input value={document.number} onChange={event => setDriverDocumentField(index, 'number', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${missing && !document.number.trim() ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 700, color: '#17222F', outline: 'none' }} />
+                              <input value={document.number} onChange={event => setDriverDocumentField(index, 'number', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${missing && !document.number.trim() ? '#EF7168' : 'var(--border)'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }} />
                             </td>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                              <input type="date" value={document.issuedAt} onChange={event => setDriverDocumentField(index, 'issuedAt', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${missing && !document.issuedAt ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 700, color: '#17222F', outline: 'none' }} />
+                              <input type="date" value={document.issuedAt} onChange={event => setDriverDocumentField(index, 'issuedAt', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${missing && !document.issuedAt ? '#EF7168' : 'var(--border)'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }} />
                             </td>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                              <input type="date" value={document.expiresAt} onChange={event => setDriverDocumentField(index, 'expiresAt', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${expired || (missing && !document.expiresAt) ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 700, color: expired ? '#B42318' : '#17222F', outline: 'none' }} />
+                              <input type="date" value={document.expiresAt} onChange={event => setDriverDocumentField(index, 'expiresAt', event.target.value)} style={{ width: '100%', height: 30, border: `1px solid ${expired || (missing && !document.expiresAt) ? '#EF7168' : 'var(--border)'}`, borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: expired ? '#B42318' : 'var(--text)', outline: 'none' }} />
                             </td>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
                               <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                                <label style={{ height: 30, padding: '0 9px', border: `1px solid ${missing && !document.scanUrl ? '#EF7168' : '#DDE9EC'}`, borderRadius: 8, background: '#fff', color: '#52606F', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 850, whiteSpace: 'nowrap' }}>
+                                <label style={{ height: 30, padding: '0 9px', border: `1px solid ${missing && !document.scanUrl ? '#EF7168' : 'var(--border)'}`, borderRadius: 8, background: '#fff', color: 'var(--text)', display: 'inline-flex', alignItems: 'center', cursor: 'pointer', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>
                                   {document.scanFile ? document.scanFile.name : document.scanUrl ? 'Заменить' : 'Добавить'}
                                   <input
                                     type="file"
@@ -3895,14 +3898,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                                   />
                                 </label>
                                 {document.scanUrl && (
-                                  <a href={document.scanUrl} target="_blank" rel="noreferrer" style={{ color: '#237F81', fontSize: 12, fontWeight: 850, textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                                  <a href={document.scanUrl} target="_blank" rel="noreferrer" style={{ color: '#146566', fontSize: 12, fontWeight: 600, textDecoration: 'none', whiteSpace: 'nowrap' }}>
                                     Открыть
                                   </a>
                                 )}
                               </div>
                             </td>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
-                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: missing ? '#B42318' : expired ? '#B45309' : '#237F81', fontSize: 12, fontWeight: 850 }}>
+                              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: missing ? '#B42318' : expired ? '#B45309' : '#146566', fontSize: 12, fontWeight: 600 }}>
                                 <input type="checkbox" checked={document.required} onChange={event => setDriverDocumentField(index, 'required', event.target.checked)} />
                                 {missing ? 'Не хватает' : expired ? 'Просрочен' : 'ОК'}
                               </label>
@@ -3917,33 +3920,33 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               ) : selectedDriverTab === 'finance' ? (
                 <DriverPaymentsPanel driverId={selectedDriver.driverId} sessionToken={authToken} view="history" canDeleteAdvance />
               ) : selectedDriverTab === 'b2b' ? (
-                <section style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
+                <section className="ow-card-section" style={{ borderRadius: 12, background: '#fff', border: '1px solid #DDE9EC', overflow: 'hidden' }}>
                   <div style={{ minHeight: 52, padding: '10px 14px', borderBottom: '1px solid #E5EEF1', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F' }}>История заказов B2B</div>
-                      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 650, color: '#7A859D' }}>Корпоративные выезды, на которые был назначен водитель</div>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>История заказов B2B</div>
+                      <div style={{ marginTop: 3, fontSize: 11, fontWeight: 600, color: 'var(--text-2)' }}>Корпоративные выезды, на которые был назначен водитель</div>
                     </div>
                     <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                      <span style={{ padding: '6px 9px', borderRadius: 9, background: '#E7F6F4', color: '#237F81', fontSize: 11, fontWeight: 900 }}>Заказов: {selectedDriverB2BOrders.length}</span>
-                      <span style={{ padding: '6px 9px', borderRadius: 9, background: '#F1F7FA', color: '#52606F', fontSize: 11, fontWeight: 900 }}>Начислено: {money(selectedDriverB2BOrders.reduce((sum, order) => sum + (order.driverPricePerUnit ?? 0) * order.transportCount, 0))}</span>
+                      <span style={{ padding: '6px 9px', borderRadius: 9, background: '#E7F6F4', color: '#146566', fontSize: 11, fontWeight: 600 }}>Заказов: {selectedDriverB2BOrders.length}</span>
+                      <span style={{ padding: '6px 9px', borderRadius: 9, background: '#F1F7FA', color: 'var(--text)', fontSize: 11, fontWeight: 600 }}>Начислено: {money(selectedDriverB2BOrders.reduce((sum, order) => sum + (order.driverPricePerUnit ?? 0) * order.transportCount, 0))}</span>
                     </div>
                   </div>
                   {selectedDriverB2BOrders.length === 0 ? (
-                    <div style={{ minHeight: 190, padding: 24, display: 'grid', placeItems: 'center', color: '#7A859D', fontSize: 13, textAlign: 'center' }}>У водителя пока нет заказов B2B</div>
+                    <div style={{ minHeight: 190, padding: 24, display: 'grid', placeItems: 'center', color: 'var(--text-2)', fontSize: 13, textAlign: 'center' }}>У водителя пока нет заказов B2B</div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
                       <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
-                        <thead><tr>{['Дата выезда', 'Заказ', 'Клиент', 'Маршрут', 'Транспорт', 'Начислено', 'Статус'].map(label => <th key={label} style={{ height: 36, padding: '0 11px', borderBottom: '1px solid #E5EEF1', background: '#F8FCFC', color: '#7A859D', textAlign: label === 'Начислено' ? 'right' : 'left', fontSize: 10, fontWeight: 900, textTransform: 'uppercase', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
+                        <thead><tr>{['Дата выезда', 'Заказ', 'Клиент', 'Маршрут', 'Транспорт', 'Начислено', 'Статус'].map(label => <th key={label} style={{ height: 36, padding: '0 11px', borderBottom: '1px solid #E5EEF1', background: '#F8FCFC', color: 'var(--text-2)', textAlign: label === 'Начислено' ? 'right' : 'left', fontSize: 11, fontWeight: 600, textTransform: 'none', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
                         <tbody>{selectedDriverB2BOrders.map((order, index) => {
                           const status = B2B_ORDER_STATUSES.find(item => item.key === order.status)?.label ?? order.status;
                           return <tr key={order.id}>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#52606F', fontSize: 12, fontWeight: 750, whiteSpace: 'nowrap' }}>{order.departureDate || '—'}</td>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#237F81', fontSize: 12, fontWeight: 900, whiteSpace: 'nowrap' }}>{order.number}</td>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#17222F', fontSize: 12, fontWeight: 800 }}>{order.client}</td>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#52606F', fontSize: 12 }}>{order.routeFrom} → {order.routeTo}</td>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#52606F', fontSize: 12, whiteSpace: 'nowrap' }}>{order.transportCount}× {order.transport}</td>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#17222F', fontSize: 12, fontWeight: 900, textAlign: 'right', whiteSpace: 'nowrap' }}>{money((order.driverPricePerUnit ?? 0) * order.transportCount)}</td>
-                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6' }}><span style={{ display: 'inline-flex', padding: '5px 8px', borderRadius: 8, background: order.status === 'success' ? '#EAF7EF' : order.status === 'driver_assigned' ? '#FFF7E8' : '#EEF4FF', color: order.status === 'success' ? '#2B8952' : order.status === 'driver_assigned' ? '#A96E13' : '#4770BD', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' }}>{status}</span></td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{order.departureDate || '—'}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#146566', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{order.number}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{order.client}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12 }}>{order.routeFrom} → {order.routeTo}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12, whiteSpace: 'nowrap' }}>{order.transportCount}× {order.transport}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12, fontWeight: 600, textAlign: 'right', whiteSpace: 'nowrap' }}>{money((order.driverPricePerUnit ?? 0) * order.transportCount)}</td>
+                            <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6' }}><span style={{ display: 'inline-flex', padding: '5px 8px', borderRadius: 8, background: order.status === 'success' ? '#EAF7EF' : order.status === 'driver_assigned' ? '#FFF7E8' : '#EEF4FF', color: order.status === 'success' ? '#2B8952' : order.status === 'driver_assigned' ? '#A96E13' : '#4770BD', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{status}</span></td>
                           </tr>;
                         })}</tbody>
                       </table>
@@ -3959,7 +3962,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       )}
 
       {selectedTransferCard && (
-        <div
+        <div className="ow-overlay"
           onClick={() => setTransferCardNumber(null)}
           style={{
             position: 'fixed',
@@ -3973,7 +3976,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             backdropFilter: 'blur(2px)',
           }}
         >
-          <section
+          <section className="ow-modal" role="dialog" aria-modal="true"
             onClick={event => event.stopPropagation()}
             style={{
               width: 'min(720px, calc(100vw - 32px))',
@@ -3997,11 +4000,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               borderBottom: '1px solid #E5EEF1',
             }}>
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontSize: 20, fontWeight: 900, color: '#17222F' }}>
+                <div style={{ fontSize: 20, fontWeight: 600, color: 'var(--text)' }}>
                   Трансфер №{selectedTransferCard.transfer.transferNumber}
                   <TaskButton target={{type:'transfer',id:selectedTransferCard.transfer.id,label:`Трансфер № ${selectedTransferCard.transfer.transferNumber}`}} />
                 </div>
-                <div style={{ marginTop: 4, fontSize: 12, fontWeight: 750, color: '#626C8B' }}>
+                <div style={{ marginTop: 4, fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
                   {selectedTransferCard.transfer.branchShort || selectedTransferCard.transfer.branchName || selectedDashboardSchool?.label || 'Школа'} · {VT_LABEL[selectedTransferCard.transfer.vehicleType] ?? selectedTransferCard.transfer.vehicleType}
                 </div>
               </div>
@@ -4014,7 +4017,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   border: '1px solid #D4E3E7',
                   borderRadius: 12,
                   background: '#fff',
-                  color: '#626C8B',
+                  color: 'var(--text-2)',
                   display: 'inline-flex',
                   alignItems: 'center',
                   justifyContent: 'center',
@@ -4026,7 +4029,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               </button>
             </header>
 
-            <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
+            <div className="ow-card-body" style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB' }}>
               <div style={{
                 display: 'grid',
                 gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
@@ -4047,8 +4050,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     padding: '10px 12px',
                     minWidth: 0,
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 850, color: '#7A859D', textTransform: 'uppercase' }}>{item.label}</div>
-                    <div style={{ marginTop: 7, fontSize: 14, fontWeight: 900, color: '#17222F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'none' }}>{item.label}</div>
+                    <div style={{ marginTop: 7, fontSize: 14, fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {item.value}
                     </div>
                   </div>
@@ -4068,8 +4071,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   padding: '0 14px',
                   borderBottom: '1px solid #E5EEF1',
                   fontSize: 13,
-                  fontWeight: 900,
-                  color: '#17222F',
+                  fontWeight: 600,
+                  color: 'var(--text)',
                 }}>
                   История водителей
                 </div>
@@ -4084,9 +4087,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                             borderBottom: '1px solid #E5EEF1',
                             textAlign: 'left',
                             fontSize: 11,
-                            fontWeight: 900,
-                            color: '#7A859D',
-                            textTransform: 'uppercase',
+                            fontWeight: 600,
+                            color: 'var(--text-2)',
+                            textTransform: 'none',
                             whiteSpace: 'nowrap',
                           }}>
                             {label}
@@ -4104,7 +4107,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                               borderBottom: index === selectedTransferCard.history.length - 1 ? 'none' : '1px solid #EEF4F6',
                               fontSize: 13,
                               fontWeight: cellIndex === 0 ? 850 : 650,
-                              color: cellIndex === 3 ? '#237F81' : '#17222F',
+                              color: cellIndex === 3 ? '#146566' : 'var(--text)',
                               whiteSpace: 'nowrap',
                             }}>
                               {value || '-'}
@@ -4116,9 +4119,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                           <td colSpan={4} style={{
                             height: 58,
                             padding: '0 14px',
-                            color: '#7A859D',
+                            color: 'var(--text-2)',
                             fontSize: 13,
-                            fontWeight: 700,
+                            fontWeight: 600,
                           }}>
                             Водитель не назначен
                           </td>
@@ -4134,25 +4137,25 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       )}
 
       {adminFilterOpen && adminFilterDraft && (
-        <div
+        <div className="ow-overlay"
           onClick={() => setAdminFilterOpen(null)}
           style={{ position: 'fixed', inset: 0, zIndex: 1700, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(23,34,47,0.18)', backdropFilter: 'blur(2px)' }}
         >
-          <div
+          <div className="ow-modal" role="dialog" aria-modal="true"
             onClick={e => e.stopPropagation()}
             style={{ width: 340, background: '#fff', borderRadius: 18, boxShadow: '0 16px 48px rgba(30,56,75,0.18)', border: '1px solid #D4E3E7', padding: '22px 24px 20px' }}
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
-              <span style={{ fontSize: 15, fontWeight: 800, color: '#17222F' }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
                 Фильтры · {SCHOOL_TABS.find(t => t.key === adminFilterOpen)?.label ?? adminFilterOpen}
               </span>
-              <button onClick={() => setAdminFilterOpen(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: '#626C8B', padding: 4 }}>
+              <button onClick={() => setAdminFilterOpen(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-2)', padding: 4 }}>
                 <X size={16} />
               </button>
             </div>
             <div style={{ display: 'grid', gap: 12 }}>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A859D', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Метрика</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 5, textTransform: 'none', letterSpacing: '0.05em' }}>Метрика</div>
                 <NotionSelect
                   value={adminFilterDraft.metric}
                   options={LOGISTICS_DASHBOARD_METRICS.map(m => ({ value: m.key, label: m.label }))}
@@ -4162,7 +4165,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 />
               </div>
               <div>
-                <div style={{ fontSize: 11, fontWeight: 700, color: '#7A859D', marginBottom: 5, textTransform: 'uppercase', letterSpacing: '0.05em' }}>Тип транспорта</div>
+                <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 5, textTransform: 'none', letterSpacing: '0.05em' }}>Тип транспорта</div>
                 <NotionSelect
                   value={adminFilterDraft.vehicleFilter}
                   options={LOGISTICS_VEHICLE_FILTERS.map(f => ({ value: f.key, label: f.label }))}
@@ -4175,14 +4178,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             <div style={{ display: 'flex', gap: 8, marginTop: 20, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setAdminFilterOpen(null)}
-                style={{ padding: '7px 16px', border: '1px solid #D4E3E7', borderRadius: 10, background: '#F5FAFB', color: '#626C8B', fontSize: 13, fontWeight: 650, cursor: 'pointer' }}
+                style={{ padding: '7px 16px', border: '1px solid #D4E3E7', borderRadius: 10, background: '#F5FAFB', color: 'var(--text-2)', fontSize: 13, fontWeight: 600, cursor: 'pointer' }}
               >
                 Отмена
               </button>
               <button
                 onClick={saveAdminFilter}
                 disabled={savingPageFilter}
-                style={{ padding: '7px 16px', border: 'none', borderRadius: 10, background: '#31A4A5', color: '#fff', fontSize: 13, fontWeight: 700, cursor: savingPageFilter ? 'default' : 'pointer', opacity: savingPageFilter ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
+                style={{ padding: '7px 16px', border: 'none', borderRadius: 10, background: '#1A7F80', color: '#fff', fontSize: 13, fontWeight: 600, cursor: savingPageFilter ? 'default' : 'pointer', opacity: savingPageFilter ? 0.7 : 1, display: 'flex', alignItems: 'center', gap: 6 }}
               >
                 <Save size={13} />
                 {savingPageFilter ? 'Сохранение...' : 'Сохранить'}
@@ -4254,9 +4257,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             marginBottom: 6,
           }}>
             <span style={{
-              color: '#17222F',
+              color: 'var(--text)',
               fontSize: 12,
-              fontWeight: 900,
+              fontWeight: 600,
               whiteSpace: 'nowrap',
             }}>
               Трансфер №{transferTypeMenu.transferNumber}
@@ -4268,10 +4271,10 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               padding: '0 7px',
               borderRadius: 999,
               background: '#F5FAFB',
-              color: '#626C8B',
-              fontSize: 9,
-              fontWeight: 850,
-              textTransform: 'uppercase',
+              color: 'var(--text-2)',
+              fontSize: 11,
+              fontWeight: 600,
+              textTransform: 'none',
               whiteSpace: 'nowrap',
             }}>
               Фильтр
@@ -4279,10 +4282,10 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           </div>
           <div style={{
             padding: '1px 6px 6px',
-            color: '#626C8B',
-            fontSize: 10,
-            fontWeight: 800,
-            textTransform: 'uppercase',
+            color: 'var(--text-2)',
+            fontSize: 11,
+            fontWeight: 600,
+            textTransform: 'none',
             letterSpacing: 0,
           }}>
             Тип транспорта
@@ -4307,7 +4310,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     border: `1px solid ${active ? tone.border : 'transparent'}`,
                     borderRadius: 10,
                     background: active ? tone.bg : '#fff',
-                    color: active ? tone.text : '#17222F',
+                    color: active ? tone.text : 'var(--text)',
                     display: 'grid',
                     gridTemplateColumns: '14px minmax(0, 1fr) 18px',
                     alignItems: 'center',
@@ -4384,7 +4387,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 boxShadow: '0 24px 60px rgba(8,11,11,0.18)',
                 color: 'var(--text-2)',
                 fontSize: 13,
-                fontWeight: 700,
+                fontWeight: 600,
                 textAlign: 'center',
               }}>
                 Загрузка...

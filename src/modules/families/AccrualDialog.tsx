@@ -39,10 +39,11 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
 
   const done = !dialog.confirmLabel || Boolean(result);
   return (
-    <div style={overlayStyle} onClick={running ? undefined : onClose}>
+    <div className="ow-overlay" style={overlayStyle} onClick={running ? undefined : onClose}>
       <div
         ref={panelRef}
         tabIndex={-1}
+        className="ow-modal"
         style={{ ...panelStyle, outline: 'none' }}
         onClick={event => event.stopPropagation()}
         onKeyDown={event => { if (event.key === 'Escape' && !running) onClose(); }}
@@ -50,21 +51,21 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
         aria-label={dialog.title}
       >
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <div style={{ fontSize: 15, fontWeight: 800 }}>{dialog.title}</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>{dialog.title}</div>
           <button type="button" onClick={onClose} disabled={running} style={iconButtonStyle} aria-label="Закрыть"><X size={16} /></button>
         </div>
 
         <div style={{ ...noteStyle, whiteSpace: 'pre-line' }}>{result || dialog.message}</div>
 
-        {error && <div style={{ color: '#B91C1C', fontSize: 12, fontWeight: 700, margin: '10px 0 0' }}>{error}</div>}
+        {error && <div style={{ color: '#B91C1C', fontSize: 12, fontWeight: 600, margin: '10px 0 0' }}>{error}</div>}
 
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end', marginTop: 12 }}>
           {done ? (
-            <button type="button" onClick={onClose} style={{ ...secondaryButtonStyle, background: '#31A4A5', color: '#fff', border: 'none' }}>Готово</button>
+            <button type="button" onClick={onClose} style={{ ...secondaryButtonStyle, background: '#1A7F80', color: '#fff', border: 'none' }}>Готово</button>
           ) : (
             <>
-              <button type="button" onClick={onClose} disabled={running} style={{ ...secondaryButtonStyle, color: '#374151' }}>Отмена</button>
-              <button type="button" onClick={confirm} disabled={running} style={{ ...secondaryButtonStyle, background: '#31A4A5', color: '#fff', border: 'none' }}>
+              <button type="button" onClick={onClose} disabled={running} style={{ ...secondaryButtonStyle, color: 'var(--text)' }}>Отмена</button>
+              <button type="button" onClick={confirm} disabled={running} style={{ ...secondaryButtonStyle, background: '#1A7F80', color: '#fff', border: 'none' }}>
                 {running ? 'Выполняем...' : dialog.confirmLabel}
               </button>
             </>

@@ -52,7 +52,7 @@ const SCHOOL_COLORS = [
 ];
 
 const KPI_COLORS: Record<SortKey, string> = {
-  school: '#626C8B',
+  school: 'var(--text-2)',
   activeCount: 'var(--success)',
   inactiveCount: '#EF7168',
   microbusCount: '#1D6FA4',
@@ -114,7 +114,7 @@ function computeDriverStats(rows: V2DriverTableRow[], allowedSchools: string[] |
   const reserveRows = rows.filter(row=>isVisibleDriver(row) && isReserveDriver(row));
   return [
     ...schoolStats,
-    statFromRows(DRIVER_RESERVE_KEY, 'Резерв', '#626C8B', reserveRows),
+    statFromRows(DRIVER_RESERVE_KEY, 'Резерв', 'var(--text-2)', reserveRows),
   ];
 }
 
@@ -168,7 +168,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
   };
 
   if (rows === null) {
-    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
+    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-2)' }}>Загрузка...</div>;
   }
 
   return (

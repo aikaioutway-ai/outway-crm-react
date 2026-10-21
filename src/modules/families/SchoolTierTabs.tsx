@@ -21,7 +21,7 @@ export default function SchoolTierTabs({ value, onChange }: SchoolTierTabsProps)
             type="button"
             onClick={() => onChange(tier)}
             title={tier === '1.0' ? 'Школы на постоянной основе' : 'Школы без постоянного контракта'}
-            style={{ height: 36, padding: '0 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: active ? 850 : 700, background: active ? '#2DD4BF' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', transition: 'background .15s ease, color .15s ease' }}
+            style={{ height: 36, padding: '0 14px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 13, fontWeight: active ? 850 : 700, background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', transition: 'background .15s ease, color .15s ease' }}
           >
             School {tier}
           </button>

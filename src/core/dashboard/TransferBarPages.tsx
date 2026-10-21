@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 export const TRANSFERS_PER_PAGE = 15;
 
@@ -36,10 +37,10 @@ export default function TransferBarPages({ scopeKey, selectedKey = '', counts, c
         title={disabled ? undefined : `Трансферы ${first}–${first + TRANSFERS_PER_PAGE - 1} · записей: ${hidden}`}
         disabled={disabled}
         onClick={() => setPage(currentPage + direction)}
-        style={{ flex: '0 0 26px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 2, padding: '8px 0', borderRadius: 12, background: '#fff', border: `1px solid ${disabled ? '#E1E8EA' : '#2DD4BF'}`, color: disabled ? '#C7D0D6' : '#2DD4BF', cursor: disabled ? 'default' : 'pointer' }}
+        className={`ow-transfer-arrow${hidden > 0 && !disabled ? ' has-more' : ''}`}
       >
-        <span style={{ fontSize: 16, fontWeight: 800 }}>{direction < 0 ? '‹' : '›'}</span>
-        {!disabled && hidden > 0 && <span style={{ fontSize: 10, fontWeight: 800 }}>{hidden}</span>}
+        {direction < 0 ? <ChevronLeft size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
+        {!disabled && hidden > 0 && <span>{hidden}</span>}
       </button>
     );
   };

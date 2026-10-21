@@ -181,7 +181,7 @@ export default function TabFinance({
   return (
     <div>
       {msg && (
-        <div style={{ background: msg.includes('Не удалось') ? '#FEE2E2' : '#F7F9FB', color: msg.includes('Не удалось') ? '#991B1B' : '#374151', borderRadius: 8, padding: '7px 12px', marginBottom: 8, fontSize: 12, fontWeight: 700 }}>
+        <div style={{ background: msg.includes('Не удалось') ? '#FEE2E2' : '#F7F9FB', color: msg.includes('Не удалось') ? '#991B1B' : 'var(--text)', borderRadius: 8, padding: '7px 12px', marginBottom: 8, fontSize: 12, fontWeight: 600 }}>
           {msg}
         </div>
       )}
@@ -215,7 +215,7 @@ export default function TabFinance({
                     />
                   </label>
                   <input value={receiptCode} onChange={e => setReceiptCode(e.target.value)} placeholder="Код чека" style={inputStyle} />
-                  {ocrMsg && <div style={{ gridColumn: '1 / -1', fontSize: 10, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '0 2px' }}>{ocrMsg}</div>}
+                  {ocrMsg && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '0 2px' }}>{ocrMsg}</div>}
                   <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={submitPaymentBtnStyle(savingPayment || !paymentAmount)}>
                     {savingPayment ? 'Сохраняем...' : 'На проверку →'}
                   </button>
@@ -289,7 +289,7 @@ export default function TabFinance({
         >
           {addingPeriod && (
             <div style={{ background: '#F7F9FB', borderRadius: 10, padding: 10, marginBottom: 10 }}>
-              <div style={{ fontSize: 11, fontWeight: 700, color: '#6B7280', marginBottom: 8 }}>Создать начисления всем детям</div>
+              <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', marginBottom: 8 }}>Создать начисления всем детям</div>
               <div style={{ display: 'flex', gap: 7 }}>
                 <select aria-label="Период начисления" value={availablePeriods.some(p => p.key === newPeriodKey) ? newPeriodKey : availablePeriods[0]?.key ?? ''} onChange={e => setNewPeriodKey(e.target.value)} style={{ ...inputStyle, flex: 1 }}>
                   {availablePeriods.map(p => <option key={p.key} value={p.key}>{p.label}</option>)}
@@ -314,16 +314,16 @@ export default function TabFinance({
                 ) : periodRows.map(row => (
                   <tr key={row.key}>
                     <td style={financeTdStyle}>
-                      <div style={{ fontWeight: 900, color: '#17222F' }}>{row.label}</div>
-                      <div style={{ fontSize: 10, color: '#8A94A3', marginTop: 2 }}>{row.childrenCount} начисл.</div>
+                      <div style={{ fontWeight: 600, color: 'var(--text)' }}>{row.label}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>{row.childrenCount} начисл.</div>
                     </td>
-                    <td style={{ ...financeTdStyle, textAlign: 'left', fontWeight: 900 }}>{money(row.charged)}</td>
+                    <td style={{ ...financeTdStyle, textAlign: 'left', fontWeight: 600 }}>{money(row.charged)}</td>
                     <td style={{ ...financeTdStyle, textAlign: 'left' }}>
-                      <div style={{ fontWeight: 900, color: '#237F81' }}>
+                      <div style={{ fontWeight: 600, color: '#146566' }}>
                         {money(row.paid)}
                       </div>
                     </td>
-                    <td style={{ ...financeTdStyle, textAlign: 'left', color: row.debt > 0 ? '#B42318' : '#667085', fontWeight: 700 }}>{money(row.debt)}</td>
+                    <td style={{ ...financeTdStyle, textAlign: 'left', color: row.debt > 0 ? '#B42318' : 'var(--text-2)', fontWeight: 600 }}>{money(row.debt)}</td>
                     <td style={financeTdStyle}>{row.writeOffDate || '-'}</td>
                   </tr>
                 ))}
@@ -399,15 +399,15 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
     <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginBottom: 7 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(payment.amount)}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{money(payment.amount)}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>
             {payment.paymentDate ? new Date(payment.paymentDate).toLocaleDateString('ru-RU') : 'без даты'} · {PAYMENT_TYPE_LABEL[payment.paymentType] ?? payment.paymentType}
             {payment.paymentOrderNumber && <> · п/п {payment.paymentOrderNumber}</>}
             {payment.actualPaymentDate && <> · факт {new Date(payment.actualPaymentDate).toLocaleDateString('ru-RU')}</>}
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-          <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+          <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
             {payment.status}
           </div>
           {onUnconfirm && !editing && (
@@ -443,7 +443,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
               onClick={() => onConfirm(actualPaymentDate)}
               disabled={confirming || !actualPaymentDate}
               style={{
-                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 600,
                 cursor: confirming || !actualPaymentDate ? 'default' : 'pointer',
                 background: confirming || !actualPaymentDate ? '#D1FAE5' : '#10B981',
                 color: '#fff',
@@ -455,7 +455,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
               onClick={() => onSave({ status: 'Отклонено' })}
               disabled={confirming}
               style={{
-                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 600,
                 cursor: confirming ? 'default' : 'pointer',
                 background: '#FEE2E2', color: '#991B1B',
               }}
@@ -489,7 +489,7 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
           <div style={{ display: 'flex', gap: 6 }}>
             <button onClick={save} disabled={saving} style={smallAccentBtn}>{saving ? '...' : <><Save size={12} /> Сохранить</>}</button>
             <button onClick={() => setEditing(false)} style={{ ...smallAccentBtn, background: '#F3F4F6', color: 'var(--text)' }}><X size={12} /></button>
-            <button onClick={remove} disabled={saving} style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}><Trash2 size={12} /></button>
+            <button type="button" onClick={remove} disabled={saving} aria-label="Удалить" title="Удалить" style={{ ...smallAccentBtn, background: '#FEE2E2', color: '#991B1B' }}><Trash2 size={12} /></button>
           </div>
         </div>
       )}
@@ -532,13 +532,13 @@ function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
     <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginBottom: 7 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text)' }}>{money(refund.amount)}</div>
-          <div style={{ fontSize: 10, color: 'var(--text-2)', marginTop: 1 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{money(refund.amount)}</div>
+          <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>
             {refund.requestedAt ? new Date(refund.requestedAt).toLocaleDateString('ru-RU') : 'без даты'}
             {refund.requestedBy && <> · {refund.requestedBy}</>}
           </div>
         </div>
-        <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 10, fontWeight: 700, whiteSpace: 'nowrap' }}>
+        <div style={{ ...statusStyle, borderRadius: 6, padding: '3px 8px', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
           {refund.status}
         </div>
       </div>
@@ -555,7 +555,7 @@ function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
               onClick={() => onConfirm(paymentMethod, paymentOrderNumber.trim() || undefined)}
               disabled={confirming}
               style={{
-                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 600,
                 cursor: confirming ? 'default' : 'pointer',
                 background: confirming ? '#D1FAE5' : '#10B981',
                 color: '#fff',
@@ -567,7 +567,7 @@ function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
               onClick={onReject}
               disabled={confirming}
               style={{
-                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 800,
+                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 600,
                 cursor: confirming ? 'default' : 'pointer',
                 background: '#FEE2E2', color: '#991B1B',
               }}
@@ -679,86 +679,26 @@ export function buildPeriodRows(charges: Charge[], payments: FamilyPayment[], pa
     .map(({ rawMonth: _rawMonth, rawYear: _rawYear, dateValue: _dateValue, ...row }) => row);
 }
 
-const inputStyle: React.CSSProperties = {
-  height: 31,
-  padding: '0 9px',
-  border: '1px solid var(--border)',
-  borderRadius: 7,
-  fontSize: 11,
-  fontWeight: 700,
-  color: 'var(--text)',
-  background: '#fff',
-  boxSizing: 'border-box',
-};
+const inputStyle: React.CSSProperties = { height: 34, padding: '0 10px', border: '1px solid var(--border)', borderRadius: 8, fontSize: 13, fontWeight: 400, color: 'var(--text)', background: 'var(--surface)', boxSizing: 'border-box', boxShadow: 'var(--shadow-xs)' };
 
 const financeLayoutStyle: React.CSSProperties = {
   display: 'grid',
   gap: 14,
 };
 
-const newPaymentGridStyle: React.CSSProperties = {
-  display: 'grid',
-  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-  gap: 8,
-};
+const newPaymentGridStyle: React.CSSProperties = { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 };
 
 
 
 
-const smallAccentBtn: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  gap: 4,
-  padding: '6px 10px',
-  background: '#D7EEEE',
-  color: '#237F81',
-  border: 'none',
-  borderRadius: 7,
-  fontSize: 11,
-  fontWeight: 700,
-  cursor: 'pointer',
-};
+const smallAccentBtn: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, height: 30, padding: '0 10px', background: 'var(--surface)', color: 'var(--text)', border: '1px solid var(--border)', borderRadius: 7, fontSize: 12.5, fontWeight: 500, cursor: 'pointer', boxShadow: 'var(--shadow-xs)' };
 
-const fileInputStyle: React.CSSProperties = {
-  minWidth: 0,
-  height: 31,
-  display: 'flex',
-  alignItems: 'center',
-  gap: 7,
-  padding: '0 9px',
-  border: '1px solid var(--border)',
-  borderRadius: 7,
-  fontSize: 11,
-  fontWeight: 800,
-  color: '#374151',
-  background: '#fff',
-  cursor: 'pointer',
-  overflow: 'hidden',
-};
+const fileInputStyle: React.CSSProperties = { minWidth: 0, height: 34, display: 'flex', alignItems: 'center', gap: 7, padding: '0 10px', border: '1px dashed var(--border-strong)', borderRadius: 8, fontSize: 12.5, fontWeight: 500, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: 'pointer', overflow: 'hidden' };
 
-const paymentPanelStyle: React.CSSProperties = {
-  background: '#fff',
-  border: '1px solid #DDE7EB',
-  borderRadius: 10,
-  padding: 9,
-  boxShadow: '0 8px 20px rgba(8,11,11,0.04)',
-};
+const paymentPanelStyle: React.CSSProperties = { background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, padding: 14, boxShadow: 'none' };
 
 function submitPaymentBtnStyle(disabled: boolean): React.CSSProperties {
-  return {
-    gridColumn: '1 / -1',
-    width: '100%',
-    height: 34,
-    border: 'none',
-    borderRadius: 8,
-    background: '#31A4A5',
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 850,
-    cursor: disabled ? 'default' : 'pointer',
-    opacity: disabled ? 0.55 : 1,
-  };
+  return { gridColumn: '1 / -1', width: '100%', height: 36, border: '1px solid var(--accent-h)', borderRadius: 8, background: 'var(--accent)', color: '#fff', fontSize: 13, fontWeight: 500, cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.5 : 1, boxShadow: 'var(--shadow-xs)' };
 }
 
 const paymentsListStyle: React.CSSProperties = {
@@ -767,12 +707,7 @@ const paymentsListStyle: React.CSSProperties = {
   paddingRight: 2,
 };
 
-const financeTableWrapStyle: React.CSSProperties = {
-  overflowX: 'auto',
-  border: '1px solid #DDE7EB',
-  borderRadius: 12,
-  background: '#fff',
-};
+const financeTableWrapStyle: React.CSSProperties = { overflowX: 'auto', border: '1px solid var(--border)', borderRadius: 10, background: 'var(--surface)' };
 
 const financeTableStyle: React.CSSProperties = {
   width: '100%',
@@ -780,64 +715,14 @@ const financeTableStyle: React.CSSProperties = {
   borderCollapse: 'collapse',
 };
 
-const financeThStyle: React.CSSProperties = {
-  height: 34,
-  padding: '0 14px',
-  background: '#F7FBFB',
-  borderBottom: '1px solid #E8EEF1',
-  color: '#667085',
-  fontSize: 11,
-  fontWeight: 900,
-  textAlign: 'left',
-};
+const financeThStyle: React.CSSProperties = { height: 38, padding: '0 14px', background: 'var(--surface-2)', borderBottom: '1px solid var(--border)', color: 'var(--text-2)', fontSize: 12.5, fontWeight: 500, textAlign: 'left' };
 
-const financeTdStyle: React.CSSProperties = {
-  height: 44,
-  padding: '8px 14px',
-  borderBottom: '1px solid #F0F3F5',
-  color: '#374151',
-  fontSize: 12,
-  fontWeight: 750,
-};
+const financeTdStyle: React.CSSProperties = { height: 44, padding: '8px 14px', borderBottom: '1px solid #EEF1F4', color: 'var(--text)', fontSize: 13, fontWeight: 400, fontVariantNumeric: 'tabular-nums' };
 
-const financeTotalCellStyle: React.CSSProperties = {
-  height: 40,
-  padding: '8px 14px',
-  background: '#F8FCFC',
-  color: '#17222F',
-  fontSize: 12,
-  fontWeight: 900,
-};
+const financeTotalCellStyle: React.CSSProperties = { height: 42, padding: '8px 14px', background: 'var(--surface-2)', color: 'var(--text)', fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' };
 
-const financeEmptyCellStyle: React.CSSProperties = {
-  padding: '28px 14px',
-  textAlign: 'center',
-  color: '#7A859D',
-  fontSize: 12,
-  fontWeight: 750,
-};
+const financeEmptyCellStyle: React.CSSProperties = { padding: '28px 14px', textAlign: 'center', color: 'var(--text-2)', fontSize: 13, fontWeight: 400 };
 
-const receiptLinkStyle: React.CSSProperties = {
-  display: 'inline-flex',
-  alignItems: 'center',
-  gap: 5,
-  marginTop: 6,
-  fontSize: 11,
-  fontWeight: 800,
-  color: '#374151',
-  textDecoration: 'none',
-};
+const receiptLinkStyle: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 5, marginTop: 6, fontSize: 12.5, fontWeight: 500, color: 'var(--accent)', textDecoration: 'none' };
 
-const iconBtnStyle: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  border: 'none',
-  borderRadius: 7,
-  background: '#D7EEEE',
-  color: '#237F81',
-  display: 'inline-flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-  flexShrink: 0,
-};
+const iconBtnStyle: React.CSSProperties = { width: 30, height: 30, border: '1px solid var(--border)', borderRadius: 7, background: 'var(--surface)', color: 'var(--text-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 };

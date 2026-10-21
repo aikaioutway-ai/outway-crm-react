@@ -1,5 +1,6 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import LogisticsSchoolTransferDashboard from './LogisticsSchoolTransferDashboard';
+import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { updateV2TransferVehicleType } from '../../services/crmV2Service';
 
@@ -45,9 +46,9 @@ test('shows the selected vehicle type immediately and refreshes the transfer dat
   render(<LogisticsSchoolTransferDashboard schoolKey="AES" />);
 
   fireEvent.contextMenu(screen.getByRole('button', { name: '2 1' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Минивэн' }));
+  fireEvent.click(screen.getByRole('menuitem', { name: 'Минивэн' }));
 
-  expect(screen.getByRole('button', { name: '2 1' })).toHaveStyle({ border: '1px solid #8B5CF6' });
+  expect(screen.getByRole('button', { name: '2 1' }).style.getPropertyValue('--cell-color')).toBe(VEHICLE_COLOR.minivan);
   expect(mockedUpdateVehicleType).toHaveBeenNthCalledWith(1, expect.objectContaining({
     branchId: 'branch-1',
     transferNumber: 1,

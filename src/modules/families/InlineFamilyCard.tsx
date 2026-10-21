@@ -7,6 +7,7 @@ import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType,
 import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
+import { formatPhoneDisplay } from './familiesRowHelpers';
 import { addV2Audit, createV2Child, deleteV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
@@ -619,30 +620,28 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           <div style={headerInfoStyle}>
             <div className="family-card-avatar">{initials}</div>
             <div style={{ minWidth: 0 }}>
-              <div className="family-card-eyebrow">КАРТОЧКА КЛИЕНТА</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: '#111827', lineHeight: 1.2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              <div className="family-card-eyebrow">Карточка клиента</div>
+              <div className="family-card-title">
                 {formatName(cardFamily.parentName)}
               </div>
-              <div style={{ marginTop: 3, display: 'flex', alignItems: 'center', gap: 5, color: '#374151', fontSize: 11, fontWeight: 750 }}>
-                <Phone size={11} color="#7B8491" />
+              <div className="family-card-subline">
+                <Phone size={13} aria-hidden="true" />
                 {headerWaLink ? (
                   <a href={headerWaLink} target="_blank" rel="noreferrer" title="Написать в WhatsApp"
-                    style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: '#374151', textDecoration: 'none' }}
-                    onMouseEnter={e => (e.currentTarget.style.color = '#159A6A')}
-                    onMouseLeave={e => (e.currentTarget.style.color = '#374151')}
+                    className="family-card-wa-link"
                   >
-                    <span>{formatPhone(cardFamily.phone)}</span>
-                    <MessageCircle size={11} color="#25D366" />
+                    <span>{formatPhoneDisplay(formatPhone(cardFamily.phone))}</span>
+                    <MessageCircle size={13} color="#25D366" aria-hidden="true" />
                   </a>
                 ) : (
-                  <span>{cardFamily.phone ? formatPhone(cardFamily.phone) : 'телефон не указан'}</span>
+                  <span>{cardFamily.phone ? formatPhoneDisplay(formatPhone(cardFamily.phone)) : 'телефон не указан'}</span>
                 )}
               </div>
-              <div style={{ marginTop: 2, fontSize: 10, color: '#9CA3AF', fontWeight: 600, userSelect: 'all', cursor: 'text' }}>
+              <div className="family-card-id">
                 ID: {family.id}
               </div>
             </div>
-            {saveMsg && <div style={{ fontSize: 10, color: saveMsg === 'Ошибка' ? '#DC2626' : '#059669', fontWeight: 800 }}>{saveMsg}</div>}
+            {saveMsg && <div role="status" className={`family-card-save-msg${saveMsg === 'Ошибка' ? ' is-error' : ''}`}>{saveMsg}</div>}
           </div>
           <div className="family-card-header-actions">
             <TaskButton target={{type:'family',id:family.id,label:cardFamily.parentName}} />
@@ -961,7 +960,7 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
       nextPlans.forEach((plan, index) => {
         if (!plan.routeCoordinates?.length) return;
         const routeLine = new ymaps.Polyline(plan.routeCoordinates, {}, {
-          strokeColor: index === 0 ? '#2D8B57' : '#31A4A5',
+          strokeColor: index === 0 ? '#2D8B57' : '#1A7F80',
           strokeWidth: 6,
           strokeOpacity: .9,
         });
@@ -987,7 +986,7 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
         params: { routingMode: 'auto' },
       }, {
         boundsAutoApply: index === 0,
-        routeActiveStrokeColor: index === 0 ? '#2D8B57' : '#31A4A5',
+        routeActiveStrokeColor: index === 0 ? '#2D8B57' : '#1A7F80',
         routeActiveStrokeWidth: 6,
         wayPointVisible: false,
       });
@@ -1088,12 +1087,12 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
     && plans.every(plan => !plan.error && plan.distanceKm != null && plan.zone);
 
   return (
-    <div onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }} style={addressModalOverlayStyle}>
-      <section role="dialog" aria-modal="true" aria-labelledby="address-change-title" style={addressModalCardStyle}>
+    <div onMouseDown={event => { if (event.target === event.currentTarget && !busy) onClose(); }} className="ow-overlay" style={addressModalOverlayStyle}>
+      <section className="ow-modal" role="dialog" aria-modal="true" aria-labelledby="address-change-title" style={addressModalCardStyle}>
         <header style={addressModalHeaderStyle}>
           <div>
-            <h2 id="address-change-title" style={{ margin: 0, fontSize: 18, color: '#111827' }}>Смена адреса</h2>
-            <p style={{ margin: '5px 0 0', fontSize: 12, color: '#667085' }}>Как в форме заявки: укажите адрес, выберите точку и проверьте маршрут.</p>
+            <h2 id="address-change-title" style={{ margin: 0, fontSize: 18, color: 'var(--text)' }}>Смена адреса</h2>
+            <p style={{ margin: '5px 0 0', fontSize: 12, color: 'var(--text-2)' }}>Как в форме заявки: укажите адрес, выберите точку и проверьте маршрут.</p>
           </div>
           <button type="button" onClick={onClose} disabled={Boolean(busy)} aria-label="Закрыть" style={closeButtonStyle}><X size={17} /></button>
         </header>
@@ -1101,7 +1100,7 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
         <div style={addressModalBodyStyle}>
           <div style={addressModalFormPaneStyle}>
             <form onSubmit={searchAddress} style={{ display: 'grid', gap: 12 }}>
-              <div style={{ fontSize: 13, fontWeight: 900, color: '#17222F' }}>Адрес проживания</div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>Адрес проживания</div>
               <div style={addressFieldGridStyle}>
                 <label style={addressFieldLabelStyle}>Тип адреса
                   <select value={addressFields.type} onChange={event => updateAddressFields({ type: event.target.value })} style={addressSearchInputStyle}>
@@ -1131,10 +1130,10 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
 
             {candidates.length > 0 && (
               <div style={addressCandidatesStyle}>
-                <div style={{ padding: '9px 12px 5px', fontSize: 10, fontWeight: 850, color: '#7B8491', textTransform: 'uppercase' }}>Выберите точный адрес</div>
+                <div style={{ padding: '9px 12px 5px', fontSize: 11, fontWeight: 600, color: 'var(--text-2)', textTransform: 'none' }}>Выберите точный адрес</div>
                 {candidates.map((candidate, index) => (
                   <button key={`${candidate.latitude}-${candidate.longitude}-${index}`} type="button" onClick={() => chooseCandidate(candidate)} style={addressCandidateButtonStyle}>
-                    <MapPin size={15} color="#31A4A5" />
+                    <MapPin size={15} color="#1A7F80" />
                     <span>{candidate.address}</span>
                   </button>
                 ))}
@@ -1144,13 +1143,13 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
             {point && (
               <div style={addressPointSummaryStyle}>
                 <div style={{ display: 'flex', gap: 9, alignItems: 'flex-start' }}>
-                  <MapPin size={18} color="#31A4A5" style={{ flexShrink: 0, marginTop: 2 }} />
+                  <MapPin size={18} color="#1A7F80" style={{ flexShrink: 0, marginTop: 2 }} />
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 850, color: '#1F2937', lineHeight: 1.45 }}>{point.address}</div>
-                    <div style={{ marginTop: 5, fontSize: 11, color: '#667085' }}>{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: '#1F2937', lineHeight: 1.45 }}>{point.address}</div>
+                    <div style={{ marginTop: 5, fontSize: 11, color: 'var(--text-2)' }}>{point.latitude.toFixed(6)}, {point.longitude.toFixed(6)}</div>
                   </div>
                 </div>
-                <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid #E5ECEF', fontSize: 10, lineHeight: 1.45, color: '#667085' }}>
+                <div style={{ marginTop: 10, paddingTop: 9, borderTop: '1px solid #E5ECEF', fontSize: 11, lineHeight: 1.45, color: 'var(--text-2)' }}>
                   Точку можно выбрать кликом по карте или перетащить маркер.
                 </div>
               </div>
@@ -1158,18 +1157,18 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
 
             {plans.length > 0 && (
               <div style={{ display: 'grid', gap: 8 }}>
-                <div style={{ fontSize: 12, fontWeight: 900, color: '#17222F' }}>Расчёт стоимости</div>
+                <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text)' }}>Расчёт стоимости</div>
                 {plans.map(plan => (
                   <article key={plan.childId} style={addressPlanCardStyle}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10 }}>
-                      <b>{plan.childName}</b><span style={{ color: '#667085' }}>{plan.branchName}</span>
+                      <b>{plan.childName}</b><span style={{ color: 'var(--text-2)' }}>{plan.branchName}</span>
                     </div>
                     {plan.error ? <div style={{ marginTop: 8, color: '#B42318' }}>{plan.error}</div> : (
                       <div style={addressPlanMetricsStyle}>
                         <span>Расстояние<b>{plan.oldDistanceKm != null ? `${plan.oldDistanceKm} → ` : ''}{plan.distanceKm} км</b></span>
                         <span>В пути<b>{plan.durationMinutes ? `${plan.durationMinutes} мин` : '—'}</b></span>
                         <span>Зона<b>{plan.oldZone} → {plan.zone}</b></span>
-                        <span>Стоимость<b style={{ color: plan.price !== plan.oldPrice ? '#B45309' : '#237F81' }}>{money(plan.oldPrice)} → {money(plan.price ?? 0)}</b></span>
+                        <span>Стоимость<b style={{ color: plan.price !== plan.oldPrice ? '#B45309' : '#146566' }}>{money(plan.oldPrice)} → {money(plan.price ?? 0)}</b></span>
                       </div>
                     )}
                   </article>
@@ -1184,7 +1183,7 @@ export function AddressChangeModal({ initialAddress, initialPoint, children, bra
         </div>
 
         <footer style={addressModalFooterStyle}>
-          <span style={{ fontSize: 11, color: '#667085' }}>Старые оплаты и начисления не изменяются.</span>
+          <span style={{ fontSize: 11, color: 'var(--text-2)' }}>Старые оплаты и начисления не изменяются.</span>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" onClick={onClose} disabled={Boolean(busy)} style={addressSecondaryButtonStyle}>Отмена</button>
             <button type="button" onClick={() => point && onApply(point, plans)} disabled={!canApply || Boolean(busy)} style={{ ...addressPrimaryButtonStyle, opacity: canApply && !busy ? 1 : .5 }}>
@@ -1205,16 +1204,16 @@ function FamilyDocumentsTab({ documents, editing, loading, onPatch, onAdd, onDel
   onAdd: () => void;
   onDelete: (index: number) => void;
 }) {
-  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: '#8A94A3', fontSize: 13 }}>Загрузка документов...</div>;
+  if (loading) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-2)', fontSize: 13 }}>Загрузка документов...</div>;
   const readyCount = documents.filter(document => Boolean(document.scanUrl || document.scanFile)).length;
   return (
     <div style={{ display: 'grid', gap: 12 }}>
       <section style={{ background: '#fff', borderRadius: 14, padding: '13px 15px', boxShadow: '0 5px 18px rgba(43, 72, 89, .055)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
         <div>
-          <div style={{ color: '#111827', fontSize: 14, fontWeight: 900 }}>Документы клиента</div>
-          <div style={{ marginTop: 3, color: '#8A94A3', fontSize: 11, fontWeight: 650 }}>{readyCount} из {documents.length} файлов добавлено</div>
+          <div style={{ color: 'var(--text)', fontSize: 14, fontWeight: 600 }}>Документы клиента</div>
+          <div style={{ marginTop: 3, color: 'var(--text-2)', fontSize: 11, fontWeight: 600 }}>{readyCount} из {documents.length} файлов добавлено</div>
         </div>
-        {editing && <button type="button" onClick={onAdd} style={{ height: 34, padding: '0 12px', border: '1px solid #A9D7D8', borderRadius: 10, background: '#F1FAFA', color: '#237F81', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 850, cursor: 'pointer' }}><Plus size={14} /> Добавить документ</button>}
+        {editing && <button type="button" onClick={onAdd} style={{ height: 34, padding: '0 12px', border: '1px solid #A9D7D8', borderRadius: 10, background: '#F1FAFA', color: '#146566', display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11, fontWeight: 600, cursor: 'pointer' }}><Plus size={14} /> Добавить документ</button>}
       </section>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
@@ -1223,29 +1222,29 @@ function FamilyDocumentsTab({ documents, editing, loading, onPatch, onAdd, onDel
           return (
             <article key={document.documentKey} style={{ position: 'relative', background: '#fff', border: '1px solid #E4ECEF', borderRadius: 14, padding: 14, boxShadow: '0 4px 14px rgba(43, 72, 89, .045)', display: 'grid', gap: 11 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 9, paddingRight: document.isDefault || !editing ? 0 : 34 }}>
-                <span style={{ width: 32, height: 32, borderRadius: 10, background: hasFile ? '#E4F6F3' : '#FFF4E8', color: hasFile ? '#237F81' : '#B45309', display: 'grid', placeItems: 'center', flexShrink: 0 }}><FileText size={16} /></span>
+                <span style={{ width: 32, height: 32, borderRadius: 10, background: hasFile ? '#E4F6F3' : '#FFF4E8', color: hasFile ? '#146566' : '#B45309', display: 'grid', placeItems: 'center', flexShrink: 0 }}><FileText size={16} /></span>
                 {editing ? (
-                  <input value={document.title} onChange={event => onPatch(index, { title: event.currentTarget.value })} aria-label="Название документа" style={{ width: '100%', minWidth: 0, height: 32, border: '1px solid #DDE7EB', borderRadius: 8, padding: '0 9px', color: '#111827', fontSize: 12.5, fontWeight: 850, outline: 'none' }} />
+                  <input value={document.title} onChange={event => onPatch(index, { title: event.currentTarget.value })} aria-label="Название документа" style={{ width: '100%', minWidth: 0, height: 32, border: '1px solid #DDE7EB', borderRadius: 8, padding: '0 9px', color: 'var(--text)', fontSize: 12.5, fontWeight: 600, outline: 'none' }} />
                 ) : (
-                  <div style={{ color: '#111827', fontSize: 13, fontWeight: 900, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{document.title}</div>
+                  <div style={{ color: 'var(--text)', fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{document.title}</div>
                 )}
                 {!document.isDefault && editing && <button type="button" onClick={() => onDelete(index)} title="Удалить документ" style={{ position: 'absolute', right: 12, top: 16, width: 28, height: 28, border: '1px solid #F1CACA', borderRadius: 8, background: '#FFF7F7', color: '#B42318', display: 'grid', placeItems: 'center', cursor: 'pointer' }}><Trash2 size={13} /></button>}
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <label style={{ display: 'grid', gap: 4 }}><span style={{ color: '#8A94A3', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Номер</span>{editing ? <input value={document.number} onChange={event => onPatch(index, { number: event.currentTarget.value })} placeholder="Не указан" style={familyDocumentControlStyle} /> : <span style={familyDocumentValueStyle}>{document.number || '—'}</span>}</label>
-                <label style={{ display: 'grid', gap: 4 }}><span style={{ color: '#8A94A3', fontSize: 9.5, fontWeight: 800, textTransform: 'uppercase' }}>Дата</span>{editing ? <input type="date" value={document.issuedAt} onChange={event => onPatch(index, { issuedAt: event.currentTarget.value })} style={familyDocumentControlStyle} /> : <span style={familyDocumentValueStyle}>{document.issuedAt ? new Date(`${document.issuedAt}T00:00:00`).toLocaleDateString('ru-RU') : '—'}</span>}</label>
+                <label style={{ display: 'grid', gap: 4 }}><span style={{ color: 'var(--text-2)', fontSize: 11.5, fontWeight: 600, textTransform: 'none' }}>Номер</span>{editing ? <input value={document.number} onChange={event => onPatch(index, { number: event.currentTarget.value })} placeholder="Не указан" style={familyDocumentControlStyle} /> : <span style={familyDocumentValueStyle}>{document.number || '—'}</span>}</label>
+                <label style={{ display: 'grid', gap: 4 }}><span style={{ color: 'var(--text-2)', fontSize: 11.5, fontWeight: 600, textTransform: 'none' }}>Дата</span>{editing ? <input type="date" value={document.issuedAt} onChange={event => onPatch(index, { issuedAt: event.currentTarget.value })} style={familyDocumentControlStyle} /> : <span style={familyDocumentValueStyle}>{document.issuedAt ? new Date(`${document.issuedAt}T00:00:00`).toLocaleDateString('ru-RU') : '—'}</span>}</label>
               </div>
 
               {editing ? (
-                <label style={{ height: 36, border: `1px dashed ${hasFile ? '#8EC9C4' : '#D4E0E4'}`, borderRadius: 10, background: hasFile ? '#F3FBFA' : '#FAFCFC', color: hasFile ? '#237F81' : '#667085', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 10px', fontSize: 11, fontWeight: 800, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <label style={{ height: 36, border: `1px dashed ${hasFile ? '#8EC9C4' : '#D4E0E4'}`, borderRadius: 10, background: hasFile ? '#F3FBFA' : '#FAFCFC', color: hasFile ? '#146566' : 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 10px', fontSize: 11, fontWeight: 600, cursor: 'pointer', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {document.scanFile ? document.scanFile.name : document.scanUrl ? 'Заменить файл' : 'Добавить файл'}
                   <input type="file" accept="image/*,.pdf,.doc,.docx" onChange={event => onPatch(index, { scanFile: event.currentTarget.files?.[0] ?? null })} style={{ display: 'none' }} />
                 </label>
               ) : document.scanUrl ? (
-                <a href={document.scanUrl} target="_blank" rel="noreferrer" style={{ height: 34, borderRadius: 9, background: '#F1FAFA', color: '#237F81', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none', fontSize: 11, fontWeight: 850 }}><ExternalLink size={13} /> Открыть документ</a>
+                <a href={document.scanUrl} target="_blank" rel="noreferrer" style={{ height: 34, borderRadius: 9, background: '#F1FAFA', color: '#146566', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, textDecoration: 'none', fontSize: 11, fontWeight: 600 }}><ExternalLink size={13} /> Открыть документ</a>
               ) : (
-                <div style={{ height: 34, borderRadius: 9, background: '#FAF6F1', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 800 }}>Файл не добавлен</div>
+                <div style={{ height: 34, borderRadius: 9, background: '#FAF6F1', color: '#B45309', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 600 }}>Файл не добавлен</div>
               )}
             </article>
           );
@@ -1255,46 +1254,34 @@ function FamilyDocumentsTab({ documents, editing, loading, onPatch, onAdd, onDel
   );
 }
 
-const familyDocumentControlStyle: React.CSSProperties = { width: '100%', height: 32, border: '1px solid #DDE7EB', borderRadius: 8, background: '#F8FAFC', padding: '0 8px', color: '#111827', fontSize: 11.5, fontWeight: 700, outline: 'none' };
-const familyDocumentValueStyle: React.CSSProperties = { height: 32, borderRadius: 8, background: '#F8FAFC', padding: '0 9px', color: '#344054', display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 750 };
+const familyDocumentControlStyle: React.CSSProperties = { width: '100%', height: 32, border: '1px solid #DDE7EB', borderRadius: 8, background: '#F8FAFC', padding: '0 8px', color: 'var(--text)', fontSize: 11.5, fontWeight: 600, outline: 'none' };
+const familyDocumentValueStyle: React.CSSProperties = { height: 32, borderRadius: 8, background: '#F8FAFC', padding: '0 9px', color: '#344054', display: 'flex', alignItems: 'center', fontSize: 11.5, fontWeight: 600 };
 
 function SideMetric({ label, value, alert, pending }: { label: string; value: string; alert?: boolean; pending?: boolean }) {
   return (
-    <div className="family-card-metric" style={{
-      background: pending ? '#FFFBEB' : '#F5FAFB',
-      borderRadius: 8,
-      padding: '5px 9px',
-      border: alert ? '1px solid #FECACA' : pending ? '1px solid #FDE68A' : '1px solid transparent',
-    }}>
-      <div style={{ fontSize: 11, color: pending ? '#92400E' : '#8A94A3', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '.02em' }}>{label}</div>
-      <div style={{ fontSize: 24, fontWeight: 700, color: alert ? '#B91C1C' : pending ? '#92400E' : '#111827', marginTop: 1 }}>{value}</div>
+    <div className={`family-card-metric${alert ? ' is-alert' : ''}${pending ? ' is-pending' : ''}`}>
+      <div className="family-card-metric-label">{label}</div>
+      <div className="family-card-metric-value">{value}</div>
     </div>
   );
 }
 
 function TabFinanceLazy({ loaded, onLoad, ...props }: { loaded: boolean; onLoad: () => void } & React.ComponentProps<typeof TabFinance>) {
   useEffect(() => { if (!loaded) onLoad(); }, [loaded, onLoad]);
-  if (!loaded) return <div style={{ padding: 40, textAlign: 'center', color: '#8A94A3', fontSize: 13 }}>Загрузка финансов...</div>;
+  if (!loaded) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-2)', fontSize: 13 }}>Загрузка финансов...</div>;
   return <TabFinance {...props} />;
 }
 
 function TabHistoryLazy({ loaded, onLoad, audit }: { loaded: boolean; onLoad: () => void; audit: AuditEntry[] }) {
   useEffect(() => { if (!loaded) onLoad(); }, [loaded, onLoad]);
-  if (!loaded) return <div style={{ padding: 40, textAlign: 'center', color: '#8A94A3', fontSize: 13 }}>Загрузка истории...</div>;
+  if (!loaded) return <div style={{ padding: 40, textAlign: 'center', color: 'var(--text-2)', fontSize: 13 }}>Загрузка истории...</div>;
   return <TabHistory audit={audit} />;
 }
 
-function DetailPanel({ title, children, accent }: { title: string; children: React.ReactNode; accent?: string }) {
+function DetailPanel({ title, children }: { title: string; children: React.ReactNode; accent?: string }) {
   return (
-    <section className="family-card-panel" style={{
-      background: '#fff',
-      border: 'none',
-      borderTop: accent ? `3px solid ${accent}` : 'none',
-      borderRadius: 14,
-      padding: 14,
-      boxShadow: '0 5px 18px rgba(43, 72, 89, .055)',
-    }}>
-      <div style={{ fontSize: 13, fontWeight: 900, color: '#111827', marginBottom: 8 }}>{title}</div>
+    <section className="family-card-panel">
+      <div className="family-card-panel-title">{title}</div>
       <div className="family-detail-rows">
         {children}
       </div>
@@ -1341,7 +1328,7 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
             if (liveCommit) onCommit(event.target.value);
           }}
           onBlur={event => { if (!liveCommit) onCommit(event.currentTarget.value); }}
-          style={{ ...detailControlStyle, background: '#F8FAFC', borderColor: '#DDE7EB' }}
+          style={{ ...detailControlStyle, background: '#F8FAFC', borderColor: 'var(--border)' }}
         />
       ) : waHref ? (
         <a
@@ -1352,7 +1339,7 @@ function DetailInput({ label, value, onCommit, placeholder = '-', type = 'text',
           onClick={event => event.stopPropagation()}
           style={{ ...detailControlStyle, display: 'inline-flex', alignItems: 'center', gap: 5, paddingLeft: 0, color: '#159A6A', textDecoration: 'none' }}
         >
-          <span>{value || placeholder}</span>
+          <span>{formatPhoneDisplay(value) || placeholder}</span>
           <MessageCircle size={12} color="#25D366" />
         </a>
       ) : (
@@ -1377,7 +1364,7 @@ function childDiscountLabel(child: Child): string {
 }
 
 function ReadOnlyValue({ value }: { value?: string }) {
-  return <span style={{ color: '#17222F', fontSize: 12, fontWeight: 750 }}>{value || '-'}</span>;
+  return <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 500 }}>{value || '—'}</span>;
 }
 
 function DetailValue({ label, value }: { label: string; value: string }) {
@@ -1405,7 +1392,7 @@ function DetailMapLink({ label, url }: { label: string; url: string }) {
             display: 'inline-flex',
             alignItems: 'center',
             gap: 6,
-            color: '#237F81',
+            color: '#146566',
             textDecoration: 'none',
           }}
         >
@@ -1414,19 +1401,19 @@ function DetailMapLink({ label, url }: { label: string; url: string }) {
           <ExternalLink size={12} />
         </a>
       ) : (
-        <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', color: '#98A2B3' }}>-</span>
+        <span style={{ ...detailControlStyle, display: 'flex', alignItems: 'center', color: 'var(--text-3)' }}>-</span>
       )}
     </div>
   );
 }
 
 const CHILD_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  boarded:  { bg: '#D1FAE5', color: '#065F46' },
-  waiting:  { bg: '#FEF9C3', color: '#92400E' },
-  new:      { bg: '#EFF6FF', color: '#1E40AF' },
-  paused:   { bg: '#F3F4F6', color: '#374151' },
-  rejected: { bg: '#FEE2E2', color: '#991B1B' },
-};
+  boarded:  { bg: '#E7F5EE', color: '#0F6B48' },
+  waiting:  { bg: '#FDF3DD', color: '#8A5A00' },
+  new:      { bg: '#EAF1FD', color: '#2952A3' },
+  paused:   { bg: '#EEF1F4', color: '#4A5563' },
+  rejected: { bg: '#FBEAEA', color: '#A12C2C' },
+}
 const CHILD_STATUS_OPTIONS_INLINE = [
   { value: 'new', label: 'Новый' },
   { value: 'waiting', label: 'Ожидание' },
@@ -1475,19 +1462,19 @@ function ChildCard({
       >
         <span style={childCardIndexStyle}>{index + 1}</span>
         <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
-          <span style={{ fontSize: 13.5, fontWeight: 850, color: '#111827' }}>{formatName(child.childName) || 'Без имени'}</span>
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{formatName(child.childName) || 'Без имени'}</span>
           <TaskButton compact target={{type:'child',id:child.id,label:child.childName,familyId:child.familyId}} />
-          <span style={{ fontSize: 10, color: '#9CA3AF', fontWeight: 650, whiteSpace: 'nowrap' }}>
+          <span style={{ fontSize: 11, color: 'var(--text-3)', fontWeight: 600, whiteSpace: 'nowrap' }}>
             CRM: {formatInlineDate(child.createdAt)} · Посадка: {formatInlineDate(child.transferAssignedAt)}
           </span>
 
         </div>
-        <span style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 10.5, fontWeight: 750, padding: '4px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>
+        <span style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 11, fontWeight: 600, padding: '4px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>
           {CHILD_STATUS_OPTIONS_INLINE.find(item => item.value === s)?.label ?? s}
         </span>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexShrink: 0 }}>
-          {hasDiscount && <span style={{ fontSize: 10.5, color: '#9CA3AF', textDecoration: 'line-through' }}>{money(basePrice)}</span>}
-          <span style={{ fontSize: 13.5, fontWeight: 900, color: '#111827' }}>{money(finalPrice)}</span>
+          {hasDiscount && <span style={{ fontSize: 11, color: 'var(--text-3)', textDecoration: 'line-through' }}>{money(basePrice)}</span>}
+          <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{money(finalPrice)}</span>
         </div>
         {onEditDiscount && !child.id.startsWith('draft-') && (
           <button
@@ -1552,7 +1539,7 @@ function ChildCard({
                 content: (
                   editing ? <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
                     <EditableSelect value={child.zone} options={ZONE_OPTIONS} onCommit={value => onSaveChild(child, { zone: value as Zone })} width={40} panelWidth={120} />
-                    <span style={{ color: '#C4C9D4', fontSize: 10 }}>·</span>
+                    <span style={{ color: '#C4C9D4', fontSize: 11 }}>·</span>
                     <EditableSelect value={child.vehicleType} options={VEHICLE_TYPE_OPTIONS} onCommit={value => onSaveChild(child, { vehicleType: value as VehicleType })} width={90} panelWidth={190} />
                   </div> : <ReadOnlyValue value={`${child.zone} · ${vehicleLabel}`} />
                 ),
@@ -1579,7 +1566,7 @@ function ChildCard({
                     value={child.discountOverridePercent == null ? (Number(child.manualDiscountPercent || 0) > 0 || Number(child.manualDiscountAmount || 0) > 0 ? 'custom' : 'auto') : String(child.discountOverridePercent)}
                     disabled={busy}
                     onChange={event => void onSaveChild(child, { discountOverridePercent: event.target.value === 'auto' ? null : Number(event.target.value) })}
-                    style={{ width: '100%', border: '1px solid #D5E3E7', borderRadius: 5, background: '#fff', color: '#17222F', fontSize: 12, fontWeight: 750, padding: '3px 5px' }}
+                    style={{ width: '100%', border: '1px solid #D5E3E7', borderRadius: 5, background: '#fff', color: 'var(--text)', fontSize: 12, fontWeight: 600, padding: '3px 5px' }}
                   >
                     {child.discountOverridePercent == null && (Number(child.manualDiscountPercent || 0) > 0 || Number(child.manualDiscountAmount || 0) > 0) && <option value="custom" disabled>{childDiscountLabel(child)}</option>}
                     <option value="auto">Автоматически</option>
@@ -1593,7 +1580,7 @@ function ChildCard({
               },
             ].filter(({ label }) => editing || (label !== 'Итого' && (label !== 'Цена (сом)' || hasDiscount))).map(({ label, content }) => (
               <div key={label} style={{ background: '#F8FAFC', borderRadius: 7, padding: '5px 8px' }}>
-                <div style={{ fontSize: 10, color: '#8A94A3', fontWeight: 750, marginBottom: 2 }}>{label}</div>
+                <div style={{ fontSize: 11, color: 'var(--text-2)', fontWeight: 600, marginBottom: 2 }}>{label}</div>
                 <div style={{ fontSize: 12 }}>{content}</div>
               </div>
             ))}
@@ -1716,7 +1703,7 @@ function EditableNumber({
   useEffect(() => setLocal(stringValue), [stringValue]);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-      {prefix && <span style={{ color: '#98A2B3', fontSize: 10, fontWeight: 850 }}>{prefix}</span>}
+      {prefix && <span style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 600 }}>{prefix}</span>}
       <input
         type="number"
         value={local}
@@ -1732,7 +1719,7 @@ function EditableNumber({
         }}
         style={{ ...childTableControlStyle(strong), width: 58 }}
       />
-      {suffix && <span style={{ color: '#98A2B3', fontSize: 10, fontWeight: 850 }}>{suffix}</span>}
+      {suffix && <span style={{ color: 'var(--text-3)', fontSize: 11, fontWeight: 600 }}>{suffix}</span>}
     </div>
   );
 }
@@ -1776,10 +1763,10 @@ function modalStyle(): React.CSSProperties {
   return {
     display: 'grid',
     gridTemplateColumns: 'minmax(0, 1fr)',
-    background: '#fff',
-    border: 'none',
-    borderRadius: 20,
-    boxShadow: '0 28px 70px rgba(8,11,11,0.18)',
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 12,
+    boxShadow: 'var(--shadow-lg)',
     height: 'min(900px, calc(100vh - 48px))',
     minHeight: 0,
     maxHeight: 'calc(100vh - 48px)',
@@ -1792,35 +1779,35 @@ function modalStyle(): React.CSSProperties {
 function detailFieldStyle(_tone: 'soft' | 'clear'): React.CSSProperties {
   return {
     display: 'grid',
-    gridTemplateColumns: '104px minmax(0, 1fr)',
-    gap: 10,
+    gridTemplateColumns: '120px minmax(0, 1fr)',
+    gap: 12,
     minWidth: 0,
-    padding: '3px 8px',
-    minHeight: 29,
-    borderBottom: '1px solid #F0F3F5',
-    borderRadius: 7,
+    padding: '6px 0',
+    minHeight: 36,
+    borderBottom: '1px solid #EEF1F4',
+    borderRadius: 0,
     background: 'transparent',
     alignItems: 'center',
   };
 }
 
 const detailLabelStyle: React.CSSProperties = {
-  fontSize: 10,
-  fontWeight: 800,
-  color: '#7B8491',
+  fontSize: 12.5,
+  fontWeight: 400,
+  color: 'var(--text-2)',
 };
 
 const detailControlStyle: React.CSSProperties = {
   width: '100%',
   minWidth: 0,
-  height: 24,
+  height: 30,
   border: '1px solid transparent',
   borderRadius: 7,
   background: 'transparent',
-  color: '#111827',
-  padding: '0 8px',
-  fontSize: 12,
-  fontWeight: 750,
+  color: 'var(--text)',
+  padding: '0 9px',
+  fontSize: 13.5,
+  fontWeight: 500,
   outline: 'none',
 };
 
@@ -1835,11 +1822,11 @@ const headerInfoStyle: React.CSSProperties = {
 const closeButtonStyle: React.CSSProperties = {
   width: 32,
   height: 32,
-  background: '#fff',
-  border: '1px solid #E5ECEF',
-  borderRadius: 10,
+  background: 'transparent',
+  border: 'none',
+  borderRadius: 8,
   cursor: 'pointer',
-  color: '#6B7280',
+  color: 'var(--text-2)',
   padding: 0,
   flexShrink: 0,
   display: 'grid',
@@ -1848,41 +1835,44 @@ const closeButtonStyle: React.CSSProperties = {
 
 const editHeaderButtonStyle: React.CSSProperties = {
   height: 32,
-  padding: '0 13px',
-  border: 'none',
-  borderRadius: 10,
-  background: '#31A4A5',
+  padding: '0 12px',
+  border: '1px solid var(--accent-h)',
+  borderRadius: 8,
+  background: 'var(--accent)',
   color: '#fff',
   display: 'inline-flex',
   alignItems: 'center',
-  gap: 7,
-  fontSize: 11,
-  fontWeight: 850,
+  gap: 6,
+  fontSize: 13,
+  fontWeight: 500,
   cursor: 'pointer',
-  boxShadow: '0 5px 14px rgba(49, 164, 165, .2)',
+  boxShadow: 'var(--shadow-xs)',
+  whiteSpace: 'nowrap',
 };
 
 const secondaryHeaderButtonStyle: React.CSSProperties = {
   ...editHeaderButtonStyle,
-  background: '#F4F7F8',
-  color: '#667085',
-  boxShadow: 'none',
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--text)',
 };
 
 const addressChangeButtonStyle: React.CSSProperties = {
-  minHeight: 30,
-  margin: '4px 8px',
-  border: '1px solid #B9DDDD',
+  minHeight: 32,
+  margin: '6px 0',
+  padding: '0 12px',
+  border: '1px solid var(--border)',
   borderRadius: 8,
-  background: '#F0FAFA',
-  color: '#237F81',
+  background: 'var(--surface)',
+  color: 'var(--text)',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
   gap: 6,
-  fontSize: 11,
-  fontWeight: 850,
+  fontSize: 13,
+  fontWeight: 500,
   cursor: 'pointer',
+  boxShadow: 'var(--shadow-xs)',
 };
 
 const addressModalOverlayStyle: React.CSSProperties = {
@@ -1927,9 +1917,9 @@ const addressSearchInputStyle: React.CSSProperties = {
   borderRadius: 10,
   padding: '0 12px',
   outline: 'none',
-  color: '#111827',
+  color: 'var(--text)',
   fontSize: 13,
-  fontWeight: 650,
+  fontWeight: 600,
 };
 
 const addressModalBodyStyle: React.CSSProperties = {
@@ -1962,8 +1952,8 @@ const addressFieldLabelStyle: React.CSSProperties = {
   display: 'grid',
   gap: 6,
   color: '#475467',
-  fontSize: 10,
-  fontWeight: 850,
+  fontSize: 11,
+  fontWeight: 600,
 };
 
 const addressQueryPreviewStyle: React.CSSProperties = {
@@ -1976,7 +1966,7 @@ const addressQueryPreviewStyle: React.CSSProperties = {
   background: '#fff',
   color: '#1F2937',
   fontSize: 12,
-  fontWeight: 750,
+  fontWeight: 600,
   lineHeight: 1.35,
 };
 
@@ -1989,10 +1979,10 @@ const addressPrimaryButtonStyle: React.CSSProperties = {
   alignItems: 'center',
   justifyContent: 'center',
   gap: 7,
-  background: '#31A4A5',
+  background: '#1A7F80',
   color: '#fff',
   fontSize: 12,
-  fontWeight: 850,
+  fontWeight: 600,
   cursor: 'pointer',
 };
 
@@ -2000,7 +1990,7 @@ const addressSecondaryButtonStyle: React.CSSProperties = {
   ...addressPrimaryButtonStyle,
   border: '1px solid #DCE4E7',
   background: '#fff',
-  color: '#667085',
+  color: 'var(--text-2)',
 };
 
 const addressCandidatesStyle: React.CSSProperties = {
@@ -2038,7 +2028,7 @@ const addressErrorStyle: React.CSSProperties = {
   background: '#FFF5F5',
   color: '#B42318',
   fontSize: 11,
-  fontWeight: 750,
+  fontWeight: 600,
 };
 
 const addressStatusStyle: React.CSSProperties = {
@@ -2047,9 +2037,9 @@ const addressStatusStyle: React.CSSProperties = {
   border: '1px solid #CDE5E2',
   borderRadius: 9,
   background: '#F4FBFA',
-  color: '#237F81',
+  color: '#146566',
   fontSize: 11,
-  fontWeight: 750,
+  fontWeight: 600,
 };
 
 const addressMapStyle: React.CSSProperties = {
@@ -2071,8 +2061,8 @@ const addressMapHintStyle: React.CSSProperties = {
   background: 'rgba(255,255,255,.92)',
   boxShadow: '0 6px 18px rgba(15, 23, 42, .12)',
   color: '#475467',
-  fontSize: 10,
-  fontWeight: 800,
+  fontSize: 11,
+  fontWeight: 600,
   pointerEvents: 'none',
 };
 
@@ -2116,53 +2106,53 @@ const addressModalFooterStyle: React.CSSProperties = {
 };
 
 const discountButtonStyle: React.CSSProperties = {
-  border: '1px solid #E5E7EB',
-  background: '#fff',
-  color: '#374151',
+  border: '1px solid var(--border)',
+  background: 'var(--surface)',
+  color: 'var(--text)',
   borderRadius: 7,
-  padding: '3px 8px',
-  fontSize: 11,
-  fontWeight: 750,
+  padding: '3px 9px',
+  fontSize: 12,
+  fontWeight: 500,
   cursor: 'pointer',
   flexShrink: 0,
 };
 
 function teacherPriceButtonStyle(active: boolean): React.CSSProperties {
   return {
-    ...editHeaderButtonStyle,
-    border: `1px solid ${active ? '#D29B23' : '#E6D3A4'}`,
-    background: active ? '#FFF4D6' : '#FFFBF1',
-    color: '#8A5A00',
-    boxShadow: active ? '0 4px 12px rgba(210, 155, 35, .18)' : 'none',
+    ...secondaryHeaderButtonStyle,
+    border: `1px solid ${active ? '#E3B341' : 'var(--border)'}`,
+    background: active ? '#FFF7E0' : 'var(--surface)',
+    color: active ? '#8A5A00' : 'var(--text)',
   };
 }
 
 const contentBodyStyle: React.CSSProperties = {
   flex: 1,
   overflowY: 'auto',
-  padding: '14px 22px',
-  background: '#F6F9FA',
+  padding: '20px 24px 28px',
+  background: 'var(--bg)',
 };
 
 const smallAddChildBtnStyle: React.CSSProperties = {
-  height: 30,
-  border: 'none',
-  borderRadius: 9,
-  background: '#31A4A5',
+  height: 32,
+  border: '1px solid var(--accent-h)',
+  borderRadius: 8,
+  background: 'var(--accent)',
   color: '#fff',
   padding: '0 12px',
-  fontSize: 12,
-  fontWeight: 850,
+  fontSize: 13,
+  fontWeight: 500,
   cursor: 'pointer',
+  boxShadow: 'var(--shadow-xs)',
 };
 
 const deleteChildBtnStyle: React.CSSProperties = {
-  width: 28,
-  height: 28,
-  border: '1px solid #F5C8C8',
+  width: 30,
+  height: 30,
+  border: '1px solid var(--border)',
   borderRadius: 8,
-  background: '#FFF5F5',
-  color: '#C62828',
+  background: 'var(--surface)',
+  color: 'var(--danger)',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
@@ -2172,14 +2162,14 @@ const deleteChildBtnStyle: React.CSSProperties = {
 const childCardIndexStyle: React.CSSProperties = {
   width: 22,
   height: 22,
-  borderRadius: '50%',
-  background: '#D7EEEE',
-  color: '#237F81',
+  borderRadius: 6,
+  background: 'var(--surface-3)',
+  color: 'var(--text-2)',
   display: 'inline-flex',
   alignItems: 'center',
   justifyContent: 'center',
-  fontSize: 11,
-  fontWeight: 900,
+  fontSize: 12,
+  fontWeight: 600,
   flexShrink: 0,
 };
 
@@ -2187,14 +2177,14 @@ function childTableControlStyle(strong?: boolean): React.CSSProperties {
   return {
     width: '100%',
     minWidth: 0,
-    height: 24,
+    height: 28,
     border: '1px solid transparent',
     borderRadius: 6,
     background: 'transparent',
-    color: '#111827',
-    padding: '0 4px',
-    fontSize: 11,
-    fontWeight: strong ? 850 : 750,
+    color: 'var(--text)',
+    padding: '0 6px',
+    fontSize: 13,
+    fontWeight: strong ? 600 : 400,
     outline: 'none',
   };
 }

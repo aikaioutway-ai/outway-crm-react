@@ -130,7 +130,7 @@ export default function MarketCatalogTab({ sessionToken }: { sessionToken?: stri
                   <td>{row.unit}</td>
                   <td className="number">{money(row.purchasePrice)}</td>
                   <td className="number">{money(row.salePrice)}</td>
-                  <td className="number" style={{ color: margin < 0 ? '#c33e3e' : '#17222F', fontWeight: 850 }}>{money(margin)}</td>
+                  <td className="number" style={{ color: margin < 0 ? '#c33e3e' : 'var(--text)', fontWeight: 600 }}>{money(margin)}</td>
                   <td><span className={`market-badge${row.active ? '' : ' muted'}`}>{row.active ? 'Активен' : 'Скрыт'}</span></td>
                   <td><button className="market-icon-btn" onClick={() => setEditing(row)} aria-label="Редактировать"><Pencil size={15} /></button></td>
                 </tr>

@@ -76,7 +76,7 @@ function drawHeader(ctx: CanvasRenderingContext2D, list: ExportList, columns: Co
   let y = MARGIN + 110;
   ctx.fillStyle = '#E2F5F3';
   ctx.fillRect(MARGIN, y, PAGE_WIDTH - MARGIN * 2, 48);
-  ctx.fillStyle = '#237F81';
+  ctx.fillStyle = '#146566';
   ctx.font = `800 22px ${FONT}`;
   let x = MARGIN;
   columns.forEach(column => {

@@ -252,7 +252,7 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
                   <td>{formatAuditDate(entry.createdAt)}</td>
                   <td>{!entry.userName || /^FAM-|^SYS-|^[0-9a-f]{8}-/i.test(entry.userName) ? 'Система' : entry.userName}</td>
                   <td>
-                    <div style={{ fontWeight: 650 }}>{actionLabel(entry)}</div>
+                    <div style={{ fontWeight: 600 }}>{actionLabel(entry)}</div>
                     {!deletedPayment && description && <div className="family-history-details">{description}</div>}
                     {deletedPayment && <details className="family-history-details">
                       <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')}</summary>

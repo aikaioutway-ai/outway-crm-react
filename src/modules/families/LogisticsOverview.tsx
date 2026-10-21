@@ -12,6 +12,7 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import { SchoolTier } from './SchoolTierTabs';
 import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
+import { isInTestTransfer, useTestTransfers } from './testTransfers';
 
 type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 'microbusCount' | 'lightVehicleCount';
 
@@ -43,7 +44,7 @@ export const SCHOOL_COLORS = [
 ];
 
 const KPI_COLORS: Record<SortKey, string> = {
-  school: '#626C8B',
+  school: 'var(--text-2)',
   newRequests: '#378ADD',
   microbusAverage: '#2563EB',
   transferCount: '#2DD4BF',
@@ -64,8 +65,9 @@ const GRID_TEMPLATE = ['school', 'newRequests', 'microbusAverage', 'transferCoun
   .map(key => `minmax(0, ${COLUMN_WEIGHTS[key as SortKey]}fr)`)
   .join(' ');
 
+// Тестовые трансферы — черновики логиста: в статистику трансферов не входят.
 function workRows(rows: FamilyListRow[]): FamilyListRow[] {
-  return rows.filter(row => row.status !== 'rejected');
+  return rows.filter(row => row.status !== 'rejected' && !isInTestTransfer(row));
 }
 
 function transferStats(rows: FamilyListRow[]) {
@@ -101,7 +103,7 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
       label: tab.label,
       color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
       logo: tab.logo,
-      newRequests: schoolRows.filter(isNewUnassignedRow).length,
+      newRequests: schoolRows.filter(row => isNewUnassignedRow(row) || isInTestTransfer(row)).length,
       microbusAverage: transfers.microbusAverage,
       transferCount: transfers.transferCount,
       microbusCount: transfers.microbusCount,
@@ -126,7 +128,9 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier, allowedSchools), [rows, schoolTier, allowedSchools]);
+  const testMarks = useTestTransfers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- testMarks: пересчёт при смене тестовых отметок
+  const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier, allowedSchools), [rows, schoolTier, allowedSchools, testMarks]);
   const totals = useMemo(() => {
     const tierRows = (rows ?? []).filter(row => SCHOOL_TIER_2_KEYS.includes(row.branchFilter) === (schoolTier === '2.0'));
     const transferSummary = transferStats(tierRows);
@@ -170,7 +174,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   };
 
   if (rows === null) {
-    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
+    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-2)' }}>Загрузка...</div>;
   }
 
   return (

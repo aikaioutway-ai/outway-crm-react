@@ -50,7 +50,7 @@ const SCHOOL_COLORS = [
 
 const KPI_COLORS: Record<SortKey, string> = {
   school: '#64748B',
-  paymentsAmount: '#626C8B',
+  paymentsAmount: 'var(--text-2)',
   pendingCount: '#7C3AED',
   pendingAmount: '#2563EB',
   confirmedAmount: 'var(--success)',
@@ -194,9 +194,9 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
       {focused && query.trim() && <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 12px 30px rgba(23,34,47,.12)', zIndex: 90, maxHeight: 320, overflowY: 'auto' }}>
         {suggestions.length === 0 ? <div style={{ padding: '14px 16px', color: 'var(--text-2)', fontSize: 13 }}>Платежи не найдены</div> : suggestions.map((row, index) => (
           <button key={row.familyId} onMouseDown={event => event.preventDefault()} onClick={() => select(row)} style={{ width: '100%', padding: '10px 12px', border: 'none', borderBottom: '1px solid var(--border)', background: index === activeIndex ? 'var(--surface-2)' : '#fff', textAlign: 'left', display: 'grid', gap: 2 }}>
-            <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 800 }}>{row.childrenNames || row.parentName}</span>
+            <span style={{ color: 'var(--text)', fontSize: 13, fontWeight: 600 }}>{row.childrenNames || row.parentName}</span>
             <span style={{ color: 'var(--text-2)', fontSize: 11 }}>{row.parentName} · {row.phone} · {row.branchShort}</span>
-            <span style={{ color: 'var(--accent)', fontSize: 10, fontWeight: 750 }}>Последний платёж: {paymentDate(row)?.toLocaleDateString('ru-RU') ?? '—'}</span>
+            <span style={{ color: 'var(--accent)', fontSize: 11, fontWeight: 600 }}>Последний платёж: {paymentDate(row)?.toLocaleDateString('ru-RU') ?? '—'}</span>
           </button>
         ))}
       </div>}
@@ -287,7 +287,7 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
   };
 
   if (rows === null) {
-    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
+    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-2)' }}>Загрузка...</div>;
   }
 
   return (

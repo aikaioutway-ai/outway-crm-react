@@ -258,10 +258,10 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
               >
                 <SchoolAvatar logo={tab?.logo} label={tab?.label ?? row.branchFilter} color="#626C8B" size={26} radius={7} fontSize={10} />
                 <div style={{ minWidth: 0, flex: 1 }}>
-                  <div style={{ fontSize: 13, fontWeight: 700, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.childName || row.parentName}</div>
+                  <div style={{ fontSize: 13, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.childName || row.parentName}</div>
                   <div style={{ fontSize: 11, color: 'var(--text-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{row.parentName} · {row.phone}</div>
                 </div>
-                <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-2)', flexShrink: 0 }}>{tab?.label ?? row.branchFilter}</span>
+                <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--text-2)', flexShrink: 0 }}>{tab?.label ?? row.branchFilter}</span>
               </div>
             );
           })}
@@ -346,13 +346,13 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
   };
 
   if (branchStatsQuery.isPending) {
-    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: '#7A859D' }}>Загрузка...</div>;
+    return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-2)' }}>Загрузка...</div>;
   }
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column' }}>
       {loadError && (
-        <div style={{ padding: '8px 14px', margin: '0 0 8px', background: '#FBEAE9', border: '1px solid #F0C4C0', borderRadius: 10, color: '#B3261E', fontSize: 12.5, fontWeight: 700 }}>
+        <div style={{ padding: '8px 14px', margin: '0 0 8px', background: '#FBEAE9', border: '1px solid #F0C4C0', borderRadius: 10, color: '#B3261E', fontSize: 12.5, fontWeight: 600 }}>
           Не удалось обновить данные — показаны последние загруженные. Проверьте соединение и обновите страницу.
         </div>
       )}
@@ -383,7 +383,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
               flexShrink: 0,
               cursor: 'pointer',
               fontSize: 13,
-              fontWeight: 800,
+              fontWeight: 600,
               whiteSpace: 'nowrap',
             }}
           >
