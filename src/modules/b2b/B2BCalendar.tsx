@@ -1,3 +1,4 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import { useMemo, useState } from 'react';
 import { CalendarDays, ChevronLeft, ChevronRight, Search, X } from 'lucide-react';
 import { B2B_ORDER_STATUSES, B2BOrder, OrderStatus } from './B2BOrders';
@@ -69,7 +70,7 @@ function capitalize(value: string) {
   return value.charAt(0).toLocaleUpperCase('ru-RU') + value.slice(1);
 }
 
-export default function B2BCalendar({ onOpenOrder }: { onOpenOrder: (id: string) => void }) {
+export default function B2BCalendar({ onOpenOrder, onOpenAll }: { onOpenOrder: (id: string) => void; onOpenAll?: () => void }) {
   const { data: orders = [] } = useB2BOrders();
   const [currentDate, setCurrentDate] = useState(() => startOfLocalDay(new Date()));
   const [view, setView] = useState<CalendarView>('month');
@@ -148,7 +149,7 @@ export default function B2BCalendar({ onOpenOrder }: { onOpenOrder: (id: string)
 
   return (
     <section className="b2b-calendar" aria-label="Календарь выездов">
-      <header className="b2b-calendar-head">
+      <header className="b2b-calendar-head"><AllRecordsButton onClick={()=>{setDriverFilter('all');setStatusFilter('all');setSearch('');onOpenAll?.();}}/>
         <div><h2>Календарь выездов</h2><p>{filteredOrders.length} {filteredOrders.length === 1 ? 'выезд' : 'выездов'} с указанной датой</p></div>
         <div className="b2b-calendar-view" aria-label="Вид календаря">
           {([['month', 'Месяц'], ['week', 'Неделя'], ['day', 'День']] as const).map(([key, label]) => (

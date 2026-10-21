@@ -1,3 +1,5 @@
+import { downloadTableExcel } from './tableExport';
+jest.mock('./tableExport', () => ({ downloadTableExcel: jest.fn().mockResolvedValue(undefined) }));
 import { act, fireEvent, render as renderBase, screen, waitFor, within } from '@testing-library/react';
 import { DataTable, type ColumnDef } from './DataTable';
 
@@ -203,3 +205,25 @@ async function render(ui: Parameters<typeof renderBase>[0]) {
  await act(async()=>{result=renderBase(ui);});
  return result;
 }
+
+test('header repeat filter includes matches across pages, excludes blanks and resets', async () => {
+  const repeatColumns: ColumnDef<{id: string; transfer: string}>[] = [{key: 'transfer', label: 'Трансфер', type: 'text'}];
+  const rows = Array.from({length: 24}, (_, index) => ({id: String(index), transfer: index === 0 || index === 23 ? 'Дубль' : `Уникальный ${index}`}));
+  rows.push({id: 'empty1', transfer: ''}, {id: 'empty2', transfer: ''});
+  await render(<DataTable columns={repeatColumns} data={rows} rowKey="id" storageKey="repeat-test" />);
+  fireEvent.contextMenu(screen.getByText('Трансфер'));
+  expect(screen.queryByText('Среднее')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Повторяющиеся значения'}));
+  expect(screen.getAllByText('Дубль')).toHaveLength(2);
+  expect(screen.queryByText('Уникальный 1')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('2 строк');
+  fireEvent.click(screen.getByRole('button', {name: 'Сбросить'}));
+  expect(screen.getByText('Уникальный 1')).toBeInTheDocument();
+});
+
+test('Excel download contains all filtered rows across pages with readable select labels', async () => {
+  const rows = Array.from({length: 25}, (_, index) => ({id: String(index), paymentMethod: 'cash'}));
+  await render(<DataTable columns={columns} data={rows} rowKey="id" storageKey="excel-test" />);
+  fireEvent.click(screen.getByRole('button', {name:'Скачать таблицу в Excel'}));
+  await waitFor(() => expect(downloadTableExcel).toHaveBeenCalledWith(['Вид оплаты'], Array.from({length:25}, () => ['Наличные'])));
+});

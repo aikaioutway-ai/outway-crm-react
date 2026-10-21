@@ -1,3 +1,4 @@
+import FilterableTable from '../../core/tables/FilterableTable';
 import { useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Check, Pencil, X } from 'lucide-react';
 import { B2B_QUERY_KEYS } from '../../hooks/useB2BData';
@@ -114,7 +115,7 @@ export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpen
   };
 
   return <div className="b2b-client-orders-wrap">
-    <table className="b2b-client-orders-table b2b-client-payments-table">
+    <FilterableTable className="b2b-client-orders-table b2b-client-payments-table">
       <thead><tr>
         {header('paymentDate', 'Дата')}
         {header('orderNumber', 'Заказ')}
@@ -141,7 +142,7 @@ export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpen
           </> : <button type="button" onClick={() => openEdit(payment)} title="Редактировать платёж"><Pencil size={14} /></button>}</td>
         </tr>;
       })}</tbody>
-    </table>
+    </FilterableTable>
     {error && <div className="b2b-payment-inline-error" role="alert">{error}</div>}
   </div>;
 }

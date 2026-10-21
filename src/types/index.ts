@@ -171,6 +171,7 @@ export interface FamilyPayment {
   paymentType: PaymentType;
   paymentOrderNumber?: string;
   receiptUrl?: string;
+  receiptCode?:string;receiptTime?:string;receiptCardLast4?:string;receiptBank?:string;
   paymentDate: string;
   actualPaymentDate?: string;
   status: PaymentReviewStatus;

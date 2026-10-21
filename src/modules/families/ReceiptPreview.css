@@ -1,0 +1,15 @@
+.receipt-workspace { display: grid; grid-template-columns: minmax(0,1fr); gap: 20px; align-items: start; }
+.receipt-workspace-form { grid-area: 1 / 1; }
+.receipt-workspace--open .receipt-preview { grid-area: 1 / 1; width: calc((100% - 24px) / 2); margin-left: auto; z-index: 2; align-self: start; }
+.receipt-workspace--open .family-money-refund-form, .receipt-workspace--open .family-money-refund-list { visibility: hidden; pointer-events: none; }
+.receipt-workspace-form { min-width: 0; }
+
+.receipt-preview { position: sticky; top: 0; min-width: 0; height: min(76vh,900px); border: 1px solid var(--border); border-radius: 12px; overflow: hidden; background: var(--surface); display: flex; flex-direction: column; }
+.receipt-preview header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.receipt-preview header strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
+.receipt-preview header button { display: grid; place-items: center; min-width: 32px; min-height: 32px; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.receipt-preview-content { flex: 1; min-height: 0; overflow: auto; background: var(--surface-2); }
+.receipt-preview-content img { display: block; width: 100%; height: auto; }
+.receipt-preview-content iframe { width: 100%; height: 100%; border: 0; background: white; }
+.receipt-preview-link { display: inline-flex; align-items: center; gap: 6px; padding: 7px 0; text-align: left; font: inherit; font-size: 12px; border: 0; background: transparent; color: var(--accent); cursor: pointer; overflow-wrap: anywhere; }
+@media(max-width:700px) { .receipt-workspace--open { grid-template-columns: minmax(0,1fr); } .receipt-workspace--open .receipt-preview { grid-area: auto; position: relative; width: 100%; height: 55vh; } .receipt-workspace--open .family-money-refund-form, .receipt-workspace--open .family-money-refund-list { visibility: visible; pointer-events: auto; } }

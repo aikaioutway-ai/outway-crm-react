@@ -16,6 +16,7 @@ function appVersionFile(): Plugin {
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
+  const anthropicKey = process.env.ANTHROPIC_API_KEY || env.ANTHROPIC_API_KEY || env.VITE_ANTHROPIC_API_KEY;
 
   return {
     plugins: [react(), appVersionFile()],
@@ -27,11 +28,17 @@ export default defineConfig(({ mode }) => {
         '/anthropic': {
           target: 'https://api.anthropic.com',
           changeOrigin: true,
+          bypass: (_req, res) => {
+            if (!anthropicKey) {
+              res.writeHead(503, { 'content-type': 'application/json; charset=utf-8' });
+              res.end(JSON.stringify({ error: 'OCR не настроен: добавьте ANTHROPIC_API_KEY в .env.local и перезапустите сервер' }));
+              return false;
+            }
+          },
           rewrite: path => path.replace(/^\/anthropic/, ''),
           configure: proxy => {
             proxy.on('proxyReq', proxyReq => {
-              const apiKey = env.VITE_ANTHROPIC_API_KEY;
-              if (apiKey) proxyReq.setHeader('x-api-key', apiKey);
+              if (anthropicKey) proxyReq.setHeader('x-api-key', anthropicKey);
               proxyReq.setHeader('anthropic-version', '2023-06-01');
             });
           },

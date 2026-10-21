@@ -1,3 +1,4 @@
+import FilterableTable from '../../core/tables/FilterableTable';
 import React, { useState } from 'react';
 
 interface AuditEntry {
@@ -237,7 +238,7 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
         {deletedOnly ? 'Вся история' : 'Удалённые чеки'}
       </button>
       <div style={{ overflowX: 'auto', border: '1px solid #e5eaf0', borderRadius: 10 }}>
-        <table className="family-history-table">
+        <FilterableTable className="family-history-table">
           <thead><tr><th scope="col">Дата</th><th scope="col">Кто</th><th scope="col">Что сделал</th></tr></thead>
           <tbody>
             {visibleAudit.length === 0 && <tr><td colSpan={3}>Удалённых чеков нет</td></tr>}
@@ -265,7 +266,7 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
               );
             })}
           </tbody>
-        </table>
+        </FilterableTable>
       </div>
     </div>
   );

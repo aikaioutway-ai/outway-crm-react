@@ -1,8 +1,9 @@
+import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
 import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Table2, Columns3, Search, Building2, Bus, CircleUserRound, Route, School, ReceiptText, RotateCcw, Gift, Banknote, LockKeyhole, WalletCards, Pencil, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, List, Search, Building2, Bus, CircleUserRound, Route, School, ReceiptText, RotateCcw, Gift, Banknote, LockKeyhole, WalletCards, Pencil, Plus, Trash2 } from 'lucide-react';
 import { deleteExpense, updateExpense } from '../../services/expenseService';
 import { ADVANCE_EDITABLE_FIELDS, deleteAdvanceExpense, updateAdvanceExpenseCell } from '../../services/advanceExpenseService';
 import { loadExpenseRows, periodBounds } from './expenseRows';
@@ -76,7 +77,7 @@ export function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId
       </div>
     ) : <span title="Системная выплата редактируется в разделе «Зарплата»"><LockKeyhole size={14} /></span> },
   ];
-  return <DataTable<ExpenseRecord> storageKey={settingsKey} showProperties={columnsOpen} onShowPropertiesChange={onColumnsOpenChange} columns={columns.map(column => ({...column, width: column.width ?? (column.key === 'subcategory' ? 170 : 130), visible: !['schoolKey','departmentKey','salaryPeriodKey','source'].includes(column.key), editable: !['source','actions'].includes(column.key)}))} toolbarExtra={toolbar} onCellSave={onCellSave} canEditCell={(row, key) => row.source === 'advance' ? ADVANCE_EDITABLE_FIELDS.includes(key) : row.source === 'manual' && (key !== 'schoolKey' || row.category === 'school' && row.subcategory === 'ЗП') && (key !== 'departmentKey' || row.category === 'office' && row.subcategory === 'ЗП') && (key !== 'salaryPeriodKey' || row.subcategory === 'ЗП')} data={rows} rowKey="id" emptyText="За выбранный период расходов пока нет" canManageProperties={false} />;
+  return <DataTable<ExpenseRecord> storageKey={settingsKey} showProperties={columnsOpen} onShowPropertiesChange={onColumnsOpenChange} columns={withSchoolColumn(columns.map(column => ({...column, width: column.width ?? (column.key === 'subcategory' ? 170 : 130), visible: !['schoolKey','departmentKey','salaryPeriodKey','source'].includes(column.key), editable: !['source','actions'].includes(column.key)})), row => SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey ?? '')} toolbarExtra={toolbar} onCellSave={onCellSave} canEditCell={(row, key) => row.source === 'advance' ? ADVANCE_EDITABLE_FIELDS.includes(key) : row.source === 'manual' && (key !== 'schoolKey' || row.category === 'school' && row.subcategory === 'ЗП') && (key !== 'departmentKey' || row.category === 'office' && row.subcategory === 'ЗП') && (key !== 'salaryPeriodKey' || row.subcategory === 'ЗП')} data={rows} rowKey="id" emptyText="За выбранный период расходов пока нет" canManageProperties={false} />;
 }
 
 export function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowPersonalCategory, onClose, onSaved, onPaymentsSaved }: {
@@ -248,7 +249,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
         <div className={`expenses-toolbar${toolbarContent ? '' : ' expenses-toolbar-inner'}`}>
           {toolbarContent}
           <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} />
-          <div className="expenses-create-actions"><button className="expenses-add" title="Новый расход" aria-label="Новый расход" onClick={() => { setEditingExpense(null); setModalOpen(true); }}><Plus size={17} /></button><button className="expenses-add" title="Новая выплата" aria-label="Новая выплата" onClick={() => setAdvanceOpen(true)}><WalletCards size={17} />Новая выплата</button></div>
+          <div className="expenses-create-actions"><button className="expenses-add" title="Новый расход" aria-label="Новый расход" onClick={() => { setEditingExpense(null); setModalOpen(true); }}><Plus size={17} /></button><button className="expenses-add" title="Новая выплата" aria-label="Новая выплата" onClick={() => setAdvanceOpen(true)}><WalletCards size={17} aria-hidden="true" /></button><button type="button" className="expenses-all-records" title={selectedCategory ? 'Все расходы категории' : 'Все расходы'} aria-label={selectedCategory ? 'Все расходы категории' : 'Все расходы'} onClick={() => setTableOpen(true)}><List size={17} aria-hidden="true"/></button></div>
         </div>
 
         {loadError && <div className="expenses-load-error">Не удалось загрузить данные: {loadError}. Проверьте, что миграция расходов применена.</div>}
@@ -261,8 +262,9 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
         <div><span>Наличные</span><strong>{loading ? '…' : money(scopedRows.filter(row=>row.paymentMethod==='cash').reduce((sum,row)=>sum+row.amount,0))}</strong></div>
         <div className="finance-summary-count"><span>Записей</span><strong>{loading ? '…' : scopedRows.length}</strong></div>
       </section>
-      {!tableOpen && selectedSubcategory === 'ALL' && <div className="finance-section-bar"><div><strong>{selectedCategory ? EXPENSE_CATEGORIES[selectedCategory].label : 'Категории расходов'}</strong><span>Выберите категорию или откройте все записи</span></div><button type="button" className="expenses-view-button" onClick={() => setTableOpen(true)}><Table2 size={16}/>{selectedCategory ? 'Все расходы категории' : 'Все расходы'}</button></div>}
-      {!tableOpen && selectedSubcategory === 'ALL' && (loading ? <div className="expenses-empty">Загрузка…</div> : <SchoolDashboardTable
+      {!tableOpen && selectedSubcategory === 'ALL' && <section className="finance-categories-card" aria-label="Категории расходов">
+
+        {loading ? <div className="expenses-empty">Загрузка…</div> : <SchoolDashboardTable
         showAvatars={false} rowGap={8} className="finance-category-table"
         columns={[
           { key: 'category', label: selectedCategory ? 'Подкатегория' : 'Категория', total: overviewRows.length, color: '#64748B' },
@@ -283,10 +285,10 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
           if (selectedCategory) setSelectedSubcategory(key);
           else if (key !== 'personal' || canViewPersonalDetails) { setSelectedCategory(key as ExpenseCategory); setSelectedSubcategory('ALL'); }
         }}
-      />)}
+      />}</section>}
 
       {(tableOpen || selectedSubcategory !== 'ALL') && <div className="expenses-panel">
-        {loading ? <div className="expenses-empty">Загрузка…</div> : <ExpensesTable rows={canViewPersonalDetails ? visibleRows : visibleRows.filter(row => row.category !== 'personal')} showCategory={!selectedCategory} allowPersonal={canViewPersonalDetails} columnsOpen={propertiesOpen} onColumnsOpenChange={changePropertiesOpen} settingsKey={`finance_expenses_v2_${userName || userRole || 'user'}_${selectedCategory || 'all'}`} onCellSave={saveExpenseCell} toolbar={<div className="expenses-table-heading"><button type="button" className="expenses-view-button expenses-view-button--back" onClick={() => {setTableOpen(false);setSelectedSubcategory('ALL');}}><ArrowLeft size={15} />К сводке</button><strong>{selectedCategory ? EXPENSE_CATEGORIES[selectedCategory].label : 'Все расходы'}{selectedSubcategory !== 'ALL' ? ` · ${selectedSubcategory}` : ''}</strong><span className="expenses-record-count">{visibleRows.length} записей</span><label className="finance-search"><Search size={15}/><input aria-label="Поиск расходов" placeholder="Поиск по расходам…" value={search} onChange={event=>setSearch(event.target.value)}/></label><button type="button" className="expenses-view-button" aria-pressed={propertiesOpen} onClick={()=>changePropertiesOpen(!propertiesOpen)}><Columns3 size={15}/>Колонки</button></div>} onEdit={expense => { setEditingExpense(expense); setModalOpen(true); }} onDelete={handleDelete} deletingId={deletingId} />}
+        {loading ? <div className="expenses-empty">Загрузка…</div> : <ExpensesTable rows={canViewPersonalDetails ? visibleRows : visibleRows.filter(row => row.category !== 'personal')} showCategory={!selectedCategory} allowPersonal={canViewPersonalDetails} columnsOpen={propertiesOpen} onColumnsOpenChange={changePropertiesOpen} settingsKey={`finance_expenses_v2_${userName || userRole || 'user'}_${selectedCategory || 'all'}`} onCellSave={saveExpenseCell} toolbar={<div className="expenses-table-heading"><button type="button" className="expenses-view-button expenses-view-button--back" onClick={() => {setTableOpen(false);setSelectedSubcategory('ALL');}}><ArrowLeft size={15} />К сводке</button><strong>{selectedCategory ? EXPENSE_CATEGORIES[selectedCategory].label : 'Все расходы'}{selectedSubcategory !== 'ALL' ? ` · ${selectedSubcategory}` : ''}</strong><span className="expenses-record-count">{visibleRows.length} записей</span><label className="finance-search"><Search size={15}/><input aria-label="Поиск расходов" placeholder="Поиск по расходам…" value={search} onChange={event=>setSearch(event.target.value)}/></label></div>} onEdit={expense => { setEditingExpense(expense); setModalOpen(true); }} onDelete={handleDelete} deletingId={deletingId} />}
       </div>}
       {advanceOpen && <EmployeeAdvanceModal sessionToken={sessionToken} allowPersonalCategory={canViewPersonalDetails} userName={userName} onClose={() => setAdvanceOpen(false)} onSaved={() => setRefreshKey(value => value + 1)} />}
       {modalOpen && <ExpenseModal initialCategory={selectedCategory} expense={editingExpense} userName={userName} sessionToken={sessionToken} allowPersonalCategory={canViewPersonalDetails} onClose={() => { setModalOpen(false); setEditingExpense(null); }} onSaved={handleSaved} onPaymentsSaved={()=>{setRefreshKey(value=>value+1);setModalOpen(false);setEditingExpense(null);}} />}

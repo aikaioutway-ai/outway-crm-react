@@ -1,3 +1,4 @@
+import FilterableTable from '../../core/tables/FilterableTable';
 import React, { useMemo, useState } from 'react';
 import { X } from 'lucide-react';
 import { VehicleType } from '../../types';
@@ -250,7 +251,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
               Документы
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <table style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
+              <FilterableTable style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
                     {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
@@ -295,7 +296,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </FilterableTable>
             </div>
           </div>
           )}

@@ -1399,3 +1399,24 @@ select.dt-cell-input {
 
 /* Пустое состояние */
 .dt-empty-inner { color: var(--text-2); }
+
+.dt-repeat-filter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--dt-accent-l, #edf8f8);
+  color: var(--dt-accent, #087f83);
+  font-size: 12px;
+  border-bottom: 1px solid var(--dt-border, #e2e8f0);
+}
+
+.table-actions-bar { display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 8px 12px; background: var(--surface, #fff); border-bottom: 1px solid var(--border, #e2e8f0); }
+.table-actions-title { flex: 1; min-width: 0; font-size: 13px; font-weight: 600; color: var(--text); }
+.table-actions-bar .dt-btn { display: inline-flex; align-items: center; gap: 7px; }
+.dt-export-error { font-size: 12px; color: var(--danger, #b91c1c); }
+
+.filterable-table { position: relative; }
+.native-table-export { position: absolute; top: 6px; right: 8px; z-index: 1; padding: 0; width: auto; }
+.filterable-table > thead > tr > th:last-child { padding-right: 48px; }

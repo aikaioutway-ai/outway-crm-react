@@ -1,3 +1,5 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
+import FilterableTable from '../../core/tables/FilterableTable';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import {
   Building2,
@@ -238,7 +240,7 @@ export default function B2BExpenses({ onOpenOrder, userName = 'CRM' }: B2BExpens
             <h2>{selectedLabel ?? 'Дашборд расходов B2B'}</h2>
             <p>Расходы нерегулярных перевозок · {periodLabel}</p>
           </div>
-          <div className="b2b-expenses-period-controls">
+          <div className="b2b-expenses-period-controls"><AllRecordsButton onClick={()=>{setSelectedCategory(null);setSearch('');}}/>
             <div className="b2b-expenses-year-picker">
               <button type="button" onClick={() => setSelectedYear(year => year - 1)} aria-label="Предыдущий год"><ChevronLeft size={17} /></button>
               <select value={selectedYear} onChange={event => setSelectedYear(Number(event.target.value))} aria-label="Год">
@@ -287,12 +289,12 @@ export default function B2BExpenses({ onOpenOrder, userName = 'CRM' }: B2BExpens
             <button type="button" className="b2b-primary-button" onClick={openNewExpense}><Plus size={16} />Новый расход</button>
           </div>
         </div>
-        <div className="b2b-expenses-table-wrap"><table className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th>№ платёжного поручения</th><th className="number">Сумма</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={9} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
+        <div className="b2b-expenses-table-wrap"><FilterableTable className="b2b-expenses-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Категория</th><th>Назначение</th><th>Способ оплаты</th><th>№ платёжного поручения</th><th className="number">Сумма</th><th>Комментарий</th><th className="actions">Действия</th></tr></thead><tbody>{isLoading ? <tr><td colSpan={9} className="empty">Загрузка…</td></tr> : rows.length ? rows.map(row => {
           const meta = categoryMeta(normalizedCategory(row.category));
           const Icon = meta.icon;
           const canOpenOrder = Boolean(onOpenOrder && row.orderNumber !== '—' && orders.some(order => order.number === row.orderNumber));
           return <tr key={row.id}><td>{displayDate(row.expenseDate)}</td><td className="order">{canOpenOrder ? <button type="button" className="b2b-expense-order-link" onClick={() => openOrder(row)}>{row.orderNumber}</button> : row.orderNumber}</td><td><span className="b2b-expense-badge" style={{ background: meta.soft, color: meta.color }}><Icon size={12} />{meta.label}</span></td><td className="driver">{row.purpose || '—'}</td><td>{formatB2BPaymentMethod(row.method)}</td><td>{row.paymentOrderNumber || '—'}</td><td className="number">{money(row.amount)}</td><td title={row.comment}>{row.comment || '—'}</td><td className="actions"><button type="button" className="b2b-expense-edit-button" onClick={() => openExpenseEdit(row)} title={isAutomaticExpense(row) ? 'Открыть исходную запись в заказе' : 'Редактировать расход'}><Pencil size={14} /><span>{isAutomaticExpense(row) ? 'Источник' : 'Изменить'}</span></button></td></tr>;
-        }) : <tr><td colSpan={9} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></table></div>
+        }) : <tr><td colSpan={9} className="empty">За выбранный период расходов пока нет</td></tr>}</tbody></FilterableTable></div>
       </div>
 
       {showCreate && <div className="b2b-modal-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeExpenseEditor(); }}>

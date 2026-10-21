@@ -1,4 +1,8 @@
+import { normalizeReceiptOcrResult } from './receiptOcrResult';
 export interface OcrResult {
+  bank: string | null;
+  time: string | null;
+  card_last4: string | null;
   receipt_code: string | null;
   amount: number | null;
   date: string | null;
@@ -18,13 +22,20 @@ async function fileToBase64(file: File): Promise<{ base64: string; mediaType: st
   });
 }
 
-const PROMPT = `Извлеки из этого банковского чека:
-1. receipt_code — возьми значение поля "Идентификатор транзакции" или "ID транзакции" (например 29e98b10-a039-4186-8084-15f97c646360). Если такого поля нет — возьми "Описание". НЕ включай время (ЧЧ:ММ:СС) — только сам код.
-2. amount — сумма в сомах (только число, без "KGS" и пробелов)
-3. date — дата в формате YYYY-MM-DD
-
-Верни только JSON без пояснений: {"receipt_code": "...", "amount": 5500, "date": "2026-06-10"}
-Если поле не найдено — ставь null.`;
+const PROMPT = `Извлеки данные банковского чека. Верни только JSON:
+{"receipt_code":null,"amount":null,"date":null,"time":null,"card_last4":null,"bank":null}
+receipt_code: ID транзакции, ELQR ID или номер квитанции; если их нет — код из описания/комментария, включая mbiz:, MBIZ_S_, QR_. Сохрани весь код, не путай его с временем.
+amount: итоговая сумма перевода без комиссии, число в сомах.
+date: дата самой операции YYYY-MM-DD, не дата загрузки.
+time: время самой операции HH:MM:SS, либо HH:MM, если секунды не указаны. Не добавляй отсутствующие секунды и не используй часы телефона.
+card_last4: последние 4 цифры карты или счёта ОТПРАВИТЕЛЯ (поля «Откуда», «Счёт списания», Payer requisites). Верни строку из четырёх цифр, сохраняя нули. Не используй реквизиты получателя, mbiz или номер квитанции.
+bank: название банка, выдавшего чек (например Optima Bank, Bakai Bank, DemirBank, MBANK). Не банк получателя или поставщик услуг c2b.mbank.kg.
+Примеры форматов (не подставляй эти значения в ответ):
+Optima24: поле «Откуда **** 7985», дата «06 окт. 2026, 17:39», операция с mbiz: — извлекай card_last4="7985", time="17:39", date="2026-10-06", bank="Optima Bank"; сам mbiz оставь в receipt_code.
+Bakai: используй ELQR ID как код, время из «Дата создания», карту из «Счёт списания»; игнорируй mbiz комментария при наличии ELQR ID.
+DemirBank: используй ID transaction как код, время из Transaction date and time, карту из Payer requisites.
+MBANK: код может быть в «Детали операции» и содержать MBIZ_S_/QR_; банк определяется по логотипу чека.
+Если поле отсутствует или неразборчиво — null. Не придумывай данные.`;
 
 async function readErrorMessage(res: Response): Promise<string> {
   const fallback = `сервер вернул ${res.status}`;
@@ -72,7 +83,8 @@ export async function extractReceiptData(file: File): Promise<OcrResult> {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
+      max_tokens: 512,
+      temperature: 0,
       messages: [{ role: 'user', content }],
     }),
   });
@@ -89,20 +101,13 @@ export async function extractReceiptData(file: File): Promise<OcrResult> {
     .join('');
 
   const jsonMatch = text.match(/\{[\s\S]*\}/);
-  if (!jsonMatch) return { receipt_code: null, amount: null, date: null };
+  if (!jsonMatch) return { receipt_code: null, amount: null, date: null, time:null,card_last4:null,bank:null };
 
   try {
     const parsed = JSON.parse(jsonMatch[0]);
-    let code: string | null = parsed.receipt_code ?? null;
-    // Убираем префикс времени вида "21:03:38/" если есть
-    if (code) code = code.replace(/^\d{2}:\d{2}:\d{2}\//, '');
-    return {
-      receipt_code: code,
-      amount: parsed.amount != null ? Number(parsed.amount) : null,
-      date: parsed.date ?? null,
-    };
+    return normalizeReceiptOcrResult(parsed);
   } catch {
-    return { receipt_code: null, amount: null, date: null };
+    return { receipt_code: null, amount: null, date: null, time:null,card_last4:null,bank:null };
   }
 }
 // build: Mon Jun 22 15:35:20 +06 2026

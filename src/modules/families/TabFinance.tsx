@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import FilterableTable from '../../core/tables/FilterableTable';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
 import { useReceiptOcr } from '../../hooks/useReceiptOcr';
 import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentType, Refund, UserRole } from '../../types';
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL } from './constants';
+import './ReceiptPreview.css';
 import { Section, Spinner, Empty } from './DrawerUI';
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -29,13 +31,13 @@ interface Props {
   onSaveCharge: (charge: Charge, updates: Partial<Charge>) => Promise<boolean>;
   onDeleteCharge: (charge: Charge) => void;
   onAddCharges: (month: number, year: number) => void | Promise<void>;
-  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string, paymentOrderNumber?: string) => Promise<boolean>;
+  onCreatePayment: (amount: number, paymentType: PaymentType, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string, paymentOrderNumber?: string, receiptDetails?: {time:string;cardLast4:string;bank:string}) => Promise<boolean>;
   onConfirmPayment: (payment: FamilyPayment, actualPaymentDate: string) => Promise<boolean>;
   onUnconfirmPayment?: (payment: FamilyPayment) => Promise<boolean>;
   onSavePayment: (payment: FamilyPayment, updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDeletePayment: (payment: FamilyPayment) => Promise<boolean>;
   onCreateRefund: (amount: number, comment: string) => Promise<boolean>;
-  onConfirmRefund: (refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string) => Promise<boolean>;
+  onConfirmRefund: (refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string, receiptDetails?: {time:string;cardLast4:string;bank:string}) => Promise<boolean>;
   onRejectRefund: (refund: Refund, reason: string) => Promise<boolean>;
   readOnly?: boolean;
 }
@@ -76,9 +78,17 @@ export default function TabFinance({
   const [paymentType, setPaymentType] = useState<PaymentType>('cash');
   const [paymentOrderNumber, setPaymentOrderNumber] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
-  const { ocrLoading, ocrMsg, receiptFile, receiptCode, setReceiptCode, handleFileChange: handleOcrFile, reset: resetOcr } = useReceiptOcr();
+  const { ocrLoading, ocrMsg, receiptFile, receiptCode, setReceiptCode, receiptTime,setReceiptTime,receiptCardLast4,setReceiptCardLast4,receiptBank,setReceiptBank, handleFileChange: handleOcrFile, reset: resetOcr } = useReceiptOcr();
+  const [preview,setPreview]=useState<{url:string;name:string;pdf:boolean}|null>(null);
+  const [localReceiptUrl,setLocalReceiptUrl]=useState('');
+  useEffect(()=>{
+    if(!receiptFile){setLocalReceiptUrl('');return;}
+    const url=URL.createObjectURL(receiptFile);setLocalReceiptUrl(url);
+    return ()=>{URL.revokeObjectURL(url);setPreview(current=>current?.url===url?null:current);};
+  },[receiptFile]);
   const [comment, setComment] = useState('');
   const [savingPayment, setSavingPayment] = useState(false);
+  const [paymentError,setPaymentError]=useState('');
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
@@ -106,10 +116,12 @@ export default function TabFinance({
 
   async function submitPayment() {
     const amount = Number(paymentAmount);
-    if (!amount || amount <= 0) return;
-    setSavingPayment(true);
-    const ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile, receiptCode || undefined, paymentOrderNumber.trim() || undefined);
-    setSavingPayment(false);
+    if (!amount || amount <= 0 || savingPayment || ocrLoading) return;
+    setSavingPayment(true);setPaymentError('');
+    let ok=false;
+    try { ok = await onCreatePayment(amount, paymentType, comment, paymentDate, receiptFile, receiptCode || undefined, paymentOrderNumber.trim() || undefined, {time:receiptTime,cardLast4:receiptCardLast4,bank:receiptBank}); }
+    catch(error){setPaymentError(error instanceof Error?error.message:'Не удалось отправить платёж');}
+    finally{setSavingPayment(false);}
     if (ok) {
       setMsg('Платёж отправлен кассиру на проверку');
       setPaymentAmount('');
@@ -179,7 +191,7 @@ export default function TabFinance({
   }
 
   return (
-    <div>
+    <div className={`receipt-workspace${preview ? ' receipt-workspace--open' : ''}`}><div className="receipt-workspace-form">
       {msg && (
         <div style={{ background: msg.includes('Не удалось') ? '#FEE2E2' : '#F7F9FB', color: msg.includes('Не удалось') ? '#991B1B' : 'var(--text)', borderRadius: 8, padding: '7px 12px', marginBottom: 8, fontSize: 12, fontWeight: 600 }}>
           {msg}
@@ -199,11 +211,14 @@ export default function TabFinance({
                     <option value="transfer">АйКай Мбанк</option>
                   </select>
                   <input aria-label="Дата платежа" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
+                  <input aria-label="Время операции чека" value={receiptTime} onChange={e=>setReceiptTime(e.target.value)} placeholder="ЧЧ:ММ или ЧЧ:ММ:СС" style={{...inputStyle,width:'100%',minWidth:0}}/>
+                  <input aria-label="Банк чека" value={receiptBank} onChange={e=>setReceiptBank(e.target.value)} placeholder="Банк отправителя" style={{...inputStyle,width:'100%',minWidth:0}}/>
+                  <input aria-label="Последние 4 цифры счёта" inputMode="numeric" maxLength={4} value={receiptCardLast4} onChange={e=>setReceiptCardLast4(e.target.value.replace(/\D/g,''))} placeholder="Последние 4 цифры" style={{...inputStyle,width:'100%',minWidth:0}}/>
+                  <input value={receiptCode} onChange={e => setReceiptCode(e.target.value)} placeholder="Код чека" style={inputStyle} />
                   <input value={paymentOrderNumber} onChange={e => setPaymentOrderNumber(e.target.value)} placeholder="№ платёжного поручения" style={inputStyle} />
-                  <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={inputStyle} />
-                  <label style={{ ...fileInputStyle, width: '100%', boxSizing: 'border-box' }}>
+                  <label style={{ ...fileInputStyle, gridColumn:'1 / -1', width: '100%', boxSizing: 'border-box' }}>
                     {ocrLoading ? <Loader size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Paperclip size={14} />}
-                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{receiptFile ? receiptFile.name : 'Прикрепить чек'}</span>
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{receiptFile ? 'Заменить чек' : 'Прикрепить чек'}</span>
                     <input
                       type="file"
                       accept="image/*,.pdf"
@@ -214,9 +229,11 @@ export default function TabFinance({
                       style={{ display: 'none' }}
                     />
                   </label>
-                  <input value={receiptCode} onChange={e => setReceiptCode(e.target.value)} placeholder="Код чека" style={inputStyle} />
+                  {receiptFile && <button type="button" className="receipt-preview-link" style={{gridColumn:'1 / -1'}} disabled={!localReceiptUrl} onClick={()=>setPreview({url:localReceiptUrl,name:receiptFile.name,pdf:receiptFile.type==='application/pdf' || receiptFile.name.toLowerCase().endsWith('.pdf')})}><Paperclip size={14}/>{receiptFile.name} · Открыть рядом</button>}
+                  <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{...inputStyle,gridColumn:'1 / -1'}} />
                   {ocrMsg && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '0 2px' }}>{ocrMsg}</div>}
-                  <button onClick={submitPayment} disabled={savingPayment || !paymentAmount} style={submitPaymentBtnStyle(savingPayment || !paymentAmount)}>
+                  {paymentError && <div role="alert" style={{gridColumn:'1 / -1',color:'#991B1B',padding:10,background:'#FEF2F2',borderRadius:8,fontSize:12}}>{paymentError}</div>}
+                  <button onClick={submitPayment} disabled={savingPayment || ocrLoading || !paymentAmount} style={submitPaymentBtnStyle(savingPayment || ocrLoading || !paymentAmount)}>
                     {savingPayment ? 'Сохраняем...' : 'На проверку →'}
                   </button>
                 </div>
@@ -245,6 +262,7 @@ export default function TabFinance({
               {sortedPayments.length === 0 ? <Empty text="Платежей нет" /> : sortedPayments.map(payment => (
                 <PaymentRow
                   key={payment.id}
+                  onOpenReceipt={()=>setPreview({url:payment.receiptUrl!,name:'Чек платежа',pdf:/\.pdf(?:\?|$)/i.test(payment.receiptUrl!)})}
                   payment={payment}
                   items={paymentItems.filter(i => i.paymentId === payment.id)}
                   canConfirm={canConfirmPayment && payment.status === 'На проверке'}
@@ -300,7 +318,7 @@ export default function TabFinance({
           )}
 
           <div style={financeTableWrapStyle}>
-            <table style={financeTableStyle}>
+            <FilterableTable style={financeTableStyle}>
               <thead>
                 <tr>
                   {['Период', 'Начислено', 'Погашено', 'Остаток', 'Дата списания'].map(label => (
@@ -339,16 +357,22 @@ export default function TabFinance({
                   </tr>
                 </tfoot>
               )}
-            </table>
+            </FilterableTable>
           </div>
         </Section>}
 
       </div>
     </div>
+      {preview && <aside className="receipt-preview" aria-label="Просмотр чека рядом">
+        <header><strong title={preview.name}>{preview.name}</strong><button type="button" aria-label="Закрыть просмотр чека" onClick={()=>setPreview(null)}><X size={18}/></button></header>
+        <div className="receipt-preview-content">{preview.pdf ? <iframe key={preview.url} title="PDF чека" src={preview.url}/> : <img key={preview.url} src={preview.url} alt="Прикреплённый чек"/>}</div>
+      </aside>}
+    </div>
   );
 }
 
-function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUnconfirm, onSave, onDelete, isAdmin, canDelete }: {
+function PaymentRow({ onOpenReceipt, payment, items, canConfirm, confirming, onConfirm, onUnconfirm, onSave, onDelete, isAdmin, canDelete }: {
+  onOpenReceipt:()=>void;
   payment: FamilyPayment;
   items: PaymentItem[];
   canConfirm: boolean;
@@ -495,9 +519,9 @@ function PaymentRow({ payment, items, canConfirm, confirming, onConfirm, onUncon
       )}
       {payment.comment && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 6 }}>{payment.comment}</div>}
       {payment.receiptUrl && (
-        <a href={payment.receiptUrl} target="_blank" rel="noreferrer" style={receiptLinkStyle}>
+        <button type="button" onClick={onOpenReceipt} style={{...receiptLinkStyle,border:0,background:'transparent',cursor:'pointer'}}>
           <Paperclip size={12} /> Чек
-        </a>
+        </button>
       )}
       {items.length > 0 && (
         <div style={{ marginTop: 7, borderTop: '1px solid var(--border)', paddingTop: 6 }}>

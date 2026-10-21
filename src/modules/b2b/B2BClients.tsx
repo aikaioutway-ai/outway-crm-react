@@ -1,3 +1,5 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
+import FilterableTable from '../../core/tables/FilterableTable';
 import { FormEvent, useState } from 'react';
 import { ArrowUpDown, Building2, CircleDollarSign, ClipboardList, Clock3, CreditCard, FileCheck2, FileText, Landmark, Mail, MapPin, Pencil, Percent, Phone, Plus, School, Search, Truck, UserRound, X } from 'lucide-react';
 import { B2B_QUERY_KEYS, useB2BClients, useB2BDriverPayouts, useB2BExpenses, useB2BOrders } from '../../hooks/useB2BData';
@@ -203,7 +205,7 @@ export default function B2BClients({ onOpenOrder, userName = 'CRM', canViewFinan
     <div className="b2b-clients">
       <div className="b2b-panel-head">
         <div><h2>Клиенты</h2><p>Компании, школы и частные заказчики</p></div>
-        <button className="b2b-primary-button" type="button" onClick={openNewClient}><Plus size={17} /> Новый клиент</button>
+        <div className="overview-icon-actions"><button className="overview-icon-button overview-icon-button--primary" type="button" title="Новый клиент" aria-label="Новый клиент" onClick={openNewClient}><Plus size={18}/></button><AllRecordsButton onClick={()=>{setSearchQuery('');setClientFilter('all');setSelectedClientId(null);}}/></div>
       </div>
 
       {!isLoading && clients.length > 0 && <div className="b2b-client-tools">
@@ -304,25 +306,25 @@ export default function B2BClients({ onOpenOrder, userName = 'CRM', canViewFinan
                 <section><h3><FileCheck2 size={16} /> Подписант</h3><strong>{selectedClient.signerName || 'Не указан'}</strong><div>{selectedClient.signerPosition || 'Должность не указана'}</div>{selectedClient.comments && <p>{selectedClient.comments}</p>}</section>
               </div>}
 
-              {clientCardTab === 'orders' && (selectedClientOrders.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table"><thead><tr><th>Заказ</th><th>Дата</th><th>Маршрут</th><th>Транспорт</th><th className="number">Сумма</th><th>Статус</th><th>Документы</th></tr></thead><tbody>{selectedClientOrders.map(order => {
+              {clientCardTab === 'orders' && (selectedClientOrders.length ? <div className="b2b-client-orders-wrap"><FilterableTable className="b2b-client-orders-table"><thead><tr><th>Заказ</th><th>Дата</th><th>Маршрут</th><th>Транспорт</th><th className="number">Сумма</th><th>Статус</th><th>Документы</th></tr></thead><tbody>{selectedClientOrders.map(order => {
                 const status = B2B_ORDER_STATUSES.find(item => item.key === order.status)?.label ?? order.status;
                 return <tr key={order.id}><td className="order-number"><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(order.id)} aria-label={`Открыть карточку заказа ${order.number}`}>{order.number}</button></td><td>{order.departureDate || order.requestDate}</td><td><span className="b2b-client-order-route">{order.routeFrom}<b>→</b>{order.routeTo}</span></td><td>{order.transportCount}× {order.transport}</td><td className="number">{order.total.toLocaleString()}</td><td><span className={`b2b-client-order-status status-${order.status}`}>{status}</span></td><td><div className="b2b-client-doc-actions"><button type="button" onClick={() => setEditingOrder(order)} title="Редактировать заказ"><Pencil size={14} /></button><button type="button" onClick={() => void downloadB2BGeneratedDocument('invoice', order)} title={`Скачать счёт ${generatedDocumentNumber('invoice', order.number)}`}><FileText size={14} /> Счёт</button><button type="button" onClick={() => void downloadB2BGeneratedDocument('act', order)} title={`Скачать акт ${generatedDocumentNumber('act', order.number)}`}><FileCheck2 size={14} /> Акт</button></div></td></tr>;
-              })}</tbody></table></div> : <div className="b2b-client-tab-empty"><ClipboardList size={28} /><strong>Заказов пока нет</strong><span>Новые заказы этого клиента появятся здесь.</span></div>)}
+              })}</tbody></FilterableTable></div> : <div className="b2b-client-tab-empty"><ClipboardList size={28} /><strong>Заказов пока нет</strong><span>Новые заказы этого клиента появятся здесь.</span></div>)}
 
               {clientCardTab === 'payments' && <div className="b2b-client-payments-panel">
                 <div className="b2b-client-money-summary"><article><span>Заказы</span><strong>{clientOrdersTotal.toLocaleString()}</strong></article><article className="paid"><span>Подтверждено</span><strong>{clientPaidTotal.toLocaleString()}</strong></article><article className="debt"><span>Остаток</span><strong>{Math.max(0, clientOrdersTotal - clientPaidTotal).toLocaleString()}</strong></article></div>
                 {selectedClientPayments.length ? <B2BClientPaymentsTable payments={selectedClientPayments} canEditStatus={canEditPaymentStatus} onOpenOrder={onOpenOrder} userName={userName} /> : <div className="b2b-client-tab-empty"><CreditCard size={28} /><strong>Оплат пока нет</strong><span>Платежи по заказам клиента появятся здесь.</span></div>}
               </div>}
 
-              {clientCardTab === 'payouts' && (selectedClientPayouts.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Водитель</th><th>Способ</th><th className="number">Сумма</th><th>Комментарий</th></tr></thead><tbody>{selectedClientPayouts.map(payout => {
+              {clientCardTab === 'payouts' && (selectedClientPayouts.length ? <div className="b2b-client-orders-wrap"><FilterableTable className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Водитель</th><th>Способ</th><th className="number">Сумма</th><th>Комментарий</th></tr></thead><tbody>{selectedClientPayouts.map(payout => {
                 const order = selectedClientOrders.find(item => item.id === payout.orderId);
                 return <tr key={payout.id}><td>{payout.paymentDate}</td><td className="order-number"><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(payout.orderId, 'driver')}>{order?.number ?? '—'}</button></td><td>{payout.driverName}</td><td>{formatB2BPaymentMethod(payout.method)}</td><td className="number">{payout.amount.toLocaleString()}</td><td>{payout.comment || '—'}</td></tr>;
-              })}</tbody></table></div> : <div className="b2b-client-tab-empty"><Truck size={28} /><strong>Выплат водителям пока нет</strong><span>Выплаты по заказам клиента появятся здесь.</span></div>)}
+              })}</tbody></FilterableTable></div> : <div className="b2b-client-tab-empty"><Truck size={28} /><strong>Выплат водителям пока нет</strong><span>Выплаты по заказам клиента появятся здесь.</span></div>)}
 
-              {clientCardTab === 'taxes' && (selectedClientTaxes.length ? <div className="b2b-client-orders-wrap"><table className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Основание</th><th>Способ</th><th className="number">Сумма</th></tr></thead><tbody>{selectedClientTaxes.map(tax => {
+              {clientCardTab === 'taxes' && (selectedClientTaxes.length ? <div className="b2b-client-orders-wrap"><FilterableTable className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Основание</th><th>Способ</th><th className="number">Сумма</th></tr></thead><tbody>{selectedClientTaxes.map(tax => {
                 const order = selectedClientOrders.find(item => item.number === tax.orderNumber);
                 return <tr key={tax.id}><td>{tax.expenseDate}</td><td className="order-number">{order ? <button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(order.id, 'payment')}>{tax.orderNumber}</button> : tax.orderNumber}</td><td>{tax.purpose || 'Налог 4% с подтверждённой оплаты'}</td><td>{formatB2BPaymentMethod(tax.method)}</td><td className="number">{tax.amount.toLocaleString()}</td></tr>;
-              })}</tbody></table></div> : <div className="b2b-client-tab-empty"><Percent size={28} /><strong>Налогов пока нет</strong><span>Начисления 4% появятся после подтверждённых безналичных оплат.</span></div>)}
+              })}</tbody></FilterableTable></div> : <div className="b2b-client-tab-empty"><Percent size={28} /><strong>Налогов пока нет</strong><span>Начисления 4% появятся после подтверждённых безналичных оплат.</span></div>)}
 
               {canViewFinance && clientCardTab === 'finance' && <div className="b2b-client-finance-panel">
                 <div className="b2b-client-finance-summary">
@@ -331,7 +333,7 @@ export default function B2BClients({ onOpenOrder, userName = 'CRM', canViewFinan
                   <article className="expenses"><span>Расходы</span><strong>{clientExpensesTotal.toLocaleString()}</strong></article>
                   <article className={clientBalanceTotal < 0 ? 'balance negative' : 'balance'}><span>Остаток</span><strong>{clientBalanceTotal.toLocaleString()}</strong></article>
                 </div>
-                {clientFinanceRows.length ? <div className="b2b-client-finance-table-wrap"><table className="b2b-client-finance-table">
+                {clientFinanceRows.length ? <div className="b2b-client-finance-table-wrap"><FilterableTable className="b2b-client-finance-table">
                   <thead><tr><th>Заказ</th><th>Водитель</th><th className="number">Выручка</th><th className="number">Водителю</th><th className="number">Налог</th><th className="number">Прочие</th><th className="number">Все расходы</th><th className="number">Остаток</th></tr></thead>
                   <tbody>{clientFinanceRows.map(({ order, revenue, driverCost, taxCost, otherCost, totalExpenses, balance }) => <tr key={order.id} className="b2b-openable-row" onClick={() => onOpenOrder?.(order.id, 'pnl')} title="Открыть P&L заказа и редактирование">
                     <td><button className="b2b-client-order-link" type="button" onClick={event => { event.stopPropagation(); onOpenOrder?.(order.id, 'pnl'); }} aria-label={`Открыть карточку заказа ${order.number}`}>{order.number}</button><span>{order.departureDate || order.requestDate} · {order.routeFrom} → {order.routeTo}</span></td>
@@ -343,7 +345,7 @@ export default function B2BClients({ onOpenOrder, userName = 'CRM', canViewFinan
                     <td className="number expenses">{totalExpenses.toLocaleString()}</td>
                     <td className={`number balance${balance < 0 ? ' negative' : ''}`}>{balance.toLocaleString()}</td>
                   </tr>)}</tbody>
-                </table></div> : <div className="b2b-client-tab-empty"><CircleDollarSign size={28} /><strong>Финансовых данных пока нет</strong><span>Данные появятся после создания первого заказа клиента.</span></div>}
+                </FilterableTable></div> : <div className="b2b-client-tab-empty"><CircleDollarSign size={28} /><strong>Финансовых данных пока нет</strong><span>Данные появятся после создания первого заказа клиента.</span></div>}
               </div>}
 
               {clientCardTab === 'documents' && <B2BClientDocumentsTab client={selectedClient} orders={selectedClientOrders} payments={selectedClientPayments} onOpenOrder={onOpenOrder} />}

@@ -5,7 +5,7 @@ import DirectorySchoolDashboard from './DirectorySchoolDashboard';
 import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Plus, Search, X } from 'lucide-react';
+import { List, Plus, Search, X } from 'lucide-react';
 import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
 import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
 import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
@@ -359,37 +359,17 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        <DashboardTopPanel className="dashboard-control-row">
+        <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar">
           <ManagerModeTabs canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
-          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+          <div className="manager-overview-period">
             {mode !== 'directory' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
           </div>
-          <ManagerSearch rows={accessibleRows ?? []} onOpenFamily={onOpenFamily} />
-          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
-          <button
-            type="button"
-            onClick={() => setShowNewFamily(true)}
-            style={{
-              height: 44,
-              padding: '0 16px',
-              border: 'none',
-              borderRadius: 12,
-              background: 'var(--accent)',
-              color: '#fff',
-              display: 'inline-flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: 8,
-              flexShrink: 0,
-              cursor: 'pointer',
-              fontSize: 13,
-              fontWeight: 600,
-              whiteSpace: 'nowrap',
-            }}
-          >
-            <Plus size={17} strokeWidth={2.4} />
-            Новый заказ
-          </button>
+          <div className="manager-overview-search"><ManagerSearch rows={accessibleRows ?? []} onOpenFamily={onOpenFamily} /></div>
+          <div className="overview-icon-actions">
+            <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
+            <button type="button" className="overview-icon-button overview-icon-button--primary" title="Новый заказ" aria-label="Новый заказ" onClick={() => setShowNewFamily(true)}><Plus size={18} aria-hidden="true"/></button>
+            <button type="button" className="overview-icon-button" title="Все записи" aria-label="Все записи" onClick={() => onSelectSchool('ALL')}><List size={18} aria-hidden="true"/></button>
+          </div>
         </DashboardTopPanel>
 
         {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : (

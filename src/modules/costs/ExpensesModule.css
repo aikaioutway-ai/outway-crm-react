@@ -203,10 +203,13 @@
 .finance-summary strong { font-size: 23px; line-height: 1.2; font-variant-numeric: tabular-nums; letter-spacing: -.03em; color: var(--finance-ink); }
 .finance-summary .finance-summary-total strong { color: var(--finance-accent); font-size: 28px; }
 .finance-summary small { font-size: 13px; font-weight: 500; letter-spacing: 0; color: var(--finance-muted); }
-.finance-section-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 4px 4px 2px; }
-.finance-section-bar > div { display: grid; gap: 4px; }
-.finance-section-bar strong { font-size: 15px; color: var(--finance-ink); }
-.finance-section-bar span { font-size: 12px; color: var(--finance-muted); }
+.finance-categories-card { background: var(--surface, #fff); border: 1px solid var(--finance-line); border-radius: 12px; overflow: hidden; }
+.finance-categories-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border-bottom: 1px solid var(--finance-line); }
+.finance-categories-header strong { font-size: 13px; font-weight: 600; color: var(--finance-ink); }
+.finance-categories-header .expenses-view-button { flex-shrink: 0; }
+.finance-categories-card .ow-school-table-wrap { border: 0; border-radius: 0; box-shadow: none; }
+.finance-categories-card .finance-category-table { border: 0; border-radius: 0; }
+@media (max-width: 520px) { .finance-categories-header { padding: 10px 12px; flex-wrap: wrap; } }
 .finance-workspace .finance-category-table { --dashboard-row-height: 50px; border: 1px solid var(--finance-line); border-radius: 14px; overflow: hidden; }
 .finance-workspace .expenses-panel { border-color: var(--finance-line); border-radius: 14px; }
 .finance-workspace .dt-toolbar { padding: 12px 14px; min-height: 58px; border-bottom: 1px solid var(--finance-line); }
@@ -223,3 +226,20 @@
 .finance-workspace .expenses-view-button[aria-pressed=true] { background: #deefed; border-color: var(--finance-accent); }
 @media(max-width:900px) { .finance-summary { grid-template-columns: 1fr 1fr; gap: 16px; padding: 16px; } .finance-summary > div { border: 0; padding: 0; } .finance-search { margin-left: 0; flex: 1; } .finance-search input { width: 100%; } }
 @media(prefers-reduced-motion:reduce) { .finance-workspace *, .finance-workspace *::before, .finance-workspace *::after { transition: none !important; animation: none !important; } }
+
+.finance-workspace .finance-categories-card .finance-category-table { border: 0; border-radius: 0; }
+
+.finance-categories-header .expenses-view-button { border-radius: 6px; gap: 8px; color: var(--finance-accent); background: var(--surface, #fff); border-color: var(--finance-line); }
+.finance-categories-header .expenses-view-button:hover { background: var(--surface-2, #f5f8fa); border-color: var(--finance-accent); }
+.finance-categories-header .expenses-view-button svg { flex-shrink: 0; }
+
+.finance-workspace .expenses-toolbar { align-items: center; }
+.finance-workspace .expenses-create-actions { align-items: center; height: 36px !important; padding: 0 !important; gap: 8px; }
+.finance-workspace .expenses-create-actions .expenses-add,
+.finance-workspace .expenses-all-records { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px !important; padding: 0; flex-shrink: 0; border-radius: 8px; cursor: pointer; }
+.finance-workspace .expenses-all-records { border: 1px solid var(--finance-line); color: var(--finance-accent); background: var(--surface, #fff); }
+.finance-workspace .expenses-all-records:hover { background: var(--surface-2); }
+.finance-workspace .expenses-all-records:focus-visible { outline: 2px solid var(--finance-accent); outline-offset: 2px; }
+.finance-workspace .expenses-toolbar > div:not(.expenses-create-actions) { height: 36px !important; box-sizing: border-box; }
+.finance-workspace .expenses-toolbar > div:not(.expenses-create-actions) button { height: 28px !important; }
+.finance-workspace .expenses-create-actions .expenses-all-records { height: 36px !important; width: 36px; }

@@ -17,7 +17,7 @@ export default function ManagerPeriodBar({
 }: ManagerPeriodBarProps) {
   const specialButtonStyle = (active: boolean): React.CSSProperties => ({
     width: 36,
-    height: 36,
+    height: 28,
     flexShrink: 0,
     display: 'inline-flex',
     alignItems: 'center',
@@ -35,8 +35,8 @@ export default function ManagerPeriodBar({
       display: 'flex',
       alignItems: 'center',
       gap: 2,
-      height: 44,
-      padding: 4,
+      height: 36,
+      padding: 3,
       overflowX: 'auto',
       flexShrink: 0,
       width: '100%',
@@ -81,7 +81,7 @@ export default function ManagerPeriodBar({
             onClick={() => onPeriodKeyChange(period.key)}
             title={period.label}
             aria-label={period.label}
-            style={{ flex: 1, minWidth: 34, height: 36, padding: '0 6px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 850 : 700, background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', transition: 'background .15s ease, color .15s ease' }}
+            style={{ flex: 1, minWidth: 34, height: 28, padding: '0 6px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 850 : 700, background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', transition: 'background .15s ease, color .15s ease' }}
           >
             {String(period.month).padStart(2, '0')}
           </button>

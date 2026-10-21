@@ -1,3 +1,6 @@
+import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
+import CashierReceiptPanel from './CashierReceiptPanel';
+import FilterableTable from '../../core/tables/FilterableTable';
 import { useQuery } from '@tanstack/react-query';
 import { isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
@@ -547,14 +550,14 @@ const PAYMENT_TYPE_COL: ColumnDef<ChildRow> = {
     return <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }}>{type}</span>;
   },
 };
-function ReceiptThumb({ url }: { url: string }) {
+function ReceiptThumb({ url, onOpen }: { url: string; onOpen?: () => void }) {
   return (
     <a
       href={url}
       target="_blank"
       rel="noreferrer"
-      onClick={e => e.stopPropagation()}
-      title="Открыть чек"
+      onClick={e => { e.stopPropagation(); if (onOpen) { e.preventDefault(); onOpen(); } }}
+      title={onOpen ? 'Открыть чек рядом' : 'Открыть чек'}
       style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: '#146566' }}
     >
       <Paperclip size={16} strokeWidth={2.5} />
@@ -729,11 +732,12 @@ function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
 
 export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
-  const canRejectFamilies = ['admin', 'manager', 'senior_logist', 'director', 'gen_director'].includes(userRole);
+  const canRejectFamilies = ['admin', 'manager', 'logist', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [paymentRows, setPaymentRows] = useState<PaymentTableRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
+  const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<CashierPaymentRow | null>(null);
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
   const [loadingCashier, setLoadingCashier] = useState(false);
   const [cashierConfirmingId, setCashierConfirmingId] = useState<string | null>(null);
@@ -781,7 +785,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   );
 
   const cashierColumns = useMemo((): ColumnDef<CashierPaymentRow>[] => [
-    { key: 'id', label: 'ID платежа', type: 'text', category: 'Платёж', width: 140, sortable: false, filterable: false, render: (val) => <span style={{ fontSize: 11, color: 'var(--text-2)', fontFamily: 'monospace', wordBreak: 'break-all', whiteSpace: 'normal', lineHeight: 1.4 }}>{String(val)}</span> },
+    { key: 'receiptCode', label: 'Код чека', type: 'text', category: 'Платёж', width: 180, render: val => <span style={{ fontSize: 12, wordBreak: 'break-all' }}>{val || '—'}</span> },
     { key: 'parentName', label: 'Родитель', type: 'text', category: 'Клиент', width: 160, render: (val) => <span style={{ fontWeight: 600, fontSize: 13 }}>{val || '—'}</span> },
     { key: 'childrenNames', label: 'Дети', type: 'text', category: 'Клиент', width: 160, render: (val) => {
       const names = String(val || '').split(',').map(n => n.trim()).filter(Boolean);
@@ -866,7 +870,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     },
     {
       key: 'receiptUrl', label: 'Чек', type: 'text', category: 'Платёж', width: 52, sortable: false, filterable: false,
-      render: (val) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} />,
+      render: (val, row) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} onOpen={() => setSelectedReceiptPayment(row)} />,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [cashierDates, cashierConfirmingId, cashierEditingId, hasAdminAccess, cashierView]);
@@ -1799,7 +1803,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const pagedTotalFamilies = familiesPageQuery.data?.totalFamilies ?? 0;
   const pagedTotalPages = Math.max(1, Math.ceil(pagedTotalFamilies / FAMILIES_PAGE_SIZE));
 
-  const modeRows = useMemo(() => {
+  const modeRows = useMemo<Array<ChildRow | (typeof pagedRows)[number]>>(() => {
     if (isPagedMode) return pagedRows;
     // Кнопка «Отказ» показывает именно отказников — не отсекаем их заранее.
     return mode === 'logistics' && quickChildStatus !== 'rejected' ? logisticsWorkRows(rows) : rows;
@@ -3189,7 +3193,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             <DataTable<V2DriverTableRow>
               getTaskTarget={row=>({type:'driver',id:row.driverId,label:row.fullName})}
               key="drivers_table"
-              columns={DRIVER_COLUMNS}
+              columns={activeTab === 'ALL' ? withSchoolColumn(DRIVER_COLUMNS, row => row.branchShorts.join(', ')) : DRIVER_COLUMNS}
               data={filteredDriverRows}
               rowKey="rowId"
               storageKey="drivers_table_by_school"
@@ -3228,12 +3232,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               )}
             />
           ) : isCashierMode ? (
+            <div className={`cashier-receipt-workspace${selectedReceiptPayment ? ' is-open' : ''}`}><div className="cashier-receipt-table">
             <DataTable<CashierPaymentRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key={`cashier_table_${cashierView}`}
-              columns={cashierColumns}
+              columns={activeTab === 'ALL' ? withSchoolColumn(cashierColumns, row => row.branchShort) : cashierColumns}
               data={(cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows).filter(r => {
                 if (!cashierRowMatchesSelectedPeriod(r, paymentsPeriodKey)) return false;
+                if (!SCHOOL_TABS.some(school => school.key !== 'ALL' && isTabAllowed(school.key) && [school.key, school.label].some(label => label.toLowerCase() === r.branchShort.toLowerCase()))) return false;
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
                   if (bs !== tab.key.toLowerCase() && bs !== tab.label.toLowerCase()) return false;
@@ -3257,12 +3263,16 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 if (childRow) toggleExpandedFamily(row.familyId, childRow, 'finance');
               }}
               hideToolbar={tableBarsCollapsed}
-            />
+            /></div>
+            {selectedReceiptPayment?.receiptUrl && <CashierReceiptPanel key={selectedReceiptPayment.id} paymentId={selectedReceiptPayment.id} parentName={selectedReceiptPayment.parentName} receiptUrl={selectedReceiptPayment.receiptUrl} canEdit={hasAdminAccess || userRole === 'cashier'} onClose={() => setSelectedReceiptPayment(null)} onSaved={payment => {
+              const patch = { receiptCode: payment.receiptCode ?? null, paymentDate: payment.paymentDate };
+              setCashierRows(previous => previous.map(row => row.id === payment.id ? { ...row, ...patch } : row));
+            }}/>}</div>
           ) : isPaymentsMode ? (
             <DataTable<PaymentTableRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key="payments_table"
-              columns={paymentTableColumns}
+              columns={activeTab === 'ALL' ? withSchoolColumn(paymentTableColumns, row => row.branchShort) : paymentTableColumns}
               data={paymentRows.filter(r => {
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
@@ -3302,7 +3312,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             <DataTable<ChildRow>
               getTaskTarget={row=>!row.rowId.endsWith('_empty') ? {type:'child',id:row.rowId,label:row.childName,familyId:row.familyId,schoolKey:row.branchFilter} : {type:'family',id:row.familyId,label:row.parentName}}
               key={`families_table_${accrualsView ? 'accruals' : mode}`}
-              columns={tableColumns}
+              columns={activeTab === 'ALL' ? withSchoolColumn(tableColumns, row => row.branchShort) : tableColumns}
               data={filteredSorted}
               rowKey="rowId"
               groupByKey="familyId"
@@ -3732,7 +3742,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   Дети ({selectedDriverChildren.length})
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
+                  <FilterableTable style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
                         {['№', 'ФИО', 'Адрес', 'Телефон', 'Остановка', 'Координаты'].map(label => (
@@ -3798,7 +3808,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </FilterableTable>
                 </div>
               </section>
               ) : selectedDriverTab === 'parentCard' ? (
@@ -3848,7 +3858,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   </span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
+                  <FilterableTable style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
                         {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
@@ -3914,7 +3924,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         );
                       })}
                     </tbody>
-                  </table>
+                  </FilterableTable>
                 </div>
               </section>
               ) : selectedDriverTab === 'finance' ? (
@@ -3935,7 +3945,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     <div style={{ minHeight: 190, padding: 24, display: 'grid', placeItems: 'center', color: 'var(--text-2)', fontSize: 13, textAlign: 'center' }}>У водителя пока нет заказов B2B</div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
-                      <table style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
+                      <FilterableTable style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
                         <thead><tr>{['Дата выезда', 'Заказ', 'Клиент', 'Маршрут', 'Транспорт', 'Начислено', 'Статус'].map(label => <th key={label} style={{ height: 36, padding: '0 11px', borderBottom: '1px solid #E5EEF1', background: '#F8FCFC', color: 'var(--text-2)', textAlign: label === 'Начислено' ? 'right' : 'left', fontSize: 11, fontWeight: 600, textTransform: 'none', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
                         <tbody>{selectedDriverB2BOrders.map((order, index) => {
                           const status = B2B_ORDER_STATUSES.find(item => item.key === order.status)?.label ?? order.status;
@@ -3949,7 +3959,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                             <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6' }}><span style={{ display: 'inline-flex', padding: '5px 8px', borderRadius: 8, background: order.status === 'success' ? '#EAF7EF' : order.status === 'driver_assigned' ? '#FFF7E8' : '#EEF4FF', color: order.status === 'success' ? '#2B8952' : order.status === 'driver_assigned' ? '#A96E13' : '#4770BD', fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>{status}</span></td>
                           </tr>;
                         })}</tbody>
-                      </table>
+                      </FilterableTable>
                     </div>
                   )}
                 </section>
@@ -4077,7 +4087,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   История водителей
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+                  <FilterableTable style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
                     <thead>
                       <tr>
                         {['ФИО водителя', 'Дата начала', 'Дата конец', 'Статус'].map(label => (
@@ -4128,7 +4138,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         </tr>
                       )}
                     </tbody>
-                  </table>
+                  </FilterableTable>
                 </div>
               </div>
             </div>

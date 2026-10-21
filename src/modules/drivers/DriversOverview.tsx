@@ -1,3 +1,4 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import { isVisibleDriver } from './driverSchoolVisibility';
 import LogisticsTabs, { LogisticsTab } from '../families/LogisticsTabs';
 import HiddenSchoolsList from '../families/HiddenSchoolsList';
@@ -175,11 +176,11 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        <DashboardTopPanel className="dashboard-control-row">
+        <DashboardTopPanel className="dashboard-control-row overview-control-row">
           <LogisticsTabs value="drivers" onChange={onTabChange} />
           <div style={{ flex: 1 }} />
           <DashboardSearch value={search} onChange={onSearchChange} placeholder="Поиск школы…" />
-          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
+          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
         <SchoolDashboardTable
           columns={[

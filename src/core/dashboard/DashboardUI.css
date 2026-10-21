@@ -570,3 +570,46 @@
   height: var(--transfer-row-h);
   border-radius: var(--transfer-row-r);
 }
+
+/* Keep overview navigation, periods, search and actions on one aligned baseline. */
+.manager-overview-toolbar { display: grid; grid-template-columns: auto minmax(0, 1fr) minmax(230px, 360px) auto; align-items: center; gap: 10px; padding: 12px 16px; }
+.manager-overview-toolbar .ow-seg { box-sizing: border-box; height: 36px; border-radius: 8px; }
+.manager-overview-toolbar .ow-seg-btn { height: 28px; }
+.manager-overview-period { display: flex; min-width: 0; }
+.manager-overview-period > div { height: 36px !important; padding: 3px !important; border-radius: 8px !important; }
+.manager-overview-period button { height: 28px !important; }
+.manager-overview-search { min-width: 0; }
+.manager-overview-search > div { width: 100% !important; height: 36px !important; margin: 0 !important; }
+.manager-overview-search > div > div:first-child { height: 36px !important; border-radius: 8px !important; }
+.overview-icon-actions { display: flex; align-items: center; gap: 8px; }
+.overview-icon-button { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: 36px; height: 36px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--surface, #fff); color: var(--text-2); cursor: pointer; }
+.overview-icon-button:hover { background: var(--surface-2); color: var(--accent); }
+.overview-icon-button--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.overview-icon-button--primary:hover { background: var(--accent-h, #146566); color: #fff; }
+.overview-icon-button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (max-width: 1100px) { .manager-overview-toolbar { grid-template-columns: 1fr auto; } .manager-overview-period { grid-column: 1 / -1; grid-row: 2; } .manager-overview-search { grid-column: 1; grid-row: 3; } .manager-overview-toolbar .overview-icon-actions { grid-column: 2; grid-row: 3; } }
+
+.overview-control-row { align-items: center; padding: 12px 16px; gap: 10px; }
+.overview-control-row .ow-seg { height: 36px; box-sizing: border-box; }
+.overview-control-row .ow-seg-btn { height: 28px; }
+.overview-control-row > div:not(.ow-seg):not(.overview-icon-actions):not(:has([role="listbox"])) { height: 36px !important; min-width: 0; }
+.overview-control-row > div > div:first-child { max-height: 36px; box-sizing: border-box; }
+.overview-control-row .dashboard-search { height: 36px; border-radius: 8px; }
+.overview-control-row > div > div > button { max-height: 28px; }
+.overview-control-row .overview-icon-actions { flex-shrink: 0; }
+.employees-controls { align-items: center; }
+.employees-controls .employees-search { min-height: 36px; box-sizing: border-box; }
+@media (max-width: 1000px) { .overview-control-row { flex-wrap: wrap; } .overview-control-row > div { max-width: 100%; } }
+
+/* Shared compact controls across module headers. */
+.b2b-module :is(.b2b-panel-head,.b2b-orders-head,.b2b-logistics-head,.b2b-finance-head,.b2b-calendar-head,.b2b-cashier-head,.b2b-cashflow-toolbar,.b2b-expenses-toolbar),
+.market-panel-title, .employees-controls, .tasks-heading { align-items: center; gap: 10px; }
+.b2b-module :is(.b2b-finance-filters,.b2b-cashflow-toolbar,.b2b-client-tools,.b2b-logistics-filters) :is(input,select),
+.market-order-toolbar select { min-height: 36px; box-sizing: border-box; }
+.market-panel-title .overview-icon-actions { margin-left: auto; }
+.tasks-heading > .overview-icon-button { margin-left: auto; }
+
+.dashboard-search { height: 36px; border-radius: 8px; }
+.salary-overview-toolbar .dashboard-search { height: 36px; }
+.salary-overview-toolbar .expense-cancel { height: 36px; box-sizing: border-box; }
+.b2b-finance-month-page-head > .overview-icon-button { margin-left: auto; order: 3; }

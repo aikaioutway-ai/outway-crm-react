@@ -1,3 +1,4 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
 import { Banknote, CheckCircle2, ChevronRight, RefreshCw, School, WalletCards } from 'lucide-react';
 import { DashboardGrid, DashboardSearch, DashboardTopPanel, OverviewColumn, SchoolAvatar } from '../../core/dashboard/DashboardUI';
@@ -11,7 +12,7 @@ import { loadExpenseRows } from './expenseRows';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import { ExpenseModal, ExpensesTable } from './ExpensesModule';
 import { deleteAdvanceExpense, updateAdvanceExpenseCell } from '../../services/advanceExpenseService';
-import { Table2, ArrowLeft } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { money } from '../../utils/pricing';
 
 export type SalaryScope = 'all' | 'school' | 'office';
@@ -92,11 +93,13 @@ export default function SalaryExpensesView({ sessionToken, scope='all', columnsO
   };
   const tableTitle=department?departments.find(item=>item.key===department)?.label:school?schools.find(item=>item.key===school)?.label:scope==='school'?'ЗП школа':'Все выплаты';
   return <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', gap: 12, paddingBottom: 10 }}>
-    <DashboardTopPanel>
-      <button type="button" className="expenses-view-button" style={{marginBottom:10}} onClick={()=>{setTableOpen(value=>!value);setSearch('');}}>{tableOpen ? <ArrowLeft size={15}/> : <Table2 size={15}/ >}{tableOpen ? 'К сводке' : 'Все расходы'}</button>
+    <DashboardTopPanel className="salary-overview-toolbar">
+
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
         {(department || (school && scope!=='office')) && <button type="button" className="expense-cancel" onClick={() => { if(department)setDepartment(null);else setSchool(null);setHalf('ALL');setSearch(''); }}>← {department?'Офис':'Школы и офис'}</button>}
-        <div style={{ flex: 1, minWidth: 0, display: 'flex' }}><ManagerPeriodBar periodKey={period} onPeriodKeyChange={setPeriod} periods={availablePeriods} showAll={false} /></div>
+        <div className="salary-period-control" style={{ flex: 1, minWidth: 0, display: 'flex' }}><ManagerPeriodBar periodKey={period} onPeriodKeyChange={setPeriod} periods={availablePeriods} showAll={false} /></div>
+        <AllRecordsButton label="Все расходы" onClick={()=>{setTableOpen(true);setSearch('');}}/>
+        {tableOpen && <button type="button" className="overview-icon-button" title="К сводке" aria-label="К сводке" onClick={()=>setTableOpen(false)}><ArrowLeft size={18}/></button>}
         <DashboardSearch width={260} value={search} onChange={setSearch} placeholder={tableOpen || !showOverview?'Поиск выплаты...':school==='OFFICE'?'Поиск отдела...':'Поиск школы или офиса...'} />
         <button type="button" style={{ width: 34, height: 34, border: '1px solid var(--border)', borderRadius: 8, background: 'var(--surface)', color: 'var(--text-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} title="Обновить" aria-label="Обновить выплаты" onClick={() => setRefresh(value => value + 1)}><RefreshCw size={16} /></button>
       </div>
@@ -119,7 +122,7 @@ export default function SalaryExpensesView({ sessionToken, scope='all', columnsO
       ] as const).map(column => <OverviewColumn key={column.key} sortKey={column.key} label={column.label} icon={column.icon} value={dataReady ? money(sortedSchools.reduce((sum, item) => sum + item[column.key], 0)) : '—'} color={column.color} sortState={{ key: sort, dir: ascending ? 'asc' : 'desc' }} onSort={handleSort}>
         {sortedSchools.map((item, index) => <div key={item.key} data-school-row={item.key} style={{ flex: 1, display: 'flex', alignItems: 'center', padding: '0 16px', background: index % 2 ? 'var(--surface-2)' : undefined }}><span style={{ fontSize: 14, fontWeight: 600, color: item[column.key] > 0 ? column.color : 'var(--text)' }}>{dataReady ? money(item[column.key]) : '—'}</span></div>)}
       </OverviewColumn>)}
-    </DashboardGrid> : <div className="expenses-panel finance-workspace" style={{overflow:'auto'}}><ExpensesTable rows={selectedRows.filter(row=>[row.name,row.comment,row.paymentOrderNumber].some(value=>value?.toLowerCase().includes(search.toLowerCase())))} showCategory={true} allowPersonal={false} onEdit={setEditing} onDelete={remove} deletingId={deleting} onCellSave={saveCell} columnsOpen={propertiesOpen} onColumnsOpenChange={changeProperties} settingsKey={`finance_salary_${scope}_${school || 'all'}`} toolbar={<div className="expenses-table-heading"><strong>{tableTitle}</strong><span className="expenses-record-count">{selectedRows.length} записей</span><button type="button" className="expenses-view-button" onClick={()=>changeProperties(!propertiesOpen)}>Колонки</button></div>}/></div>}
+    </DashboardGrid> : <div className="expenses-panel finance-workspace" style={{overflow:'auto'}}><ExpensesTable rows={selectedRows.filter(row=>[row.name,row.comment,row.paymentOrderNumber].some(value=>value?.toLowerCase().includes(search.toLowerCase())))} showCategory={true} allowPersonal={false} onEdit={setEditing} onDelete={remove} deletingId={deleting} onCellSave={saveCell} columnsOpen={propertiesOpen} onColumnsOpenChange={changeProperties} settingsKey={`finance_salary_${scope}_${school || 'all'}`} toolbar={<div className="expenses-table-heading"><strong>{tableTitle}</strong><span className="expenses-record-count">{selectedRows.length} записей</span></div>}/></div>}
     {editing && <ExpenseModal initialCategory={editing.category} expense={editing} sessionToken={sessionToken} allowPersonalCategory={false} onClose={()=>setEditing(null)} onSaved={saved} onPaymentsSaved={()=>{setRefresh(value=>value+1);setEditing(null);}}/>}
 
   </div>;

@@ -26,6 +26,7 @@ const pendingReceipts = new Map<number, {
   date: string;
   receiptUrl: string;
   receiptCode: string | null;
+  time:string|null;card_last4:string|null;bank:string|null;hash:string;
 }>();
 
 async function sendMessage(chatId: number, text: string) {
@@ -54,13 +55,20 @@ async function downloadFileAsBase64(url: string): Promise<{ base64: string; medi
 }
 
 async function ocrReceipt(base64: string, mediaType: string) {
-  const PROMPT = `Извлеки из этого банковского чека:
-1. receipt_code — значение поля "Идентификатор транзакции" или "ID транзакции". Если нет — "Описание". Без времени.
-2. amount — сумма в сомах (только число)
-3. date — дата в формате YYYY-MM-DD
-
-Верни только JSON: {"receipt_code": "...", "amount": 5500, "date": "2026-06-10"}
-Если поле не найдено — null.`;
+  const PROMPT = `Извлеки данные банковского чека. Верни только JSON:
+{"receipt_code":null,"amount":null,"date":null,"time":null,"card_last4":null,"bank":null}
+receipt_code: ID транзакции, ELQR ID или номер квитанции; если их нет — код из описания/комментария, включая mbiz:, MBIZ_S_, QR_. Сохрани весь код, не путай его с временем.
+amount: итоговая сумма перевода без комиссии, число в сомах.
+date: дата самой операции YYYY-MM-DD, не дата загрузки.
+time: время самой операции HH:MM:SS, либо HH:MM, если секунды не указаны. Не добавляй отсутствующие секунды и не используй часы телефона.
+card_last4: последние 4 цифры карты или счёта ОТПРАВИТЕЛЯ (поля «Откуда», «Счёт списания», Payer requisites). Верни строку из четырёх цифр, сохраняя нули. Не используй реквизиты получателя, mbiz или номер квитанции.
+bank: название банка, выдавшего чек (например Optima Bank, Bakai Bank, DemirBank, MBANK). Не банк получателя или поставщик услуг c2b.mbank.kg.
+Примеры форматов (не подставляй эти значения в ответ):
+Optima24: поле «Откуда **** 7985», дата «06 окт. 2026, 17:39», операция с mbiz: — извлекай card_last4="7985", time="17:39", date="2026-10-06", bank="Optima Bank"; сам mbiz оставь в receipt_code.
+Bakai: используй ELQR ID как код, время из «Дата создания», карту из «Счёт списания»; игнорируй mbiz комментария при наличии ELQR ID.
+DemirBank: используй ID transaction как код, время из Transaction date and time, карту из Payer requisites.
+MBANK: код может быть в «Детали операции» и содержать MBIZ_S_/QR_; банк определяется по логотипу чека.
+Если поле отсутствует или неразборчиво — null. Не придумывай данные.`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -71,7 +79,8 @@ async function ocrReceipt(base64: string, mediaType: string) {
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
-      max_tokens: 256,
+      max_tokens: 512,
+      temperature: 0,
       messages: [{
         role: 'user',
         content: [
@@ -85,14 +94,14 @@ async function ocrReceipt(base64: string, mediaType: string) {
   const data = await res.json();
   const text = (data.content ?? []).filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
   const match = text.match(/\{[\s\S]*\}/);
-  if (!match) return { receipt_code: null, amount: null, date: null };
+  if (!match) return { receipt_code: null, amount: null, date: null,time:null,card_last4:null,bank:null };
   try {
     const parsed = JSON.parse(match[0]);
     let code = parsed.receipt_code ?? null;
     if (code) code = code.replace(/^\d{2}:\d{2}:\d{2}\//, '');
-    return { receipt_code: code, amount: parsed.amount ? Number(parsed.amount) : null, date: parsed.date ?? null };
+    return { time:typeof parsed.time==='string' && /^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(parsed.time)?parsed.time:null,card_last4:typeof parsed.card_last4==='string' && /^\d{4}$/.test(parsed.card_last4)?parsed.card_last4:null,bank:typeof parsed.bank==='string'?parsed.bank:null,receipt_code: code, amount: parsed.amount ? Number(parsed.amount) : null, date: parsed.date ?? null };
   } catch {
-    return { receipt_code: null, amount: null, date: null };
+    return { receipt_code: null, amount: null, date: null,time:null,card_last4:null,bank:null };
   }
 }
 
@@ -119,7 +128,7 @@ async function findFamilyByPhone(phone: string) {
   return data ?? [];
 }
 
-async function createPendingPayment(familyId: string, amount: number, date: string, receiptUrl: string, receiptCode: string | null, submittedBy: string) {
+async function createPendingPayment(familyId: string, amount: number, date: string, receiptUrl: string, receiptCode: string | null, submittedBy: string, details?:{time:string|null;card_last4:string|null;bank:string|null;hash:string}) {
   const { data, error } = await supabase.from('v2_payments').insert({
     family_id: familyId,
     amount,
@@ -129,6 +138,7 @@ async function createPendingPayment(familyId: string, amount: number, date: stri
     payment_date: date,
     receipt_url: receiptUrl,
     receipt_code: receiptCode,
+    receipt_sha256:details?.hash ?? null,receipt_time:details?.time ?? null,receipt_card_last4:details?.card_last4 ?? null,receipt_bank:details?.bank ?? null,
     status: 'pending',
     submitted_by: submittedBy,
     comment: 'Загружено через Telegram-бот',
@@ -154,6 +164,8 @@ async function handleUpdate(update: any) {
 
     const fileUrl = await getFileUrl(fileId);
     const { base64, mediaType } = await downloadFileAsBase64(fileUrl);
+    const bytes=Uint8Array.from(atob(base64),char=>char.charCodeAt(0));
+    const hash=Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256',bytes)),value=>value.toString(16).padStart(2,'0')).join('');
     const ocr = await ocrReceipt(base64, mediaType);
 
     if (!ocr.amount || !ocr.date) {
@@ -166,6 +178,7 @@ async function handleUpdate(update: any) {
       date: ocr.date,
       receiptUrl: fileUrl,
       receiptCode: ocr.receipt_code,
+      time:ocr.time,card_last4:ocr.card_last4,bank:ocr.bank,hash,
     });
 
     await sendMessage(chatId,
@@ -203,20 +216,24 @@ async function handleUpdate(update: any) {
 
     const family = families[0];
 
+    const {data:duplicates,error:checkError}=await supabase.rpc('find_receipt_duplicate',{p_code:receipt.receiptCode,p_hash:receipt.hash,p_bank:receipt.bank,p_time:receipt.time,p_card:receipt.card_last4,p_amount:receipt.amount,p_date:receipt.date});
+    if(checkError){await sendMessage(chatId,'Не удалось проверить дубли. Повторите попытку позже.');return;}
+    if(duplicates?.[0]){const duplicate=duplicates[0];await sendMessage(chatId,`Дубль чека: платёж уже есть у семьи ${String(duplicate.parent_name).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;')} (${duplicate.family_id}), сумма ${duplicate.amount}, дата ${duplicate.payment_date}. Повторная отправка запрещена.`);return;}
     // Загружаем фото в Supabase Storage
     let receiptUrl = receipt.receiptUrl;
     try {
       receiptUrl = await uploadReceiptFromUrl(family.id, receipt.receiptUrl, 'tg-receipt.jpg');
     } catch (_) { /* если не загрузилось — используем telegram url */ }
 
-    await createPendingPayment(
+    try { await createPendingPayment(
       family.id,
       receipt.amount,
       receipt.date,
       receiptUrl,
       receipt.receiptCode,
       `tg:${username}`,
-    );
+      receipt,
+    ); } catch(error){await sendMessage(chatId,String(error instanceof Error?error.message:'Не удалось создать платёж').replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;'));return;}
 
     pendingReceipts.delete(chatId);
 

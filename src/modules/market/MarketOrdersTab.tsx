@@ -1,3 +1,5 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
+import FilterableTable from '../../core/tables/FilterableTable';
 import React, { FormEvent, useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Plus, Trash2, X } from 'lucide-react';
 import { UserRole } from '../../types';
@@ -219,7 +221,7 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
             <option value="ALL">Все статусы</option>
             {MARKET_ORDER_STATUSES.map(s => <option key={s.key} value={s.key}>{s.label}</option>)}
           </select>
-          <button className="market-add" onClick={() => setModalOpen(true)}><Plus size={16} /> Новый заказ</button>
+          <button className="overview-icon-button overview-icon-button--primary" title="Новый заказ" aria-label="Новый заказ" onClick={() => setModalOpen(true)}><Plus size={18}/></button><AllRecordsButton onClick={()=>{setStatusFilter('ALL');loadOrders('ALL');}}/>
         </div>
       </div>
 
@@ -234,7 +236,7 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
         <div className="market-empty">Заказов пока нет</div>
       ) : (
         <div className="market-table-wrap">
-          <table className="market-table">
+          <FilterableTable className="market-table">
             <thead><tr>
               <th></th><th>№</th><th>Клиент</th><th>Доставка</th><th>Статус</th><th>Источник</th>
               <th className="number">Сумма</th><th className="number">Маржа</th><th></th>
@@ -263,7 +265,7 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
                   {expanded && (
                     <tr className="market-order-detail-row">
                       <td colSpan={9}>
-                        <table className="market-order-detail-table">
+                        <FilterableTable className="market-order-detail-table">
                           <thead><tr><th>Товар</th><th>Ед.</th><th className="number">Кол-во</th><th className="number">Закупка</th><th className="number">Продажа</th></tr></thead>
                           <tbody>{order.items.map(item => (
                             <tr key={item.id}>
@@ -273,7 +275,7 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
                               <td className="number">{money(item.saleAmount)}</td>
                             </tr>
                           ))}</tbody>
-                        </table>
+                        </FilterableTable>
                         {order.comment && <div className="market-order-comment">Комментарий: {order.comment}</div>}
                       </td>
                     </tr>
@@ -281,7 +283,7 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
                 </React.Fragment>
               );
             })}</tbody>
-          </table>
+          </FilterableTable>
         </div>
       )}
 

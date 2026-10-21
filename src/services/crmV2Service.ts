@@ -2249,6 +2249,7 @@ export interface CashierPaymentRow {
   status: string;
   paymentMethod: string | null;
   receiptUrl: string | null;
+  receiptCode?: string | null;
   paymentDate: string | null;
   actualPaymentDate: string | null;
   comment: string;
@@ -2271,7 +2272,7 @@ async function fetchCashierPaymentsTableUncached(): Promise<CashierPaymentRow[]>
   const [payments, families, children] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')
-        .select('id, family_id, amount, status, payment_method, receipt_url, payment_number, payment_date, actual_payment_date, comment, created_at')
+        .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, comment, created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .range(from, to)),
@@ -2316,6 +2317,7 @@ async function fetchCashierPaymentsTableUncached(): Promise<CashierPaymentRow[]>
       status: p.status ?? '',
       paymentMethod: p.payment_method ?? null,
       receiptUrl: p.receipt_url ?? null,
+      receiptCode: p.receipt_code ?? null,
       paymentDate: p.payment_date ?? null,
       actualPaymentDate: p.actual_payment_date ?? null,
       comment: p.comment ?? '',

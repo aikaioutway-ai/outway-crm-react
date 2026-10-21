@@ -1,3 +1,4 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import { queryClient } from '../../services/queryClient';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, ListTodo, Pencil, Trash2, Plus, RefreshCw, AlertCircle, CheckCheck, Clock, X, ChevronDown } from 'lucide-react';
@@ -22,6 +23,9 @@ export default function TasksModule(props:TasksModuleProps) {
   const [overviewExpanded,setOverviewExpanded]=useState(false);
   const summary=useTaskSummary(props.user.sessionToken);
   const [quickFilter,setQuickFilter]=useState<{view:TaskFilters['view'];status:TaskFilters['status'];due:string}>();
+  const [allTasksOpen,setAllTasksOpen]=useState(false);
+  const allTasksDialog=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{if(allTasksOpen && !allTasksDialog.current?.open)allTasksDialog.current?.showModal();},[allTasksOpen]);
   const [teamSelection,setTeamSelection]=useState<{department:string;assigneeId:string}|null>(null);
   const dialog=useRef<HTMLDialogElement>(null);
   useEffect(()=>{if(teamSelection && !dialog.current?.open)dialog.current?.showModal();},[teamSelection]);
@@ -32,7 +36,8 @@ export default function TasksModule(props:TasksModuleProps) {
     {label:'Срок в течение суток',value:summary.data?.dueSoon,icon:Clock,color:'amber',view:'mine',status:'active',due:'soon'},
     {label:'Ждут моей проверки',value:summary.data?.review,icon:CheckCheck,color:'violet',view:'created',status:'review',due:''},
   ] as const;
-  return <section className="tasks-board-module"><header className="tasks-heading"><div className="tasks-heading-title"><span><ListTodo size={23}/></span><div><h1>Задачи</h1><p>Все списки задач в одном окне</p></div></div></header>
+  return <section className="tasks-board-module"><header className="tasks-heading"><div className="tasks-heading-title"><span><ListTodo size={23}/></span><div><h1>Задачи</h1><p>Все списки задач в одном окне</p></div></div><AllRecordsButton onClick={()=>setAllTasksOpen(true)}/></header>
+    {allTasksOpen && <dialog ref={allTasksDialog} className="tasks-dialog tasks-department-dialog" aria-label="Все задачи" onCancel={()=>setAllTasksOpen(false)}><header><h2>Все задачи</h2><button type="button" className="tasks-icon" aria-label="Закрыть все задачи" onClick={()=>setAllTasksOpen(false)}><X size={18}/></button></header><TaskColumn {...props} column={{view:showOverview?'all':'mine',label:'Все задачи'}} initialFilters={{status:'all'}}/></dialog>}
     <div className="tasks-kpis">{cards.map(card=><button key={card.label} type="button" className={`tasks-kpi ${card.color}`} onClick={()=>setQuickFilter({view:card.view,status:card.status,due:card.due})}><span><card.icon size={18}/>{card.label}</span><strong>{card.value ?? '—'}</strong></button>)}</div>
     {showOverview && <section className="tasks-module tasks-overview-column tasks-overview-wide" key="all"><header className="tasks-column-heading"><button type="button" className="tasks-overview-toggle" aria-expanded={overviewExpanded} aria-controls="tasks-team-statistics" onClick={()=>setOverviewExpanded(current=>!current)}><ChevronDown size={18} className={overviewExpanded?'':'is-collapsed'}/><h2>Все задачи</h2></button><button className="tasks-icon" aria-label="Обновить статистику" onClick={()=>void queryClient.invalidateQueries({queryKey:['tasks',props.user.sessionToken]})}><RefreshCw size={16}/></button></header><div id="tasks-team-statistics" hidden={!overviewExpanded}><TaskTeamOverview token={props.user.sessionToken} role={props.user.role} employees={metadata.data?.employees ?? []} onSelect={(department,assigneeId)=>setTeamSelection({department,assigneeId})}/></div></section>}
     <div className="tasks-personal-board tasks-personal-board-four" aria-label="Личные задачи">{columns.map(column=><TaskColumn key={column.label} {...props} column={column} quickFilter={quickFilter}/>)}</div>

@@ -1,3 +1,5 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
+import FilterableTable from '../../core/tables/FilterableTable';
 import React, { FormEvent, useEffect, useState } from 'react';
 import { Pencil, Plus, X } from 'lucide-react';
 import { fetchMarketClients, fetchMarketSchools, saveMarketClient } from '../../services/marketService';
@@ -123,14 +125,14 @@ export default function MarketClientsTab({ sessionToken }: { sessionToken?: stri
     <div className="market-panel">
       <div className="market-panel-title">
         <span>Клиенты Маркета</span>
-        <button className="market-add" onClick={() => setEditing(null)}><Plus size={16} /> Новый клиент</button>
+        <div className="overview-icon-actions"><button className="overview-icon-button overview-icon-button--primary" title="Новый клиент" aria-label="Новый клиент" onClick={() => setEditing(null)}><Plus size={18}/></button><AllRecordsButton onClick={()=>setEditing(undefined)}/></div>
       </div>
       {loadError && <div className="market-load-error">Не удалось загрузить данные: {loadError}. Проверьте, что миграция и функция market-api применены.</div>}
       {loading ? <div className="market-empty">Загрузка…</div> : rows.length === 0 ? (
         <div className="market-empty">Клиентов пока нет — добавьте первого</div>
       ) : (
         <div className="market-table-wrap">
-          <table className="market-table">
+          <FilterableTable className="market-table">
             <thead><tr>
               <th>Название</th><th>Школа CRM</th><th>Контакт</th><th>Телефон</th><th>Логин портала</th><th>Статус</th><th></th>
             </tr></thead>
@@ -145,7 +147,7 @@ export default function MarketClientsTab({ sessionToken }: { sessionToken?: stri
                 <td><button className="market-icon-btn" onClick={() => setEditing(row)} aria-label="Редактировать"><Pencil size={15} /></button></td>
               </tr>
             ))}</tbody>
-          </table>
+          </FilterableTable>
         </div>
       )}
       {editing !== undefined && (

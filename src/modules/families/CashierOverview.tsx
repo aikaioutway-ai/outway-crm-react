@@ -1,3 +1,4 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import CashierViewTabs, { CashierView } from './CashierViewTabs';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
@@ -293,7 +294,7 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <DashboardTopPanel className="dashboard-control-row cashier-control-row">
+        <DashboardTopPanel className="dashboard-control-row cashier-control-row overview-control-row">
           <CashierViewTabs value={view} onChange={onViewChange} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
@@ -303,7 +304,7 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
             />
           </div>
           <CashierPaymentSearch rows={searchablePayments} onOpenPaymentFamily={onOpenPaymentFamily} />
-          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
+          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
 
         <SchoolDashboardTable

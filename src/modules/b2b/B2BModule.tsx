@@ -88,7 +88,7 @@ export default function B2BModule({ userRole, sessionToken, userName }: { userRo
       ) : visibleTab === 'logistics' ? (
         <B2BLogistics canPay={access.driverPay} onOpenOrder={openOrderCard} />
       ) : visibleTab === 'calendar' ? (
-        <B2BCalendar onOpenOrder={openOrderCard} />
+        <B2BCalendar onOpenAll={()=>setActiveTab('orders')} onOpenOrder={openOrderCard} />
       ) : visibleTab === 'clients' ? (
         <B2BClients userName={userName} canViewFinance={access.clientFinance} canEditPaymentStatus={access.reviewPayments} canCreateOrder={access.createOrderFromClient} onOpenOrder={canOpenOrders ? openOrderCard : undefined} />
       ) : visibleTab === 'expenses' ? (

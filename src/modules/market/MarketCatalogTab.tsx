@@ -1,3 +1,5 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
+import FilterableTable from '../../core/tables/FilterableTable';
 import React, { FormEvent, useEffect, useState } from 'react';
 import { Pencil, Plus, X } from 'lucide-react';
 import { fetchMarketProducts, saveMarketProduct } from '../../services/marketService';
@@ -108,14 +110,14 @@ export default function MarketCatalogTab({ sessionToken }: { sessionToken?: stri
     <div className="market-panel">
       <div className="market-panel-title">
         <span>Каталог товаров</span>
-        <button className="market-add" onClick={() => setEditing(null)}><Plus size={16} /> Новый товар</button>
+        <div className="overview-icon-actions"><button className="overview-icon-button overview-icon-button--primary" title="Новый товар" aria-label="Новый товар" onClick={() => setEditing(null)}><Plus size={18}/></button><AllRecordsButton onClick={()=>setEditing(undefined)}/></div>
       </div>
       {loadError && <div className="market-load-error">Не удалось загрузить данные: {loadError}. Проверьте, что миграция и функция market-api применены.</div>}
       {loading ? <div className="market-empty">Загрузка…</div> : rows.length === 0 ? (
         <div className="market-empty">Каталог пуст — добавьте первый товар</div>
       ) : (
         <div className="market-table-wrap">
-          <table className="market-table">
+          <FilterableTable className="market-table">
             <thead><tr>
               <th>Наименование</th><th>Категория</th><th>Ед.</th>
               <th className="number">Закупка</th><th className="number">Продажа</th><th className="number">Маржа</th>
@@ -136,7 +138,7 @@ export default function MarketCatalogTab({ sessionToken }: { sessionToken?: stri
                 </tr>
               );
             })}</tbody>
-          </table>
+          </FilterableTable>
         </div>
       )}
       {editing !== undefined && (

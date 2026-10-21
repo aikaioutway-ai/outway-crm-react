@@ -1,3 +1,4 @@
+import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import React, { useMemo, useState } from 'react';
 import { Pencil } from 'lucide-react';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
@@ -7,10 +8,11 @@ import { useRefundsTable } from '../../hooks/useCrmQueries';
 import { confirmFamilyRefund, rejectFamilyRefund } from '../../services/financeService';
 import { money } from '../../utils/pricing';
 import { phoneMatchesQuery } from '../../utils/format';
-import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
+import { CASHIER_PERIODS, SCHOOL_TABS, isSchoolAllowed } from './constants';
 
 interface Props {
   schoolKey: string;
+  allowedSchools?: string[];
   periodKey: string;
   searchQuery?: string;
   confirmedBy?: string;
@@ -38,7 +40,7 @@ function matchesSchool(row: RefundTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery = '', confirmedBy }: Props) {
+export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery = '', confirmedBy, allowedSchools }: Props) {
   const { data: rows = [], isLoading } = useRefundsTable();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [paymentMethodById, setPaymentMethodById] = useState<Record<string, 'cash' | 'cashless'>>({});
@@ -156,17 +158,18 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
   const filteredRows = useMemo(() => {
     const q = searchQuery.toLowerCase().replace(/\s+/g, '');
     return rows.filter(row => {
+      if (!SCHOOL_TABS.some(school => school.key !== 'ALL' && isSchoolAllowed(school.key, allowedSchools) && matchesSchool(row, school.key))) return false;
       if (!matchesSchool(row, schoolKey)) return false;
       if (!matchesPeriod(row, periodKey)) return false;
       if (!q) return true;
       return phoneMatchesQuery(searchQuery, row.phone) || [row.parentName, row.phone, row.childrenNames, row.branchShort].some(v => v.toLowerCase().replace(/\s+/g, '').includes(q));
     });
-  }, [rows, schoolKey, periodKey, searchQuery]);
+  }, [rows, schoolKey, periodKey, searchQuery, allowedSchools]);
 
   return (
     <DataTable<RefundTableRow>
       key={`refunds_table_${schoolKey}`}
-      columns={columns}
+      columns={schoolKey === 'ALL' ? withSchoolColumn(columns, row => row.branchShort) : columns}
       data={filteredRows}
       rowKey="id"
       storageKey="cashier_refunds_table_v1"

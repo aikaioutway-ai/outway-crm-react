@@ -1,3 +1,4 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
 import SchoolsMap from './SchoolsMap';
 import { ManagerSearch } from './ManagerOverview';
@@ -180,11 +181,11 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <DashboardTopPanel className="dashboard-control-row">
+        <DashboardTopPanel className="dashboard-control-row overview-control-row">
           <LogisticsTabs value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} />
           <div style={{ flex: 1 }} />
           <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
-          <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
+          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
         {view === 'schools' ? <SchoolsMap allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable
           columns={[

@@ -94,13 +94,14 @@ test('edits a price in place, saves and recalculates the total', async()=>{
   expect(document.querySelector('.dt-toolbar .expenses-table-heading')).toHaveTextContent('Все расходы');
 });
 
-test('finance columns can be shown and hidden with saved settings', async()=>{
+test('finance columns remain configurable from the sidebar without a duplicate toolbar button', async()=>{
   (loadExpenseRows as jest.Mock).mockResolvedValue(expenseRows);
-  render(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin"/>);
+  const {rerender}=render(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin"/>);
   await screen.findByRole('row',{name:/^Офис/});
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Все расходы'}));});
   expect(document.querySelector('thead')).not.toHaveTextContent('Отдел');
-  fireEvent.click(screen.getByRole('button',{name:'Колонки'}));
+  expect(screen.queryByRole('button',{name:'Колонки'})).not.toBeInTheDocument();
+  rerender(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin" columnsOpen={true}/>);
   const department=screen.getByText('Отдел',{selector:'.dt-props-item-name'});
   await act(async()=>{fireEvent.click(department);});
   expect(document.querySelector('thead')).toHaveTextContent('Отдел');

@@ -1,3 +1,5 @@
+import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
+import FilterableTable from '../../core/tables/FilterableTable';
 import type { UserRole } from '../../types';
 import { b2bAccess } from './b2bAccess';
 import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
@@ -83,7 +85,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
   const { data: drivers = [], isLoading: driversLoading } = useDriversTable();
   const [driverPayouts, setDriverPayouts] = useState<B2BDriverPayout[]>([]);
   const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<OrderStatus | 'all' | 'all-records'>('all');
   const [sortKey, setSortKey] = useState<SortKey>('requestDate');
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc');
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -158,7 +160,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
   const filteredOrders = useMemo(() => {
     const query = search.trim().toLowerCase();
     return orders.filter(order => {
-      if (statusFilter !== 'all' && order.status !== statusFilter) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'all-records' && order.status !== statusFilter) return false;
       if (statusFilter === 'all' && order.status === 'success') return false;
       if (!query) return true;
       return order.number.toLowerCase().includes(query) || order.client.toLowerCase().includes(query) ||
@@ -481,7 +483,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
         <div><h2>Заказы</h2><p>Табличный список корпоративных перевозок</p></div>
         <div className="b2b-orders-head-actions">
           <div className="b2b-orders-total">{orders.length} всего</div>
-          <button className="b2b-primary-button" type="button" onClick={openNewOrderForm}><Plus size={17} /> Новый заказ</button>
+          <button className="overview-icon-button overview-icon-button--primary" type="button" title="Новый заказ" aria-label="Новый заказ" onClick={openNewOrderForm}><Plus size={18}/></button><AllRecordsButton onClick={()=>{setSearch('');setStatusFilter('all-records');setSelectedOrderId(null);}}/>
         </div>
       </div>
 
@@ -515,7 +517,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
       </div>
 
       <div className="b2b-orders-table-wrap">
-        <table className="b2b-orders-table">
+        <FilterableTable className="b2b-orders-table">
           <thead><tr>
             {sortableHead('№ заказа', 'number')}{sortableHead('Клиент', 'client')}{sortableHead('Маршрут', 'route')}
             {sortableHead('Дата заявки', 'requestDate')}{sortableHead('Дата выезда', 'departureDate')}{sortableHead('Транспорт', 'transport')}
@@ -543,7 +545,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
               </tr>
             );})}
           </tbody>
-        </table>
+        </FilterableTable>
       </div>
 
       </>}
@@ -672,11 +674,11 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                   {selectedDriverCost <= 0 && selectedTaxCost <= 0 && selectedOrderExpenses.length === 0 ? (
                     <div className="b2b-order-pnl-empty">Затрат по заказу пока нет</div>
                   ) : (
-                    <table><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
+                    <FilterableTable><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
                       {selectedDriverCost > 0 && <tr><td>Водитель</td><td>{selectedOrder.driverName || 'Начисление водителю'}</td><td>{selectedOrder.departureDate || selectedOrder.requestDate}</td><td className="number">{selectedDriverCost.toLocaleString()}</td></tr>}
                       {selectedTaxCost > 0 && <tr><td>Налог</td><td>4% с подтверждённой выручки на юрсчёт</td><td>По датам оплат</td><td className="number">{selectedTaxCost.toLocaleString()}</td></tr>}
                       {selectedOrderExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()}</td></tr>)}
-                    </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()}</td></tr></tfoot></table>
+                    </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()}</td></tr></tfoot></FilterableTable>
                   )}
                 </div>
               </div>

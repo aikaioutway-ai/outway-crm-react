@@ -1,3 +1,4 @@
+import FilterableTable from '../../core/tables/FilterableTable';
 import './InlineFamilyCard.css';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
@@ -433,9 +434,9 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     await loadFinance();
     await loadAudit();
   }
-  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string, paymentOrderNumber?: string): Promise<boolean> {
+  async function handleCreatePayment(amount: number, paymentType: any, comment: string, paymentDate: string, receiptFile?: File | null, receiptCode?: string, paymentOrderNumber?: string, receiptDetails?: {time:string;cardLast4:string;bank:string}): Promise<boolean> {
     try {
-      await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentOrderNumber, paymentDate, receiptFile, receiptCode, comment, createdBy: userName });
+      await createFamilyPayment({ familyId: family.id, amount, paymentType, paymentOrderNumber, paymentDate, receiptFile, receiptCode, receiptDetails, comment, createdBy: userName });
       try {
         await addAudit('Платёж', 'family_payment', '-', `${money(amount)} на проверке`);
       } catch (error) {
@@ -446,9 +447,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       onUpdated?.();
       return true;
     } catch (error) {
-      console.error('Payment save failed', error);
-      window.alert(error instanceof Error ? error.message : 'Не удалось внести платёж');
-      return false;
+      throw error instanceof Error ? error : new Error('Не удалось внести платёж');
     }
   }
   async function handleConfirmPayment(payment: FamilyPayment, actualPaymentDate: string): Promise<boolean> {
@@ -1619,7 +1618,7 @@ function ChildrenOverviewTable({
       </div>
       {children.length === 0 ? <p>Добавьте первого ребёнка в режиме редактирования.</p> : (
         <div className="family-children-table-wrap">
-          <table className="family-children-table">
+          <FilterableTable className="family-children-table">
             <thead><tr>{['Ребёнок', 'Школа / класс', 'Транспорт', 'Трансфер', 'Остановка', 'Статус', 'В месяц', ''].map((label, index) => <th scope="col" key={index}>{label}</th>)}</tr></thead>
             <tbody>{children.map((child, index) => (
               <React.Fragment key={child.id}>
@@ -1638,7 +1637,7 @@ function ChildrenOverviewTable({
               </td></tr>}
               </React.Fragment>
             ))}</tbody>
-          </table>
+          </FilterableTable>
         </div>
       )}
     </div>

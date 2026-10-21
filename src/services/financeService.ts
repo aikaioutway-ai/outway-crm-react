@@ -1,3 +1,4 @@
+import { assertNoReceiptDuplicate, receiptFileHash } from './receiptDuplicate';
 import { supabase } from './supabase';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { queryClient, QK } from './queryClient';
@@ -92,6 +93,7 @@ function mapPayment(row: any): FamilyPayment {
     paymentType: (row.payment_method ?? 'cash') as PaymentType,
     paymentOrderNumber: row.payment_order_number ?? undefined,
     receiptUrl: row.receipt_url ?? undefined,
+    receiptCode:row.receipt_code ?? undefined,receiptTime:row.receipt_time ?? undefined,receiptCardLast4:row.receipt_card_last4 ?? undefined,receiptBank:row.receipt_bank ?? undefined,
     paymentDate: String(row.payment_date ?? row.created_at ?? ''),
     actualPaymentDate: row.actual_payment_date ? String(row.actual_payment_date) : undefined,
     status: toReviewStatus(row.status ?? 'pending'),
@@ -351,8 +353,18 @@ function fromReviewStatus(status: PaymentReviewStatus): string {
   return 'draft';
 }
 
+export async function fetchFamilyPayment(paymentId: string): Promise<FamilyPayment> {
+  const { data, error } = await supabase.from('v2_payments').select('*').eq('id', paymentId).single();
+  if (error) throw new Error(error.message);
+  return mapPayment(data);
+}
+
 export async function updateFamilyPayment(paymentId: string, updates: {
   amount?: number;
+  receiptCode?: string;
+  receiptBank?: string;
+  receiptTime?: string;
+  receiptCardLast4?: string;
   paymentType?: PaymentType;
   paymentOrderNumber?: string;
   paymentDate?: string;
@@ -365,6 +377,12 @@ export async function updateFamilyPayment(paymentId: string, updates: {
     row.amount = updates.amount;
     row.suggested_main_amount = updates.amount;
   }
+  if (updates.receiptTime && !/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/.test(updates.receiptTime)) throw new Error('Время должно быть в формате ЧЧ:ММ или ЧЧ:ММ:СС');
+  if (updates.receiptCardLast4 && !/^\d{4}$/.test(updates.receiptCardLast4)) throw new Error('Укажите последние 4 цифры карты');
+  if (updates.receiptCode !== undefined) row.receipt_code = updates.receiptCode.trim() || null;
+  if (updates.receiptBank !== undefined) row.receipt_bank = updates.receiptBank.trim() || null;
+  if (updates.receiptTime !== undefined) row.receipt_time = updates.receiptTime || null;
+  if (updates.receiptCardLast4 !== undefined) row.receipt_card_last4 = updates.receiptCardLast4 || null;
   if (updates.paymentType !== undefined) row.payment_method = updates.paymentType;
   if (updates.paymentOrderNumber !== undefined) row.payment_order_number = updates.paymentOrderNumber || null;
   if (updates.paymentDate !== undefined) row.payment_date = updates.paymentDate;
@@ -390,8 +408,15 @@ export async function updateFamilyPayment(paymentId: string, updates: {
     return savedPaymentType;
   }
 
-  const { error } = await supabase.from('v2_payments').update(row).eq('id', paymentId);
-  if (error) throw new Error(error.message);
+  const receiptEdit = updates.receiptCode !== undefined || updates.receiptBank !== undefined || updates.receiptTime !== undefined || updates.receiptCardLast4 !== undefined;
+  if (receiptEdit) {
+    const { data, error } = await supabase.from('v2_payments').update(row).eq('id', paymentId).select('id').single();
+    if (error) throw new Error(error.message);
+    if (!data?.id) throw new Error('Нет доступа к изменению платежа');
+  } else {
+    const { error } = await supabase.from('v2_payments').update(row).eq('id', paymentId);
+    if (error) throw new Error(error.message);
+  }
   invalidateFinanceCache();
   return undefined;
 }
@@ -429,9 +454,15 @@ export async function createFamilyPayment(params: {
   paymentDate: string;
   receiptFile?: File | null;
   receiptCode?: string;
+  receiptDetails?:{time:string;cardLast4:string;bank:string};
   comment?: string;
   createdBy?: string;
 }): Promise<FamilyPayment> {
+  if(params.receiptFile && params.receiptFile.size>10*1024*1024)throw new Error('Файл слишком большой (макс. 10 МБ)');
+  if(params.receiptDetails?.time && !/^([01]\d|2[0-3]):[0-5]\d(:[0-5]\d)?$/.test(params.receiptDetails.time))throw new Error('Время чека: укажите ЧЧ:ММ или ЧЧ:ММ:СС');
+  if(params.receiptDetails?.cardLast4 && !/^\d{4}$/.test(params.receiptDetails.cardLast4))throw new Error('Укажите ровно 4 последние цифры карты или счёта');
+  const receiptHash=params.receiptFile ? await receiptFileHash(params.receiptFile) : undefined;
+  await assertNoReceiptDuplicate({code:params.receiptCode,hash:receiptHash,details:params.receiptDetails,amount:params.amount,date:params.paymentDate});
   const receiptUrl = params.receiptFile
     ? await uploadPaymentReceipt(params.familyId, params.receiptFile)
     : null;
@@ -448,6 +479,8 @@ export async function createFamilyPayment(params: {
       payment_date: params.paymentDate,
       receipt_url: receiptUrl,
       receipt_code: params.receiptCode || null,
+      receipt_sha256:receiptHash || null,
+      ...(params.receiptDetails ? {receipt_time:params.receiptDetails.time || null,receipt_card_last4:params.receiptDetails.cardLast4 || null,receipt_bank:params.receiptDetails.bank || null} : {}),
       status: 'pending',
       submitted_by: params.createdBy,
       comment: params.comment || null,

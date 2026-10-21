@@ -1,3 +1,4 @@
+import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import SalaryExpensesView, { SalaryScope } from './modules/costs/SalaryExpensesView';
 import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
@@ -161,8 +162,9 @@ export default function App() {
   const [managerPeriodKey, setManagerPeriodKey] = useState(currentPayrollPeriodKey);
   const canAccessManagerSchool = (schoolKey: string) => isSchoolAllowed(schoolKey, currentUser?.schoolKeys);
   const handleManagerSelectSchool = (schoolKey: string) => {
-    if (!canAccessManagerSchool(schoolKey)) return;
+    if (schoolKey !== 'ALL' && !canAccessManagerSchool(schoolKey)) return;
     setManagerOpenFamilySearch('');
+    if (schoolKey === 'ALL') setManagerTransferFilter('');
     setManagerSchoolKey(schoolKey);
   };
   const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
@@ -172,8 +174,10 @@ export default function App() {
     setManagerSchoolKey(schoolKey);
   };
   const handleLogisticsSelectSchool = (schoolKey: string) => {
-    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
-    if (logisticsView === 'schools') setLogisticsView('map');
+    if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    if (schoolKey === 'ALL') setLogisticsView('table');
+    else if (logisticsView === 'schools') setLogisticsView('map');
+    if (schoolKey === 'ALL') setLogisticsTransferFilter('');
     setLogisticsSchoolKey(schoolKey);
   };
   const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
@@ -184,8 +188,9 @@ export default function App() {
     setLogisticsSchoolKey(schoolKey);
   };
   const handleCashierSelectSchool = (schoolKey: string) => {
-    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     setCashierOpenFamilySearch('');
+    if (schoolKey === 'ALL') setCashierTransferFilter('');
     setCashierSchoolKey(schoolKey);
   };
   const handleCashierOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, periodKey: string) => {
@@ -327,6 +332,10 @@ export default function App() {
 
   const extraTabs = (_hasFamiliesPage: boolean) => currentUser ? (
     <div className="ow-user">
+      {section === 'families' && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
+      {section === 'cashier' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
+      {section === 'logistics' && logisticsSchoolKey && <AllRecordsButton onClick={()=>handleLogisticsSelectSchool('ALL')}/>}
+      {section === 'drivers' && driversSchoolKey && <AllRecordsButton onClick={()=>{setDriversSchoolKey('ALL');setDriversTransferFilter('');}}/>}
       <div className="ow-user-meta">
         {currentUser.position && <div className="ow-user-role">{currentUser.position}</div>}
         {currentUser.name && <div className="ow-user-name">{currentUser.name}</div>}
@@ -456,24 +465,25 @@ export default function App() {
                       </div>
                       <DashboardSearch value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
                     </div>
-                  <CashierSchoolKpiStrip
+                  {cashierSchoolKey !== 'ALL' && <CashierSchoolKpiStrip
                     view={cashierView}
                     schoolKey={cashierSchoolKey}
                     periodKey={cashierPeriodKey}
                     rightReserveWidth={schoolSidebarReserveWidth}
-                  />
-                  <CashierSchoolTransferDashboard
+                  />}
+                  {cashierSchoolKey !== 'ALL' && <CashierSchoolTransferDashboard
                     schoolKey={cashierSchoolKey}
                     periodKey={cashierPeriodKey}
                     rightReserveWidth={schoolSidebarReserveWidth}
                     selectedKey={cashierTransferFilter}
                     onSelect={setCashierTransferFilter}
                     statusFilter={cashierView}
-                  />
+                  />}
                 </DashboardTopPanel>
               )}
               {cashierView === 'refunds' ? (
                 <CashierRefundsTable
+                  allowedSchools={currentUser?.schoolKeys}
                   schoolKey={cashierSchoolKey}
                   periodKey={cashierPeriodKey}
                   searchQuery={cashierOpenFamilySearch}
@@ -541,16 +551,16 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            {logisticsSchoolKey && isSchoolAllowed(logisticsSchoolKey, currentUser?.schoolKeys) ? (
+            {logisticsSchoolKey && (logisticsSchoolKey === 'ALL' || isSchoolAllowed(logisticsSchoolKey, currentUser?.schoolKeys)) ? (
               <>
               <DashboardTopPanel>
-                <LogisticsSchoolKpiStrip
+                {logisticsSchoolKey !== 'ALL' && <LogisticsSchoolKpiStrip
                   schoolKey={logisticsSchoolKey}
                   rightReserveWidth={schoolSidebarReserveWidth}
-                />
+                />}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <LogisticsSchoolTransferDashboard schoolKey={logisticsSchoolKey} selectedKey={logisticsTransferFilter} onSelect={setLogisticsTransferFilter} />
+                    {logisticsSchoolKey !== 'ALL' && <LogisticsSchoolTransferDashboard schoolKey={logisticsSchoolKey} selectedKey={logisticsTransferFilter} onSelect={setLogisticsTransferFilter} />}
                   </div>
                   <div style={{ paddingTop: 10 }}><DashboardSearch value={logisticsSearch} onChange={setLogisticsSearch} placeholder="Имя, телефон, ребёнок, адрес..." /></div>
                 </div>
@@ -626,13 +636,13 @@ export default function App() {
                       <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
                     </div>
                   )}
-                  <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} />
+                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} />}
                   {managerSchoolMode !== 'directory' ? (
-                    <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
+                    managerSchoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingTop: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <SchoolTransferDashboard topPadding={0} mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
+                        {managerSchoolKey !== 'ALL' && <SchoolTransferDashboard topPadding={0} mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />}
                       </div>
                       <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
                     </div>
@@ -689,13 +699,13 @@ export default function App() {
             {driversSchoolKey ? (
               <>
                 <DashboardTopPanel>
-                  <DriversSchoolKpiStrip
+                  {driversSchoolKey !== 'ALL' && <DriversSchoolKpiStrip
                     schoolKey={driversSchoolKey}
                     rightReserveWidth={schoolSidebarReserveWidth}
-                  />
+                  />}
                   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                     <div style={{ flex: 1, minWidth: 0 }}>
-                      <DriversTransferDashboard schoolKey={driversSchoolKey} selectedKey={driversTransferFilter} onSelect={setDriversTransferFilter} />
+                      {driversSchoolKey !== 'ALL' && <DriversTransferDashboard schoolKey={driversSchoolKey} selectedKey={driversTransferFilter} onSelect={setDriversTransferFilter} />}
                     </div>
                     <div style={{ paddingTop: 10 }}><DashboardSearch value={driversSearch} onChange={setDriversSearch} placeholder="ФИО, телефон, трансфер, авто..." /></div>
                   </div>
@@ -719,7 +729,7 @@ export default function App() {
                 onSearchChange={setDriversSearch}
                 onTabChange={key => { if (key !== 'drivers') { setLogisticsSchoolKey(driversSchoolKey); setLogisticsTransferFilter(driversTransferFilter); setLogisticsSearch(driversSearch); setSection('logistics'); setLogisticsView(key); } }}
                 search={driversSearch}
-                onSelectSchool={setDriversSchoolKey}
+                onSelectSchool={key => { setDriversSchoolKey(key); if (key === 'ALL') setDriversTransferFilter(''); }}
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
                 allowedSchools={currentUser?.schoolKeys}
               />

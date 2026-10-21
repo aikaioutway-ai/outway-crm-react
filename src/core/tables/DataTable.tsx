@@ -1,3 +1,6 @@
+import TableDownloadButton from './TableDownloadButton';
+import { downloadTableExcel } from './tableExport';
+import { filterRepeatedValues } from './repeatedValues';
 import { openTaskComposer, TaskTarget } from '../../modules/tasks/taskTypes';
 import React, {
   useState, useRef, useEffect, useCallback, useMemo
@@ -64,7 +67,7 @@ export interface FilterRule {
   conjunction: 'AND' | 'OR';
 }
 
-export type CalcMode = 'none' | 'count' | 'sum' | 'avg' | 'min' | 'max' | 'empty' | 'not_empty';
+
 
 export interface DataTableProps<T = any> {
   columns: ColumnDef<T>[];
@@ -212,34 +215,6 @@ function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined)
   }
 }
 
-function calcColumnValues<T>(rows: T[], col: ColumnDef<T>, mode: CalcMode): string {
-  const calcRows = col.aggregateByKey
-    ? Array.from(rows.reduce<Map<any, T>>((map, row) => {
-        const key = (row as any)[col.aggregateByKey!];
-        if (!map.has(key)) map.set(key, row);
-        return map;
-      }, new Map()).values())
-    : rows;
-  const nums = calcRows.map(r => parseFloat(getCellValue(r, col))).filter(n => !isNaN(n));
-  const allVals = calcRows.map(r => getCellValue(r, col));
-  switch (mode) {
-    case 'count':     return String(allVals.filter(v => v != null && v !== '').length);
-    case 'sum':       return nums.reduce((a, b) => a + b, 0).toLocaleString('ru-RU');
-    case 'avg':       return nums.length ? (nums.reduce((a, b) => a + b, 0) / nums.length).toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : '—';
-    case 'min':       return nums.length ? Math.min(...nums).toLocaleString('ru-RU') : '—';
-    case 'max':       return nums.length ? Math.max(...nums).toLocaleString('ru-RU') : '—';
-    case 'empty':     return String(allVals.filter(v => v == null || v === '').length);
-    case 'not_empty': return String(allVals.filter(v => v != null && v !== '').length);
-    default:          return '';
-  }
-}
-
-function isTransferColumn<T>(col: ColumnDef<T>): boolean {
-  const key = col.key.toLowerCase();
-  const label = col.label.toLowerCase();
-  return key.includes('transfer') || label.includes('трансфер');
-}
-
 const OPERATORS: { value: FilterOperator; label: string }[] = [
   { value: 'eq',          label: '= равно' },
   { value: 'neq',         label: '≠ не равно' },
@@ -251,17 +226,6 @@ const OPERATORS: { value: FilterOperator; label: string }[] = [
   { value: 'lt',          label: '< меньше' },
   { value: 'gte',         label: '≥ больше или равно' },
   { value: 'lte',         label: '≤ меньше или равно' },
-];
-
-const CALC_OPTIONS: { value: CalcMode; label: string }[] = [
-  { value: 'none',      label: 'Нет' },
-  { value: 'count',     label: 'Количество' },
-  { value: 'sum',       label: 'Сумма' },
-  { value: 'avg',       label: 'Среднее' },
-  { value: 'min',       label: 'Мин' },
-  { value: 'max',       label: 'Макс' },
-  { value: 'empty',     label: 'Пустых' },
-  { value: 'not_empty', label: 'Заполненных' },
 ];
 
 const PAGE_SIZE = 20;
@@ -489,10 +453,10 @@ export function DataTable<T extends Record<string, any>>({
   };
   const [propsSearch, setPropsSearch] = useState('');
   // openCats removed — props panel uses Shown/Hidden sections now
-  const [calcModes, setCalcModes] = useState<Record<string, CalcMode>>({});
+  const [repeatedKey, setRepeatedKey] = useState<string | null>(null);
   const [colMenu, setColMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<{ row: T; x: number; y: number } | null>(null);
-  const [calcPopup, setCalcPopup] = useState<{ key: string; x: number; y: number } | null>(null);
+  const [columnFilterPopup, setColumnFilterPopup] = useState<{ key: string; x: number; y: number } | null>(null);
   const [internalSelected, setInternalSelected] = useState<Set<any>>(new Set());
   const selected = selectedKeys ?? internalSelected;
   const setSelected = (next: Set<any>) => {
@@ -533,19 +497,10 @@ export function DataTable<T extends Record<string, any>>({
         return result;
       });
     }
+    const repeatedColumn = cols.find(col => col.key === repeatedKey);
+    if (repeatedColumn) rows = filterRepeatedValues(rows, row => getCellValue(row, repeatedColumn));
     return sortRowsInGroups(rows, sorts, cols, groupByKey);
-  }, [data, filters, sorts, cols, groupByKey]);
-
-  const calcResults = useMemo(() => {
-    const result: Record<string, string> = {};
-    visibleCols.forEach(col => {
-      const mode = calcModes[col.key];
-      if (mode && mode !== 'none') {
-        result[col.key] = calcColumnValues(processedData, col, mode);
-      }
-    });
-    return result;
-  }, [visibleCols, calcModes, processedData]);
+  }, [data, filters, sorts, cols, groupByKey, repeatedKey]);
 
   const pagedRows = useMemo(
     () => paginateRowsInGroups(processedData, PAGE_SIZE, groupByKey),
@@ -565,7 +520,7 @@ export function DataTable<T extends Record<string, any>>({
   }, [page, totalPages]);
 
   useEffect(() => {
-    const handler = () => { setColMenu(null); setRowMenu(null); setCalcPopup(null); };
+    const handler = () => { setColMenu(null); setRowMenu(null); setColumnFilterPopup(null); };
     document.addEventListener('click', handler);
     return () => document.removeEventListener('click', handler);
   }, []);
@@ -616,34 +571,26 @@ export function DataTable<T extends Record<string, any>>({
     setDraftValue('');
   };
 
-  const exportCSV = () => {
-    const rows = selected.size > 0
-      ? processedData.filter(r => selected.has(r[rowKey]))
-      : processedData;
-    if (onExport) {
-      onExport(rows);
-      return;
-    }
-    const header = visibleCols.map(c => c.label).join(',');
-    const body = rows.map(r => visibleCols.map(c => {
-      const v = getCellValue(r, c);
-      return typeof v === 'string' && v.includes(',') ? `"${v}"` : v ?? '';
-    }).join(',')).join('\n');
-    const blob = new Blob([header + '\n' + body], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'export.csv'; a.click();
+  const exportExcel = async () => {
+    const rows = selected.size > 0 ? processedData.filter(row => selected.has(row[rowKey])) : processedData;
+    if (onExport) { await onExport(rows); return; }
+    const columns = visibleCols.filter(column => !['actions', 'receiptUrl', 'pendingPaymentReceiptUrl'].includes(column.key));
+    await downloadTableExcel(columns.map(column => column.label), rows.map(row => columns.map(column => {
+      const value = getCellValue(row, column);
+      return column.editOptions?.find(option => option.value === value)?.label ?? value;
+    })));
   };
 
   const setColumnSort = (key: string, dir: SortConfig['dir']) => {
     setSorts(prev => [{ key, dir }, ...prev.filter(sort => sort.key !== key)]);
     setColMenu(null);
-    setCalcPopup(null);
+    setColumnFilterPopup(null);
   };
 
   const clearColumnSort = (key: string) => {
     setSorts(prev => prev.filter(sort => sort.key !== key));
     setColMenu(null);
-    setCalcPopup(null);
+    setColumnFilterPopup(null);
   };
 
   const toggleColumnSort = (key: string) => {
@@ -655,12 +602,12 @@ export function DataTable<T extends Record<string, any>>({
       return rest;
     });
     setColMenu(null);
-    setCalcPopup(null);
+    setColumnFilterPopup(null);
   };
 
-  const openCalcPopup = (key: string, target: HTMLElement) => {
+  const openColumnFilterPopup = (key: string, target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
-    setCalcPopup({ key, x: rect.left, y: rect.bottom + 4 });
+    setColumnFilterPopup({ key, x: rect.left, y: rect.bottom + 4 });
     setColMenu(null);
   };
 
@@ -795,17 +742,21 @@ export function DataTable<T extends Record<string, any>>({
     <div className="dt-root">
 
       {/* ── OVERLAY для закрытия панелей кликом (003) ── */}
-      {(showFilterPanel || showSortPanel || (showProps && showPropertiesExternal === undefined) || rowMenu !== null || colMenu !== null || calcPopup !== null) && (
+      {(showFilterPanel || showSortPanel || (showProps && showPropertiesExternal === undefined) || rowMenu !== null || colMenu !== null || columnFilterPopup !== null) && (
         <div
           style={{ position: 'fixed', inset: 0, zIndex: 99 }}
           onClick={() => {
             setShowFilterPanel(false); setShowSortPanel(false);
             setShowProps(false); setRowMenu(null);
-            setColMenu(null); setCalcPopup(null);
+            setColMenu(null); setColumnFilterPopup(null);
           }}
         />
       )}
 
+      {repeatedKey && <div className="dt-repeat-filter" role="status">
+        <span>Повторяющиеся значения · {cols.find(col => col.key === repeatedKey)?.label} · {processedData.length} строк</span>
+        <button type="button" className="dt-btn" onClick={() => { setRepeatedKey(null); setPage(1); }}>Сбросить</button>
+      </div>}
       {/* ── TOOLBAR ── */}
       {!hideToolbar && <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
         <div className="dt-toolbar-left">
@@ -844,14 +795,11 @@ export function DataTable<T extends Record<string, any>>({
             <span className="dt-page-text">{pageSafe} / {totalPages}</span>
             <button className="dt-page-btn" disabled={pageSafe >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
           </div>
-          <button className="dt-btn dt-btn--icon" onClick={exportCSV} title="Выгрузить таблицу">
-            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
-              <path d="M8 2v8M5 7l3 3 3-3M3 12h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
-          </button>
+          <TableDownloadButton onDownload={exportExcel}/>
           {toolbarRightExtra}
         </div>
       </div>}
+
 
       {/* ── COMPACT FILTER PANEL ── */}
       {showFilterPanel && (
@@ -987,7 +935,8 @@ export function DataTable<T extends Record<string, any>>({
             ))}
           </div>
         ) : (
-          <table className="dt-table">
+          <table className="dt-table" style={{position:'relative'}}>
+            {hideToolbar && <caption className="native-table-export"><TableDownloadButton onDownload={exportExcel}/></caption>}
             <thead>
               <tr>
                 <th className="dt-th dt-th--num dt-sticky-col">
@@ -1018,8 +967,7 @@ export function DataTable<T extends Record<string, any>>({
                       style={{ width: col.width ?? col.minWidth ?? 140, minWidth: col.minWidth ?? 80 }}
                       onContextMenu={e => {
                         e.preventDefault();
-                        if (isTransferColumn(col)) return;
-                        openCalcPopup(col.key, e.currentTarget);
+                        openColumnFilterPopup(col.key, e.currentTarget);
                       }}
                     >
                       <div className="dt-th-inner"
@@ -1027,20 +975,12 @@ export function DataTable<T extends Record<string, any>>({
                           e.stopPropagation();
                           toggleColumnSort(col.key);
                         }}
-                        title="ЛКМ: сортировка. ПКМ: вычисление"
+                        title="ЛКМ: сортировка. ПКМ: фильтр"
                         style={{ cursor: 'pointer', userSelect: 'none', width: '100%' }}
                       >
                         <span className="dt-th-label">{col.label}</span>
                         {sortEntry && <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>}
-                        {calcResults[col.key] !== undefined && (
-                          <span style={{
-                            marginLeft: 5, fontSize: 11, fontWeight: 600,
-                            color: 'var(--dt-accent)', background: 'var(--dt-accent-l)',
-                            borderRadius: 4, padding: '1px 5px', whiteSpace: 'nowrap',
-                          }}>
-                            {calcResults[col.key]}
-                          </span>
-                        )}
+
                       </div>
                       <div
                         className="dt-resize-handle"
@@ -1236,16 +1176,14 @@ export function DataTable<T extends Record<string, any>>({
         </div>
       )}
 
-      {/* ── CALC POPUP ── */}
-      {calcPopup && (
-        <div className="dt-ctx-menu dt-calc-popup" style={{ left: calcPopup.x, top: calcPopup.y, zIndex: 1000 }} onClick={e => e.stopPropagation()}>
-          <div className="dt-ctx-section">{visibleCols.find(c => c.key === calcPopup.key)?.label ?? "Вычисление"}</div>
-          {CALC_OPTIONS.map(o => (
-            <button key={o.value} className={`dt-ctx-item ${(calcModes[calcPopup.key] ?? 'none') === o.value ? 'dt-ctx-item--active' : ''}`}
-              onClick={() => { setCalcModes(prev => ({ ...prev, [calcPopup.key]: o.value })); setCalcPopup(null); }}>
-              {o.label}
-            </button>
-          ))}
+      {columnFilterPopup && (
+        <div role="menu" aria-label="Фильтр колонки" className="dt-ctx-menu dt-calc-popup" style={{ left: Math.max(8, Math.min(columnFilterPopup.x, window.innerWidth - 260)), top: Math.min(columnFilterPopup.y, window.innerHeight - 140), zIndex: 1000 }} onClick={e => e.stopPropagation()}>
+          <div className="dt-ctx-section">{visibleCols.find(c => c.key === columnFilterPopup.key)?.label}</div>
+          <button type="button" role="menuitemcheckbox" aria-checked={repeatedKey === columnFilterPopup.key} className={`dt-ctx-item ${repeatedKey === columnFilterPopup.key ? 'dt-ctx-item--active' : ''}`}
+            onClick={() => { setRepeatedKey(columnFilterPopup.key); setPage(1); setColumnFilterPopup(null); }}>
+            Повторяющиеся значения
+          </button>
+          <button type="button" role="menuitem" className="dt-ctx-item" onClick={() => { setRepeatedKey(null); setPage(1); setColumnFilterPopup(null); }}>Сбросить фильтр повторов</button>
         </div>
       )}
     </div>
