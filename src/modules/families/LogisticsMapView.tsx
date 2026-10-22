@@ -44,7 +44,8 @@ interface LogisticsMapViewProps {
 type PointRow = FamilyListRow & { latitude: number; longitude: number };
 
 const BISHKEK_CENTER: [number, number] = [42.8746, 74.5698];
-const FALLBACK_COLOR = 'var(--text-2)';
+// Цвет уходит в Яндекс Карты, они не понимают CSS-переменные — только готовый код цвета (= --text-2).
+const FALLBACK_COLOR = '#5A6673';
 const DEFAULT_ZONE_COLOR = '#2AA5A5';
 const ZONE_COLORS = ['#2AA5A5', '#5271C4', '#E29B34', '#D85B78', '#7B61C9', '#3A9D65'];
 function plural(count: number, one: string, few: string, many: string): string {
