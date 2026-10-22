@@ -886,6 +886,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const [driverParentCardCopied, setDriverParentCardCopied] = useState(false);
   const [driverDraft, setDriverDraft] = useState<DriverDraft | null>(null);
   const [driverTransferDraftId, setDriverTransferDraftId] = useState('');
+  const [driverBranchDraftId, setDriverBranchDraftId] = useState('');
   const [driverDocumentsDraft, setDriverDocumentsDraft] = useState<V2DriverDocumentInput[]>(() => createDefaultV2DriverDocuments());
   const [savingDriver, setSavingDriver] = useState(false);
   const [deletingDriver, setDeletingDriver] = useState(false);
@@ -2173,20 +2174,23 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
+  const driverBranchOptions = useMemo(() => (
+    driverBranches.filter(branch => isSchoolVisible(branch.shortName || branch.code) && isSchoolVisible(branch.name))
+  ), [driverBranches]);
+  // Школа водителя не хранится отдельно: она определяется школой его трансфера.
+  // Поэтому выбор школы в карточке только сужает список трансферов.
   const driverTransferOptions = useMemo(() => {
-    if (!selectedDriver) return [];
-    const currentBranchIds = new Set(selectedDriver.branchIds);
-    const currentTransferIds = new Set(selectedDriver.transfers.map(transfer => transfer.id));
-    const sameBranchTransfers = dashboardTransfers.filter(transfer => isSchoolVisible(transfer.branchShort) && isSchoolVisible(getBranchFilter(transfer.branchShort,transfer.branchCode)) && (
-      currentTransferIds.has(transfer.id)
-      || currentBranchIds.size === 0
-      || (transfer.branchId && currentBranchIds.has(transfer.branchId))
-    ));
-    return sameBranchTransfers.sort((left, right) => {
-      const branchOrder = (left.branchShort || left.branchCode).localeCompare(right.branchShort || right.branchCode, 'ru');
-      return branchOrder || Number(left.transferNumber) - Number(right.transferNumber);
-    });
-  }, [dashboardTransfers, selectedDriver]);
+    if (!selectedDriver || !driverBranchDraftId) return [];
+    return dashboardTransfers
+      .filter(transfer => transfer.branchId === driverBranchDraftId && isSchoolVisible(transfer.branchShort) && isSchoolVisible(getBranchFilter(transfer.branchShort,transfer.branchCode)))
+      .sort((left, right) => Number(left.transferNumber) - Number(right.transferNumber));
+  }, [dashboardTransfers, driverBranchDraftId, selectedDriver]);
+  const changeDriverBranchDraft = (branchId: string) => {
+    setDriverBranchDraftId(branchId);
+    if (!dashboardTransfers.some(transfer => transfer.id === driverTransferDraftId && transfer.branchId === branchId)) {
+      setDriverTransferDraftId('');
+    }
+  };
   const openDirectoryDriver = () => {
     if (!activeDirectoryDriver) return;
     setSelectedDriverTab('main');
@@ -2197,6 +2201,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     if (!selectedDriver) {
       setDriverDraft(null);
       setDriverTransferDraftId('');
+      setDriverBranchDraftId('');
       setDriverDocumentsDraft(createDefaultV2DriverDocuments());
       return;
     }
@@ -2219,6 +2224,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       seats: selectedDriver.seats == null ? '' : String(selectedDriver.seats),
     });
     setDriverTransferDraftId(selectedDriver.transfers[0]?.id ?? '');
+    setDriverBranchDraftId(selectedDriver.branchIds[0] ?? '');
   }, [selectedDriver]);
   useEffect(() => {
     if (!selectedDriverId) return;
@@ -2253,6 +2259,10 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     }
     if (!driverDraft.phone.trim()) {
       alert('Укажите телефон водителя');
+      return;
+    }
+    if (driverBranchDraftId && !driverTransferDraftId) {
+      alert('Выберите трансфер в этой школе или укажите школу «Резерв»');
       return;
     }
     setSavingDriver(true);
@@ -3704,14 +3714,24 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--text)', marginBottom: 10 }}>Школа / авто</div>
                   <div style={{ display: 'grid', gridTemplateColumns: '120px minmax(0, 1fr)', rowGap: 8, columnGap: 12, fontSize: 13, alignItems: 'center' }}>
                     <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Школа</span>
-                    <span style={{ color: 'var(--text)', fontWeight: 600 }}>{selectedDriver.branchShorts.join(', ') || '-'}</span>
-                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Трансфер</span>
                     <select
-                      value={driverTransferDraftId}
-                      onChange={event => setDriverTransferDraftId(event.target.value)}
+                      aria-label="Школа водителя"
+                      value={driverBranchDraftId}
+                      onChange={event => changeDriverBranchDraft(event.target.value)}
                       style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', outline: 'none' }}
                     >
-                      <option value="">Без трансфера · Резерв</option>
+                      <option value="">Резерв</option>
+                      {driverBranchOptions.map(branch => <option key={branch.id} value={branch.id}>{branch.shortName || branch.code}</option>)}
+                    </select>
+                    <span style={{ color: 'var(--text-2)', fontWeight: 400 }}>Трансфер</span>
+                    <select
+                      aria-label="Трансфер водителя"
+                      value={driverTransferDraftId}
+                      disabled={!driverBranchDraftId}
+                      onChange={event => setDriverTransferDraftId(event.target.value)}
+                      style={{ height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: driverBranchDraftId ? '#fff' : '#F2F6F7', outline: 'none' }}
+                    >
+                      <option value="">{driverBranchDraftId ? (driverTransferOptions.length ? 'Выберите трансфер' : 'В школе нет трансферов') : 'Без трансфера'}</option>
                       {driverTransferOptions.map(transfer => {
                         const assignedDriver = transfer.driverId
                           ? driverRows.find(driver => driver.driverId === transfer.driverId)
@@ -3719,7 +3739,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         const occupiedByAnotherDriver = Boolean(assignedDriver && assignedDriver.driverId !== selectedDriver.driverId);
                         return (
                           <option key={transfer.id} value={transfer.id} disabled={occupiedByAnotherDriver}>
-                            {transfer.branchShort || transfer.branchCode} · №{transfer.transferNumber}
+                            №{transfer.transferNumber}
                             {occupiedByAnotherDriver ? ` · занят: ${assignedDriver?.fullName}` : ''}
                           </option>
                         );
