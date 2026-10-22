@@ -75,6 +75,8 @@ export interface DataTableProps<T = any> {
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
   onRowOpen?: (row: T) => void;
+  /** Строки, у которых нет своей карточки, не показывают кнопку открытия. */
+  canRowOpen?: (row: T) => boolean;
   getTaskTarget?: (row: T) => TaskTarget;
   onRowReject?: (row: T) => void;
   canRowReject?: (row: T) => boolean;
@@ -351,6 +353,7 @@ export function DataTable<T extends Record<string, any>>({
   rowKey,
   onRowClick,
   onRowOpen,
+  canRowOpen,
   onRowReject,
   getTaskTarget,
   canRowReject,
@@ -1049,7 +1052,7 @@ export function DataTable<T extends Record<string, any>>({
                       ) : (
                         <span className="dt-row-number">{pageStart + idx + 1}</span>
                       )}
-                      {!selectable && (onRowOpen || onRowClick) && (
+                      {!selectable && (onRowOpen || onRowClick) && canRowOpen?.(row) !== false && (
                         <button
                           className="dt-row-open-btn"
                           title="Открыть карточку"
