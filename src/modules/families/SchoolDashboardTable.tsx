@@ -8,9 +8,9 @@ import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface Column { key: string; label: string; total: string | number; color: string; }
 interface Row { key: string; label: string; logo?: string; icon?: React.ReactNode; values: Record<string, string | number>; isChild?: boolean; isGroup?: boolean; expanded?: boolean; disabled?: boolean; }
-interface Props { columns: Column[]; rows: Row[]; sortKey: string; ascending: boolean; onSort: (key: string) => void; onSelect: (key: string) => void; showAvatars?: boolean; rowGap?: number; className?: string; }
+interface Props { commentScope?: string; commentContext?: string; columns: Column[]; rows: Row[]; sortKey: string; ascending: boolean; onSort: (key: string) => void; onSelect: (key: string) => void; showAvatars?: boolean; rowGap?: number; className?: string; }
 
-export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, className = '' }: Props) {
+export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, className = '', commentScope, commentContext = '' }: Props) {
   const [repeatedKey, setRepeatedKey] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   useEffect(() => {
@@ -31,7 +31,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
         <button type="button" role="menuitemcheckbox" aria-checked={repeatedKey === menu.key} className="dt-ctx-item" onClick={() => { setRepeatedKey(menu.key); setMenu(null); }}>Повторяющиеся значения</button>
         <button type="button" role="menuitem" className="dt-ctx-item" onClick={() => { setRepeatedKey(null); setMenu(null); }}>Сбросить фильтр повторов</button>
       </div>}
-      <table className={`school-dashboard-table ow-school-table ${className}`}>
+      <table data-comment-table={commentScope} data-comment-context={commentContext} className={`school-dashboard-table ow-school-table ${className}`}>
         <thead><tr>{columns.map((column, index) => {
           const sorted = sortKey === column.key;
           return <th key={column.key} onContextMenu={event => { event.preventDefault(); setMenu({ key: column.key, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 260)), y: Math.min(event.clientY, window.innerHeight - 140) }); }} title="ЛКМ: сортировка. ПКМ: фильтр" scope="col" aria-sort={sorted ? (ascending ? 'ascending' : 'descending') : 'none'} className={sorted ? 'is-sorted' : undefined} style={{ width: index === 0 ? '22%' : undefined, ['--col-color' as string]: column.color } as React.CSSProperties}>
@@ -45,7 +45,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
             </button>
           </th>;
         })}</tr></thead>
-        <tbody>{filteredRows.map(row => <tr key={row.key} className={row.isChild ? 'is-child' : undefined} onContextMenu={event=>{const school=SCHOOL_TABS.find(item=>item.key===row.key && item.key!=='ALL');showTaskContextMenu(event,school?{type:'school',id:school.key,label:school.label,schoolKey:school.key}:{type:'general',id:'',label:'Общая задача'});}}>{columns.map((column, index) => <td key={column.key} onClick={index === 0 && !row.disabled ? () => onSelect(row.key) : undefined} className={index === 0 ? 'is-name' : undefined}>
+        <tbody>{filteredRows.map(row => <tr data-comment-row={row.key} key={row.key} className={row.isChild ? 'is-child' : undefined} onContextMenu={event=>{const school=SCHOOL_TABS.find(item=>item.key===row.key && item.key!=='ALL');showTaskContextMenu(event,school?{type:'school',id:school.key,label:school.label,schoolKey:school.key}:{type:'general',id:'',label:'Общая задача'});}}>{columns.map((column, index) => <td data-comment-column={column.key} key={column.key} onClick={index === 0 && !row.disabled ? () => onSelect(row.key) : undefined} className={index === 0 ? 'is-name' : undefined}>
           {index === 0
             ? <button type="button" disabled={row.disabled} onClick={event => { event.stopPropagation(); onSelect(row.key); }} aria-expanded={row.isGroup ? !!row.expanded : undefined}>
                 {row.icon}{showAvatars && <SchoolAvatar logo={row.logo} label={row.label} color="var(--accent)" />}

@@ -132,12 +132,12 @@ export default function MarketClientsTab({ sessionToken }: { sessionToken?: stri
         <div className="market-empty">Клиентов пока нет — добавьте первого</div>
       ) : (
         <div className="market-table-wrap">
-          <FilterableTable className="market-table">
+          <FilterableTable data-comment-table="market/MarketClientsTab:0" className="market-table">
             <thead><tr>
               <th>Название</th><th>Школа CRM</th><th>Контакт</th><th>Телефон</th><th>Логин портала</th><th>Статус</th><th></th>
             </tr></thead>
             <tbody>{rows.map(row => (
-              <tr key={row.id}>
+              <tr data-comment-row={row.id} key={row.id}>
                 <td className="market-name">{row.name}</td>
                 <td>{row.schoolName || '—'}</td>
                 <td>{row.contactPerson || '—'}</td>

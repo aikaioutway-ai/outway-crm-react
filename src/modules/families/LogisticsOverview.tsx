@@ -187,7 +187,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        {view === 'schools' ? <SchoolsMap allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable
+        {view === 'schools' ? <SchoolsMap allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
           columns={[
             { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
             { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },

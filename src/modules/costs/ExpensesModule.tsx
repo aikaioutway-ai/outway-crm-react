@@ -77,7 +77,7 @@ export function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId
       </div>
     ) : <span title="Системная выплата редактируется в разделе «Зарплата»"><LockKeyhole size={14} /></span> },
   ];
-  return <DataTable<ExpenseRecord> storageKey={settingsKey} showProperties={columnsOpen} onShowPropertiesChange={onColumnsOpenChange} columns={withSchoolColumn(columns.map(column => ({...column, width: column.width ?? (column.key === 'subcategory' ? 170 : 130), visible: !['schoolKey','departmentKey','salaryPeriodKey','source'].includes(column.key), editable: !['source','actions'].includes(column.key)})), row => SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey ?? '')} toolbarExtra={toolbar} onCellSave={onCellSave} canEditCell={(row, key) => row.source === 'advance' ? ADVANCE_EDITABLE_FIELDS.includes(key) : row.source === 'manual' && (key !== 'schoolKey' || row.category === 'school' && row.subcategory === 'ЗП') && (key !== 'departmentKey' || row.category === 'office' && row.subcategory === 'ЗП') && (key !== 'salaryPeriodKey' || row.subcategory === 'ЗП')} data={rows} rowKey="id" emptyText="За выбранный период расходов пока нет" canManageProperties={false} />;
+  return <DataTable<ExpenseRecord> storageKey={settingsKey} commentTableKey={settingsKey.startsWith("finance_salary_") ? "costs/SalaryExpensesView:0" : "costs/ExpensesModule:0"} showProperties={columnsOpen} onShowPropertiesChange={onColumnsOpenChange} columns={withSchoolColumn(columns.map(column => ({...column, width: column.width ?? (column.key === 'subcategory' ? 170 : 130), visible: !['schoolKey','departmentKey','salaryPeriodKey','source'].includes(column.key), editable: !['source','actions'].includes(column.key)})), row => SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey ?? '')} toolbarExtra={toolbar} onCellSave={onCellSave} canEditCell={(row, key) => row.source === 'advance' ? ADVANCE_EDITABLE_FIELDS.includes(key) : row.source === 'manual' && (key !== 'schoolKey' || row.category === 'school' && row.subcategory === 'ЗП') && (key !== 'departmentKey' || row.category === 'office' && row.subcategory === 'ЗП') && (key !== 'salaryPeriodKey' || row.subcategory === 'ЗП')} data={rows} rowKey="id" emptyText="За выбранный период расходов пока нет" canManageProperties={false} />;
 }
 
 export function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowPersonalCategory, onClose, onSaved, onPaymentsSaved }: {
@@ -263,7 +263,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
       </section>
       {!tableOpen && selectedSubcategory === 'ALL' && <section className="finance-categories-card" aria-label="Категории расходов">
 
-        {loading ? <div className="expenses-empty">Загрузка…</div> : <SchoolDashboardTable
+        {loading ? <div className="expenses-empty">Загрузка…</div> : <SchoolDashboardTable commentScope="costs/ExpensesModule:overview"
         showAvatars={false} rowGap={8} className="finance-category-table"
         columns={[
           { key: 'category', label: selectedCategory ? 'Подкатегория' : 'Категория', total: overviewRows.length, color: '#64748B' },

@@ -52,6 +52,7 @@ export default function TabFinance({
   payments,
   paymentItems,
   refunds,
+  family,
   loading,
   children: _children,
   isAdmin,
@@ -318,7 +319,7 @@ export default function TabFinance({
           )}
 
           <div style={financeTableWrapStyle}>
-            <FilterableTable style={financeTableStyle}>
+            <FilterableTable data-comment-table="families/TabFinance:0" data-comment-context={family.id} style={financeTableStyle}>
               <thead>
                 <tr>
                   {['Период', 'Начислено', 'Погашено', 'Остаток', 'Дата списания'].map(label => (
@@ -330,7 +331,7 @@ export default function TabFinance({
                 {periodRows.length === 0 ? (
                   <tr><td colSpan={5} style={financeEmptyCellStyle}>Начислений нет</td></tr>
                 ) : periodRows.map(row => (
-                  <tr key={row.key}>
+                  <tr data-comment-row={row.key} key={row.key}>
                     <td style={financeTdStyle}>
                       <div style={{ fontWeight: 600, color: 'var(--text)' }}>{row.label}</div>
                       <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 2 }}>{row.childrenCount} начисл.</div>

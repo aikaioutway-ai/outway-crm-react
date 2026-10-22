@@ -307,7 +307,7 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
 
-        <SchoolDashboardTable
+        <SchoolDashboardTable commentScope="families/CashierOverview:overview" commentContext={`${view}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: stats.length, color: KPI_COLORS.school },
             ...(view === 'pending' ? [

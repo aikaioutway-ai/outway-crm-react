@@ -85,6 +85,8 @@ export interface DataTableProps<T = any> {
   onCellSave?: (row: T, key: string, value: any) => Promise<boolean> | boolean;
   canEditCell?: (row: T, key: string) => boolean;
   storageKey?: string;
+  commentTableKey?: string;
+  commentContext?: string;
   loading?: boolean;
   emptyText?: string;
   groupColorKey?: string;
@@ -103,10 +105,10 @@ export interface DataTableProps<T = any> {
   onExport?: (rows: T[]) => void;
   /** Режим выбора строк галочками (вместо номера строки). */
   selectable?: boolean;
-  selectedKeys?: Set<any>;
-  onSelectedKeysChange?: (keys: Set<any>) => void;
   /** false — галочки только для своих массовых действий, без кнопки «Удалить выбранные». */
   bulkDelete?: boolean;
+  selectedKeys?: Set<any>;
+  onSelectedKeysChange?: (keys: Set<any>) => void;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -359,6 +361,8 @@ export function DataTable<T extends Record<string, any>>({
   onCellSave,
   canEditCell,
   storageKey = 'dt_prefs',
+  commentTableKey,
+  commentContext = '',
   loading = false,
   emptyText = 'Нет данных',
   groupColorKey: _groupColorKey,
@@ -375,11 +379,11 @@ export function DataTable<T extends Record<string, any>>({
   renderExpandedRow,
   onExport,
   selectable = false,
+  bulkDelete = true,
   selectedKeys,
   onSelectedKeysChange,
 }: DataTableProps<T>) {
 
-  bulkDelete = true,
   // ── Persistent column order & visibility ──
   // Раскладка берётся из кэша сразу; если кэша нет — таблица показывает
   // скелетон, пока не придут настройки из Supabase (settingsReady).
@@ -938,7 +942,7 @@ export function DataTable<T extends Record<string, any>>({
             ))}
           </div>
         ) : (
-          <table className="dt-table" style={{position:'relative'}}>
+          <table data-comment-table={commentTableKey || storageKey.replace(/_v\d+$/, '')} data-comment-context={commentContext} className="dt-table" style={{position:'relative'}}>
             {hideToolbar && <caption className="native-table-export"><TableDownloadButton onDownload={exportExcel}/></caption>}
             <thead>
               <tr>
@@ -1019,7 +1023,7 @@ export function DataTable<T extends Record<string, any>>({
                 const isSelected = selected.has(id);
                 return (
                   <React.Fragment key={String(id)}>
-                  <tr
+                  <tr data-comment-row={String(id)}
                     className={`dt-tr ${isSelected ? 'dt-tr--selected' : ''}`}
                     data-group-even={(pageStart + idx) % 2 === 0 ? 'true' : 'false'}
                     onClick={() => onRowClick?.(row)}
@@ -1063,6 +1067,7 @@ export function DataTable<T extends Record<string, any>>({
                     {visibleCols.map(col => (
                       <td
                         key={col.key}
+                        data-comment-column={col.key}
                         className={`dt-td ${col.editable && canEditCell?.(row, col.key) !== false ? 'dt-td--editable' : ''} ${editingCell?.rowId === id && editingCell.key === col.key ? 'dt-td--editing' : ''}`}
                         onClick={e => {
                           if (col.editable) {

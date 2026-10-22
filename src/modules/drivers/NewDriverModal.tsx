@@ -251,7 +251,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
               Документы
             </div>
             <div style={{ overflowX: 'auto' }}>
-              <FilterableTable style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
+              <FilterableTable data-no-comments="true" style={{ width: '100%', minWidth: 780, borderCollapse: 'collapse' }}>
                 <thead>
                   <tr>
                     {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
@@ -263,7 +263,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
                 </thead>
                 <tbody>
                   {documents.map((document, index) => (
-                    <tr key={document.type}>
+                    <tr data-comment-row={document.type} key={document.type}>
                       <td style={{ height: 42, padding: '6px 10px', borderBottom: index === documents.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
                         <input value={document.title} onChange={event => setDocumentField(index, 'title', event.target.value)} style={{ ...inputStyle, height: 30, fontSize: 12 }} />
                       </td>

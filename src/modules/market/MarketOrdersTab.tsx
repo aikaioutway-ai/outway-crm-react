@@ -236,7 +236,7 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
         <div className="market-empty">Заказов пока нет</div>
       ) : (
         <div className="market-table-wrap">
-          <FilterableTable className="market-table">
+          <FilterableTable data-comment-table="market/MarketOrdersTab:0" className="market-table">
             <thead><tr>
               <th></th><th>№</th><th>Клиент</th><th>Доставка</th><th>Статус</th><th>Источник</th>
               <th className="number">Сумма</th><th className="number">Маржа</th><th></th>
@@ -265,10 +265,10 @@ export default function MarketOrdersTab({ sessionToken }: MarketOrdersTabProps) 
                   {expanded && (
                     <tr className="market-order-detail-row">
                       <td colSpan={9}>
-                        <FilterableTable className="market-order-detail-table">
+                        <FilterableTable data-comment-table="market/MarketOrdersTab:1" className="market-order-detail-table">
                           <thead><tr><th>Товар</th><th>Ед.</th><th className="number">Кол-во</th><th className="number">Закупка</th><th className="number">Продажа</th></tr></thead>
                           <tbody>{order.items.map(item => (
-                            <tr key={item.id}>
+                            <tr data-comment-row={item.id} key={item.id}>
                               <td>{item.productName}</td><td>{item.unit}</td>
                               <td className="number">{item.quantity}</td>
                               <td className="number">{money(item.purchaseAmount)}</td>

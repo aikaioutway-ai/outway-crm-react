@@ -517,7 +517,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
       </div>
 
       <div className="b2b-orders-table-wrap">
-        <FilterableTable className="b2b-orders-table">
+        <FilterableTable data-comment-table="b2b/B2BOrders:0" className="b2b-orders-table">
           <thead><tr>
             {sortableHead('№ заказа', 'number')}{sortableHead('Клиент', 'client')}{sortableHead('Маршрут', 'route')}
             {sortableHead('Дата заявки', 'requestDate')}{sortableHead('Дата выезда', 'departureDate')}{sortableHead('Транспорт', 'transport')}
@@ -530,7 +530,7 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
             ) : sortedOrders.map(order => {
               const effectivePaid = effectivePaidFor(order);
               return (
-              <tr key={order.id} className="b2b-order-row" onClick={() => openOrderCard(order.id)}>
+              <tr data-comment-row={order.id} key={order.id} className="b2b-order-row" onClick={() => openOrderCard(order.id)}>
                 <td className="order-number">{order.number}</td><td className="order-client">{order.client}</td>
                 <td><span className="b2b-order-route">{order.routeFrom}<b>→</b>{order.routeTo}</span></td>
                 <td>{order.requestDate}</td><td>{order.departureDate || '—'}</td><td>{order.transport}</td>
@@ -674,10 +674,10 @@ export default function B2BOrders({ openOrderId = null, openOrderTab = 'main', o
                   {selectedDriverCost <= 0 && selectedTaxCost <= 0 && selectedOrderExpenses.length === 0 ? (
                     <div className="b2b-order-pnl-empty">Затрат по заказу пока нет</div>
                   ) : (
-                    <FilterableTable><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
+                    <FilterableTable data-comment-table="b2b/B2BOrders:1" data-comment-context={selectedOrder.id}><thead><tr><th>Категория</th><th>Назначение</th><th>Дата</th><th className="number">Сумма</th></tr></thead><tbody>
                       {selectedDriverCost > 0 && <tr><td>Водитель</td><td>{selectedOrder.driverName || 'Начисление водителю'}</td><td>{selectedOrder.departureDate || selectedOrder.requestDate}</td><td className="number">{selectedDriverCost.toLocaleString()}</td></tr>}
                       {selectedTaxCost > 0 && <tr><td>Налог</td><td>4% с подтверждённой выручки на юрсчёт</td><td>По датам оплат</td><td className="number">{selectedTaxCost.toLocaleString()}</td></tr>}
-                      {selectedOrderExpenses.map(expense => <tr key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()}</td></tr>)}
+                      {selectedOrderExpenses.map(expense => <tr data-comment-row={expense.id} key={expense.id}><td>{B2B_EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}</td><td>{expense.purpose || '—'}</td><td>{expense.expenseDate}</td><td className="number">{expense.amount.toLocaleString()}</td></tr>)}
                     </tbody><tfoot><tr><td colSpan={3}>Итого затрат</td><td className="number">{selectedOrderCosts.toLocaleString()}</td></tr></tfoot></FilterableTable>
                   )}
                 </div>

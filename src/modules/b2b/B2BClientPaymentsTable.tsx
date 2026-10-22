@@ -115,7 +115,7 @@ export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpen
   };
 
   return <div className="b2b-client-orders-wrap">
-    <FilterableTable className="b2b-client-orders-table b2b-client-payments-table">
+    <FilterableTable data-comment-table="b2b/B2BClientPaymentsTable:0" className="b2b-client-orders-table b2b-client-payments-table">
       <thead><tr>
         {header('paymentDate', 'Дата')}
         {header('orderNumber', 'Заказ')}
@@ -128,7 +128,7 @@ export default function B2BClientPaymentsTable({ payments, canEditStatus, onOpen
       </tr></thead>
       <tbody>{sortedPayments.map(payment => {
         const editing = editingId === payment.id && draft;
-        return <tr key={payment.id} className={editing ? 'is-editing' : undefined}>
+        return <tr data-comment-row={payment.id} key={payment.id} className={editing ? 'is-editing' : undefined}>
           <td>{editing ? <input type="date" value={draft.paymentDate} onChange={event => setDraft({ ...draft, paymentDate: event.target.value })} /> : payment.paymentDate}</td>
           <td className="order-number"><button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(payment.orderId)} aria-label={`Открыть карточку заказа ${payment.orderNumber}`}>{payment.orderNumber}</button></td>
           <td>{editing ? <select value={draft.method} onChange={event => setDraft({ ...draft, method: event.target.value as B2BPaymentMethod })}>{B2B_PAYMENT_METHODS.map(method => <option key={method.value} value={method.value}>{method.label}</option>)}</select> : formatB2BPaymentMethod(payment.method)}</td>

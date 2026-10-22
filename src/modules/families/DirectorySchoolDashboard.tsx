@@ -25,7 +25,7 @@ export default function DirectorySchoolDashboard({ rows, allowedSchools, onSelec
     const comparison = typeof av === 'string' ? av.localeCompare(String(bv)) : Number(av) - Number(bv);
     return sort.asc ? comparison : -comparison;
   });
-  return <SchoolDashboardTable
+  return <SchoolDashboardTable commentScope="families/DirectorySchoolDashboard:overview"
     columns={columns.map(([key, label]) => ({ key, label, color: DIRECTORY_COLORS[key], total: key === 'label' ? stats.length : stats.reduce((sum, school) => sum + school[key], 0) }))}
     rows={sorted.map(school => ({ key: school.key, label: school.label, logo: school.logo, values: { applications: school.applications, newRequests: school.newRequests, boarded: school.boarded, rejected: school.rejected } }))}
     sortKey={sort.key}

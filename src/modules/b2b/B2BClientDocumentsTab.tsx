@@ -67,18 +67,18 @@ export default function B2BClientDocumentsTab({ client, orders, payments, onOpen
     const openingBalance = openingDebit - openingCredit;
     const rawTransactions = [
       ...accountingOrders.filter(entry => entry.date >= dateFrom && entry.date <= dateTo).map(entry => ({
-        date: entry.date, sort: 0, orderId: entry.item.id, document: entry.item.number,
+        id: `order-${entry.item.id}`, date: entry.date, sort: 0, orderId: entry.item.id, document: entry.item.number,
         description: `Транспортные услуги: ${entry.item.routeFrom} → ${entry.item.routeTo}`,
         debit: entry.item.total, credit: 0,
       })),
       ...confirmedPayments.filter(entry => entry.date >= dateFrom && entry.date <= dateTo).map(entry => ({
-        date: entry.date, sort: 1, orderId: entry.payment.orderId, document: `Оплата · ${entry.payment.orderNumber}`,
+        id: `payment-${entry.payment.id}`, date: entry.date, sort: 1, orderId: entry.payment.orderId, document: `Оплата · ${entry.payment.orderNumber}`,
         description: `${formatB2BPaymentMethod(entry.payment.method)}${entry.payment.comment ? ` · ${entry.payment.comment}` : ''}`,
         debit: 0, credit: entry.payment.amount,
       })),
     ].sort((left, right) => left.date.localeCompare(right.date) || left.sort - right.sort);
     let balance = openingBalance;
-    const transactions: Array<B2BReconciliationTransaction & { orderId: string }> = rawTransactions.map(transaction => {
+    const transactions: Array<B2BReconciliationTransaction & { orderId: string; id: string }> = rawTransactions.map(transaction => {
       balance += transaction.debit - transaction.credit;
       return { ...transaction, balance };
     });
@@ -130,7 +130,7 @@ export default function B2BClientDocumentsTab({ client, orders, payments, onOpen
       </div>
       {dateFrom > dateTo ? <div className="b2b-form-error">Начальная дата не может быть позже конечной.</div> : <>
         <div className="b2b-reconciliation-summary"><article><span>Сальдо на начало</span><strong>{money(reconciliation.openingBalance)}</strong></article><article className="debit"><span>Начислено</span><strong>{money(reconciliation.debitTotal)}</strong></article><article className="credit"><span>Оплачено</span><strong>{money(reconciliation.creditTotal)}</strong></article><article className={reconciliation.closingBalance > 0 ? 'debt' : 'closing'}><span>Сальдо на конец</span><strong>{money(reconciliation.closingBalance)}</strong></article></div>
-        <div className="b2b-reconciliation-table-wrap"><FilterableTable className="b2b-reconciliation-table"><thead><tr><th>Дата</th><th>Документ</th><th>Операция</th><th className="number">Начислено</th><th className="number">Оплачено</th><th className="number">Сальдо</th></tr></thead><tbody><tr className="opening"><td colSpan={5}>Сальдо на начало периода</td><td className="number">{money(reconciliation.openingBalance)}</td></tr>{reconciliation.transactions.map((transaction, index) => <tr key={`${transaction.date}-${transaction.document}-${index}`}><td>{displayDate(transaction.date)}</td><td><button type="button" className="b2b-client-order-link" onClick={() => onOpenOrder?.(transaction.orderId)}>{transaction.document}</button></td><td>{transaction.description}</td><td className="number debit">{transaction.debit ? money(transaction.debit) : '—'}</td><td className="number credit">{transaction.credit ? money(transaction.credit) : '—'}</td><td className="number balance">{money(transaction.balance)}</td></tr>)}{!reconciliation.transactions.length && <tr><td colSpan={6} className="empty">За выбранный период операций нет</td></tr>}</tbody></FilterableTable></div>
+        <div className="b2b-reconciliation-table-wrap"><FilterableTable data-comment-table="b2b/B2BClientDocumentsTab:0" data-comment-context={`${client.id}:${dateFrom}:${dateTo}`} className="b2b-reconciliation-table"><thead><tr><th>Дата</th><th>Документ</th><th>Операция</th><th className="number">Начислено</th><th className="number">Оплачено</th><th className="number">Сальдо</th></tr></thead><tbody><tr className="opening"><td colSpan={5}>Сальдо на начало периода</td><td className="number">{money(reconciliation.openingBalance)}</td></tr>{reconciliation.transactions.map((transaction, index) => <tr data-comment-row={transaction.id} key={`${transaction.date}-${transaction.document}-${index}`}><td>{displayDate(transaction.date)}</td><td><button type="button" className="b2b-client-order-link" onClick={() => onOpenOrder?.(transaction.orderId)}>{transaction.document}</button></td><td>{transaction.description}</td><td className="number debit">{transaction.debit ? money(transaction.debit) : '—'}</td><td className="number credit">{transaction.credit ? money(transaction.credit) : '—'}</td><td className="number balance">{money(transaction.balance)}</td></tr>)}{!reconciliation.transactions.length && <tr><td colSpan={6} className="empty">За выбранный период операций нет</td></tr>}</tbody></FilterableTable></div>
       </>}
     </section>
 

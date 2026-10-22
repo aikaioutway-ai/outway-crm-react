@@ -182,7 +182,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
           <DashboardSearch value={search} onChange={onSearchChange} placeholder="Поиск школы…" />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        <SchoolDashboardTable
+        <SchoolDashboardTable commentScope="drivers/DriversOverview:overview"
           columns={[
             { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
             { key: 'activeCount', label: 'Активные', total: totals.activeCount, color: KPI_COLORS.activeCount },

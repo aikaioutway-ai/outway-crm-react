@@ -3813,7 +3813,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   Дети ({selectedDriverChildren.length})
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <FilterableTable style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
+                  <FilterableTable data-comment-table="families/FamiliesPage:0" data-comment-context={selectedDriver?.driverId} style={{ width: '100%', minWidth: 920, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
                         {['№', 'ФИО', 'Адрес', 'Телефон', 'Остановка', 'Координаты'].map(label => (
@@ -3839,7 +3839,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                           ? `${child.latitude.toFixed(6)}, ${child.longitude.toFixed(6)}`
                           : '-';
                         return (
-                          <tr key={child.rowId}>
+                          <tr data-comment-row={child.rowId} key={child.rowId}>
                             {[
                               index + 1,
                               child.childName || '-',
@@ -3929,7 +3929,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   </span>
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <FilterableTable style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
+                  <FilterableTable data-comment-table="families/FamiliesPage:1" data-comment-context={selectedDriver?.driverId} style={{ width: '100%', minWidth: 980, borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
                         {['Название', 'Номер', 'Дата выдачи', 'Дата окончания', 'Скан', 'Обязательно'].map(label => (
@@ -3954,7 +3954,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                         const missing = driverDocumentMissing(document);
                         const expired = !missing && driverDocumentExpired(document);
                         return (
-                          <tr key={document.type}>
+                          <tr data-comment-row={document.type} key={document.type}>
                             <td style={{ height: 42, padding: '6px 10px', borderBottom: index === driverDocumentsDraft.length - 1 ? 'none' : '1px solid #EEF4F6' }}>
                               <input value={document.title} onChange={event => setDriverDocumentField(index, 'title', event.target.value)} style={{ width: '100%', height: 30, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 8px', fontSize: 12, fontWeight: 600, color: 'var(--text)', outline: 'none' }} />
                             </td>
@@ -4016,11 +4016,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     <div style={{ minHeight: 190, padding: 24, display: 'grid', placeItems: 'center', color: 'var(--text-2)', fontSize: 13, textAlign: 'center' }}>У водителя пока нет заказов B2B</div>
                   ) : (
                     <div style={{ overflowX: 'auto' }}>
-                      <FilterableTable style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
+                      <FilterableTable data-comment-table="families/FamiliesPage:2" data-comment-context={selectedDriver?.driverId} style={{ width: '100%', minWidth: 900, borderCollapse: 'collapse' }}>
                         <thead><tr>{['Дата выезда', 'Заказ', 'Клиент', 'Маршрут', 'Транспорт', 'Начислено', 'Статус'].map(label => <th key={label} style={{ height: 36, padding: '0 11px', borderBottom: '1px solid #E5EEF1', background: '#F8FCFC', color: 'var(--text-2)', textAlign: label === 'Начислено' ? 'right' : 'left', fontSize: 11, fontWeight: 600, textTransform: 'none', whiteSpace: 'nowrap' }}>{label}</th>)}</tr></thead>
                         <tbody>{selectedDriverB2BOrders.map((order, index) => {
                           const status = B2B_ORDER_STATUSES.find(item => item.key === order.status)?.label ?? order.status;
-                          return <tr key={order.id}>
+                          return <tr data-comment-row={order.id} key={order.id}>
                             <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{order.departureDate || '—'}</td>
                             <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: '#146566', fontSize: 12, fontWeight: 600, whiteSpace: 'nowrap' }}>{order.number}</td>
                             <td style={{ height: 46, padding: '0 11px', borderBottom: index === selectedDriverB2BOrders.length - 1 ? 'none' : '1px solid #EEF4F6', color: 'var(--text)', fontSize: 12, fontWeight: 600 }}>{order.client}</td>
@@ -4158,7 +4158,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   История водителей
                 </div>
                 <div style={{ overflowX: 'auto' }}>
-                  <FilterableTable style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
+                  <FilterableTable data-comment-table="families/FamiliesPage:3" data-comment-context={selectedTransferCard?.transfer.id} style={{ width: '100%', borderCollapse: 'collapse', minWidth: 560 }}>
                     <thead>
                       <tr>
                         {['ФИО водителя', 'Дата начала', 'Дата конец', 'Статус'].map(label => (
@@ -4180,7 +4180,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                     </thead>
                     <tbody>
                       {selectedTransferCard.history.length ? selectedTransferCard.history.map((entry, index) => (
-                        <tr key={`${entry.driverName}-${index}`}>
+                        <tr data-comment-row={`${selectedTransferCard.transfer.driverId || "unassigned"}:${entry.startDate}`} key={`${entry.driverName}-${index}`}>
                           {[entry.driverName, entry.startDate, entry.endDate, entry.status].map((value, cellIndex) => (
                             <td key={cellIndex} style={{
                               height: 42,

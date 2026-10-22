@@ -117,7 +117,7 @@ export default function MarketCatalogTab({ sessionToken }: { sessionToken?: stri
         <div className="market-empty">Каталог пуст — добавьте первый товар</div>
       ) : (
         <div className="market-table-wrap">
-          <FilterableTable className="market-table">
+          <FilterableTable data-comment-table="market/MarketCatalogTab:0" className="market-table">
             <thead><tr>
               <th>Наименование</th><th>Категория</th><th>Ед.</th>
               <th className="number">Закупка</th><th className="number">Продажа</th><th className="number">Маржа</th>
@@ -126,7 +126,7 @@ export default function MarketCatalogTab({ sessionToken }: { sessionToken?: stri
             <tbody>{rows.map(row => {
               const margin = row.salePrice - row.purchasePrice;
               return (
-                <tr key={row.id}>
+                <tr data-comment-row={row.id} key={row.id}>
                   <td className="market-name">{row.name}</td>
                   <td>{row.category || '—'}</td>
                   <td>{row.unit}</td>

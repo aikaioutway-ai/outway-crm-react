@@ -6,13 +6,13 @@ export function DashboardTopPanel({ children, className = '' }: { children: Reac
   return <section className={`dashboard-top-panel ${className}`.trim()}>{children}</section>;
 }
 
-export function DashboardGrid({ children, template }: { children: React.ReactNode; template: string }) {
+export function DashboardGrid({ children, template, commentScope, commentContext }: { children: React.ReactNode; template: string; commentScope?: string; commentContext?: string }) {
   const highlightRow = (grid: HTMLDivElement, key?: string) => {
     grid.querySelectorAll<HTMLElement>('[data-school-row]').forEach(cell => {
       cell.classList.toggle('dashboard-row-hover', !!key && cell.dataset.schoolRow === key);
     });
   };
-  return <div className="dashboard-overview-grid" style={{ gridTemplateColumns: template }}
+  return <div data-comment-table={commentScope} data-comment-context={commentContext} className="dashboard-overview-grid" style={{ gridTemplateColumns: template }}
     onMouseOver={event => {
       const cell = (event.target as HTMLElement).closest<HTMLElement>('[data-school-row]');
       highlightRow(event.currentTarget, cell?.dataset.schoolRow);
@@ -101,7 +101,7 @@ export function OverviewColumn<T extends string>({ sortKey, label, icon, value, 
 }) {
   const active = sortState.key === sortKey;
   return (
-    <div className={`dashboard-column${first ? ' first' : ''}`}>
+    <div data-comment-column={sortKey} className={`dashboard-column${first ? ' first' : ''}`}>
       <button
         className={`dashboard-column-head${active ? ' active' : ''}`}
         onClick={() => onSort(sortKey)}

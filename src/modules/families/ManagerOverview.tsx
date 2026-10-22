@@ -373,7 +373,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
         </DashboardTopPanel>
 
         {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : (
-        <SchoolDashboardTable
+        <SchoolDashboardTable commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },
             ...(mode === 'accruals' ? [
