@@ -251,3 +251,40 @@ test('header menu filter narrows text columns and matches select columns by visi
   expect(screen.getByText('Айбек')).toBeInTheDocument();
   expect(screen.queryByText('Бакыт')).not.toBeInTheDocument();
 });
+
+test('header filter is remembered per table after a reload', async () => {
+  localStorage.clear();
+  const nameColumns: ColumnDef<{id: string; name: string}>[] = [{key: 'name', label: 'Имя', type: 'text'}];
+  const rows = [{id: '1', name: 'Айбек'}, {id: '2', name: 'Бакыт'}];
+  const first = await render(<DataTable columns={nameColumns} data={rows} rowKey="id" storageKey="persist-filter-test" />);
+  fireEvent.contextMenu(screen.getByText('Имя'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Фильтр'}));
+  fireEvent.change(screen.getByPlaceholderText('Значение'), {target: {value: 'бак'}});
+  first.unmount();
+  await render(<DataTable columns={nameColumns} data={rows} rowKey="id" storageKey="persist-filter-test" />);
+  expect(screen.getByText('Бакыт')).toBeInTheDocument();
+  expect(screen.queryByText('Айбек')).not.toBeInTheDocument();
+  expect(screen.getByRole('status')).toHaveTextContent('Фильтр · Имя · 1 строк');
+  fireEvent.click(screen.getByRole('button', {name: 'Сбросить'}));
+  expect(localStorage.getItem('dt_filters:persist-filter-test')).toBeNull();
+});
+
+test('date filter accepts the on-screen format as well as the stored one', async () => {
+  localStorage.clear();
+  const dateColumns: ColumnDef<{id: string; name: string; date: string}>[] = [
+    {key: 'name', label: 'Имя', type: 'text'},
+    {key: 'date', label: 'Дата', type: 'date'},
+  ];
+  const rows = [{id: '1', name: 'Сентябрь', date: '2026-09-30'}, {id: '2', name: 'Октябрь', date: '2026-10-15T08:00:00+00:00'}];
+  await render(<DataTable columns={dateColumns} data={rows} rowKey="id" storageKey="date-filter-test" />);
+  fireEvent.contextMenu(screen.getByText('Дата'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Фильтр'}));
+  const input = screen.getByPlaceholderText('дд.мм.гггг');
+  fireEvent.change(input, {target: {value: '10.2026'}});
+  expect(screen.getByText('Октябрь')).toBeInTheDocument();
+  expect(screen.queryByText('Сентябрь')).not.toBeInTheDocument();
+  fireEvent.change(screen.getByDisplayValue('∋ содержит'), {target: {value: 'lt'}});
+  fireEvent.change(input, {target: {value: '01.10.2026'}});
+  expect(screen.getByText('Сентябрь')).toBeInTheDocument();
+  expect(screen.queryByText('Октябрь')).not.toBeInTheDocument();
+});

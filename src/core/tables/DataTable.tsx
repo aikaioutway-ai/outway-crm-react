@@ -201,6 +201,17 @@ function paginateRowsInGroups<T extends Record<string, any>>(
   return pages.length ? pages : [[]];
 }
 
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})/;
+const RU_DATE = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/;
+
+/** «15.10.2026» или «2026-10-15» → «2026-10-15», чтобы даты можно было сравнивать. */
+function normalizeFilterDate(value: string): string | null {
+  const iso = value.match(ISO_DATE);
+  if (iso) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+  const ru = value.trim().match(RU_DATE);
+  return ru ? `${ru[3]}-${ru[2].padStart(2, '0')}-${ru[1].padStart(2, '0')}` : null;
+}
+
 function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined): boolean {
   if (!col) return true;
   const raw = getCellValue(row, col);
@@ -208,11 +219,23 @@ function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined)
   const shown = col.editOptions?.find(option => String(option.value) === String(raw))?.label ?? raw;
   const val = shown == null ? '' : String(shown).toLowerCase();
   const target = rule.value.toLowerCase();
+  // Даты ищутся и так, как на экране (15.10.2026), и так, как в базе (2026-10-15).
+  const isoDate = col.type === 'date' ? normalizeFilterDate(val) : null;
+  const texts = isoDate ? [val, isoDate.split('-').reverse().join('.')] : [val];
+  if (isoDate && ['gt', 'lt', 'gte', 'lte'].includes(rule.operator)) {
+    const targetDate = normalizeFilterDate(target);
+    if (!targetDate) return true;
+    if (rule.operator === 'gt') return isoDate > targetDate;
+    if (rule.operator === 'lt') return isoDate < targetDate;
+    if (rule.operator === 'gte') return isoDate >= targetDate;
+    return isoDate <= targetDate;
+  }
+  const equalsTarget = () => texts.includes(target) || (isoDate != null && isoDate === normalizeFilterDate(target));
   switch (rule.operator) {
-    case 'eq':          return val === target;
-    case 'neq':         return val !== target;
-    case 'contains':    return val.includes(target);
-    case 'not_contains':return !val.includes(target);
+    case 'eq':          return equalsTarget();
+    case 'neq':         return !equalsTarget();
+    case 'contains':    return texts.some(text => text.includes(target));
+    case 'not_contains':return !texts.some(text => text.includes(target));
     case 'empty':       return val === '' || raw == null;
     case 'not_empty':   return val !== '' && raw != null;
     case 'gt':          return parseFloat(val) > parseFloat(target);
@@ -221,6 +244,21 @@ function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined)
     case 'lte':         return parseFloat(val) <= parseFloat(target);
     default:            return true;
   }
+}
+
+// Фильтры — личная настройка сотрудника для конкретной таблицы, хранится только в его браузере.
+const FILTERS_LS_PREFIX = 'dt_filters:';
+function readSavedFilters(storageKey: string): FilterRule[] {
+  try {
+    const saved = JSON.parse(localStorage.getItem(FILTERS_LS_PREFIX + storageKey) ?? '[]');
+    return Array.isArray(saved) ? saved.filter(rule => rule && typeof rule.key === 'string' && typeof rule.operator === 'string') : [];
+  } catch { return []; }
+}
+function writeSavedFilters(storageKey: string, filters: FilterRule[]): void {
+  try {
+    if (filters.length) localStorage.setItem(FILTERS_LS_PREFIX + storageKey, JSON.stringify(filters));
+    else localStorage.removeItem(FILTERS_LS_PREFIX + storageKey);
+  } catch { /* localStorage недоступен — фильтр просто не запомнится */ }
 }
 
 const OPERATORS: { value: FilterOperator; label: string }[] = [
@@ -452,7 +490,13 @@ export function DataTable<T extends Record<string, any>>({
   }, [persistCols]);
 
   const [sorts, setSorts] = useState<SortConfig[]>([]);
-  const [filters, setFilters] = useState<FilterRule[]>([]);
+  const [filters, setFilters] = useState<FilterRule[]>(() => readSavedFilters(storageKey));
+  const filtersKeyRef = useRef(storageKey);
+  useEffect(() => {
+    if (filtersKeyRef.current === storageKey) { writeSavedFilters(storageKey, filters); return; }
+    filtersKeyRef.current = storageKey;
+    setFilters(readSavedFilters(storageKey));
+  }, [storageKey, filters]);
   const [showFilterPanel, setShowFilterPanel] = useState(false);
   const [collapsedCats, setCollapsedCats] = useState<Set<string>>(new Set());
   const [showSortPanel, setShowSortPanel] = useState(false);
@@ -874,7 +918,7 @@ export function DataTable<T extends Record<string, any>>({
                         <option value="">Выберите…</option>
                         {options.map(option => <option key={String(option.value)} value={option.label}>{option.label}</option>)}
                       </select>
-                    : <input className="dt-input dt-input--sm" placeholder="Значение" autoFocus={i === filters.length - 1} value={f.value} onChange={e => setValue(e.target.value)} />;
+                    : <input className="dt-input dt-input--sm" placeholder={cols.find(c => c.key === f.key)?.type === 'date' ? 'дд.мм.гггг' : 'Значение'} autoFocus={i === filters.length - 1} value={f.value} onChange={e => setValue(e.target.value)} />;
                 })()}
                 <button className="dt-icon-btn" onClick={() => setFilters(prev => prev.filter(x => x.id !== f.id))} aria-label="Удалить фильтр" title="Удалить фильтр"><X size={13} aria-hidden="true" /></button>
               </div>
