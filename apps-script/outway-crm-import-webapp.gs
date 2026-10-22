@@ -60,8 +60,9 @@ const SCHOOL_CODE_TO_BRANCH = {
   NOVA: 'NOVA',
   INDIGO: 'ING',
   ING: 'ING',
-  ING_A: 'ING_A',
-  ING_P: 'ING_P',
+  // AsylKech и Prime ездят трансферами ING — это один филиал в CRM.
+  ING_A: 'ING',
+  ING_P: 'ING',
   ING_W: 'ING_W',
   GENIUS: 'GEN2',
   GEN2: 'GEN2',
@@ -95,9 +96,9 @@ const BRANCH_NAME_TO_CODE = {
   'Nova International School': 'NOVA',
   'Индиго Kids': 'ING',
   'Индиго кидс': 'ING',
-  'Asylkech Girls School': 'ING_A',
-  'AsylKech Girls School': 'ING_A',
-  'Indigo Prime Academy': 'ING_P',
+  'Asylkech Girls School': 'ING',
+  'AsylKech Girls School': 'ING',
+  'Indigo Prime Academy': 'ING',
   'Indigo West': 'ING_W',
   'Гениум Чуйкова': 'GEN2',
   'Гениум — Чуйкова': 'GEN2',
@@ -109,6 +110,15 @@ const BRANCH_NAME_TO_CODE = {
   'Академия будущих лидеров(Авангард)': 'ABL1',
   'Академия будущих лидеров (Мавлянова)': 'ABL2',
   'Академия будущих лидеров(Мавлянова)': 'ABL2'
+};
+
+// Филиалы, объединённые в ING: название сохраняем в комментарии семьи.
+const ING_MERGED_BRANCH_NAMES = {
+  'Asylkech Girls School': 'Asylkech Girls School',
+  'AsylKech Girls School': 'Asylkech Girls School',
+  'Indigo Prime Academy': 'Indigo Prime Academy',
+  ING_A: 'Asylkech Girls School',
+  ING_P: 'Indigo Prime Academy'
 };
 
 const BRANCH_CODE_TO_SCHOOL_CODE = {
@@ -238,7 +248,7 @@ function syncToSupabaseV2_(familyId, payload, children, sourceSheet) {
     contact_name: text_(payload.contactName),
     contact_phone: normalizePhone_(payload.contactPhone),
     contact_phone_telegram: toBool_(payload.contactPhoneTelegram),
-    comment: text_(payload.comment),
+    comment: familyCommentWithBranch_(payload),
     status: 'new',
     created_at: createdAt
   };
@@ -635,6 +645,16 @@ function resolveSchoolNameForBranch_(schoolCode, payload) {
   if (code === 'GENIUS') return 'Genius';
   if (code === 'ABL') return 'Академия будущих лидеров';
   return text_(payload.schoolName) || text_(payload.branchName) || code;
+}
+
+function familyCommentWithBranch_(payload) {
+  const mergedBranch = ING_MERGED_BRANCH_NAMES[text_(payload.branchName)]
+    || ING_MERGED_BRANCH_NAMES[text_(payload.schoolCode).toUpperCase()];
+  const comment = text_(payload.comment);
+  if (!mergedBranch) return comment;
+  const tag = 'Филиал: ' + mergedBranch;
+  if (comment.indexOf(tag) !== -1) return comment;
+  return comment ? tag + '\n' + comment : tag;
 }
 
 function resolveBranchCode_(schoolCode, branchName) {
