@@ -14,7 +14,7 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolVisible
 } from './constants';
 import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
-import { familiesTableQuery, useFamiliesPage, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
+import { familiesTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
 import AccrualDialog, { AccrualDialogState } from './AccrualDialog';
@@ -1837,18 +1837,16 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     pageSize: FAMILIES_PAGE_SIZE,
   }), [branchIdsForPage, search, pagedChildStatus, pagedHasTransfer, pagedTransferNumber, isDirectoryMode]);
 
-  const familiesPageQuery = useFamiliesPage({
-    ...familiesPageParams,
-    page: familiesPageNumber,
-  }, { enabled: isPagedMode && branchesReadyForPaging });
+  // familiesPageNumber — сколько страниц по 100 семей догружено сверх первой (листанием таблицы дальше конца).
+  const familiesPageQuery = useFamiliesPages(familiesPageParams, familiesPageNumber + 1, { enabled: isPagedMode && branchesReadyForPaging });
 
   useEffect(() => {
     setFamiliesPageNumber(0);
   }, [mode, activeTab, search, quickChildStatus, quickTransfer]);
 
-  const pagedRows: ChildRow[] = familiesPageQuery.data?.rows ?? EMPTY_CHILD_ROWS;
-  const pagedTotalFamilies = familiesPageQuery.data?.totalFamilies ?? 0;
-  const pagedTotalPages = Math.max(1, Math.ceil(pagedTotalFamilies / FAMILIES_PAGE_SIZE));
+  const pagedRows: ChildRow[] = familiesPageQuery.rows.length ? familiesPageQuery.rows : EMPTY_CHILD_ROWS;
+  const pagedTotalPages = Math.max(1, Math.ceil(familiesPageQuery.totalFamilies / FAMILIES_PAGE_SIZE));
+  const hasMorePagedRows = isPagedMode && familiesPageNumber + 1 < pagedTotalPages;
 
   const modeRows = useMemo<Array<ChildRow | (typeof pagedRows)[number]>>(() => {
     if (isPagedMode) return pagedRows;
@@ -3374,6 +3372,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               onSelectedKeysChange={canEditAccruals ? keys => setSelectedAccrualIds(new Set(keys)) : undefined}
               storageKey={tableStorageKey}
               loading={isPagedMode ? familiesPageQuery.isPending : loading}
+              hasMoreRows={hasMorePagedRows}
+              loadingMoreRows={isPagedMode && familiesPageQuery.isLoadingMore}
+              onLoadMoreRows={() => setFamiliesPageNumber(page => page + 1)}
               emptyText="Заявок не найдено"
               canManageProperties={false}
               showProperties={columnsOpen ?? false}

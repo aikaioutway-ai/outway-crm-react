@@ -304,3 +304,17 @@ test('reports when a header filter or repeat filter is active so paged pages can
   fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Повторяющиеся значения'}));
   expect(onActive).toHaveBeenLastCalledWith(true);
 });
+
+test('next page arrow on the last loaded page loads more rows and moves on', async () => {
+  const nameColumns: ColumnDef<{id: string; name: string}>[] = [{key: 'name', label: 'Имя', type: 'text'}];
+  const firstBatch = Array.from({length: 20}, (_, index) => ({id: String(index), name: `Ребёнок ${index + 1}`}));
+  const secondBatch = Array.from({length: 5}, (_, index) => ({id: String(20 + index), name: `Ребёнок ${21 + index}`}));
+  const onLoadMore = jest.fn();
+  const view = await render(<DataTable columns={nameColumns} data={firstBatch} rowKey="id" storageKey="load-more-test" hasMoreRows onLoadMoreRows={onLoadMore} />);
+  expect(screen.getByText('1 / 1+')).toBeInTheDocument();
+  fireEvent.click(screen.getByTitle('Загрузить следующие записи'));
+  expect(onLoadMore).toHaveBeenCalledTimes(1);
+  await act(async () => { view.rerender(<DataTable columns={nameColumns} data={[...firstBatch, ...secondBatch]} rowKey="id" storageKey="load-more-test" hasMoreRows={false} onLoadMoreRows={onLoadMore} />); });
+  expect(screen.getByText('2 / 2')).toBeInTheDocument();
+  expect(screen.getByText('Ребёнок 21')).toBeInTheDocument();
+});

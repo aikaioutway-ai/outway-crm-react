@@ -75,6 +75,10 @@ export interface DataTableProps<T = any> {
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
   onRowOpen?: (row: T) => void;
+  /** Есть ещё строки на сервере: «›» на последней странице догружает их (onLoadMoreRows) и переходит дальше. */
+  hasMoreRows?: boolean;
+  loadingMoreRows?: boolean;
+  onLoadMoreRows?: () => void;
   /** Сообщает странице, что включён фильтр или «повторы»: постраничным таблицам тогда нужны все строки, а не одна страница. */
   onClientFiltersActiveChange?: (active: boolean) => void;
   /** Строки, у которых нет своей карточки, не показывают кнопку открытия. */
@@ -397,6 +401,9 @@ export function DataTable<T extends Record<string, any>>({
   onRowOpen,
   canRowOpen,
   onClientFiltersActiveChange,
+  hasMoreRows = false,
+  loadingMoreRows = false,
+  onLoadMoreRows,
   onRowReject,
   getTaskTarget,
   canRowReject,
@@ -581,6 +588,20 @@ export function DataTable<T extends Record<string, any>>({
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
+
+  // После догрузки строк с сервера переходим на следующую страницу, как будто она была всегда.
+  const advanceAfterLoadRef = useRef<number | null>(null);
+  useEffect(() => {
+    const from = advanceAfterLoadRef.current;
+    if (from != null && totalPages > from) { advanceAfterLoadRef.current = null; setPage(from + 1); }
+  }, [totalPages]);
+  const canLoadMore = hasMoreRows && !!onLoadMoreRows;
+  const goNextPage = () => {
+    if (pageSafe < totalPages) { setPage(p => Math.min(totalPages, p + 1)); return; }
+    if (!canLoadMore || loadingMoreRows) return;
+    advanceAfterLoadRef.current = totalPages;
+    onLoadMoreRows!();
+  };
 
   useEffect(() => {
     const handler = () => { setColMenu(null); setRowMenu(null); setColumnFilterPopup(null); };
@@ -871,8 +892,8 @@ export function DataTable<T extends Record<string, any>>({
           )}
           <div className="dt-pagination">
             <button className="dt-page-btn" disabled={pageSafe <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
-            <span className="dt-page-text">{pageSafe} / {totalPages}</span>
-            <button className="dt-page-btn" disabled={pageSafe >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>›</button>
+            <span className="dt-page-text">{pageSafe} / {totalPages}{canLoadMore ? '+' : ''}</span>
+            <button className="dt-page-btn" disabled={(pageSafe >= totalPages && !canLoadMore) || loadingMoreRows} title={pageSafe >= totalPages && canLoadMore ? 'Загрузить следующие записи' : undefined} onClick={goNextPage}>{loadingMoreRows ? '…' : '›'}</button>
           </div>
           <TableDownloadButton onDownload={exportExcel}/>
           {toolbarRightExtra}

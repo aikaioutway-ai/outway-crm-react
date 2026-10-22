@@ -1,5 +1,5 @@
 import { EmployeeAdvance, fetchAllEmployeeAdvances } from '../services/employeeService';
-import { useQuery, UseQueryResult, keepPreviousData } from '@tanstack/react-query';
+import { useQueries, useQuery, UseQueryResult, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchV2FamiliesTable,
   fetchV2FamiliesPage,
@@ -49,13 +49,24 @@ export function useFamiliesTable(options?: { enabled?: boolean }): UseQueryResul
 /** Постраничная загрузка «Справочник»/«Заявки» через RPC get_families_page.
  * Все фильтры входят в queryKey — смена страницы/школы/поиска естественно
  * даёт отдельный (и кэшируемый) запрос вместо ручного релоада. keepPreviousData
- * не даёт таблице мигать пустым состоянием при листании страниц. */
-export function useFamiliesPage(params: FamiliesPageParams, options?: { enabled?: boolean }): UseQueryResult<FamiliesPageResult> {
-  return useQuery({
-    queryKey: QK.familiesPage(params as Record<string, unknown>),
-    queryFn: (): Promise<FamiliesPageResult> => fetchV2FamiliesPage(params),
-    enabled: options?.enabled ?? true,
-    placeholderData: keepPreviousData,
+ * не даёт таблице мигать пустым состоянием при листании страниц.
+ * Держит первые pageCount страниц одним списком: когда таблица листает дальше
+ * последней загруженной страницы, pageCount растёт и догружается следующая. */
+export function useFamiliesPages(params: Omit<FamiliesPageParams, 'page'>, pageCount: number, options?: { enabled?: boolean }) {
+  const enabled = options?.enabled ?? true;
+  return useQueries({
+    queries: Array.from({ length: Math.max(1, pageCount) }, (_, page) => ({
+      queryKey: QK.familiesPage({ ...params, page } as Record<string, unknown>),
+      queryFn: (): Promise<FamiliesPageResult> => fetchV2FamiliesPage({ ...params, page }),
+      enabled,
+      placeholderData: page === 0 ? keepPreviousData : undefined,
+    })),
+    combine: results => ({
+      rows: results.flatMap(result => result.data?.rows ?? []),
+      totalFamilies: results[0]?.data?.totalFamilies ?? 0,
+      isPending: results[0]?.isPending ?? true,
+      isLoadingMore: results.slice(1).some(result => result.isFetching && !result.data),
+    }),
   });
 }
 
