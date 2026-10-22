@@ -45,7 +45,7 @@ interface ManagerOverviewProps {
   onModeChange: (mode: ManagerMode) => void;
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
-  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string) => void;
+  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilyListRow) => void;
   allowedSchools?: string[];
 }
 
@@ -126,7 +126,7 @@ export function computeSchoolStatsFromBranches(branches: BranchStat[]): SchoolSt
 
 export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact = false }: {
   rows: FamilyListRow[];
-  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string) => void;
+  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilyListRow) => void;
   collapsible?: boolean;
   compact?: boolean;
 }) {
@@ -144,12 +144,12 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
     const seen = new Set<string>();
     const matches: FamilyListRow[] = [];
     for (const row of rows) {
-      if (seen.has(row.familyId)) continue;
+      if (seen.has(row.rowId)) continue;
       const haystack = `${row.parentName} ${row.childName}`.toLowerCase();
       const matchesText = normalizedQuery.length >= 2 && haystack.includes(normalizedQuery);
       const matchesPhone = phoneMatchesQuery(query, row.phone, row.secondPhone);
       if (matchesText || matchesPhone) {
-        seen.add(row.familyId);
+        seen.add(row.rowId);
         matches.push(row);
         if (matches.length >= 8) break;
       }
@@ -176,7 +176,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
       : row.parentName
         ? formatName(row.parentName)
         : row.phone;
-    onOpenFamily?.(row.branchFilter, row.familyId, searchQuery);
+    onOpenFamily?.(row.branchFilter, row.familyId, searchQuery, row);
     setQuery('');
     setFocused(false);
     if (collapsible) setExpanded(false);
@@ -251,7 +251,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
             const tab = SCHOOL_TABS.find(t => t.key === row.branchFilter);
             return (
               <div
-                key={row.familyId}
+                key={row.rowId}
                 onMouseDown={event => { event.preventDefault(); select(row); }}
                 onMouseEnter={() => setActiveIndex(i)}
                 style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px', cursor: 'pointer', background: i === activeIndex ? 'var(--surface-2)' : undefined }}

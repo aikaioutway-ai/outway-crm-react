@@ -38,7 +38,7 @@ import {
 import { useFamiliesTable } from './hooks/useCrmQueries';
 import { SCHOOL_TABS, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
 import { Family, UserRole } from './types';
-import { fetchV2Family } from './services/crmV2Service';
+import { FamilyListRow, fetchV2Family } from './services/crmV2Service';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
@@ -158,6 +158,8 @@ export default function App() {
   useEffect(() => {
     if (!canViewManagerAccruals) setRequestedManagerSchoolMode(mode => mode === 'accruals' ? 'directory' : mode);
   }, [canViewManagerAccruals]);
+  const [managerSearchChild, setManagerSearchChild] = useState<{ id: string; query: string } | null>(null);
+  const [logisticsSearchChild, setLogisticsSearchChild] = useState<{ id: string; query: string } | null>(null);
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
   const [managerOpenFamilySearch, setManagerOpenFamilySearch] = useState('');
   const [managerPeriodKey, setManagerPeriodKey] = useState(currentPayrollPeriodKey);
@@ -168,9 +170,11 @@ export default function App() {
     if (schoolKey === 'ALL') setManagerTransferFilter('');
     setManagerSchoolKey(schoolKey);
   };
-  const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
+  const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilyListRow) => {
     if (!canAccessManagerSchool(schoolKey)) return;
     setManagerOpenFamilySearch(searchQuery);
+    setManagerSearchChild({ id: row.rowId, query: searchQuery });
+    setManagerTransferFilter(row.status === 'rejected' ? 'rejected' : row.transferNumber || 'empty');
     setManagerSchoolMode('directory');
     setManagerSchoolKey(schoolKey);
   };
@@ -181,11 +185,12 @@ export default function App() {
     if (schoolKey === 'ALL') setLogisticsTransferFilter('');
     setLogisticsSchoolKey(schoolKey);
   };
-  const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string) => {
+  const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilyListRow) => {
     if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     setLogisticsSearch(searchQuery);
+    setLogisticsSearchChild({ id: row.rowId, query: searchQuery });
+    setLogisticsTransferFilter(row.status === 'rejected' ? 'rejected' : row.transferNumber || 'empty');
     setLogisticsView('table');
-    if (logisticsView === 'schools') setLogisticsView('map');
     setLogisticsSchoolKey(schoolKey);
   };
   const handleCashierSelectSchool = (schoolKey: string) => {
@@ -597,6 +602,7 @@ export default function App() {
                   externalQuickTransfer={logisticsTransferFilter === 'rejected' ? '' : logisticsTransferFilter}
                   externalQuickChildStatus={logisticsTransferFilter === 'rejected' ? 'rejected' : ''}
                   initialSearch={logisticsSearch}
+                  initialSearchChildId={logisticsSearchChild?.query === logisticsSearch ? logisticsSearchChild.id : undefined}
                 />
               )}
               </>
@@ -669,6 +675,7 @@ export default function App() {
                   externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
                   externalPeriodKey={managerSchoolMode !== 'directory' ? managerPeriodKey : undefined}
                   initialSearch={managerOpenFamilySearch}
+                  initialSearchChildId={managerSearchChild?.query === managerOpenFamilySearch ? managerSearchChild.id : undefined}
                 />
               </>
             ) : (

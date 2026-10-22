@@ -166,6 +166,7 @@ interface FamiliesPageProps {
   externalPeriodKey?: string;
   initialOpenFamilyId?: string | null;
   initialSearch?: string;
+  initialSearchChildId?: string;
   onInitialFamilyOpened?: () => void;
   cashierView?: 'pending' | 'confirmed';
 }
@@ -730,7 +731,7 @@ function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
   }
 }
 
-export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const canRejectFamilies = ['admin', 'manager', 'logist', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
@@ -1065,15 +1066,15 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         [mode]: {
           ...current,
           activeTab: nextActiveTab,
-          quickTransfer: '',
-          quickChildStatus: mode === 'directory' ? '' : current.quickChildStatus,
+          quickTransfer: externalQuickTransfer ?? '',
+          quickChildStatus: externalQuickChildStatus ?? (mode === 'directory' ? '' : current.quickChildStatus),
         },
       };
     });
     setDashboardSchoolByMode(prev => (
       prev[mode] === nextActiveTab ? prev : { ...prev, [mode]: nextActiveTab }
     ));
-  }, [initialQuickFilter?.activeTab, mode]);
+  }, [initialQuickFilter?.activeTab, mode, externalQuickTransfer, externalQuickChildStatus]);
 
   useEffect(() => {
     if (typeof initialSearch === 'string') setSearch(initialSearch);
@@ -1877,6 +1878,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     return rowMatchesSchoolTab(r, tab);
   }, [rowMatchesSchoolTab, tab]);
   const matchesSearch = useCallback((r: ChildRow) => {
+    if (initialSearchChildId && search && search === initialSearch) return r.rowId === initialSearchChildId;
     if (search) {
       if (phoneMatchesQuery(search, r.phone, r.secondPhone, r.contactPhone)) return true;
       const q = search.toLowerCase().replace(/\s+/g, '');
@@ -1887,7 +1889,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       if (!haystack.includes(q)) return false;
     }
     return true;
-  }, [search]);
+  }, [search, initialSearch, initialSearchChildId]);
   const transferMetric = useMemo(() => {
     const metric: Record<string, { value: number; label: string; alert?: boolean }> = {};
 

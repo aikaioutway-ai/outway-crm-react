@@ -19,7 +19,7 @@ type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 
 
 interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
-  onOpenFamily: (schoolKey: string, familyId: string, search: string) => void;
+  onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilyListRow) => void;
   onDrivers: () => void;
   view: 'table' | 'map' | 'schools';
   onViewChange: (view: 'table' | 'map' | 'schools') => void;
