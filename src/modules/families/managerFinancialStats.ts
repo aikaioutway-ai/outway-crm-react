@@ -7,15 +7,16 @@ export function managerFinancialStats(stats: SchoolStat[], rows: FamilyListRow[]
     return stats.map(s => {
       const children = (rows).filter(r => r.branchFilter === s.key);
       const active = children.filter(r => r.status !== 'rejected');
+      // Начисления и долги отказников не удаляются, но в общие суммы школы не входят.
       const period = periodStats.filter(p => p.childId
-        ? children.some(r => r.rowId === p.childId)
+        ? active.some(r => r.rowId === p.childId)
         : familySchool.get(p.familyId) === s.key);
       return {
         ...s,
         charged: allTime ? s.charged : period.reduce((sum, p) => sum + p.charged, 0),
         paid: allTime ? s.paid : period.reduce((sum, p) => sum + p.paid, 0),
         debtSum: allTime ? s.debtSum : period.reduce((sum, p) => sum + p.debt, 0),
-        debtorsCount: children.filter(r => (allTime ? r.childDebtAmount : byChild.get(r.rowId)?.debt ?? 0) > 0).length,
+        debtorsCount: active.filter(r => (allTime ? r.childDebtAmount : byChild.get(r.rowId)?.debt ?? 0) > 0).length,
         boarded: active.filter(r => r.status === 'boarded').length,
         uncharged: active.filter(r => !!r.transferNumber && !byChild.has(r.rowId)).length,
       };

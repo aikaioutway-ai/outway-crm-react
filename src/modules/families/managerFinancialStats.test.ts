@@ -25,3 +25,11 @@ test('empty month has zero finances and counts all active assigned children with
 test('all periods retains aggregate money and uses child debt and charge existence', () => {
   expect(managerFinancialStats(stats, rows, charges, true)[0]).toMatchObject({ charged: 900, debtSum: 800, debtorsCount: 1, uncharged: 1 });
 });
+
+test('refused children keep their charges but do not count in school month totals or debtors', () => {
+  const refusedCharge = { childId: 'e', familyId: 'other', charged: 6500, paid: 0, debt: 6500 } as PeriodChargeStats;
+  const refusedRows = rows.map(row => row.rowId === 'e' ? { ...row, childDebtAmount: 6500 } : row);
+  const [aes] = managerFinancialStats(stats, refusedRows, [...charges, refusedCharge], false);
+  expect(aes).toMatchObject({ charged: 100, paid: 40, debtSum: 60, debtorsCount: 1 });
+  expect(managerFinancialStats(stats, refusedRows, [...charges, refusedCharge], true)[0]).toMatchObject({ debtorsCount: 1 });
+});
