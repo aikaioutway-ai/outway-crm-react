@@ -86,7 +86,8 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   const statusCells = [
     { filterKey: 'new', label: '?', debtSum: debtSumOf(allSchoolRows.filter(isNewUnassignedRow)), childCount: childCountOf(allSchoolRows.filter(isNewUnassignedRow)), tone: STATUS_CELL_TONE.new },
     { filterKey: 'rejected', label: '×', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'rejected')), childCount: childCountOf(allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
-    { filterKey: '', label: '≡', debtSum: debtSumOf(allSchoolRows), childCount: childCountOf(allSchoolRows), tone: STATUS_CELL_TONE.all },
+    // «Все» — рабочие дети без отказников: отказники видны только по своей фишке.
+    { filterKey: '', label: '≡', debtSum: debtSumOf(schoolRows), childCount: childCountOf(schoolRows), tone: STATUS_CELL_TONE.all },
   ];
 
   const cells = [...transferCells, ...statusCells];

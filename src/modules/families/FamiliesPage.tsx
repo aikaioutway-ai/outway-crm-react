@@ -1850,8 +1850,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
   const modeRows = useMemo<Array<ChildRow | (typeof pagedRows)[number]>>(() => {
     if (isPagedMode) return pagedRows;
-    // Справочник без постраничной загрузки повторяет правило сервера: отказники только по фишке «Отказ».
-    if (isDirectoryMode && quickChildStatus !== 'rejected') return rows.filter(row => row.status !== 'rejected');
+    // В Справочнике, Оплатах и Начислениях Менеджера отказники видны только по фишке «Отказ».
+    if ((isDirectoryMode || mode === 'charges') && quickChildStatus !== 'rejected') return rows.filter(row => row.status !== 'rejected');
     // Кнопка «Отказ» показывает именно отказников — не отсекаем их заранее.
     return mode === 'logistics' && quickChildStatus !== 'rejected' ? logisticsWorkRows(rows) : rows;
   }, [isPagedMode, isDirectoryMode, pagedRows, mode, rows, quickChildStatus]);
