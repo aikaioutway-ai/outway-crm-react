@@ -1038,6 +1038,7 @@ export function DataTable<T extends Record<string, any>>({
                   >
                     <td
                       className="dt-td dt-td--num dt-sticky-col"
+                      data-no-comments="true"
                       onClick={selectable ? event => { event.stopPropagation(); toggleSelected(id); } : undefined}
                       style={selectable ? { cursor: 'pointer' } : undefined}
                     >

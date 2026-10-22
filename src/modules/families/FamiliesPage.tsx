@@ -3848,7 +3848,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                               child.stopNumber || '—',
                               coords,
                             ].map((value, cellIndex) => (
-                              <td key={cellIndex} style={{
+                              <td key={cellIndex} data-no-comments={cellIndex === 0 ? 'true' : undefined} style={{
                                 height: 42,
                                 padding: '0 10px',
                                 borderBottom: index === selectedDriverChildren.length - 1 ? 'none' : '1px solid #EEF4F6',
