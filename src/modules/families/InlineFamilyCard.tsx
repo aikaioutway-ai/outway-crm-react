@@ -747,6 +747,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
               onDeletePayment={handleDeletePayment}
               onCreateRefund={handleCreateRefund} onConfirmRefund={handleConfirmRefund} onRejectRefund={handleRejectRefund}
               readOnly={!editing && !isCashier}
+              onReceiptDetailsSaved={() => void loadFinance()}
             />
           )}
           {tab === 'history' && (

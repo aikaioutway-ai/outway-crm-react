@@ -1,16 +1,19 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import CashierReceiptPanel from './CashierReceiptPanel';
+import ReceiptModal from './ReceiptModal';
 import { fetchFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 jest.mock('../../services/financeService', () => ({ fetchFamilyPayment: jest.fn(), updateFamilyPayment: jest.fn() }));
+jest.mock('./pdfReceipt', () => ({ renderPdfPages: jest.fn().mockResolvedValue(['data:image/png;base64,page1', 'data:image/png;base64,page2']) }));
 const fetchPayment = jest.mocked(fetchFamilyPayment);
 const update = jest.mocked(updateFamilyPayment);
 const payment = { id: 'p1', familyId: 'f1', amount: 6800, paymentType: 'cash' as const, paymentDate: '2026-10-21', status: 'Подтверждено' as const, createdAt: '2026-10-21', receiptCode: '', receiptBank: '', receiptTime: '', receiptCardLast4: '', comment: '' };
 beforeEach(() => { jest.resetAllMocks(); fetchPayment.mockResolvedValue(payment); update.mockResolvedValue(undefined); });
 
-test('edits receipt fields beside PDF, saves metadata without changing amount and keeps failed draft', async () => {
+test('shows PDF as fitted page images, edits receipt fields, saves metadata without changing amount and keeps failed draft', async () => {
   const saved = jest.fn();
-  render(<CashierReceiptPanel paymentId="p1" parentName="Родитель" receiptUrl="/check.pdf" canEdit onClose={jest.fn()} onSaved={saved}/>);
-  expect(screen.getByTitle('PDF чека')).toHaveAttribute('src', '/check.pdf');
+  render(<ReceiptModal paymentId="p1" subtitle="Родитель" receiptUrl="/check.pdf" canEdit onClose={jest.fn()} onSaved={saved}/>);
+  expect(await screen.findByAltText('Чек платежа')).toHaveAttribute('src', 'data:image/png;base64,page1');
+  fireEvent.click(screen.getByRole('button', {name: 'Следующая страница'}));
+  expect(screen.getByAltText('Чек платежа')).toHaveAttribute('src', 'data:image/png;base64,page2');
   const code = await screen.findByLabelText('Код чека');
   fireEvent.change(code, {target: {value: 'receipt-123'}});
   update.mockRejectedValueOnce(new Error('Дубль в другой семье'));
@@ -25,8 +28,17 @@ test('edits receipt fields beside PDF, saves metadata without changing amount an
 });
 
 test('read-only users can view image but cannot save', async () => {
-  render(<CashierReceiptPanel paymentId="p1" parentName="Родитель" receiptUrl="/check.jpg" canEdit={false} onClose={jest.fn()} onSaved={jest.fn()}/>);
+  render(<ReceiptModal paymentId="p1" subtitle="Родитель" receiptUrl="/check.jpg" canEdit={false} onClose={jest.fn()} onSaved={jest.fn()}/>);
   expect(screen.getByAltText('Чек платежа')).toHaveAttribute('src', '/check.jpg');
   expect(await screen.findByLabelText('Код чека')).toBeDisabled();
   expect(screen.queryByRole('button', {name: 'Сохранить изменения'})).not.toBeInTheDocument();
+});
+
+test('without a saved payment shows only the receipt and closes on Escape', () => {
+  const close = jest.fn();
+  render(<ReceiptModal receiptUrl="blob:local" pdf={false} onClose={close}/>);
+  expect(screen.getByAltText('Чек платежа')).toHaveAttribute('src', 'blob:local');
+  expect(screen.queryByLabelText('Код чека')).not.toBeInTheDocument();
+  fireEvent.keyDown(window, {key: 'Escape'});
+  expect(close).toHaveBeenCalled();
 });

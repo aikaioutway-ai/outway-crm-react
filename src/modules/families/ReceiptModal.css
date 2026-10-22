@@ -1,0 +1,33 @@
+/* Окно чека открывается как карточка клиента; чек всегда вписан целиком, без прокрутки. */
+.receipt-modal-overlay { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 24px; }
+.receipt-modal { position: relative; display: grid; grid-template-columns: minmax(0, 1fr) 380px; width: min(var(--record-card-width), calc(100vw - 48px)); height: var(--record-card-height); overflow: hidden; }
+.receipt-modal.is-view-only { grid-template-columns: minmax(0, 1fr); }
+.receipt-modal-document { position: relative; min-width: 0; min-height: 0; overflow: hidden; padding: 16px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
+.receipt-modal-document img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.receipt-modal-placeholder { color: var(--text-2); font-size: 13px; }
+.receipt-modal-pager { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 4px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-2); }
+.receipt-modal-pager button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
+.receipt-modal-pager button:disabled { opacity: .35; cursor: default; }
+.receipt-modal-side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
+.receipt-modal-side header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.receipt-modal-side header strong { font-size: 15px; }
+.receipt-modal-side header small { display: block; margin-top: 4px; color: var(--text-2); font-size: 12px; }
+.receipt-modal-side header button, .receipt-modal-close { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.receipt-modal-close { position: absolute; top: 12px; right: 12px; }
+.receipt-modal-side form { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; }
+.receipt-modal-summary { margin-bottom: 14px; font-size: 12px; color: var(--text-2); }
+.receipt-modal-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.receipt-modal-fields label { display: flex; flex-direction: column; gap: 6px; min-width: 0; font-size: 12px; color: var(--text-2); }
+.receipt-modal-fields input, .receipt-modal-fields textarea { box-sizing: border-box; width: 100%; min-width: 0; border: 1px solid var(--border); border-radius: 6px; padding: 8px; font: inherit; font-size: 13px; color: var(--text); background: var(--surface); }
+.receipt-modal-fields textarea { min-height: 80px; resize: vertical; }
+.receipt-modal-comment { grid-column: 1 / -1; }
+.receipt-modal-save { margin-top: 14px; width: 100%; padding: 10px; background: var(--accent); color: #fff; border: 0; border-radius: 6px; font: inherit; font-weight: 600; cursor: pointer; }
+.receipt-modal-save:disabled { opacity: .6; cursor: wait; }
+.receipt-modal-note { margin: 10px 0 0; padding: 0 20px; font-size: 12px; color: var(--text-2); }
+.receipt-modal-side form .receipt-modal-note { padding: 0; }
+.receipt-modal-error { margin: 12px 20px; color: var(--danger); font-size: 12px; }
+@media (max-width: 800px) {
+  .receipt-modal-overlay { padding: 12px; }
+  .receipt-modal { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; width: calc(100vw - 24px); height: calc(100dvh - 24px); }
+  .receipt-modal-side { border-left: 0; border-top: 1px solid var(--border); max-height: 50%; }
+}

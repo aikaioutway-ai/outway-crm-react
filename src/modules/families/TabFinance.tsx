@@ -6,6 +6,7 @@ import { Charge, Child, Family, FamilyPayment, PaymentItem, PaymentType, Refund,
 import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL } from './constants';
 import './ReceiptPreview.css';
+import ReceiptModal, { isPdfReceipt } from './ReceiptModal';
 import { Section, Spinner, Empty } from './DrawerUI';
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -40,6 +41,7 @@ interface Props {
   onConfirmRefund: (refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string, receiptDetails?: {time:string;cardLast4:string;bank:string}) => Promise<boolean>;
   onRejectRefund: (refund: Refund, reason: string) => Promise<boolean>;
   readOnly?: boolean;
+  onReceiptDetailsSaved?: () => void;
 }
 
 export function canCreateFamilyRefund(isManager: boolean, isAdmin: boolean, isCashier: boolean): boolean {
@@ -71,6 +73,7 @@ export default function TabFinance({
   onConfirmRefund,
   onRejectRefund,
   readOnly = false,
+  onReceiptDetailsSaved,
 }: Props) {
   const [addingPeriod, setAddingPeriod] = useState(false);
   const [creatingPeriod, setCreatingPeriod] = useState(false);
@@ -80,7 +83,7 @@ export default function TabFinance({
   const [paymentOrderNumber, setPaymentOrderNumber] = useState('');
   const [paymentDate, setPaymentDate] = useState(new Date().toISOString().slice(0, 10));
   const { ocrLoading, ocrMsg, receiptFile, receiptCode, setReceiptCode, receiptTime,setReceiptTime,receiptCardLast4,setReceiptCardLast4,receiptBank,setReceiptBank, handleFileChange: handleOcrFile, reset: resetOcr } = useReceiptOcr();
-  const [preview,setPreview]=useState<{url:string;name:string;pdf:boolean}|null>(null);
+  const [preview,setPreview]=useState<{url:string;name:string;pdf:boolean;paymentId?:string}|null>(null);
   const [localReceiptUrl,setLocalReceiptUrl]=useState('');
   useEffect(()=>{
     if(!receiptFile){setLocalReceiptUrl('');return;}
@@ -192,7 +195,7 @@ export default function TabFinance({
   }
 
   return (
-    <div className={`receipt-workspace${preview ? ' receipt-workspace--open' : ''}`}><div className="receipt-workspace-form">
+    <div><div>
       {msg && (
         <div style={{ background: msg.includes('Не удалось') ? '#FEE2E2' : '#F7F9FB', color: msg.includes('Не удалось') ? '#991B1B' : 'var(--text)', borderRadius: 8, padding: '7px 12px', marginBottom: 8, fontSize: 12, fontWeight: 600 }}>
           {msg}
@@ -230,7 +233,7 @@ export default function TabFinance({
                       style={{ display: 'none' }}
                     />
                   </label>
-                  {receiptFile && <button type="button" className="receipt-preview-link" style={{gridColumn:'1 / -1'}} disabled={!localReceiptUrl} onClick={()=>setPreview({url:localReceiptUrl,name:receiptFile.name,pdf:receiptFile.type==='application/pdf' || receiptFile.name.toLowerCase().endsWith('.pdf')})}><Paperclip size={14}/>{receiptFile.name} · Открыть рядом</button>}
+                  {receiptFile && <button type="button" className="receipt-preview-link" style={{gridColumn:'1 / -1'}} disabled={!localReceiptUrl} onClick={()=>setPreview({url:localReceiptUrl,name:receiptFile.name,pdf:receiptFile.type==='application/pdf' || receiptFile.name.toLowerCase().endsWith('.pdf')})}><Paperclip size={14}/>{receiptFile.name} · Открыть</button>}
                   <input value={comment} onChange={e => setComment(e.target.value)} placeholder="Комментарий" style={{...inputStyle,gridColumn:'1 / -1'}} />
                   {ocrMsg && <div style={{ gridColumn: '1 / -1', fontSize: 11, color: ocrMsg.startsWith('✓') ? '#065F46' : '#92400E', padding: '0 2px' }}>{ocrMsg}</div>}
                   {paymentError && <div role="alert" style={{gridColumn:'1 / -1',color:'#991B1B',padding:10,background:'#FEF2F2',borderRadius:8,fontSize:12}}>{paymentError}</div>}
@@ -263,7 +266,7 @@ export default function TabFinance({
               {sortedPayments.length === 0 ? <Empty text="Платежей нет" /> : sortedPayments.map(payment => (
                 <PaymentRow
                   key={payment.id}
-                  onOpenReceipt={()=>setPreview({url:payment.receiptUrl!,name:'Чек платежа',pdf:/\.pdf(?:\?|$)/i.test(payment.receiptUrl!)})}
+                  onOpenReceipt={()=>setPreview({url:payment.receiptUrl!,name:'Чек платежа',pdf:isPdfReceipt(payment.receiptUrl!),paymentId:payment.id})}
                   payment={payment}
                   items={paymentItems.filter(i => i.paymentId === payment.id)}
                   canConfirm={canConfirmPayment && payment.status === 'На проверке'}
@@ -364,10 +367,7 @@ export default function TabFinance({
 
       </div>
     </div>
-      {preview && <aside className="receipt-preview" aria-label="Просмотр чека рядом">
-        <header><strong title={preview.name}>{preview.name}</strong><button type="button" aria-label="Закрыть просмотр чека" onClick={()=>setPreview(null)}><X size={18}/></button></header>
-        <div className="receipt-preview-content">{preview.pdf ? <iframe key={preview.url} title="PDF чека" src={preview.url}/> : <img key={preview.url} src={preview.url} alt="Прикреплённый чек"/>}</div>
-      </aside>}
+      {preview && <ReceiptModal receiptUrl={preview.url} title={preview.name} subtitle={family.parentName} pdf={preview.pdf} paymentId={preview.paymentId} canEdit={isAdmin || isCashier} onClose={()=>setPreview(null)} onSaved={onReceiptDetailsSaved ? () => onReceiptDetailsSaved() : undefined}/>}
     </div>
   );
 }

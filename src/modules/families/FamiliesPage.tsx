@@ -1,5 +1,5 @@
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
-import CashierReceiptPanel from './CashierReceiptPanel';
+import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
 import { useQuery } from '@tanstack/react-query';
 import { driverMatchesSchool, isVisibleDriver } from '../drivers/driverSchoolVisibility';
@@ -551,18 +551,21 @@ const PAYMENT_TYPE_COL: ColumnDef<ChildRow> = {
     return <span style={{ fontSize: 11, color: 'var(--text)', fontWeight: 600 }}>{type}</span>;
   },
 };
-function ReceiptThumb({ url, onOpen }: { url: string; onOpen?: () => void }) {
+function ReceiptThumb({ url, paymentId, subtitle, canEdit = false, onSaved }: { url: string; paymentId?: string | null; subtitle?: string; canEdit?: boolean; onSaved?: (payment: FamilyPayment) => void }) {
+  const [open, setOpen] = useState(false);
   return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noreferrer"
-      onClick={e => { e.stopPropagation(); if (onOpen) { e.preventDefault(); onOpen(); } }}
-      title={onOpen ? 'Открыть чек рядом' : 'Открыть чек'}
-      style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: '#146566' }}
-    >
-      <Paperclip size={16} strokeWidth={2.5} />
-    </a>
+    <>
+      <button
+        type="button"
+        onClick={e => { e.stopPropagation(); setOpen(true); }}
+        title="Открыть чек"
+        aria-label="Открыть чек"
+        style={{ display: 'inline-flex', alignItems: 'center', padding: 0, border: 0, background: 'transparent', color: '#146566', cursor: 'pointer' }}
+      >
+        <Paperclip size={16} strokeWidth={2.5} />
+      </button>
+      {open && <ReceiptModal receiptUrl={url} paymentId={paymentId ?? undefined} subtitle={subtitle} canEdit={canEdit} onClose={() => setOpen(false)} onSaved={onSaved} />}
+    </>
   );
 }
 const PAYMENT_RECEIPT_COL: ColumnDef<ChildRow> = {
@@ -577,7 +580,7 @@ const PAYMENT_RECEIPT_COL: ColumnDef<ChildRow> = {
   render: (_val: any, row: ChildRow) => {
     const url = row.pendingPaymentReceiptUrl;
     if (!url) return <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} />;
-    return <ReceiptThumb url={url} />;
+    return <ReceiptThumb url={url} paymentId={row.pendingPaymentId} subtitle={row.parentName} />;
   },
 };
 const PAYMENTS_COLUMNS: ColumnDef<ChildRow>[] = [
@@ -670,9 +673,9 @@ const PAYMENT_TABLE_COLUMNS: ColumnDef<PaymentTableRow>[] = [
   },
   {
     key: 'receiptUrl', label: 'Чек', type: 'text', category: 'Платёж', width: 52, sortable: false, filterable: false,
-    render: (val) => {
+    render: (val, row) => {
       if (!val) return <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} />;
-      return <ReceiptThumb url={String(val)} />;
+      return <ReceiptThumb url={String(val)} paymentId={row.id} subtitle={row.parentName} />;
     },
   },
 ];
@@ -738,7 +741,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const [rows, setRows]           = useState<ChildRow[]>(() => familiesRowsCache ?? []);
   const [paymentRows, setPaymentRows] = useState<PaymentTableRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
-  const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<CashierPaymentRow | null>(null);
   // Фильтр или «повторы» в заголовке таблицы должны искать по всем семьям, а не по одной странице с сервера.
   const [tableFiltersActive, setTableFiltersActive] = useState(false);
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
@@ -873,10 +875,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     },
     {
       key: 'receiptUrl', label: 'Чек', type: 'text', category: 'Платёж', width: 52, sortable: false, filterable: false,
-      render: (val, row) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} onOpen={() => setSelectedReceiptPayment(row)} />,
+      render: (val, row) => !val ? <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} /> : <ReceiptThumb url={String(val)} paymentId={row.id} subtitle={row.parentName} canEdit={hasAdminAccess || userRole === 'cashier'} onSaved={payment => {
+        const patch = { receiptCode: payment.receiptCode ?? null, paymentDate: payment.paymentDate };
+        setCashierRows(previous => previous.map(item => item.id === payment.id ? { ...item, ...patch } : item));
+      }} />,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [cashierDates, cashierConfirmingId, cashierEditingId, hasAdminAccess, cashierView]);
+  ], [cashierDates, cashierConfirmingId, cashierEditingId, hasAdminAccess, cashierView, userRole]);
   const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
   const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
@@ -2517,7 +2522,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         if (!row.isFirstChild) return null;
         const url = row.pendingPaymentReceiptUrl;
         if (!url) return <Paperclip size={15} strokeWidth={1.5} style={{ color: '#C8D5D8' }} />;
-        return <ReceiptThumb url={url} />;
+        return <ReceiptThumb url={url} paymentId={row.pendingPaymentId} subtitle={row.parentName} canEdit={hasAdminAccess || userRole === 'cashier'} />;
       },
       getValue: (row) => row.pendingPaymentReceiptUrl ?? '',
     }, {
@@ -3291,7 +3296,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               )}
             />
           ) : isCashierMode ? (
-            <div className={`cashier-receipt-workspace${selectedReceiptPayment ? ' is-open' : ''}`}><div className="cashier-receipt-table">
             <DataTable<CashierPaymentRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key={`cashier_table_${cashierView}`}
@@ -3322,11 +3326,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 if (childRow) toggleExpandedFamily(row.familyId, childRow, 'finance');
               }}
               hideToolbar={tableBarsCollapsed}
-            /></div>
-            {selectedReceiptPayment?.receiptUrl && <CashierReceiptPanel key={selectedReceiptPayment.id} paymentId={selectedReceiptPayment.id} parentName={selectedReceiptPayment.parentName} receiptUrl={selectedReceiptPayment.receiptUrl} canEdit={hasAdminAccess || userRole === 'cashier'} onClose={() => setSelectedReceiptPayment(null)} onSaved={payment => {
-              const patch = { receiptCode: payment.receiptCode ?? null, paymentDate: payment.paymentDate };
-              setCashierRows(previous => previous.map(row => row.id === payment.id ? { ...row, ...patch } : row));
-            }}/>}</div>
+            />
           ) : isPaymentsMode ? (
             <DataTable<PaymentTableRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
