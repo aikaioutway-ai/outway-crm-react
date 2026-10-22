@@ -15,7 +15,7 @@ import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
 import { SchoolTier } from './SchoolTierTabs';
 import ManagerPeriodBar from './ManagerPeriodBar';
 
-type SortKey = 'school' | 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsAmount' | 'refundsPendingAmount' | 'refundsConfirmedAmount';
+type SortKey = 'school' | 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedCount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsCount' | 'refundsAmount' | 'refundsPendingAmount' | 'refundsConfirmedAmount';
 
 interface CashierOverviewProps {
   view: CashierView;
@@ -36,9 +36,11 @@ interface CashierSchoolStat {
   paymentsAmount: number;
   pendingCount: number;
   pendingAmount: number;
+  confirmedCount: number;
   confirmedAmount: number;
   qrAmount: number;
   cashAmount: number;
+  refundsCount: number;
   refundsAmount: number;
   refundsPendingAmount: number;
   refundsConfirmedAmount: number;
@@ -54,9 +56,11 @@ const KPI_COLORS: Record<SortKey, string> = {
   paymentsAmount: 'var(--text-2)',
   pendingCount: '#7C3AED',
   pendingAmount: '#2563EB',
+  confirmedCount: 'var(--success)',
   confirmedAmount: 'var(--success)',
   qrAmount: '#1D6FA4',
   cashAmount: '#15803D',
+  refundsCount: '#B91C1C',
   refundsAmount: '#B91C1C',
   refundsPendingAmount: '#7C3AED',
   refundsConfirmedAmount: 'var(--success)',
@@ -248,9 +252,11 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
       paymentsAmount: paymentRows.reduce((sum, row) => sum + row.amount, 0),
       pendingCount: pendingRows.length,
       pendingAmount: pendingRows.reduce((sum, row) => sum + row.amount, 0),
+      confirmedCount: confirmedRows.length,
       confirmedAmount: confirmedRows.reduce((sum, row) => sum + row.amount, 0),
       qrAmount: activeRows.filter(isQr).reduce((sum, row) => sum + row.amount, 0),
       cashAmount: activeRows.filter(isCash).reduce((sum, row) => sum + row.amount, 0),
+      refundsCount: schoolRefundRows.filter(row => row.status === 'pending' || row.status === 'confirmed').length,
       refundsAmount: refundsPendingAmount + refundsConfirmedAmount,
       refundsPendingAmount,
       refundsConfirmedAmount,
@@ -263,19 +269,21 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
     pendingCount: acc.pendingCount + s.pendingCount,
     paymentsAmount: acc.paymentsAmount + s.paymentsAmount,
     pendingAmount: acc.pendingAmount + s.pendingAmount,
+    confirmedCount: acc.confirmedCount + s.confirmedCount,
     confirmedAmount: acc.confirmedAmount + s.confirmedAmount,
     qrAmount: acc.qrAmount + s.qrAmount,
     cashAmount: acc.cashAmount + s.cashAmount,
+    refundsCount: acc.refundsCount + s.refundsCount,
     refundsAmount: acc.refundsAmount + s.refundsAmount,
     refundsPendingAmount: acc.refundsPendingAmount + s.refundsPendingAmount,
     refundsConfirmedAmount: acc.refundsConfirmedAmount + s.refundsConfirmedAmount,
-  }), { paymentsAmount: 0, pendingCount: 0, pendingAmount: 0, confirmedAmount: 0, qrAmount: 0, cashAmount: 0, refundsAmount: 0, refundsPendingAmount: 0, refundsConfirmedAmount: 0 }), [stats]);
+  }), { paymentsAmount: 0, pendingCount: 0, pendingAmount: 0, confirmedCount: 0, confirmedAmount: 0, qrAmount: 0, cashAmount: 0, refundsCount: 0, refundsAmount: 0, refundsPendingAmount: 0, refundsConfirmedAmount: 0 }), [stats]);
 
   const displayRows = useMemo(() => {
     return buildGroupedRows(
       stats,
       expandedGroups,
-      ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsAmount', 'refundsPendingAmount', 'refundsConfirmedAmount'],
+      ['paymentsAmount', 'pendingCount', 'pendingAmount', 'confirmedCount', 'confirmedAmount', 'qrAmount', 'cashAmount', 'refundsCount', 'refundsAmount', 'refundsPendingAmount', 'refundsConfirmedAmount'],
       (a, b) => {
         const cmp = sortState.key === 'school' ? a.label.localeCompare(b.label) : a.data[sortState.key] - b.data[sortState.key];
         return sortState.dir === 'asc' ? cmp : -cmp;
@@ -314,8 +322,10 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
               { key: 'pendingCount', label: 'К-во на проверке', total: totals.pendingCount, color: KPI_COLORS.pendingCount },
               { key: 'pendingAmount', label: 'Сумма на проверке', total: money(totals.pendingAmount), color: KPI_COLORS.pendingAmount },
             ] : view === 'confirmed' ? [
+              { key: 'confirmedCount', label: 'К-во', total: totals.confirmedCount, color: KPI_COLORS.confirmedCount },
               { key: 'confirmedAmount', label: 'Подтверждено', total: money(totals.confirmedAmount), color: KPI_COLORS.confirmedAmount },
             ] : [
+              { key: 'refundsCount', label: 'К-во', total: totals.refundsCount, color: KPI_COLORS.refundsCount },
               { key: 'refundsAmount', label: 'Возвраты', total: money(totals.refundsAmount), color: KPI_COLORS.refundsAmount },
               { key: 'refundsPendingAmount', label: 'На проверке', total: money(totals.refundsPendingAmount), color: '#7C3AED' },
               { key: 'refundsConfirmedAmount', label: 'Подтверждено', total: money(totals.refundsConfirmedAmount), color: 'var(--success)' },
@@ -325,7 +335,7 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
               { key: 'cashAmount', label: 'Наличные', total: money(totals.cashAmount), color: KPI_COLORS.cashAmount },
             ] : []),
           ]}
-          rows={displayRows.map(row => ({ ...row, values: { pendingCount: row.data.pendingCount, pendingAmount: money(row.data.pendingAmount), confirmedAmount: money(row.data.confirmedAmount), qrAmount: money(row.data.qrAmount), cashAmount: money(row.data.cashAmount), refundsAmount: money(row.data.refundsAmount), refundsPendingAmount: money(row.data.refundsPendingAmount), refundsConfirmedAmount: money(row.data.refundsConfirmedAmount) } }))}
+          rows={displayRows.map(row => ({ ...row, values: { pendingCount: row.data.pendingCount, pendingAmount: money(row.data.pendingAmount), confirmedCount: row.data.confirmedCount, confirmedAmount: money(row.data.confirmedAmount), qrAmount: money(row.data.qrAmount), cashAmount: money(row.data.cashAmount), refundsCount: row.data.refundsCount, refundsAmount: money(row.data.refundsAmount), refundsPendingAmount: money(row.data.refundsPendingAmount), refundsConfirmedAmount: money(row.data.refundsConfirmedAmount) } }))}
           sortKey={sortState.key}
           ascending={sortState.dir === 'asc'}
           onSort={key => handleSort(key as SortKey)}
