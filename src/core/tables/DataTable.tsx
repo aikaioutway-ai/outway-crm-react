@@ -204,7 +204,9 @@ function paginateRowsInGroups<T extends Record<string, any>>(
 function applyFilter<T>(row: T, rule: FilterRule, col: ColumnDef<T> | undefined): boolean {
   if (!col) return true;
   const raw = getCellValue(row, col);
-  const val = raw == null ? '' : String(raw).toLowerCase();
+  // В колонках-списках сравниваем с тем, что видит пользователь («Наличные»), а не с кодом («cash»).
+  const shown = col.editOptions?.find(option => String(option.value) === String(raw))?.label ?? raw;
+  const val = shown == null ? '' : String(shown).toLowerCase();
   const target = rule.value.toLowerCase();
   switch (rule.operator) {
     case 'eq':          return val === target;
@@ -615,6 +617,15 @@ export function DataTable<T extends Record<string, any>>({
     setColumnFilterPopup(null);
   };
 
+  const openColumnFilter = (key: string) => {
+    const col = cols.find(c => c.key === key);
+    if (!filters.some(rule => rule.key === key)) {
+      setFilters(prev => [...prev, { id: String(Date.now()), key, operator: col?.editOptions?.length ? 'eq' : 'contains', value: '', conjunction: 'AND' }]);
+    }
+    setShowFilterPanel(true);
+    setColumnFilterPopup(null);
+  };
+
   const openColumnFilterPopup = (key: string, target: HTMLElement) => {
     const rect = target.getBoundingClientRect();
     setColumnFilterPopup({ key, x: rect.left, y: rect.bottom + 4 });
@@ -763,6 +774,13 @@ export function DataTable<T extends Record<string, any>>({
         />
       )}
 
+      {filters.length > 0 && !showFilterPanel && <div className="dt-repeat-filter" role="status">
+        <span>Фильтр · {filters.map(rule => cols.find(col => col.key === rule.key)?.label ?? rule.key).join(', ')} · {processedData.length} строк</span>
+        <span style={{ display: 'flex', gap: 6 }}>
+          <button type="button" className="dt-btn" onClick={() => setShowFilterPanel(true)}>Изменить</button>
+          <button type="button" className="dt-btn" onClick={() => setFilters([])}>Сбросить</button>
+        </span>
+      </div>}
       {repeatedKey && <div className="dt-repeat-filter" role="status">
         <span>Повторяющиеся значения · {cols.find(col => col.key === repeatedKey)?.label} · {processedData.length} строк</span>
         <button type="button" className="dt-btn" onClick={() => { setRepeatedKey(null); setPage(1); }}>Сбросить</button>
@@ -848,10 +866,16 @@ export function DataTable<T extends Record<string, any>>({
                   onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, operator: e.target.value as FilterOperator } : x))}>
                   {OPERATORS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
-                {!['empty', 'not_empty'].includes(f.operator) && (
-                  <input className="dt-input dt-input--sm" placeholder="Значение" value={f.value}
-                    onChange={e => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value: e.target.value } : x))} />
-                )}
+                {!['empty', 'not_empty'].includes(f.operator) && (() => {
+                  const options = cols.find(c => c.key === f.key)?.editOptions;
+                  const setValue = (value: string) => setFilters(prev => prev.map((x, j) => j === i ? { ...x, value } : x));
+                  return options?.length && ['eq', 'neq'].includes(f.operator)
+                    ? <select className="dt-select dt-select--md" value={f.value} onChange={e => setValue(e.target.value)}>
+                        <option value="">Выберите…</option>
+                        {options.map(option => <option key={String(option.value)} value={option.label}>{option.label}</option>)}
+                      </select>
+                    : <input className="dt-input dt-input--sm" placeholder="Значение" autoFocus={i === filters.length - 1} value={f.value} onChange={e => setValue(e.target.value)} />;
+                })()}
                 <button className="dt-icon-btn" onClick={() => setFilters(prev => prev.filter(x => x.id !== f.id))} aria-label="Удалить фильтр" title="Удалить фильтр"><X size={13} aria-hidden="true" /></button>
               </div>
             ))}
@@ -1191,6 +1215,11 @@ export function DataTable<T extends Record<string, any>>({
       {columnFilterPopup && (
         <div role="menu" aria-label="Фильтр колонки" className="dt-ctx-menu dt-calc-popup" style={{ left: Math.max(8, Math.min(columnFilterPopup.x, window.innerWidth - 260)), top: Math.min(columnFilterPopup.y, window.innerHeight - 140), zIndex: 1000 }} onClick={e => e.stopPropagation()}>
           <div className="dt-ctx-section">{visibleCols.find(c => c.key === columnFilterPopup.key)?.label}</div>
+          {visibleCols.find(c => c.key === columnFilterPopup.key)?.filterable !== false && (
+            <button type="button" role="menuitem" className="dt-ctx-item" onClick={() => openColumnFilter(columnFilterPopup.key)}>
+              Фильтр
+            </button>
+          )}
           <button type="button" role="menuitemcheckbox" aria-checked={repeatedKey === columnFilterPopup.key} className={`dt-ctx-item ${repeatedKey === columnFilterPopup.key ? 'dt-ctx-item--active' : ''}`}
             onClick={() => { setRepeatedKey(columnFilterPopup.key); setPage(1); setColumnFilterPopup(null); }}>
             Повторяющиеся значения

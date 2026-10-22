@@ -227,3 +227,27 @@ test('Excel download contains all filtered rows across pages with readable selec
   fireEvent.click(screen.getByRole('button', {name:'Скачать таблицу в Excel'}));
   await waitFor(() => expect(downloadTableExcel).toHaveBeenCalledWith(['Вид оплаты'], Array.from({length:25}, () => ['Наличные'])));
 });
+
+test('header menu filter narrows text columns and matches select columns by visible label', async () => {
+  const filterColumns: ColumnDef<{id: string; name: string; paymentMethod: string}>[] = [
+    {key: 'name', label: 'Имя', type: 'text'},
+    {key: 'paymentMethod', label: 'Вид оплаты', type: 'select', editOptions: [{value: 'cash', label: 'Наличные'}, {value: 'transfer', label: 'АйКай Мбанк'}]},
+  ];
+  const rows = [{id: '1', name: 'Айбек', paymentMethod: 'cash'}, {id: '2', name: 'Бакыт', paymentMethod: 'transfer'}, {id: '3', name: 'Айгуль', paymentMethod: 'transfer'}];
+  await render(<DataTable columns={filterColumns} data={rows} rowKey="id" storageKey="header-filter-test" />);
+  fireEvent.contextMenu(screen.getByText('Имя'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Фильтр'}));
+  fireEvent.change(screen.getByPlaceholderText('Значение'), {target: {value: 'айг'}});
+  expect(screen.getByText('Айгуль')).toBeInTheDocument();
+  expect(screen.queryByText('Айбек')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', {name: 'Закрыть фильтры'}));
+  expect(screen.getByRole('status')).toHaveTextContent('Фильтр · Имя · 1 строк');
+  fireEvent.click(screen.getByRole('button', {name: 'Сбросить'}));
+  expect(screen.getByText('Айбек')).toBeInTheDocument();
+
+  fireEvent.contextMenu(screen.getByText('Вид оплаты'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Фильтр'}));
+  fireEvent.change(screen.getByDisplayValue('Выберите…'), {target: {value: 'Наличные'}});
+  expect(screen.getByText('Айбек')).toBeInTheDocument();
+  expect(screen.queryByText('Бакыт')).not.toBeInTheDocument();
+});
