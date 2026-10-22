@@ -23,7 +23,7 @@ test('office scope starts with departments, while school scope hides office and 
   await screen.findByText('TIS');
   expect(screen.queryByText('Офис')).not.toBeInTheDocument();
   expect(screen.queryByText('BJ')).not.toBeInTheDocument();
-  expect(screen.queryByText('LA Primary')).not.toBeInTheDocument();
+  expect(screen.queryByText('LA_P')).not.toBeInTheDocument();
   expect(screen.queryByText('ING_W')).not.toBeInTheDocument();
 });
 

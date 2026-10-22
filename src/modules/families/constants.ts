@@ -13,13 +13,13 @@ export const SCHOOL_DIRECTORY: { key: string; label: string; codes: string[]; br
   { key: 'ING',   label: 'ING',   codes: ['INDIGO'], branches: ['Индиго Kids','Asylkech Girls School','Indigo Prime Academy'], logo: '/school-logos/ING.png' },
   { key: 'ING_W', label: 'ING_W', codes: ['INDIGO'], branches: ['Indigo West'], logo: '/school-logos/ING.png' },
   { key: 'LA',    label: 'LA',    codes: ['LIGHT'],   branches: ['Light Academy'], logo: '/school-logos/LA.png' },
-  { key: 'LA_P',  label: 'LA Primary', codes: ['LIGHT'], branches: ['Light Academy Primary'], logo: '/school-logos/LA.png' },
+  { key: 'LA_P',  label: 'LA_P', codes: ['LIGHT'], branches: ['Light Academy Primary'], logo: '/school-logos/LA.png' },
   { key: 'BKG',   label: 'BKG',   codes: ['BILIM'],   branches: ['Билим Бишкек Kg','Билим Бишкек KG','Билим Бишкек kg'], logo: '/school-logos/BKG.png' },
   { key: 'BJ',    label: 'BJ',    codes: ['BILIM'],   branches: ['Билим Жолу','Bilim Jolu'], logo: '/school-logos/BJ.png' },
   { key: 'ABL1',  label: 'ABL #2',codes: ['ABL1'], branches: [], logo: '/school-logos/ABL.png' },
   { key: 'ABL2',  label: 'ABL #1',codes: ['ABL2'], branches: [], logo: '/school-logos/ABL.png' },
-  { key: 'SNP',   label: 'Sanarip', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
-  { key: 'ELS',   label: 'Ellipse', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
+  { key: 'SNP',   label: 'SNP', codes: ['SANARIP'], branches: [], logo: '/school-logos/SNP.png' },
+  { key: 'ELS',   label: 'ELP', codes: ['ELLIPSE'], branches: [], logo: '/school-logos/ELS.png' },
   { key: 'ALL',   label: 'Все',   codes: [], branches: [] },
 ];
 
@@ -29,7 +29,7 @@ export const SCHOOL_DIRECTORY: { key: string; label: string; codes: string[]; br
 export const SCHOOL_TIER_2_KEYS = ['BJ', 'LA_P', 'ING_W'];
 const HIDDEN_SCHOOL_NAMES = new Set([
   ...SCHOOL_DIRECTORY.filter(school=>SCHOOL_TIER_2_KEYS.includes(school.key)).flatMap(school=>[school.key,school.label,...school.branches]),
-  'LIGHT_PRIMARY','INDIGO_WEST','BILIM_JOLU',
+  'LIGHT_PRIMARY','LA PRIMARY','INDIGO_WEST','BILIM_JOLU',
 ].map(value=>value.trim().toUpperCase()));
 export function isSchoolVisible(key:string):boolean {
   return !HIDDEN_SCHOOL_NAMES.has(String(key??'').trim().toUpperCase());
