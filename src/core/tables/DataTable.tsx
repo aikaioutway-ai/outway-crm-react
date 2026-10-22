@@ -75,6 +75,8 @@ export interface DataTableProps<T = any> {
   rowKey: keyof T;
   onRowClick?: (row: T) => void;
   onRowOpen?: (row: T) => void;
+  /** Сообщает странице, что включён фильтр или «повторы»: постраничным таблицам тогда нужны все строки, а не одна страница. */
+  onClientFiltersActiveChange?: (active: boolean) => void;
   /** Строки, у которых нет своей карточки, не показывают кнопку открытия. */
   canRowOpen?: (row: T) => boolean;
   getTaskTarget?: (row: T) => TaskTarget;
@@ -394,6 +396,7 @@ export function DataTable<T extends Record<string, any>>({
   onRowClick,
   onRowOpen,
   canRowOpen,
+  onClientFiltersActiveChange,
   onRowReject,
   getTaskTarget,
   canRowReject,
@@ -510,6 +513,10 @@ export function DataTable<T extends Record<string, any>>({
   const [propsSearch, setPropsSearch] = useState('');
   // openCats removed — props panel uses Shown/Hidden sections now
   const [repeatedKey, setRepeatedKey] = useState<string | null>(null);
+  const clientFiltersActive = filters.length > 0 || repeatedKey != null;
+  const onClientFiltersActiveChangeRef = useRef(onClientFiltersActiveChange);
+  onClientFiltersActiveChangeRef.current = onClientFiltersActiveChange;
+  useEffect(() => { onClientFiltersActiveChangeRef.current?.(clientFiltersActive); }, [clientFiltersActive]);
   const [colMenu, setColMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   const [rowMenu, setRowMenu] = useState<{ row: T; x: number; y: number } | null>(null);
   const [columnFilterPopup, setColumnFilterPopup] = useState<{ key: string; x: number; y: number } | null>(null);

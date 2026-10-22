@@ -738,6 +738,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const [paymentRows, setPaymentRows] = useState<PaymentTableRow[]>([]);
   const [loadingPayments, setLoadingPayments] = useState(false);
   const [selectedReceiptPayment, setSelectedReceiptPayment] = useState<CashierPaymentRow | null>(null);
+  // Фильтр или «повторы» в заголовке таблицы должны искать по всем семьям, а не по одной странице с сервера.
+  const [tableFiltersActive, setTableFiltersActive] = useState(false);
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
   const [loadingCashier, setLoadingCashier] = useState(false);
   const [cashierConfirmingId, setCashierConfirmingId] = useState<string | null>(null);
@@ -990,12 +992,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     // (полный rows для сводок + отдельная страница для таблицы). Полная
     // загрузка запускается лениво, если mode позже сменится на режим,
     // которому всё ещё нужен весь rows (Кассир/Логистика/Начисления/...).
-    if (isRequestsModule || mode === 'directory') return;
+    // Исключение: при фильтре в заголовке таблицы им нужен весь список (берётся из общего кэша).
+    if ((isRequestsModule || mode === 'directory') && !tableFiltersActive) return;
     load(!familiesRowsCache, false);
     // This transition loader deliberately follows the active module only. `load`
     // reads the latest cache and filters when the effect runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRequestsModule, mode]);
+  }, [isRequestsModule, mode, tableFiltersActive]);
 
   useEffect(() => {
     if (!isDirectoryMode) return;
@@ -1786,7 +1789,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   // переведённых на серверную пагинацию (RPC get_families_page). Остальные
   // остальные режимы пока используют полную выборку для своих таблиц и
   // связанных карточек редактирования.
-  const isPagedMode = isRequestsModule || isDirectoryMode;
+  const usesServerPages = isRequestsModule || isDirectoryMode;
+  const isPagedMode = usesServerPages && !tableFiltersActive;
   const branchStatsForPaging = useBranchStats();
   const [familiesPageNumber, setFamiliesPageNumber] = useState(0);
   const FAMILIES_PAGE_SIZE = 100;
@@ -1848,9 +1852,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
   const modeRows = useMemo<Array<ChildRow | (typeof pagedRows)[number]>>(() => {
     if (isPagedMode) return pagedRows;
+    // Справочник без постраничной загрузки повторяет правило сервера: отказники только по фишке «Отказ».
+    if (isDirectoryMode && quickChildStatus !== 'rejected') return rows.filter(row => row.status !== 'rejected');
     // Кнопка «Отказ» показывает именно отказников — не отсекаем их заранее.
     return mode === 'logistics' && quickChildStatus !== 'rejected' ? logisticsWorkRows(rows) : rows;
-  }, [isPagedMode, pagedRows, mode, rows, quickChildStatus]);
+  }, [isPagedMode, isDirectoryMode, pagedRows, mode, rows, quickChildStatus]);
 
   useEffect(() => {
     if (!initialOpenFamilyId) return;
@@ -3363,6 +3369,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               groupByKey="familyId"
               selectable={canEditAccruals}
               bulkDelete={!canEditAccruals}
+              onClientFiltersActiveChange={setTableFiltersActive}
               selectedKeys={canEditAccruals ? selectedAccrualIds : undefined}
               onSelectedKeysChange={canEditAccruals ? keys => setSelectedAccrualIds(new Set(keys)) : undefined}
               storageKey={tableStorageKey}

@@ -288,3 +288,19 @@ test('date filter accepts the on-screen format as well as the stored one', async
   expect(screen.getByText('Сентябрь')).toBeInTheDocument();
   expect(screen.queryByText('Октябрь')).not.toBeInTheDocument();
 });
+
+test('reports when a header filter or repeat filter is active so paged pages can load every row', async () => {
+  localStorage.clear();
+  const onActive = jest.fn();
+  const nameColumns: ColumnDef<{id: string; name: string}>[] = [{key: 'name', label: 'Имя', type: 'text'}];
+  await render(<DataTable columns={nameColumns} data={[{id: '1', name: 'Айбек'}]} rowKey="id" storageKey="active-filter-test" onClientFiltersActiveChange={onActive} />);
+  expect(onActive).toHaveBeenLastCalledWith(false);
+  fireEvent.contextMenu(screen.getByText('Имя'));
+  fireEvent.click(screen.getByRole('menuitem', {name: 'Фильтр'}));
+  expect(onActive).toHaveBeenLastCalledWith(true);
+  fireEvent.click(screen.getByRole('button', {name: 'Очистить'}));
+  expect(onActive).toHaveBeenLastCalledWith(false);
+  fireEvent.contextMenu(screen.getByText('Имя'));
+  fireEvent.click(screen.getByRole('menuitemcheckbox', {name: 'Повторяющиеся значения'}));
+  expect(onActive).toHaveBeenLastCalledWith(true);
+});
