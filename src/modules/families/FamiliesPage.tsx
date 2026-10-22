@@ -1221,6 +1221,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const [accrualDialog, setAccrualDialog] = useState<AccrualDialogState | null>(null);
   // Последний перенос — его можно отменить в тот же день, в том числе после перезагрузки страницы.
   const [lastAccrualCopy, setLastAccrualCopy] = useState<LastAccrualCopy | null>(readLastAccrualCopy);
+  // Галочки во вкладке «Начисления»: массовые действия идут только по отмеченным детям.
+  const [selectedAccrualIds, setSelectedAccrualIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => { setSelectedAccrualIds(new Set()); }, [chargesPeriodKey]);
   const canUndoAccrualCopy = canEditAccruals && lastAccrualCopy != null
     && lastAccrualCopy.month === accrualPeriod.month && lastAccrualCopy.year === accrualPeriod.year
     && lastAccrualCopy.day === todayKey();
@@ -1384,7 +1387,47 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             writeLastAccrualCopy(copy);
           }
           await Promise.all([accrualQuery.refetch(), load(false)]);
+          setSelectedAccrualIds(new Set());
           return `Перенесено: ${result.created}.\nУже было начисление: ${result.skipped}.\nНет начисления за прошлый месяц: ${result.noSource}.`;
+        } finally {
+          setCopyingAccruals(false);
+        }
+      },
+    });
+  }
+
+  function setAmountForSelectedAccruals(rowsToSet: ChildRow[]) {
+    const targets = rowsToSet.filter(row => !row.rowId.endsWith('_empty'));
+    if (!targets.length) return;
+    const monthName = new Date(2000, accrualPeriod.month - 1, 1).toLocaleString('ru-RU', { month: 'long' });
+    const alreadyCharged = targets.filter(row => (accrualQuery.data?.current.get(row.rowId) ?? 0) > 0).length;
+    setAccrualDialog({
+      title: 'Поставить сумму выбранным',
+      message: `Начисление за ${monthName} для ${targets.length} детей.`
+        + (alreadyCharged ? `\nУ ${alreadyCharged} уже есть начисление — оно заменится на новую сумму.` : '')
+        + '\nНовые начисления сразу спишутся с баланса семей.',
+      amountInput: { label: 'Сумма, сом' },
+      confirmLabel: 'Начислить',
+      onConfirm: async amountText => {
+        const text = amountText.replace(/\s/g, '').replace(',', '.');
+        const amount = Number(text);
+        if (!text || !Number.isFinite(amount) || amount <= 0) throw new Error('Введите сумму числом больше нуля');
+        setCopyingAccruals(true);
+        let done = 0;
+        const failed: string[] = [];
+        try {
+          for (const row of targets) {
+            if ((accrualQuery.data?.current.get(row.rowId) ?? 0) === amount) { done += 1; continue; }
+            try {
+              await setChildCharge({ childId: row.rowId, chargeType: 'monthly', month: accrualPeriod.month, year: accrualPeriod.year, amount, actor: userName });
+              done += 1;
+            } catch {
+              failed.push(row.childName);
+            }
+          }
+          await Promise.all([accrualQuery.refetch(), load(false)]);
+          setSelectedAccrualIds(new Set());
+          return `Начислено ${money(amount)}: ${done}.` + (failed.length ? `\nНе удалось: ${failed.join(', ')}.` : '');
         } finally {
           setCopyingAccruals(false);
         }
@@ -1974,6 +2017,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
   }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats]);
+  // Отмеченные, но скрытые поиском или фильтром дети в массовые действия не попадают.
+  const selectedAccrualRows = selectedAccrualIds.size ? filteredSorted.filter(row => selectedAccrualIds.has(row.rowId)) : [];
 
   const transferVehicleType = useCallback((transfer: string) => {
     if (!transfer || transfer === 'empty') return 'empty';
@@ -3316,6 +3361,10 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               data={filteredSorted}
               rowKey="rowId"
               groupByKey="familyId"
+              selectable={canEditAccruals}
+              bulkDelete={!canEditAccruals}
+              selectedKeys={canEditAccruals ? selectedAccrualIds : undefined}
+              onSelectedKeysChange={canEditAccruals ? keys => setSelectedAccrualIds(new Set(keys)) : undefined}
               storageKey={tableStorageKey}
               loading={isPagedMode ? familiesPageQuery.isPending : loading}
               emptyText="Заявок не найдено"
@@ -3351,13 +3400,35 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                   {canEditAccruals && (
                     <button
                       type="button"
-                      onClick={() => copyAccrualsFromPreviousMonth(filteredSorted)}
+                      onClick={() => copyAccrualsFromPreviousMonth(selectedAccrualRows.length ? selectedAccrualRows : filteredSorted)}
                       disabled={copyingAccruals}
-                      title="Детям без начисления в этом месяце поставить сумму прошлого месяца"
+                      title={selectedAccrualRows.length
+                        ? 'Отмеченным детям без начисления в этом месяце поставить сумму прошлого месяца'
+                        : 'Детям без начисления в этом месяце поставить сумму прошлого месяца. Галочками можно выбрать только нужных'}
                       style={{ height: 26, padding: '0 10px', border: 'none', borderRadius: 7, background: copyingAccruals ? '#A7C9CA' : '#1A7F80', color: '#fff', fontSize: 11, fontWeight: 600, cursor: copyingAccruals ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
                     >
-                      {copyingAccruals ? 'Переносим...' : 'Перенести с прошлого месяца'}
+                      {copyingAccruals ? 'Выполняем...' : selectedAccrualRows.length ? `Перенести с прошлого месяца (${selectedAccrualRows.length})` : 'Перенести с прошлого месяца'}
                     </button>
+                  )}
+                  {canEditAccruals && selectedAccrualRows.length > 0 && (
+                    <>
+                      <button
+                        type="button"
+                        onClick={() => setAmountForSelectedAccruals(selectedAccrualRows)}
+                        disabled={copyingAccruals}
+                        title="Ввести сумму один раз и начислить её всем отмеченным детям за этот месяц"
+                        style={{ height: 26, padding: '0 10px', border: '1px solid #1A7F80', borderRadius: 7, background: '#fff', color: '#1A7F80', fontSize: 11, fontWeight: 600, cursor: copyingAccruals ? 'default' : 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        Поставить сумму ({selectedAccrualRows.length})
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAccrualIds(new Set())}
+                        style={{ height: 26, padding: '0 4px', border: 'none', background: 'none', color: '#9AA5AE', fontSize: 11, fontWeight: 600, textDecoration: 'underline', cursor: 'pointer', whiteSpace: 'nowrap' }}
+                      >
+                        снять выбор
+                      </button>
+                    </>
                   )}
                   {canUndoAccrualCopy && (
                     <button

@@ -7,8 +7,10 @@ export interface AccrualDialogState {
   message: string;
   /** Без confirmLabel окно только сообщает (результат или ошибка). */
   confirmLabel?: string;
+  /** Поле суммы в окне (например, «Поставить сумму выбранным»); его значение уходит в onConfirm. */
+  amountInput?: { label: string };
   /** Действие после подтверждения; возвращённый текст показывается как результат. */
-  onConfirm?: () => Promise<string | void>;
+  onConfirm?: (amountText: string) => Promise<string | void>;
 }
 
 /** Окно CRM вместо window.confirm/alert: встроенный браузер может их молча блокировать. */
@@ -16,18 +18,21 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
   const [running, setRunning] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState('');
+  const [amountText, setAmountText] = useState('');
   const panelRef = useRef<HTMLDivElement>(null);
+  const amountRef = useRef<HTMLInputElement>(null);
 
   // Окно открывается по Enter из ячейки таблицы. Фокус ставим на само окно, а не на кнопку,
   // иначе тот же Enter сразу «нажмёт» её. Подтверждение — только кликом, Esc закрывает.
-  useEffect(() => { panelRef.current?.focus(); }, []);
+  // Окно с полем суммы открывается кнопкой, там фокус сразу в поле.
+  useEffect(() => { (amountRef.current ?? panelRef.current)?.focus(); }, []);
 
   async function confirm() {
     if (!dialog.onConfirm) return;
     setError('');
     setRunning(true);
     try {
-      const text = await dialog.onConfirm();
+      const text = await dialog.onConfirm(amountText);
       if (text) setResult(text);
       else onClose();
     } catch (actionError) {
@@ -56,6 +61,21 @@ export default function AccrualDialog({ dialog, onClose }: { dialog: AccrualDial
         </div>
 
         <div style={{ ...noteStyle, whiteSpace: 'pre-line' }}>{result || dialog.message}</div>
+
+        {dialog.amountInput && !result && (
+          <label style={{ display: 'grid', gap: 4, marginTop: 10, fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>
+            {dialog.amountInput.label}
+            <input
+              ref={amountRef}
+              inputMode="decimal"
+              value={amountText}
+              disabled={running}
+              onChange={event => setAmountText(event.target.value)}
+              onKeyDown={event => { if (event.key === 'Enter' && !running) confirm(); }}
+              style={{ height: 32, border: '1px solid #DDE9EC', borderRadius: 8, padding: '0 10px', fontSize: 13, fontWeight: 600, color: 'var(--text)', outline: 'none' }}
+            />
+          </label>
+        )}
 
         {error && <div style={{ color: '#B91C1C', fontSize: 12, fontWeight: 600, margin: '10px 0 0' }}>{error}</div>}
 

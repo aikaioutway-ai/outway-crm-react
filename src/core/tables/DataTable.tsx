@@ -105,6 +105,8 @@ export interface DataTableProps<T = any> {
   selectable?: boolean;
   selectedKeys?: Set<any>;
   onSelectedKeysChange?: (keys: Set<any>) => void;
+  /** false — галочки только для своих массовых действий, без кнопки «Удалить выбранные». */
+  bulkDelete?: boolean;
 }
 
 // ─── HELPERS ──────────────────────────────────────────────────────────────────
@@ -377,6 +379,7 @@ export function DataTable<T extends Record<string, any>>({
   onSelectedKeysChange,
 }: DataTableProps<T>) {
 
+  bulkDelete = true,
   // ── Persistent column order & visibility ──
   // Раскладка берётся из кэша сразу; если кэша нет — таблица показывает
   // скелетон, пока не придут настройки из Supabase (settingsReady).
@@ -782,7 +785,7 @@ export function DataTable<T extends Record<string, any>>({
           {selected.size > 0 && (
             <span className="dt-selected-info">Выбрано: {selected.size}</span>
           )}
-          {(selected.size > 0 && onRowDelete) && (
+          {(selected.size > 0 && onRowDelete && bulkDelete) && (
             <button className="dt-btn dt-btn--danger" onClick={() => {
               processedData.filter(r => selected.has(r[rowKey])).forEach(r => onRowDelete(r));
               setSelected(new Set());
