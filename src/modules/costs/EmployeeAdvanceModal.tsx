@@ -3,14 +3,14 @@ import { periodAmounts, periodTotal } from './paymentPeriods';
 import DriverPaymentPicker, { DriverPayment } from './DriverPaymentPicker';
 import { EXPENSE_CATEGORIES, EXPENSE_CATEGORY_KEYS, ExpenseCategory, ExpenseRecord } from './expenseTypes';
 import { updateAdvanceExpense } from '../../services/advanceExpenseService';
-import { createExpense, updateExpense } from '../../services/expenseService';
+import { createExpense, deleteExpense, updateExpense } from '../../services/expenseService';
 import { currentSchoolYear, salaryExpensePeriods } from './salaryExpensePeriods';
 import { EMPLOYEE_DEPARTMENTS } from '../employees/employeeDepartments';
 import { useEffect, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { useDriversTable, useEmployees } from '../../hooks/useCrmQueries';
-import { createEmployeeAdvance } from '../../services/employeeService';
-import { createV2DriverAdvance } from '../../services/crmV2Service';
+import { createEmployeeAdvance, deleteEmployeeAdvance } from '../../services/employeeService';
+import { createV2DriverAdvance, deleteV2DriverAdvance } from '../../services/crmV2Service';
 import { queryClient } from '../../services/queryClient';
 import { getBranchFilter, SCHOOL_TABS } from '../families/constants';
 
@@ -78,7 +78,18 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
     const paymentCount=units.length*selectedPeriods.length;
     inFlight.current=true;setBusy(true);setError('');
     try {
-      if(expense){
+      if(expense && paymentType==='advance' && expense.source!=='advance'){
+        // Обычный расход, переделанный в аванс, становится настоящим авансом: только так он
+        // привязан к водителю/сотруднику, виден в его карточке и уменьшает остаток к выплате.
+        const unit=units[0],key=selectedPeriods[0];
+        const [year,month]=key.split('-').map(Number);
+        const paymentAmount=Number(unit.amounts[key]);
+        const removeCreated=department==='drivers'
+          ? await createV2DriverAdvance({driverId:unit.id,transferId:unit.transferId||undefined,schoolKey:unit.schoolKey||undefined,amount:paymentAmount,date,comment,periodMonth:month,periodYear:year,salaryPeriodKey:key,paymentMethod:method,paymentOrderNumber:number}).then(id=>()=>deleteV2DriverAdvance(id))
+          : await createEmployeeAdvance(unit.id,paymentAmount,date,comment,{periodMonth:month,periodYear:year,schoolKey:'OFFICE',salaryPeriodKey:key,paymentMethod:method,paymentOrderNumber:number}).then(created=>()=>deleteEmployeeAdvance(created.id));
+        try{await deleteExpense(expense.id,sessionToken);}
+        catch(reason){await removeCreated().catch(()=>undefined);throw reason;}
+      }else if(expense){
         const unit=units[0],key=selectedPeriods[0];
         const paymentAmount=Number(unit.amounts[key]);
         const next={...expense,category:department==='drivers'?'school' as const:'office' as const,subcategory:paymentType==='salary'?'ЗП':'Аванс',name:`${paymentType==='salary'?'ЗП':'Аванс'} — ${unit.name}`,amount:paymentAmount,unitPrice:paymentAmount,quantity:1,expenseDate:date,paymentMethod:method==='cash'?'cash' as const:'cashless' as const,paymentOrderNumber:number,comment,salaryPeriodKey:key,schoolKey:department==='drivers'?unit.schoolKey:undefined,departmentKey:department==='office'?officeDepartment:undefined,employeeId:paymentType==='salary' && department==='office'?unit.id:undefined,driverId:paymentType==='salary' && department==='drivers'?unit.id:undefined,transferId:paymentType==='salary' && department==='drivers'?unit.transferId:undefined};

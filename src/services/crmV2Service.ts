@@ -1754,16 +1754,17 @@ export async function createV2DriverAdvance(input: {
   driverId: string; amount: number; date: string; comment: string;
   periodMonth: number; periodYear: number; salaryPeriodKey?: string; schoolKey?: string; transferId?: string;
   paymentMethod: string; paymentOrderNumber?: string;
-}): Promise<void> {
-  const { error } = await supabase.from('v2_driver_advances').insert({
+}): Promise<string> {
+  const { data, error } = await supabase.from('v2_driver_advances').insert({
     ...(input.salaryPeriodKey ? { salary_period_key: input.salaryPeriodKey } : {}),
     driver_id: input.driverId, amount: input.amount, date: input.date,
     comment: input.comment.trim() || null, period_month: input.periodMonth,
     period_year: input.periodYear, school_key: input.schoolKey || null,
     transfer_id: input.transferId || null, payment_method: input.paymentMethod,
     payment_order_number: input.paymentOrderNumber?.trim() || null,
-  });
+  }).select('id').single();
   if (error) throw new Error(error.message);
+  return String(data.id);
 }
 
 export async function fetchV2DriverAdvances(driverId: string): Promise<V2DriverAdvance[]> {

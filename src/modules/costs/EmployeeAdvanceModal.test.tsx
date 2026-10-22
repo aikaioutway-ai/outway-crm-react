@@ -1,14 +1,14 @@
 import { ExpenseRecord } from './expenseTypes';
 import { salaryExpensePeriods,currentSchoolYear } from './salaryExpensePeriods';
-import { createExpense, updateExpense } from '../../services/expenseService';
+import { createExpense, deleteExpense, updateExpense } from '../../services/expenseService';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import EmployeeAdvanceModal from './EmployeeAdvanceModal';
-import { createV2DriverAdvance } from '../../services/crmV2Service';
+import { createV2DriverAdvance, deleteV2DriverAdvance } from '../../services/crmV2Service';
 import { createEmployeeAdvance } from '../../services/employeeService';
 
-jest.mock('../../services/expenseService', () => ({ createExpense: jest.fn().mockResolvedValue({id:'saved'}),updateExpense:jest.fn().mockImplementation(async(id,row)=>({...row,id})) }));
-jest.mock('../../services/crmV2Service', () => ({ createV2DriverAdvance: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../../services/employeeService', () => ({ createEmployeeAdvance: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/expenseService', () => ({ createExpense: jest.fn().mockResolvedValue({id:'saved'}),updateExpense:jest.fn().mockImplementation(async(id,row)=>({...row,id})),deleteExpense:jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/crmV2Service', () => ({ createV2DriverAdvance: jest.fn().mockResolvedValue('driver-advance-id'), deleteV2DriverAdvance: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/employeeService', () => ({ createEmployeeAdvance: jest.fn().mockResolvedValue({id:'employee-advance-id'}), deleteEmployeeAdvance: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
 jest.mock('../../hooks/useCrmQueries', () => ({
   useEmployees: () => ({ data: [{ id: 'office', fullName: 'Офисный сотрудник', status: 'active', role: 'manager' }] }),
@@ -253,13 +253,37 @@ test('legacy expense can switch to driver advance and exposes advance in subcate
  expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
 });
 
-test('reclassifies a manual expense as an advance without creating a duplicate payout',async()=>{
+test('reclassifying a manual expense as an office advance moves it to the employee without a duplicate',async()=>{
  const expense={id:'legacy',name:'Расход',category:'office',subcategory:'Прочее',source:'manual',amount:5000,unitPrice:5000,quantity:1,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
- const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
+ const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={saved}/>);
  fireEvent.click(screen.getByRole('button',{name:'Аванс'}));
  fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
  fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
  await waitFor(()=>expect(saved).toHaveBeenCalled());
- expect(updateExpense).toHaveBeenCalledWith('legacy',expect.objectContaining({subcategory:'Аванс',category:'office',employeeId:undefined,driverId:undefined}),undefined);
- expect(createEmployeeAdvance).not.toHaveBeenCalled();
+ expect(createEmployeeAdvance).toHaveBeenCalledWith('office',5000,'2026-10-15','',expect.objectContaining({schoolKey:'OFFICE'}));
+ expect(deleteExpense).toHaveBeenCalledWith('legacy',undefined);
+ expect(updateExpense).not.toHaveBeenCalled();
+});
+
+test('reclassifying a manual expense as a driver advance links it to the driver',async()=>{
+ const expense={id:'legacy-driver',name:'Аванс — Водитель А',category:'school',subcategory:'Аванс',source:'manual',amount:10000,unitPrice:10000,quantity:1,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={saved}/>);
+ expect(screen.getByRole('button',{name:'Аванс'})).toHaveAttribute('aria-pressed','true');
+ fireEvent.click(screen.getByRole('button',{name:'Получатели'}));fireEvent.click(screen.getByRole('checkbox',{name:/Водитель А/}));fireEvent.change(screen.getByRole('spinbutton',{name:/Сумма для Водитель А за/}),{target:{value:'10000'}});fireEvent.click(screen.getByRole('button',{name:'Готово'}));
+ fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
+ await waitFor(()=>expect(saved).toHaveBeenCalled());
+ expect(createV2DriverAdvance).toHaveBeenCalledTimes(1);
+ expect(createV2DriverAdvance).toHaveBeenCalledWith(expect.objectContaining({driverId:'driver-a',transferId:'transfer-a',schoolKey:'TIS',amount:10000}));
+ expect(deleteExpense).toHaveBeenCalledWith('legacy-driver',undefined);
+});
+
+test('if the old expense cannot be removed, the new driver advance is rolled back',async()=>{
+ (deleteExpense as jest.Mock).mockRejectedValueOnce(new Error('Нет доступа'));
+ const expense={id:'legacy-driver',name:'Аванс — Водитель А',category:'school',subcategory:'Аванс',source:'manual',amount:10000,unitPrice:10000,quantity:1,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
+ const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={saved}/>);
+ fireEvent.click(screen.getByRole('button',{name:'Получатели'}));fireEvent.click(screen.getByRole('checkbox',{name:/Водитель А/}));fireEvent.change(screen.getByRole('spinbutton',{name:/Сумма для Водитель А за/}),{target:{value:'10000'}});fireEvent.click(screen.getByRole('button',{name:'Готово'}));
+ fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
+ expect(await screen.findByText('Нет доступа')).toBeInTheDocument();
+ expect(deleteV2DriverAdvance).toHaveBeenCalledWith('driver-advance-id');
+ expect(saved).not.toHaveBeenCalled();
 });
