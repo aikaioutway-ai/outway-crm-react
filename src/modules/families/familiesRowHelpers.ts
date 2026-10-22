@@ -149,7 +149,9 @@ export function isNewLogisticsRow(row:Pick<ChildRow,'status'|'transferNumber'|'i
 }
 
 export function matchesLogisticsMapFilter(row: Pick<ChildRow, 'status' | 'transferNumber' | 'isTestTransfer'>, transferFilter: string): boolean {
-  if (row.status === 'rejected' || transferFilter === 'rejected') return false;
+  // Отказы видны на карте только по фишке «Отказ»; в «Все» и по трансферам их нет.
+  if (transferFilter === 'rejected') return row.status === 'rejected';
+  if (row.status === 'rejected') return false;
   if (transferFilter === 'empty') return isNewLogisticsRow(row);
   return !transferFilter || row.transferNumber === transferFilter;
 }

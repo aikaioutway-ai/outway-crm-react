@@ -44,8 +44,11 @@ interface LogisticsMapViewProps {
 type PointRow = FamilyListRow & { latitude: number; longitude: number };
 
 const BISHKEK_CENTER: [number, number] = [42.8746, 74.5698];
-// Цвет уходит в Яндекс Карты, они не понимают CSS-переменные — только готовый код цвета (= --text-2).
+// Цвета уходят в Яндекс Карты, они не понимают CSS-переменные — только готовый код цвета.
 const FALLBACK_COLOR = '#5A6673';
+// Совпадают с фишками «Без №» и «Отказ» над картой.
+const NEW_CHILD_COLOR = '#2DD4BF';
+const REJECTED_COLOR = '#64748B';
 const DEFAULT_ZONE_COLOR = '#2AA5A5';
 const ZONE_COLORS = ['#2AA5A5', '#5271C4', '#E29B34', '#D85B78', '#7B61C9', '#3A9D65'];
 function plural(count: number, one: string, few: string, many: string): string {
@@ -632,7 +635,8 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
       const iconContent = isSpecificTransfer ? (first.stopNumber ?? '') : (first.transferNumber ?? '');
       const iconColor = isSpecificTransfer
         ? (VEHICLE_COLOR[first.vehicleType] ?? FALLBACK_COLOR)
-        : (first.transferNumber ? SCHOOL_COLORS[(Number(first.transferNumber) - 1) % SCHOOL_COLORS.length] : FALLBACK_COLOR);
+        : first.status === 'rejected' ? REJECTED_COLOR
+        : (first.transferNumber ? SCHOOL_COLORS[(Number(first.transferNumber) - 1) % SCHOOL_COLORS.length] : NEW_CHILD_COLOR);
       const properties = {
         iconContent: iconContent || undefined,
         iconCaption: group.length > 1 ? `×${group.length}` : undefined,

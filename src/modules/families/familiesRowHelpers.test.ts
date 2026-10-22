@@ -14,15 +14,17 @@ describe('logistics map filters', () => {
     expect(rows.filter(row => matchesLogisticsMapFilter(row, 'empty'))).toEqual(rows.slice(0, 2));
   });
 
-  it.each(['', 'empty', 'rejected', '2'])('excludes rejections for filter %s even with a transfer', filter => {
+  it.each(['', 'empty', '2'])('excludes rejections for filter %s even with a transfer', filter => {
     expect(matchesLogisticsMapFilter({ status: 'rejected', transferNumber: '2', isTestTransfer: true }, filter)).toBe(false);
   });
 
-  it('keeps selected routes separate and leaves the rejection map empty', () => {
+  it('keeps selected routes separate and shows only rejections on the rejection map', () => {
     const row = { status: 'boarded', transferNumber: '2' };
     expect(matchesLogisticsMapFilter(row, '2')).toBe(true);
     expect(matchesLogisticsMapFilter(row, '3')).toBe(false);
     expect(matchesLogisticsMapFilter(row, 'rejected')).toBe(false);
+    expect(matchesLogisticsMapFilter({ status: 'rejected', transferNumber: null }, 'rejected')).toBe(true);
+    expect(matchesLogisticsMapFilter({ status: 'rejected', transferNumber: '2' }, 'rejected')).toBe(true);
   });
 });
 
