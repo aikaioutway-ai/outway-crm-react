@@ -4,8 +4,9 @@ import TransferBarPages, { transferCellCount } from '../../core/dashboard/Transf
 import React, { useMemo } from 'react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { SCHOOL_TABS, VT_LABEL } from '../families/constants';
+import { VT_LABEL } from '../families/constants';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from './DriversOverview';
+import { driverMatchesSchool } from './driverSchoolVisibility';
 
 interface DriversTransferDashboardProps {
   schoolKey: string;
@@ -17,13 +18,6 @@ interface DriversTransferDashboardProps {
 
 
 
-function driverMatchesSchool(driver: V2DriverTableRow, schoolKey: string): boolean {
-  const school = SCHOOL_TABS.find(item => item.key === schoolKey);
-  if (!school) return false;
-  return driver.branchCodes.includes(school.key)
-    || driver.branchShorts.includes(school.label)
-    || driver.branchNames.includes(school.label);
-}
 
 function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string): boolean {
   return driver.transferNumbers

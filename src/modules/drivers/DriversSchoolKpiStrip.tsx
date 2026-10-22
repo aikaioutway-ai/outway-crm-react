@@ -1,10 +1,10 @@
 import React, { useMemo } from 'react';
 import { Bus, Car, FileWarning, UserCheck, UserX } from 'lucide-react';
-import { V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from '../families/constants';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from './DriversOverview';
+import { driverMatchesSchool } from './driverSchoolVisibility';
 
 interface DriversSchoolKpiStripProps {
   schoolKey: string;
@@ -21,13 +21,6 @@ const COLORS = {
   documents: '#B45309',
 };
 
-function driverMatchesSchool(driver: V2DriverTableRow, schoolKey: string): boolean {
-  const school = SCHOOL_TABS.find(item => item.key === schoolKey);
-  if (!school) return false;
-  return driver.branchCodes.includes(school.key)
-    || driver.branchShorts.includes(school.label)
-    || driver.branchNames.includes(school.label);
-}
 
 export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: DriversSchoolKpiStripProps) {
   const { data: rows = null } = useDriversTable();

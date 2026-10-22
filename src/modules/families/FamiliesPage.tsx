@@ -2,7 +2,7 @@ import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import CashierReceiptPanel from './CashierReceiptPanel';
 import FilterableTable from '../../core/tables/FilterableTable';
 import { useQuery } from '@tanstack/react-query';
-import { isVisibleDriver } from '../drivers/driverSchoolVisibility';
+import { driverMatchesSchool, isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
@@ -2138,9 +2138,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       const schoolMatch = !selectedDashboardSchool
         || selectedDashboardSchool.key === 'ALL'
         || (isReserveSelected && isReserveDriver(row))
-        || row.branchCodes.includes(selectedDashboardSchool.key)
-        || row.branchShorts.includes(selectedDashboardSchool.label)
-        || row.branchNames.includes(selectedDashboardSchool.label)
+        || driverMatchesSchool(row, selectedDashboardSchool.key)
         || dashboardSchoolRows.some(schoolRow => row.branchIds.includes(String(schoolRow.branchId ?? '')));
       if (!schoolMatch) return false;
       if (dashboardVehicleFilter !== 'all' && row.vehicleType !== dashboardVehicleFilter) return false;
