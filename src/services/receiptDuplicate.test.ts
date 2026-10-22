@@ -1,3 +1,7 @@
+/**
+ * @jest-environment node
+ */
+// Node WebCrypto rejects ArrayBuffers created in the jsdom realm on Node 20 (CI).
 import { assertNoReceiptDuplicate, duplicateReceiptMessage } from './receiptDuplicate';
 import {supabase} from './supabase';
 jest.mock('./supabase',()=>({supabase:{rpc:jest.fn()}}));
@@ -19,8 +23,6 @@ test('does not silently continue when duplicate checking is unavailable',async()
 });
 
 test('SHA-256 identifies equal file bytes independently of the filename',async()=>{
- const {webcrypto}=await import('crypto');
- Object.defineProperty(globalThis.crypto,'subtle',{value:webcrypto.subtle,configurable:true});
  const {receiptFileHash}=await import('./receiptDuplicate');
  const file={arrayBuffer:async()=>new Uint8Array([97,98,99]).buffer} as File;
  expect(await receiptFileHash(file)).toBe('ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad');
