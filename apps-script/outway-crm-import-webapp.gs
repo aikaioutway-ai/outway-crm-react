@@ -74,11 +74,14 @@ const SCHOOL_CODE_TO_BRANCH = {
   ABL1: 'ABL1',
   'ABL #1': 'ABL1',
   ABL2: 'ABL2',
-  'ABL #2': 'ABL2'
+  'ABL #2': 'ABL2',
+  KLM: 'KLM',
+  TSL: 'TSL'
 };
 
 const BRANCH_NAME_TO_CODE = {
   'Light Academy': 'LA',
+  'Light Academy Primary': 'LA_P',
   'Билим Бишкек Kg': 'BKG',
   'Билим Бишкек KG': 'BKG',
   'Билим Бишкек kg': 'BKG',
@@ -109,7 +112,9 @@ const BRANCH_NAME_TO_CODE = {
   'Академия будущих лидеров (Авангард)': 'ABL1',
   'Академия будущих лидеров(Авангард)': 'ABL1',
   'Академия будущих лидеров (Мавлянова)': 'ABL2',
-  'Академия будущих лидеров(Мавлянова)': 'ABL2'
+  'Академия будущих лидеров(Мавлянова)': 'ABL2',
+  'Калем Академи Скуул': 'KLM',
+  'Tesla Academy': 'TSL'
 };
 
 // Филиалы, объединённые в ING: название сохраняем в комментарии семьи.
@@ -123,6 +128,7 @@ const ING_MERGED_BRANCH_NAMES = {
 
 const BRANCH_CODE_TO_SCHOOL_CODE = {
   LA: 'LA',
+  LA_P: 'LA',
   BKG: 'BKG',
   BJ: 'BKG',
   AES: 'AES',
@@ -140,7 +146,9 @@ const BRANCH_CODE_TO_SCHOOL_CODE = {
   GEN4: 'GENIUS',
   KRT: 'KRT',
   ABL1: 'ABL',
-  ABL2: 'ABL'
+  ABL2: 'ABL',
+  KLM: 'KLM',
+  TSL: 'TSL'
 };
 
 function doGet(e) {
@@ -194,7 +202,11 @@ function doPost(e) {
 
     return json_({ ok: true, familyId, duplicates: duplicateChildren });
   } catch (error) {
-    return json_({ ok: false, error: error.message });
+    console.error(error && error.stack ? error.stack : String(error));
+    return json_({
+      ok: false,
+      error: error && error.message ? error.message : String(error)
+    });
   }
 }
 
@@ -709,7 +721,16 @@ function validatePayload(payload) {
 }
 
 function supabaseGet_(path) {
-  return supabaseRequest_(path, 'GET');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return supabaseRequest_(path, 'GET');
+    } catch (error) {
+      const message = String(error && error.message || error);
+      const transient = /failed: (429|502|503|504)\b/.test(message);
+      if (!transient || attempt === 2) throw error;
+      Utilities.sleep(500 * Math.pow(2, attempt));
+    }
+  }
 }
 
 function supabaseInsert_(table, data) {
@@ -809,4 +830,9 @@ function json_(data) {
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);
+}
+
+function testSupabaseConnection() {
+  const result = supabaseGet_('v2_schools?select=id,code&limit=1');
+  console.log(JSON.stringify(result));
 }
