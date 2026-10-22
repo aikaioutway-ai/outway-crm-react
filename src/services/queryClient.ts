@@ -17,6 +17,7 @@ export const QK = {
   familiesTable: ['familiesTable'] as const,
   familiesPage: (filters: Record<string, unknown>) => ['familiesPage', filters] as const,
   driversTable: ['driversTable'] as const,
+  transfersDashboard: ['transfersDashboard'] as const,
   paymentsTable: ['paymentsTable'] as const,
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
   refundsTable: ['refundsTable'] as const,

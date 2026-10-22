@@ -4,6 +4,7 @@ import {
   fetchV2FamiliesTable,
   fetchV2FamiliesPage,
   fetchV2DriversTable,
+  fetchV2TransfersDashboard,
   fetchPaymentsTable,
   fetchRefundsTable,
   fetchBranchStats,
@@ -17,6 +18,7 @@ import {
   FamiliesPageParams,
   FamiliesPageResult,
   V2DriverTableRow,
+  V2TransferDashboardRow,
   PaymentTableRow,
   RefundTableRow,
   BranchStat,
@@ -28,6 +30,7 @@ import {
 import { fetchEmployees } from '../services/employeeService';
 import { Employee } from '../types';
 import { QK } from '../services/queryClient';
+import { getBranchFilter } from '../modules/families/constants';
 
 /** Таблица семей — самый тяжёлый запрос CRM. Одна копия на всё приложение
  * (меню, Логистика, FamiliesPage): данные с финансами нужны части экранов,
@@ -75,6 +78,20 @@ export function useDriversTable(): UseQueryResult<V2DriverTableRow[]> {
     queryKey: QK.driversTable,
     queryFn: fetchV2DriversTable,
   });
+}
+
+/** Номера трансферов школы из v2_transfers — единый источник для панелей
+ * трансферов: страница 16–30 появляется везде, как только у школы есть такой
+ * трансфер, даже если на нём пока нет детей или водителя. */
+export function useSchoolTransferNumbers(schoolKey: string): string[] {
+  const { data } = useQuery({
+    queryKey: QK.transfersDashboard,
+    queryFn: fetchV2TransfersDashboard,
+  });
+  const transfers: V2TransferDashboardRow[] = data ?? [];
+  return transfers
+    .filter((transfer: V2TransferDashboardRow) => getBranchFilter(transfer.branchName, transfer.branchCode) === schoolKey)
+    .map((transfer: V2TransferDashboardRow) => transfer.transferNumber);
 }
 
 export function usePaymentsTable(options?: { enabled?: boolean }): UseQueryResult<PaymentTableRow[]> {

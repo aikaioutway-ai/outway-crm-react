@@ -2,10 +2,11 @@ import { showTaskContextMenu } from '../tasks/TaskContextMenu';
 import { openTaskComposer } from '../tasks/taskTypes';
 import '../../core/selects/NotionSelect.css';
 import TransferCell, { transferCellColor, VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
+import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Check, ChevronLeft, ChevronRight, ListTodo } from 'lucide-react';
+import { Check, ListTodo } from 'lucide-react';
 import { isTestTransfer, setTestTransfer, TEST_TRANSFER_COLOR, useTestTransfers } from './testTransfers';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
 import { clearV2TransferVehicleType, updateV2TransferVehicleType } from '../../services/crmV2Service';
 import { VehicleType } from '../../types';
 
@@ -15,8 +16,6 @@ interface LogisticsSchoolTransferDashboardProps {
   selectedKey?: string;
   onSelect?: (key: string) => void;
 }
-
-const TRANSFERS_PER_PAGE = 15;
 
 const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }[] = [
   { value: 'microbus', label: 'Микроавтобус' },
@@ -28,6 +27,7 @@ const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
   const { data: rows, refetch } = useFamiliesTable();
+  const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const [vehicleMenu, setVehicleMenu] = useState<{
     x: number;
     y: number;
@@ -36,10 +36,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
   } | null>(null);
   const [savingVehicleType, setSavingVehicleType] = useState(false);
   const [vehicleTypeOverrides, setVehicleTypeOverrides] = useState<Record<string, VehicleType | ''>>({});
-  const [page, setPage] = useState(0);
   useTestTransfers(); // перерисовка при смене тестовых отметок
-
-  useEffect(() => { setPage(0); }, [schoolKey]);
 
   useEffect(() => {
     if (!vehicleMenu) return;
@@ -97,23 +94,8 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
 
   if (!rows) return null;
 
-  const maxTransferNumber = schoolRows.reduce((max, row) => {
-    const number = Number(row.transferNumber);
-    return Number.isInteger(number) && number > max ? number : max;
-  }, 0);
-  const pageCount = Math.max(1, Math.ceil(maxTransferNumber / TRANSFERS_PER_PAGE));
-  const currentPage = Math.min(page, pageCount - 1);
-  const firstNumber = currentPage * TRANSFERS_PER_PAGE + 1;
-  const lastNumber = firstNumber + TRANSFERS_PER_PAGE - 1;
-  const countOutsidePage = (before: boolean) => schoolRows.filter(row => {
-    const number = Number(row.transferNumber);
-    return Number.isInteger(number) && number > 0 && (before ? number < firstNumber : number > lastNumber);
-  }).length;
-  const hiddenBefore = countOutsidePage(true);
-  const hiddenAfter = countOutsidePage(false);
-
-  const transferCells = Array.from({ length: TRANSFERS_PER_PAGE }, (_, i) => {
-    const number = String(firstNumber + i);
+  const transferCells = Array.from({ length: transferCellCount([...schoolRows.map(row => row.transferNumber), ...schoolTransferNumbers], selectedKey) }, (_, i) => {
+    const number = String(i + 1);
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
     const branchId = transferRows[0]?.branchId ?? allSchoolRows[0]?.branchId ?? null;
     const targets = Array.from(new Map(
@@ -178,26 +160,6 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
     />
   );
 
-  const renderPageArrow = (direction: -1 | 1) => {
-    const disabled = direction < 0 ? currentPage === 0 : currentPage >= pageCount - 1;
-    const hidden = direction < 0 ? hiddenBefore : hiddenAfter;
-    return (
-      <button
-        type="button"
-        className={`ow-transfer-arrow${hidden > 0 && !disabled ? ' has-more' : ''}`}
-        disabled={disabled}
-        onClick={() => setPage(currentPage + direction)}
-        aria-label={direction < 0 ? 'Предыдущие трансферы' : 'Следующие трансферы'}
-        title={disabled ? undefined : direction < 0
-          ? `Трансферы ${firstNumber - TRANSFERS_PER_PAGE}–${firstNumber - 1}`
-          : `Трансферы ${lastNumber + 1}–${lastNumber + TRANSFERS_PER_PAGE}${hidden > 0 ? ` · учеников дальше: ${hidden}` : ''}`}
-      >
-        {direction < 0 ? <ChevronLeft size={16} aria-hidden="true" /> : <ChevronRight size={16} aria-hidden="true" />}
-        {!disabled && hidden > 0 && <span>{hidden}</span>}
-      </button>
-    );
-  };
-
   return (
     <div style={{
       display: 'flex',
@@ -207,10 +169,10 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
-      {pageCount > 1 && renderPageArrow(-1)}
-      {transferCells.map(renderCell)}
-      {pageCount > 1 && renderPageArrow(1)}
-      {fixedCells.map(renderCell)}
+      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.count)}>
+        {transferCells.map(renderCell)}
+        {fixedCells.map(renderCell)}
+      </TransferBarPages>
       {vehicleMenu && (
         <div
           className="dt-ctx-menu ow-vehicle-menu"

@@ -21,6 +21,7 @@ export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
+  queryClient.invalidateQueries({ queryKey: QK.transfersDashboard });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
 }
 

@@ -5,7 +5,7 @@ import { ALL_PERIODS } from './constants';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useEffect, useState } from 'react';
 import { FamilyListRow, PeriodChargeStats, fetchChargesForPeriod } from '../../services/crmV2Service';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
 import { isNewUnassignedRow } from './familiesRowHelpers';
 
@@ -46,6 +46,7 @@ function childCountOf(rows: FamilyListRow[]): number {
 
 export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools }: SchoolTransferDashboardProps) {
   const { data: rows } = useFamiliesTable();
+  const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const [periodDebts, setPeriodDebts] = useState<PeriodChargeStats[]>([]);
   useEffect(() => {
     setPeriodDebts([]);
@@ -65,7 +66,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   const allSchoolRows = rows.filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');
 
-  const transferCells = Array.from({ length: transferCellCount(schoolRows.map(row => row.transferNumber), selectedKey) }, (_, i) => {
+  const transferCells = Array.from({ length: transferCellCount([...schoolRows.map(row => row.transferNumber), ...schoolTransferNumbers], selectedKey) }, (_, i) => {
     const number = String(i + 1);
     const assignedRows = schoolRows.filter(r => r.transferNumber === number);
     return {

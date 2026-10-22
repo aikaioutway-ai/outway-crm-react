@@ -3,7 +3,7 @@ import TransferCell, { transferCellColor } from '../../core/dashboard/TransferCe
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useMemo } from 'react';
 import { V2DriverTableRow } from '../../services/crmV2Service';
-import { useDriversTable } from '../../hooks/useCrmQueries';
+import { useDriversTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
 import { VT_LABEL } from '../families/constants';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from './DriversOverview';
 import { driverMatchesSchool } from './driverSchoolVisibility';
@@ -29,6 +29,7 @@ function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string)
 
 export default function DriversTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: DriversTransferDashboardProps) {
   const { data: rows = null } = useDriversTable();
+  const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
 
   const isReserve = schoolKey === DRIVER_RESERVE_KEY;
   const schoolRows = useMemo(() => (
@@ -41,7 +42,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
 
   if (rows === null || isReserve) return null;
 
-  const transferCells = Array.from({ length: transferCellCount(schoolRows.flatMap(row => row.transferNumbers.split(',').map(number => number.replace(/[^\d]/g, ''))), selectedKey) }, (_, index) => {
+  const transferCells = Array.from({ length: transferCellCount([...schoolRows.flatMap(row => row.transferNumbers.split(',').map(number => number.replace(/[^\d]/g, ''))), ...schoolTransferNumbers], selectedKey) }, (_, index) => {
     const number = String(index + 1);
     const transferRows = schoolRows.filter(row => driverMatchesTransfer(row, number));
     return {

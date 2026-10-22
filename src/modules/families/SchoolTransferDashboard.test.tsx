@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import SchoolTransferDashboard from './SchoolTransferDashboard';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 
-jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn() }));
+jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferNumbers: () => [] }));
 
 test('directory transfer marker shows how many children are in the transfer', () => {
   (useFamiliesTable as jest.Mock).mockReturnValue({ data: [

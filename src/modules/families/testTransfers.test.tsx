@@ -4,7 +4,7 @@ import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import { updateV2TransferVehicleType } from '../../services/crmV2Service';
 import { __resetTestTransfers, isInTestTransfer, isTestTransfer, setTestTransfer, TEST_TRANSFER_COLOR } from './testTransfers';
 
-jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn() }));
+jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferNumbers: () => [] }));
 jest.mock('../../services/crmV2Service', () => ({
   clearV2TransferVehicleType: jest.fn(),
   updateV2TransferVehicleType: jest.fn(),

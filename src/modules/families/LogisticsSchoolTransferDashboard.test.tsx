@@ -6,6 +6,7 @@ import { updateV2TransferVehicleType } from '../../services/crmV2Service';
 
 jest.mock('../../hooks/useCrmQueries', () => ({
   useFamiliesTable: jest.fn(),
+  useSchoolTransferNumbers: () => [],
 }));
 
 jest.mock('../../services/crmV2Service', () => ({

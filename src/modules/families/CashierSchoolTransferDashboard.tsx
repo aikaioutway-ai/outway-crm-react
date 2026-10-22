@@ -3,7 +3,7 @@ import TransferBarPages, { transferCellCount } from '../../core/dashboard/Transf
 import TransferCell from '../../core/dashboard/TransferCell';
 import { useMemo } from 'react';
 import { PaymentTableRow } from '../../services/crmV2Service';
-import { usePaymentsTable } from '../../hooks/useCrmQueries';
+import { usePaymentsTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
 
 interface CashierSchoolTransferDashboardProps {
@@ -49,6 +49,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
 
 export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 0, selectedKey = '', onSelect, statusFilter = 'pending' }: CashierSchoolTransferDashboardProps) {
   const { data: rows = null } = usePaymentsTable();
+  const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const statusPredicate = statusFilter === 'confirmed' ? isConfirmed : isPending;
 
   const schoolRows = useMemo(() => (
@@ -57,7 +58,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
 
   if (rows === null) return null;
 
-  const transferCells = Array.from({ length: transferCellCount(schoolRows.map(row => row.transferNumber), selectedKey) }, (_, i) => {
+  const transferCells = Array.from({ length: transferCellCount([...schoolRows.map(row => row.transferNumber), ...schoolTransferNumbers], selectedKey) }, (_, i) => {
     const number = String(i + 1);
     const transferRows = schoolRows.filter(row => row.transferNumber === number);
     return {
