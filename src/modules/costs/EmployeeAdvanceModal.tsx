@@ -78,7 +78,7 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
     if(expense && (selectedPeriods.length!==1 || department==='drivers' && batch.length!==1)){setError('При редактировании выберите одного получателя и один период');return;}
     if(!selectedPeriods.length || selectedPeriods.some(key=>!salaryPeriods.some(period=>period.key===key))){setError('Выберите периоды выплаты');return;}
     if(!department || !date || (department==='drivers'
-      ? !batch.length || batch.some(row=>Object.values(periodAmounts(selectedPeriods,row.amount,row.periodAmounts)).some(value=>!validAmount(value)) || !(row.temporary && paymentType==='salary' ? drivers.some(driver=>driver.driverId===row.driverId) && activeDrivers.some(driver=>driver.transfers.some(transfer=>transfer.id===row.transferId && transferSchool(transfer)===row.schoolKey)) : activeDrivers.some(driver=>driver.driverId===row.driverId && (!driver.transfers.length || driver.transfers.some(transfer=>transfer.id===row.transferId && transferSchool(transfer)===row.schoolKey)))))
+      ? !batch.length || batch.some(row=>Object.values(periodAmounts(selectedPeriods,row.amount,row.periodAmounts)).some(value=>!validAmount(value)) || !(row.temporary ? drivers.some(driver=>driver.driverId===row.driverId) && activeDrivers.some(driver=>driver.transfers.some(transfer=>transfer.id===row.transferId && transferSchool(transfer)===row.schoolKey)) : activeDrivers.some(driver=>driver.driverId===row.driverId && (!driver.transfers.length || driver.transfers.some(transfer=>transfer.id===row.transferId && transferSchool(transfer)===row.schoolKey)))))
       : !recipients.some(row=>row.id===employeeId) || Object.values(periodAmounts(selectedPeriods,amount,selectedPeriods.length>1?officeAmounts:undefined)).some(value=>!validAmount(value)))){setError('Выберите получателей и укажите сумму за каждый период');return;}
     if(paymentType==='salary' && (department==='drivers'?batch.some(row=>!row.schoolKey || !row.transferId):!officeDepartment)){setError('Выберите школу с трансфером или отдел');return;}
     const units=department==='drivers'?batch.map(row=>({id:row.driverId,temporaryDriver:row.temporary,name:row.name,schoolKey:row.schoolKey,transferId:row.transferId,amounts:periodAmounts(selectedPeriods,row.amount,row.periodAmounts)})):[{id:employeeId,temporaryDriver:false,name:recipients.find(row=>row.id===employeeId)?.fullName??'',schoolKey:'OFFICE',transferId:'',amounts:periodAmounts(selectedPeriods,amount,selectedPeriods.length>1?officeAmounts:undefined)}];
@@ -105,7 +105,7 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
       }else{
       for(const unit of units){
         for(const key of selectedPeriods){
-          const completionKey=`${department}:${unit.id}:${key}`;
+          const completionKey=`${department}:${unit.id}:${unit.transferId}:${key}`;
           if(completed.current.has(completionKey))continue;
           const [year,month]=key.split('-').map(Number);
           const paymentAmount=Number(unit.amounts[key]);

@@ -103,7 +103,7 @@ test('retry skips driver advances successfully saved before a failure',async()=>
   fireEvent.click(screen.getByRole('button',{name:'Повторить оставшиеся выплаты'}));
   await waitFor(()=>expect(close).toHaveBeenCalledTimes(1));
   expect(createV2DriverAdvance).toHaveBeenCalledTimes(3);
-  expect(createV2DriverAdvance).toHaveBeenLastCalledWith(expect.objectContaining({driverId:'driver-b',amount:700}));
+  expect(createV2DriverAdvance).toHaveBeenLastCalledWith(expect.objectContaining({driverId:'driver-a',amount:500}));
 });
 
 test('office salary across two periods uses explicit amounts and does not duplicate the total',async()=>{
@@ -293,9 +293,9 @@ test('salary includes a manually added driver with another current school',async
   render(<EmployeeAdvanceModal onClose={jest.fn()} onSaved={saved} initialPaymentType="salary" initialScope="drivers"/>);
   fireEvent.change(screen.getByRole('combobox',{name:'Школа'}),{target:{value:'TIS'}});
   fireEvent.click(screen.getByRole('button',{name:'Получатели'}));
-  fireEvent.click(screen.getByRole('button',{name:'Добавить временного водителя'}));
-  fireEvent.change(screen.getByRole('combobox',{name:'Временный водитель'}),{target:{value:'driver-b'}});
-  fireEvent.change(screen.getByRole('combobox',{name:'Трансфер для Водитель Б'}),{target:{value:'transfer-a'}});
+  fireEvent.click(screen.getByRole('button',{name:'Добавить водителя к TIS · № 3'}));
+  const added=screen.getAllByRole('combobox').find(element=>element.getAttribute('aria-label')?.startsWith('Водитель для строки'))!;
+  fireEvent.change(added,{target:{value:'driver-b'}});
   fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма для Водитель Б'}),{target:{value:'5000'}});
   fireEvent.click(screen.getByRole('button',{name:'Готово'}));
   choosePeriod();
