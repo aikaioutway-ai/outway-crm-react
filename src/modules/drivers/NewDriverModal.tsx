@@ -38,8 +38,9 @@ const VEHICLE_OPTIONS: { value: VehicleType; label: string }[] = [
 interface Props {
   branches: V2BranchOption[];
   initialBranchKey?: string;
+  paymentRecipientOnly?: boolean;
   onClose: () => void;
-  onCreated: (driverId: string) => void;
+  onCreated: (driverId: string) => void | Promise<void>;
 }
 
 const inputStyle: React.CSSProperties = {
@@ -64,12 +65,13 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'none',
 };
 
-export default function NewDriverModal({ branches, initialBranchKey, onClose, onCreated }: Props) {
+export default function NewDriverModal({ branches, initialBranchKey, paymentRecipientOnly=false, onClose, onCreated }: Props) {
   const initialBranch = useMemo(() => (
     initialBranchKey === DRIVER_RESERVE_KEY
       ? undefined
       : branches.find(branch => branch.code === initialBranchKey || branch.shortName === initialBranchKey)
   ), [branches, initialBranchKey]);
+  const [status,setStatus]=useState(paymentRecipientOnly?'inactive':'active');
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [secondPhone, setSecondPhone] = useState('');
@@ -122,6 +124,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
     try {
       const driverId = await createV2Driver({
         fullName,
+        status: paymentRecipientOnly ? 'inactive' : status,
         phone,
         secondPhone,
         address,
@@ -137,7 +140,7 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
         comment,
         documents,
       });
-      onCreated(driverId);
+      await onCreated(driverId);
     } catch (error) {
       console.error('Driver create failed', error);
       alert(error instanceof Error ? `Не удалось добавить водителя: ${error.message}` : 'Не удалось добавить водителя');
@@ -191,13 +194,14 @@ export default function NewDriverModal({ branches, initialBranchKey, onClose, on
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
             <label style={labelStyle}>ФИО<input style={inputStyle} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
             <label style={labelStyle}>Номер<input style={inputStyle} value={phone} onChange={event => setPhone(event.target.value)} /></label>
+            <label style={labelStyle}>Статус<select style={inputStyle} value={status} disabled={paymentRecipientOnly} onChange={event=>setStatus(event.target.value)}>{[{value:'active',label:'Активен'},{value:'inactive',label:'Неактивен'},{value:'vacation',label:'Отпуск'},{value:'dismissed',label:'Уволен'},{value:'archive',label:'Архив'}].map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label style={labelStyle}>Доп. контакт<input style={inputStyle} value={secondPhone} onChange={event => setSecondPhone(event.target.value)} /></label>
             <label style={labelStyle}>Адрес<input style={inputStyle} value={address} onChange={event => setAddress(event.target.value)} /></label>
           </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 12 }}>
             <label style={labelStyle}>Школа
-              <select style={inputStyle} value={branchId} onChange={event => {
+              <select style={inputStyle} disabled={paymentRecipientOnly} value={branchId} onChange={event => {
                 const nextBranchId = event.target.value;
                 setBranchId(nextBranchId);
                 if (nextBranchId === DRIVER_RESERVE_KEY) setTransferNumber('');

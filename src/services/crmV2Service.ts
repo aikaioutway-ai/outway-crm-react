@@ -66,6 +66,7 @@ export interface V2DriverTransferOption {
 }
 
 export interface V2DriverTableRow {
+  previousAssignment?: boolean;
   rowId: string;
   driverId: string;
   fullName: string;
@@ -141,6 +142,7 @@ export function createDefaultV2DriverDocuments(): V2DriverDocumentInput[] {
 }
 
 export interface NewV2DriverInput {
+  status?: string;
   fullName: string;
   phone: string;
   secondPhone?: string;
@@ -1511,7 +1513,7 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
       address: input.address?.trim() || null,
       // Резерв — это активный водитель без назначенного трансфера, а не
       // неактивный статус. Принадлежность к резерву вычисляется по transferCount.
-      status: 'active',
+      status: input.status ?? 'active',
       comment: comment || null,
     })
     .select('id')

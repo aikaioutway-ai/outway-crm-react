@@ -1,3 +1,5 @@
+import { withFormerTransferDrivers } from '../drivers/formerTransferDrivers';
+import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
@@ -346,7 +348,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
     type: 'text',
     category: 'Водитель',
     width: 190,
-    render: value => <span style={{ fontWeight: 600, color: 'var(--text)' }}>{value || '—'}</span>,
+    render: (value,row) => <span style={{ fontWeight: 600, color: 'var(--text)' }}>{value || '—'}{row.previousAssignment && <small style={{display:'block',color:'var(--text-2)'}}>Ранее на трансфере</small>}</span>,
   },
   { key: 'phone', label: 'Телефон', type: 'text', category: 'Водитель', width: 145, render: value => <span className="dt-phone">{formatPhoneDisplay(value as string) || '—'}</span> },
   { key: 'secondPhone', label: 'Доп. телефон', type: 'text', category: 'Водитель', width: 145, visible: false, render: value => <span className="dt-phone">{formatPhoneDisplay(value as string) || '—'}</span> },
@@ -366,7 +368,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
         fontSize: 11,
         fontWeight: 600,
       }}>
-        {value === 'active' ? 'Активен' : value || '—'}
+        {{active:'Активен',inactive:'Неактивен',vacation:'Отпуск',dismissed:'Уволен',archive:'Архив',reserve:'Резерв'}[String(value)] || value || '—'}
       </span>
     ),
   },
@@ -2131,16 +2133,22 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     ? driverRows.find(driver => driver.driverId === activeDirectoryTransfer.driverId) ?? null
     : null;
   const dashboardWorkRows = logisticsWorkRows(dashboardSchoolRows);
+  const historyTransfers=useMemo(()=>dashboardTransfers.filter(transfer=>{
+    const key=getBranchFilter(transfer.branchShort,transfer.branchCode);
+    return isSchoolInTier(key,schoolTier) && (selectedDashboardSchool?.key==='ALL' ? schoolButtonItems.some(item=>item.key===key) : key===selectedDashboardSchool?.key) && (!/^\d+$/.test(quickTransfer) || transfer.transferNumber===quickTransfer);
+  }),[dashboardTransfers,quickTransfer,schoolButtonItems,selectedDashboardSchool,schoolTier]);
+  const formerDriversQuery=useQuery({queryKey:['transferDriversHistory',historyTransfers.map(item=>item.id),authToken],queryFn:()=>fetchTransferDriversHistory(historyTransfers.map(item=>item.id),authToken),enabled:isDriversModule && Boolean(authToken) && historyTransfers.length>0,retry:false});
+  const driverRowsWithHistory=useMemo(()=>withFormerTransferDrivers(driverRows,historyTransfers,formerDriversQuery.data??[]),[driverRows,historyTransfers,formerDriversQuery.data]);
   const filteredDriverRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return driverRows.filter(row => {
+    return driverRowsWithHistory.filter(row => {
       if(!isVisibleDriver(row))return false;
       const isReserveSelected = selectedDashboardSchool?.key === DRIVER_RESERVE_KEY;
       if (
         selectedDashboardSchool
         && selectedDashboardSchool.key !== 'ALL'
         && !isReserveSelected
-        && isReserveDriver(row)
+        && isReserveDriver(row) && !row.previousAssignment
       ) {
         return false;
       }
@@ -2152,7 +2160,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       if (!schoolMatch) return false;
       if (dashboardVehicleFilter !== 'all' && row.vehicleType !== dashboardVehicleFilter) return false;
       if (quickTransfer === 'empty' && row.transferCount > 0) return false;
-      if (quickTransfer === 'inactive' && row.status === 'active') return false;
+      if (quickTransfer === 'inactive' && row.status === 'active' && !row.previousAssignment) return false;
       if (quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive') {
         const transferNumbers = row.transferNumbers
           .split(',')
@@ -2176,8 +2184,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         row.address,
         row.comment,
       ].some(value => String(value ?? '').toLowerCase().includes(q));
-    });
-  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRows, quickTransfer, search, selectedDashboardSchool]);
+    }).sort((a,b)=>Number(Boolean(a.previousAssignment))-Number(Boolean(b.previousAssignment)) || Number(b.status==='active')-Number(a.status==='active') || a.fullName.localeCompare(b.fullName,'ru'));
+  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRowsWithHistory, quickTransfer, search, selectedDashboardSchool]);
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
@@ -3258,6 +3266,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             </div>
           ) : null}
           {customTableContent ?? (isDriversModule ? (
+            <>
+            {formerDriversQuery.isError && <p role="status" style={{color:'var(--text-2)',padding:12}}>Прежние назначения недоступны: требуется обновление сервера истории. Текущие водители показаны ниже.</p>}
             <DataTable<V2DriverTableRow>
               getTaskTarget={row=>({type:'driver',id:row.driverId,label:row.fullName})}
               key="drivers_table"
@@ -3299,6 +3309,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 </button>
               )}
             />
+            </>
           ) : isCashierMode ? (
             <DataTable<CashierPaymentRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}

@@ -294,8 +294,7 @@ test('salary includes a manually added driver with another current school',async
   fireEvent.change(screen.getByRole('combobox',{name:'Школа'}),{target:{value:'TIS'}});
   fireEvent.click(screen.getByRole('button',{name:'Получатели'}));
   fireEvent.click(screen.getByRole('button',{name:'Добавить водителя к TIS · № 3'}));
-  const added=screen.getAllByRole('combobox').find(element=>element.getAttribute('aria-label')?.startsWith('Водитель для строки'))!;
-  fireEvent.change(added,{target:{value:'driver-b'}});
+  fireEvent.click(screen.getByRole('option',{name:'Водитель Б'}));
   fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма для Водитель Б'}),{target:{value:'5000'}});
   fireEvent.click(screen.getByRole('button',{name:'Готово'}));
   choosePeriod();
