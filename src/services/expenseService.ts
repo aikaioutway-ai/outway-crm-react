@@ -132,3 +132,9 @@ export async function fetchTransferDriversHistory(transferIds: string[], session
   const data = await callExpenseApi(sessionToken,{action:'listTransferDriversHistory',transferIds});
   return (data.rows ?? []).map((row: Record<string,any>)=>({id:String(row.id),transferId:String(row.transfer_id),previousDriverId:row.previous_driver_id??null,driverId:row.driver_id??null,previousDriverName:row.previous_driver_name??null,driverName:row.driver_name??null,eventType:row.event_type,recordedAt:String(row.recorded_at)}));
 }
+
+export async function reserveTemporaryDriverName(sessionToken: string): Promise<string> {
+  const data = await callExpenseApi(sessionToken,{action:'reserveTemporaryDriverName'});
+  if (typeof data.name !== 'string' || !/^Временный водитель №[1-9]\d*$/.test(data.name)) throw new Error('Не удалось получить номер временного водителя');
+  return data.name;
+}

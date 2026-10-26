@@ -10,9 +10,9 @@ import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 
 export type DriverPayment = { driverId: string; transferId: string; schoolKey: string; name: string; amount: string; temporary?: boolean; periodAmounts?:Record<string,string> };
 type PaymentRow = DriverPayment & { key: number; selected: boolean; choosing?: boolean; openChooser?: boolean };
-type Props = { drivers:V2DriverTableRow[]; allDrivers?:V2DriverTableRow[]; school:string; initial:DriverPayment[]; salary:boolean; periods?:{key:string;label:string}[]; onClose:()=>void; onConfirm:(rows:DriverPayment[])=>void; transferSchool:(transfer:V2DriverTableRow['transfers'][number])=>string };
+type Props = { drivers:V2DriverTableRow[]; allDrivers?:V2DriverTableRow[]; school:string; sessionToken?:string; initial:DriverPayment[]; salary:boolean; periods?:{key:string;label:string}[]; onClose:()=>void; onConfirm:(rows:DriverPayment[])=>void; transferSchool:(transfer:V2DriverTableRow['transfers'][number])=>string };
 
-export default function DriverPaymentPicker({drivers,allDrivers=drivers,school,initial,salary,periods=[],onClose,onConfirm,transferSchool}:Props) {
+export default function DriverPaymentPicker({drivers,allDrivers=drivers,school,sessionToken,initial,salary,periods=[],onClose,onConfirm,transferSchool}:Props) {
   const transfers=Array.from(new Map(drivers.flatMap(driver=>driver.transfers).filter(transfer=>isSchoolVisible(transfer.branchShort) && isSchoolVisible(transferSchool(transfer))).map(transfer=>[transfer.id,transfer])).values()).sort((a,b)=>transferSchool(a).localeCompare(transferSchool(b),'ru',{numeric:true}) || String(a.transferNumber).localeCompare(String(b.transferNumber),'ru',{numeric:true}));
   const people=Array.from(new Map(allDrivers.map(driver=>[driver.driverId,driver])).values()).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ru'));
   const [rows,setRows]=useState<PaymentRow[]>(()=>{
@@ -82,5 +82,5 @@ export default function DriverPaymentPicker({drivers,allDrivers=drivers,school,i
     })}</div>
     {error && <p className="expense-form-error" role="alert">{error}</p>}
     <div className="payment-picker-footer"><div><span>Итого · {selected.length} водителей</span><strong>{total.toLocaleString('ru-RU')}</strong></div><button type="button" className="expense-cancel" onClick={onClose}>Отмена</button><button type="button" className="expenses-add" onClick={confirm}>Готово</button></div>
-  </div>{creatingFor!==null && createPortal(<NewDriverModal branches={[]} paymentRecipientOnly onClose={()=>setCreatingFor(null)} onCreated={async driverId=>{try{const refreshed=await fetchV2DriversTable();queryClient.setQueryData(QK.driversTable,refreshed);const driver=refreshed.find(item=>item.driverId===driverId);if(driver)change(creatingFor,{driverId:driver.driverId,name:driver.fullName,temporary:true,choosing:true,openChooser:false,selected:true});setCreatingFor(null);}catch{setError('Водитель создан. Не удалось обновить список — закройте и снова откройте выбор получателей.');setCreatingFor(null);}}}/>,document.body)}</div>;
+  </div>{creatingFor!==null && createPortal(<NewDriverModal sessionToken={sessionToken} branches={[]} paymentRecipientOnly onClose={()=>setCreatingFor(null)} onCreated={async driverId=>{try{const refreshed=await fetchV2DriversTable();queryClient.setQueryData(QK.driversTable,refreshed);const driver=refreshed.find(item=>item.driverId===driverId);if(driver)change(creatingFor,{driverId:driver.driverId,name:driver.fullName,temporary:true,choosing:true,openChooser:false,selected:true});setCreatingFor(null);}catch{setError('Водитель создан. Не удалось обновить список — закройте и снова откройте выбор получателей.');setCreatingFor(null);}}}/>,document.body)}</div>;
 }

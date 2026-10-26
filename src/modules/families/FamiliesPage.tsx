@@ -4344,6 +4344,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       )}
       {showNewDriver && (
         <NewDriverModal
+          sessionToken={authToken}
           branches={driverBranches}
           initialBranchKey={selectedDashboardSchool?.key}
           onClose={() => setShowNewDriver(false)}

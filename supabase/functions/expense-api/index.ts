@@ -138,6 +138,12 @@ Deno.serve(async req => {
       const [salaries,advances]=await Promise.all([readRows('v2_expenses'),readRows('v2_driver_advances')]);
       return response({ok:true,salaries,advances});
     }
+    if (body.action === 'reserveTemporaryDriverName') {
+      if (!new Set(['admin','gen_director','director','cashier','logist','senior_logist','b2b_logist']).has(session.role)) return response({ok:false,error:'Нет доступа к созданию водителей'},403);
+      const {data,error}=await supabase.rpc('reserve_v2_temporary_driver_name');
+      if(error)throw error;
+      return response({ok:true,name:data});
+    }
     if (!ALLOWED_ROLES.has(session.role)) return response({ ok: false, error: 'Нет доступа к расходам' }, 403);
     if (body.action === 'paymentCapabilities') return response({ ok: true, recipientDetails: true });
     if (body.action === 'listSalary') {

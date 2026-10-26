@@ -1,5 +1,6 @@
+import { reserveTemporaryDriverName } from '../../services/expenseService';
 import FilterableTable from '../../core/tables/FilterableTable';
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
 import { VehicleType } from '../../types';
 import { createDefaultV2DriverDocuments, createV2Driver, V2BranchOption, V2DriverDocumentInput } from '../../services/crmV2Service';
@@ -39,6 +40,7 @@ interface Props {
   branches: V2BranchOption[];
   initialBranchKey?: string;
   paymentRecipientOnly?: boolean;
+  sessionToken?: string;
   onClose: () => void;
   onCreated: (driverId: string) => void | Promise<void>;
 }
@@ -65,7 +67,7 @@ const labelStyle: React.CSSProperties = {
   textTransform: 'none',
 };
 
-export default function NewDriverModal({ branches, initialBranchKey, paymentRecipientOnly=false, onClose, onCreated }: Props) {
+export default function NewDriverModal({ branches, initialBranchKey, paymentRecipientOnly=false, sessionToken, onClose, onCreated }: Props) {
   const initialBranch = useMemo(() => (
     initialBranchKey === DRIVER_RESERVE_KEY
       ? undefined
@@ -73,6 +75,16 @@ export default function NewDriverModal({ branches, initialBranchKey, paymentReci
   ), [branches, initialBranchKey]);
   const [status,setStatus]=useState(paymentRecipientOnly?'inactive':'active');
   const [fullName, setFullName] = useState('');
+  const nameRequest=useRef<Promise<string>|null>(null);
+  const reservedName=useRef('');
+  const [nameError,setNameError]=useState('');
+  useEffect(()=>{
+    if (!sessionToken) return;
+    let active=true;
+    nameRequest.current ??= reserveTemporaryDriverName(sessionToken);
+    nameRequest.current.then(name=>{if(active){reservedName.current=name;setFullName(current=>current.trim()?current:name);}}).catch(()=>{if(active)setNameError('Не удалось получить следующий номер. Нумерация станет доступна после обновления сервера; можно ввести ФИО вручную.');});
+    return ()=>{active=false;};
+  },[sessionToken]);
   const [phone, setPhone] = useState('');
   const [secondPhone, setSecondPhone] = useState('');
   const [address, setAddress] = useState('');
@@ -111,7 +123,7 @@ export default function NewDriverModal({ branches, initialBranchKey, paymentReci
       alert('Укажите ФИО водителя');
       return;
     }
-    if (!phone.trim()) {
+    if (!phone.trim() && fullName.trim()!==reservedName.current) {
       alert('Укажите номер водителя');
       return;
     }
@@ -154,7 +166,7 @@ export default function NewDriverModal({ branches, initialBranchKey, paymentReci
       <section className="ow-modal" role="dialog" aria-modal="true" aria-label="Новый водитель" onClick={event => event.stopPropagation()} style={{ width: 'min(820px, calc(100vw - 32px))', maxHeight: 'calc(100vh - 48px)', overflow: 'hidden', borderRadius: 18, background: '#fff', border: '1px solid #D4E3E7', boxShadow: '0 24px 60px rgba(30, 56, 75, 0.22)', display: 'flex', flexDirection: 'column' }}>
         <header className="ow-modal-head">
           <div>
-            <h2>Новый водитель</h2>
+            <h2>{fullName || 'Новый водитель'}</h2>
             <p style={{ margin: '2px 0 0' }}>Для водителя без трансфера выберите школу «Резерв»</p>
           </div>
           <button type="button" className="ow-modal-close" onClick={onClose} aria-label="Закрыть" title="Закрыть" style={{ width: 36, height: 36, border: '1px solid #D4E3E7', borderRadius: 12, background: '#fff', color: 'var(--text-2)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
@@ -191,8 +203,9 @@ export default function NewDriverModal({ branches, initialBranchKey, paymentReci
         <div style={{ padding: 18, overflowY: 'auto', background: '#F5FAFB', display: 'grid', gap: 12 }}>
           {activeTab === 'main' ? (
           <>
+          {nameError && <p role="status" style={{color:'var(--text-2)',fontSize:12}}>{nameError}</p>}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
-            <label style={labelStyle}>ФИО<input style={inputStyle} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
+            <label style={labelStyle}>ФИО<input autoFocus style={inputStyle} value={fullName} onChange={event => setFullName(event.target.value)} /></label>
             <label style={labelStyle}>Номер<input style={inputStyle} value={phone} onChange={event => setPhone(event.target.value)} /></label>
             <label style={labelStyle}>Статус<select style={inputStyle} value={status} disabled={paymentRecipientOnly} onChange={event=>setStatus(event.target.value)}>{[{value:'active',label:'Активен'},{value:'inactive',label:'Неактивен'},{value:'vacation',label:'Отпуск'},{value:'dismissed',label:'Уволен'},{value:'archive',label:'Архив'}].map(item=><option key={item.value} value={item.value}>{item.label}</option>)}</select></label>
             <label style={labelStyle}>Доп. контакт<input style={inputStyle} value={secondPhone} onChange={event => setSecondPhone(event.target.value)} /></label>
