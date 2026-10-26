@@ -9,7 +9,7 @@ import { fetchV2DriversTable, V2DriverTableRow } from '../../services/crmV2Servi
 import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 
 export type DriverPayment = { driverId: string; transferId: string; schoolKey: string; name: string; amount: string; temporary?: boolean; periodAmounts?:Record<string,string> };
-type PaymentRow = DriverPayment & { key: number; selected: boolean; choosing?: boolean };
+type PaymentRow = DriverPayment & { key: number; selected: boolean; choosing?: boolean; openChooser?: boolean };
 type Props = { drivers:V2DriverTableRow[]; allDrivers?:V2DriverTableRow[]; school:string; initial:DriverPayment[]; salary:boolean; periods?:{key:string;label:string}[]; onClose:()=>void; onConfirm:(rows:DriverPayment[])=>void; transferSchool:(transfer:V2DriverTableRow['transfers'][number])=>string };
 
 export default function DriverPaymentPicker({drivers,allDrivers=drivers,school,initial,salary,periods=[],onClose,onConfirm,transferSchool}:Props) {
@@ -43,15 +43,15 @@ export default function DriverPaymentPicker({drivers,allDrivers=drivers,school,i
   const change=(key:number,patch:Partial<PaymentRow>)=>setRows(current=>current.map(row=>row.key===key?{...row,...patch}:row));
   const addRecipient=(row:PaymentRow)=>{
     const key=nextKey.current++;setSearch('');
-    setRows(current=>{const index=current.findIndex(item=>item.key===row.key);return [...current.slice(0,index+1),{key,selected:true,schoolKey:row.schoolKey,transferId:row.transferId,driverId:'',name:'',amount:'',temporary:true,choosing:true},...current.slice(index+1)];});
+    setRows(current=>{const index=current.findIndex(item=>item.key===row.key);return [...current.slice(0,index+1),{key,selected:true,schoolKey:row.schoolKey,transferId:row.transferId,driverId:'',name:'',amount:'',temporary:true,choosing:true,openChooser:true},...current.slice(index+1)];});
     return key;
   };
   const assignment=(driverId:string,transferId:string)=>!drivers.some(driver=>driver.driverId===driverId && driver.transfers.some(transfer=>transfer.id===transferId));
   const confirm=()=>{
     if(!selected.length || selected.some(row=>!row.driverId || ((salary || row.temporary) && (!row.schoolKey || !row.transferId)) || Object.values(periods.length?periodAmounts(keys,row.amount,row.periodAmounts):{single:row.amount}).some(value=>!Number.isFinite(Number(value)) || Number(value)<=0))){setError('Выберите водителей, школу, трансфер и укажите сумму каждому.');return;}
     if(new Set(selected.map(row=>`${row.driverId}:${row.transferId}`)).size!==selected.length){setError('Один водитель выбран дважды для одного трансфера. Объедините сумму в одной строке.');return;}
-    onConfirm(selected.map(({key,selected,choosing,...row})=>{
-      void key;void selected;void choosing;
+    onConfirm(selected.map(({key,selected,choosing,openChooser,...row})=>{
+      void key;void selected;void choosing;void openChooser;
       return periods.length?{...row,periodAmounts:periodAmounts(keys,row.amount,row.periodAmounts),amount:String(rowTotal(row))}:row;
     }));
   };
@@ -75,12 +75,12 @@ export default function DriverPaymentPicker({drivers,allDrivers=drivers,school,i
         <input type="checkbox" aria-label={identity} checked={row.selected} onChange={()=>change(row.key,{selected:!row.selected})}/>
         <label className="payment-picker-amount">Школа<select aria-label={`Школа для ${identity}`} value={row.schoolKey} onChange={event=>change(row.key,{schoolKey:event.target.value,transferId:'',driverId:'',name:'',temporary:false})}><option value="">Выберите школу</option>{SCHOOL_TABS.filter(item=>item.key!=='ALL' && isSchoolVisible(item.key)).map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
         <label className="payment-picker-amount">Трансфер<select aria-label={`Трансфер для ${identity}`} value={row.transferId} onChange={event=>{const transfer=transfers.find(item=>item.id===event.target.value);const driver=drivers.find(item=>item.transfers.some(choice=>choice.id===transfer?.id));change(row.key,{transferId:transfer?.id??'',schoolKey:transfer?transferSchool(transfer):row.schoolKey,driverId:driver?.driverId??'',name:driver?.fullName??'',temporary:false});}}><option value="">Выберите трансфер</option>{choices.map(transfer=><option key={transfer.id} value={transfer.id}>{transfer.branchShort} · № {transfer.transferNumber}</option>)}</select></label>
-        <div className="payment-picker-amount payment-driver-choice"><span>Водитель</span><NotionSelect ariaLabel={`Водитель для ${identity}`} value={row.driverId} disabled={creatingFor!==null} autoFocus={row.choosing && creatingFor===null} options={options} placeholder="Выберите водителя" footerAction={{label:'Добавить нового водителя',onClick:()=>setCreatingFor(row.choosing?row.key:addRecipient(row))}} onChange={value=>{if(value==='__add'){addRecipient(row);return;}const driver=people.find(item=>item.driverId===value);change(row.key,{driverId:driver?.driverId??'',name:driver?.fullName??'',temporary:assignment(driver?.driverId??'',row.transferId)});}}/></div>
+        <div className="payment-picker-amount payment-driver-choice"><span>Водитель</span><NotionSelect ariaLabel={`Водитель для ${identity}`} value={row.driverId} disabled={creatingFor!==null} autoFocus={row.openChooser && creatingFor===null} options={options} placeholder="Выберите водителя" footerAction={{label:'Добавить нового водителя',onClick:()=>setCreatingFor(row.choosing?row.key:addRecipient(row))}} onChange={value=>{if(value==='__add'){addRecipient(row);return;}const driver=people.find(item=>item.driverId===value);change(row.key,{driverId:driver?.driverId??'',name:driver?.fullName??'',openChooser:false,temporary:assignment(driver?.driverId??'',row.transferId)});}}/></div>
         <div className="payment-picker-amounts">{(periods.length?periods:[{key:'single',label:'Сумма, сом'}]).map(period=><label className="payment-picker-amount" key={period.key}>{period.label}<input aria-label={periods.length?`Сумма для ${identity} за ${period.label}`:`Сумма для ${identity}`} disabled={!row.selected} type="number" min="0.01" step="0.01" placeholder="0" value={periods.length?periodAmounts(keys,row.amount,row.periodAmounts)[period.key]:row.amount} onChange={event=>{if(!periods.length){change(row.key,{amount:event.target.value});return;}const values={...periodAmounts(keys,row.amount,row.periodAmounts),[period.key]:event.target.value};change(row.key,{periodAmounts:values,amount:String(periodTotal(values))});}}/></label>)}</div>
         <button type="button" className="expense-cancel" disabled={!row.schoolKey || !row.transferId} aria-label={`Добавить водителя к ${row.schoolKey} · № ${transferLabel??''}`} onClick={()=>addRecipient(row)}><Plus size={16}/></button>
       </div>;
     })}</div>
     {error && <p className="expense-form-error" role="alert">{error}</p>}
     <div className="payment-picker-footer"><div><span>Итого · {selected.length} водителей</span><strong>{total.toLocaleString('ru-RU')}</strong></div><button type="button" className="expense-cancel" onClick={onClose}>Отмена</button><button type="button" className="expenses-add" onClick={confirm}>Готово</button></div>
-  </div>{creatingFor!==null && createPortal(<NewDriverModal branches={[]} paymentRecipientOnly onClose={()=>setCreatingFor(null)} onCreated={async driverId=>{try{const refreshed=await fetchV2DriversTable();queryClient.setQueryData(QK.driversTable,refreshed);const driver=refreshed.find(item=>item.driverId===driverId);if(driver)change(creatingFor,{driverId:driver.driverId,name:driver.fullName,temporary:true,choosing:true,selected:true});setCreatingFor(null);}catch{setError('Водитель создан. Не удалось обновить список — закройте и снова откройте выбор получателей.');setCreatingFor(null);}}}/>,document.body)}</div>;
+  </div>{creatingFor!==null && createPortal(<NewDriverModal branches={[]} paymentRecipientOnly onClose={()=>setCreatingFor(null)} onCreated={async driverId=>{try{const refreshed=await fetchV2DriversTable();queryClient.setQueryData(QK.driversTable,refreshed);const driver=refreshed.find(item=>item.driverId===driverId);if(driver)change(creatingFor,{driverId:driver.driverId,name:driver.fullName,temporary:true,choosing:true,openChooser:false,selected:true});setCreatingFor(null);}catch{setError('Водитель создан. Не удалось обновить список — закройте и снова откройте выбор получателей.');setCreatingFor(null);}}}/>,document.body)}</div>;
 }
