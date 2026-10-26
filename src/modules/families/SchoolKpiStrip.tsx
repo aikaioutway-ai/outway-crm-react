@@ -6,23 +6,25 @@ import { computeSchoolStatsFromBranches, KPI_COLORS } from './ManagerOverview';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { money } from '../../utils/pricing';
 import { isSchoolAllowed } from './constants';
+import type { SchoolTier } from './SchoolTierTabs';
 
 interface SchoolKpiStripProps {
   schoolKey: string;
   mode?: ManagerMode;
   rightReserveWidth?: number;
   allowedSchools?: string[];
+  schoolTier?: SchoolTier;
 }
 
-export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools }: SchoolKpiStripProps) {
+export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools, schoolTier = '1.0' }: SchoolKpiStripProps) {
   const { data: branches } = useBranchStats();
   const { data: rows } = useFamiliesTable();
 
   const stat = useMemo(() => (
-    branches ? computeSchoolStatsFromBranches(branches).find(s => s.key === schoolKey) : undefined
-  ), [branches, schoolKey]);
+    branches ? computeSchoolStatsFromBranches(branches, schoolTier).find(s => s.key === schoolKey) : undefined
+  ), [branches, schoolKey, schoolTier]);
 
-  if (!isSchoolAllowed(schoolKey, allowedSchools) || !stat) return null;
+  if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier) || !stat) return null;
 
   if (mode === 'directory') {
     const children = (rows ?? []).filter(row => row.branchFilter === schoolKey);

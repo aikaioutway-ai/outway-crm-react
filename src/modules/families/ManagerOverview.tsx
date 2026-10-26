@@ -8,7 +8,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { List, Plus, Search, X } from 'lucide-react';
 import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
 import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
-import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
+import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
 import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -47,6 +47,7 @@ interface ManagerOverviewProps {
   onSidebarWidthChange?: (width: number) => void;
   onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilyListRow) => void;
   allowedSchools?: string[];
+  schoolTier?: SchoolTier;
 }
 
 const EMPTY_PERIOD_STATS: PeriodChargeStats[] = [];
@@ -96,8 +97,8 @@ export function computeSchoolStats(rows: FamilyListRow[]): SchoolStat[] {
  * из RPC get_branch_stats (BranchStat[], 20-40 строк), а не полная таблица
  * семей/детей. Считает идентично: складывает branch-агрегаты, попавшие в
  * одну вкладку школы через ту же группировку getBranchFilter. */
-export function computeSchoolStatsFromBranches(branches: BranchStat[]): SchoolStat[] {
-  const schools = SCHOOL_TABS.filter(t => t.key !== 'ALL');
+export function computeSchoolStatsFromBranches(branches: BranchStat[], tier: SchoolTier = '1.0'): SchoolStat[] {
+  const schools = schoolTabsForTier(tier).filter(t => t.key !== 'ALL');
   const byTab = new Map<string, BranchStat[]>();
   branches.forEach(b => {
     const tabKey = getBranchFilter(b.branchName, b.branchCode);
@@ -248,7 +249,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
           {suggestions.length === 0 ? (
             <div style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-2)' }}>Ничего не найдено</div>
           ) : suggestions.map((row, i) => {
-            const tab = SCHOOL_TABS.find(t => t.key === row.branchFilter);
+            const tab = SCHOOL_DIRECTORY.find(t => t.key === row.branchFilter);
             return (
               <div
                 key={row.rowId}
@@ -271,12 +272,11 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools }: ManagerOverviewProps) {
+export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0' }: ManagerOverviewProps) {
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
-  const [schoolTier] = useState<SchoolTier>('1.0');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
@@ -286,8 +286,8 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
   const familiesQuery = useFamiliesTable();
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
-    () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
-    [allowedSchools, rows],
+    () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier)) ?? null,
+    [allowedSchools, rows, schoolTier],
   );
   const loadError = branchStatsQuery.isError;
 
@@ -309,9 +309,8 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
   const periodStats = periodQuery.data ?? EMPTY_PERIOD_STATS;
 
   const stats = useMemo(
-    () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? [])
-      .filter(stat => isSchoolAllowed(stat.key, allowedSchools))
-      .filter(stat => SCHOOL_TIER_2_KEYS.includes(stat.key) === (schoolTier === '2.0')),
+    () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? [], schoolTier)
+      .filter(stat => isSchoolAllowed(stat.key, allowedSchools, schoolTier)),
     [allowedSchools, branchStatsQuery.data, schoolTier],
   );
 
@@ -372,7 +371,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
           </div>
         </DashboardTopPanel>
 
-        {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : (
+        {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} /> : (
         <SchoolDashboardTable commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },
@@ -407,7 +406,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
         onHiddenChange={setSidebarHidden}
         onSelect={onSelectSchool}
       />
-      {showNewFamily && <NewFamilyModal onClose={() => setShowNewFamily(false)} />}
+      {showNewFamily && <NewFamilyModal schoolTier={schoolTier} onClose={() => setShowNewFamily(false)} />}
       </div>
     </div>
   );

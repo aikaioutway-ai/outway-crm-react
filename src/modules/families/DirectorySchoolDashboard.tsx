@@ -1,10 +1,11 @@
 import React, { useMemo, useState } from 'react';
 import { FamilyListRow } from '../../services/crmV2Service';
-import { SCHOOL_TABS, SCHOOL_TIER_2_KEYS, isSchoolAllowed } from './constants';
+import { isSchoolAllowed, schoolTabsForTier } from './constants';
+import type { SchoolTier } from './SchoolTierTabs';
 import SchoolDashboardTable from './SchoolDashboardTable';
 
-export function computeDirectoryStats(rows: Pick<FamilyListRow, 'branchFilter' | 'status' | 'transferNumber'>[], allowedSchools?: string[]) {
-  return SCHOOL_TABS.filter(s => s.key !== 'ALL' && !SCHOOL_TIER_2_KEYS.includes(s.key) && isSchoolAllowed(s.key, allowedSchools)).map(school => {
+export function computeDirectoryStats(rows: Pick<FamilyListRow, 'branchFilter' | 'status' | 'transferNumber'>[], allowedSchools?: string[], tier: SchoolTier = '1.0') {
+  return schoolTabsForTier(tier).filter(s => s.key !== 'ALL' && isSchoolAllowed(s.key, allowedSchools, tier)).map(school => {
     const children = rows.filter(row => row.branchFilter === school.key);
     return { ...school, applications: children.length, newRequests: children.filter(row => row.status === 'new' && !row.transferNumber).length, boarded: children.filter(row => row.status === 'boarded').length, rejected: children.filter(row => row.status === 'rejected').length };
   });
@@ -17,9 +18,9 @@ const columns = [
 ] as const;
 type SortKey = typeof columns[number][0];
 
-export default function DirectorySchoolDashboard({ rows, allowedSchools, onSelectSchool }: { rows: FamilyListRow[]; allowedSchools?: string[]; onSelectSchool: (key: string) => void }) {
+export default function DirectorySchoolDashboard({ rows, allowedSchools, schoolTier = '1.0', onSelectSchool }: { rows: FamilyListRow[]; allowedSchools?: string[]; schoolTier?: SchoolTier; onSelectSchool: (key: string) => void }) {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'label', asc: true });
-  const stats = useMemo(() => computeDirectoryStats(rows, allowedSchools), [rows, allowedSchools]);
+  const stats = useMemo(() => computeDirectoryStats(rows, allowedSchools, schoolTier), [rows, allowedSchools, schoolTier]);
   const sorted = [...stats].sort((a, b) => {
     const av = a[sort.key], bv = b[sort.key];
     const comparison = typeof av === 'string' ? av.localeCompare(String(bv)) : Number(av) - Number(bv);

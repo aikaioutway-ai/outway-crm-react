@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { FamilyListRow, PeriodChargeStats, fetchChargesForPeriod } from '../../services/crmV2Service';
 import { useFamiliesTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
+import type { SchoolTier } from './SchoolTierTabs';
 import { isNewUnassignedRow } from './familiesRowHelpers';
 
 interface SchoolTransferDashboardProps {
@@ -18,6 +19,7 @@ interface SchoolTransferDashboardProps {
   selectedKey?: string;
   onSelect?: (key: string) => void;
   allowedSchools?: string[];
+  schoolTier?: SchoolTier;
 }
 
 
@@ -44,7 +46,7 @@ function childCountOf(rows: FamilyListRow[]): number {
   return rows.length;
 }
 
-export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools }: SchoolTransferDashboardProps) {
+export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools, schoolTier = '1.0' }: SchoolTransferDashboardProps) {
   const { data: rows } = useFamiliesTable();
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const [periodDebts, setPeriodDebts] = useState<PeriodChargeStats[]>([]);
@@ -61,7 +63,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   }, [mode, periodKey]);
 
 
-  if (!isSchoolAllowed(schoolKey, allowedSchools) || !rows) return null;
+  if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier) || !rows) return null;
 
   const allSchoolRows = rows.filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');

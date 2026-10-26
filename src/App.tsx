@@ -36,7 +36,7 @@ import {
   isEmployeeSessionActive,
 } from './services/employeeSession';
 import { useFamiliesTable } from './hooks/useCrmQueries';
-import { SCHOOL_TABS, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
+import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilyListRow, fetchV2Family } from './services/crmV2Service';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
@@ -163,7 +163,11 @@ export default function App() {
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
   const [managerOpenFamilySearch, setManagerOpenFamilySearch] = useState('');
   const [managerPeriodKey, setManagerPeriodKey] = useState(currentPayrollPeriodKey);
-  const canAccessManagerSchool = (schoolKey: string) => isSchoolAllowed(schoolKey, currentUser?.schoolKeys);
+  // «Школы 2.0» — тот же модуль «Менеджер», но только со школами 2.0.
+  const isManagerSection = section === 'families' || section === 'schools2';
+  const managerTier = section === 'schools2' ? '2.0' : '1.0';
+  const managerSectionFor = (schoolKey: string): NavSection => isSchoolVisible(schoolKey) ? 'families' : 'schools2';
+  const canAccessManagerSchool = (schoolKey: string) => isSchoolAllowed(schoolKey, currentUser?.schoolKeys, managerTier);
   const handleManagerSelectSchool = (schoolKey: string) => {
     if (schoolKey !== 'ALL' && !canAccessManagerSchool(schoolKey)) return;
     setManagerOpenFamilySearch('');
@@ -267,11 +271,11 @@ export default function App() {
   }, [currentUser?.id, currentUserRole, section]);
 
   useEffect(() => {
-    if (!managerSchoolKey || isSchoolAllowed(managerSchoolKey, currentUser?.schoolKeys)) return;
+    if (!managerSchoolKey || isSchoolAllowed(managerSchoolKey, currentUser?.schoolKeys, managerTier)) return;
     setManagerSchoolKey(null);
     setManagerOpenFamilySearch('');
     setManagerTransferFilter('');
-  }, [currentUser?.schoolKeys, managerSchoolKey]);
+  }, [currentUser?.schoolKeys, managerSchoolKey, managerTier]);
 
   useEffect(() => {
     setAdminFiltersOpen(false);
@@ -338,7 +342,7 @@ export default function App() {
 
   const extraTabs = (_hasFamiliesPage: boolean) => currentUser ? (
     <div className="ow-user">
-      {section === 'families' && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
+      {isManagerSection && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
       {section === 'cashier' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
       {section === 'logistics' && logisticsSchoolKey && <AllRecordsButton onClick={()=>handleLogisticsSelectSchool('ALL')}/>}
       {section === 'drivers' && driversSchoolKey && <AllRecordsButton onClick={()=>{setDriversSchoolKey('ALL');setDriversTransferFilter('');}}/>}
@@ -366,11 +370,11 @@ export default function App() {
     taskNavigation.current = null;
   }, [taskNavigationVersion]);
 
-  const taskSchool = section === 'families' ? managerSchoolKey : section === 'logistics' ? logisticsSchoolKey : section === 'drivers' ? driversSchoolKey : null;
-  const taskTransfer = section === 'families' ? managerTransferFilter : section === 'logistics' ? logisticsTransferFilter : section === 'drivers' ? driversTransferFilter : '';
+  const taskSchool = isManagerSection ? managerSchoolKey : section === 'logistics' ? logisticsSchoolKey : section === 'drivers' ? driversSchoolKey : null;
+  const taskTransfer = isManagerSection ? managerTransferFilter : section === 'logistics' ? logisticsTransferFilter : section === 'drivers' ? driversTransferFilter : '';
   const contextTaskTarget: TaskTarget | null = taskSchool ? (/^\d+$/.test(taskTransfer)
     ? {type:'transfer',id:'',schoolKey:taskSchool,transferNumber:Number(taskTransfer),label:`${taskSchool} · Трансфер № ${taskTransfer}`}
-    : {type:'school',id:taskSchool,label:SCHOOL_TABS.find(s=>s.key===taskSchool)?.label ?? taskSchool,schoolKey:taskSchool}) : null;
+    : {type:'school',id:taskSchool,label:SCHOOL_DIRECTORY.find(s=>s.key===taskSchool)?.label ?? taskSchool,schoolKey:taskSchool}) : null;
   const openTaskTarget = async (target: TaskTarget) => {
     try {
       const requestedUser = currentUser?.id;
@@ -383,7 +387,7 @@ export default function App() {
         setTaskChildId(resolved.type === 'child' ? resolved.childId ?? resolved.id : '');
         setTaskFamily(family);
       } else if (resolved.type === 'group' && resolved.schoolKey && canAccessSection(currentUserRole,'families',currentUser?.id)) {
-        taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.group ?? '');setSection('families');
+        taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.group ?? '');setSection(managerSectionFor(resolved.schoolKey));
       } else if (resolved.type === 'driver') {
         if (!canAccessSection(currentUserRole,'drivers',currentUser?.id)) throw new Error('Карточка водителя недоступна вашей роли');
         setTaskDriverId(resolved.id);setDriversSchoolKey(resolved.schoolKey ?? null);setDriversSearch(resolved.label);setSection('drivers');
@@ -391,7 +395,7 @@ export default function App() {
         if (canAccessSection(currentUserRole,'logistics',currentUser?.id)) {
           taskNavigation.current = { section: 'logistics', transfer: resolved.transferNumber ? String(resolved.transferNumber) : '' };setTaskNavigationVersion(value=>value+1);setLogisticsSearch('');setLogisticsSchoolKey(resolved.schoolKey);setLogisticsTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setLogisticsView('table');setSection('logistics');
         } else if (canAccessSection(currentUserRole,'families',currentUser?.id)) {
-          taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setSection('families');
+          taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.transferNumber ? String(resolved.transferNumber) : '');setSection(managerSectionFor(resolved.schoolKey));
         } else throw new Error('Раздел школы недоступен вашей роли');
       }
     } catch(error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть объект'); }
@@ -618,11 +622,11 @@ export default function App() {
               />
             )}
           </div>
-        ) : section === 'families' ? (
+        ) : isManagerSection ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
-                {sectionLabel('Менеджер')}
+                {sectionLabel(managerTier === '2.0' ? 'Школы 2.0' : 'Менеджер')}
                 {managerSchoolKey && (
                   <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
                     <ChevronLeft size={16} aria-hidden="true" />Все школы
@@ -644,13 +648,13 @@ export default function App() {
                       <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
                     </div>
                   )}
-                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} />}
+                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
                   {managerSchoolMode !== 'directory' ? (
-                    managerSchoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />
+                    managerSchoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingTop: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        {managerSchoolKey !== 'ALL' && <SchoolTransferDashboard topPadding={0} mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} />}
+                        {managerSchoolKey !== 'ALL' && <SchoolTransferDashboard topPadding={0} mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
                       </div>
                       <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
                     </div>
@@ -665,6 +669,7 @@ export default function App() {
                   allowedSchools={currentUser?.schoolKeys}
                   initialQuickFilter={{ activeTab: managerSchoolKey }}
                   onSchoolKeyChange={handleManagerSelectSchool}
+                  schoolTier={managerTier}
                   adminFiltersOpen={adminFiltersOpen}
                   onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                   columnsOpen={columnsOpen}
@@ -687,6 +692,7 @@ export default function App() {
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
                 onOpenFamily={handleManagerOpenFamily}
                 allowedSchools={currentUser?.schoolKeys}
+                schoolTier={managerTier}
               />
             )}
           </div>

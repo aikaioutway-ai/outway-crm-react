@@ -16,7 +16,7 @@ test('cashier can open expenses while personal details stay handled separately',
   expect(canAccessSection('cashier', 'families', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'expenses', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'b2b', 'cashier')).toBe(true);
-  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'expenses', 'b2b', 'tasks']);
+  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'expenses', 'b2b', 'tasks']);
 });
 
 test('cashier sees Manager in the Sidebar and can open it', () => {
@@ -35,4 +35,16 @@ test('cashier sees B2B in the Sidebar and can open it', () => {
   fireEvent.click(screen.getByTitle('B2B'));
 
   expect(onChange).toHaveBeenCalledWith('b2b');
+});
+
+test('Schools 2.0 is shown only in the expanded Sidebar', () => {
+  const onChange = jest.fn();
+  render(<Sidebar active="families" userRole="manager" userId="manager" onChange={onChange} />);
+  expect(screen.queryByTitle('Школы 2.0')).toBeNull();
+
+  fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  fireEvent.click(screen.getByTitle('Школы 2.0'));
+
+  expect(onChange).toHaveBeenCalledWith('schools2');
+  expect(getAllowedSections('logist', 'logist')).not.toContain('schools2');
 });

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ListTodo, Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { ListTodo, Users, School, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks' | 'schools2';
 
 interface SidebarProps {
   active: NavSection;
@@ -20,8 +20,10 @@ interface SidebarProps {
   columnsActive?: boolean;
 }
 
-const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
+// expandedOnly — пункт виден только в раскрытом меню.
+const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly?: boolean }[] = [
   { key: 'families',  label: 'Менеджер',   icon: <Users size={18} /> },
+  { key: 'schools2',  label: 'Школы 2.0',  icon: <School size={18} />, expandedOnly: true },
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
@@ -45,6 +47,8 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else sections = ['families'];
   sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
 
+  // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
+  sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
   const withMarket: NavSection[] = userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
   return [...withMarket, 'tasks'];
 
@@ -70,7 +74,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
       setCollapsedBySection(prev => ({ ...prev, [active]: true }));
     }
   }, [active, collapseSignal]);
-  const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId));
+  const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId) && !(collapsed && item.expandedOnly));
   const tools = [
     { label: 'Фильтры', icon: <SlidersHorizontal size={17} />, onClick: onFiltersClick, active: filtersActive },
     { label: 'Колонки', icon: <Columns3 size={17} />, onClick: onColumnsClick, active: columnsActive },
