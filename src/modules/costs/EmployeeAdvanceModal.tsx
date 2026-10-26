@@ -1,3 +1,7 @@
+import { EmployeeCardModal } from '../employees/EmployeesPage';
+import NotionSelect from '../../core/selects/NotionSelect';
+import { createPortal } from 'react-dom';
+import type { Employee, EmployeeRole } from '../../types';
 import PaymentPeriodPicker from './PaymentPeriodPicker';
 import { periodAmounts, periodTotal } from './paymentPeriods';
 import DriverPaymentPicker, { DriverPayment } from './DriverPaymentPicker';
@@ -11,7 +15,7 @@ import { X } from 'lucide-react';
 import { useDriversTable, useEmployees } from '../../hooks/useCrmQueries';
 import { createEmployeeAdvance, deleteEmployeeAdvance } from '../../services/employeeService';
 import { createV2DriverAdvance, deleteV2DriverAdvance } from '../../services/crmV2Service';
-import { queryClient } from '../../services/queryClient';
+import { queryClient, QK } from '../../services/queryClient';
 import { getBranchFilter, SCHOOL_TABS } from '../families/constants';
 
 export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, expense, initialPaymentType='advance', initialScope='office', initialAmount='', onRecordSaved, initialCategory='school', allowPersonalCategory=false, userName }: { onClose: () => void; onSaved: () => void; sessionToken?: string; expense?:ExpenseRecord; initialPaymentType?:'expense'|'advance'|'salary'; initialScope?:'office'|'drivers'; initialAmount?:string; onRecordSaved?:(row:ExpenseRecord)=>void; initialCategory?:ExpenseCategory; allowPersonalCategory?:boolean; userName?:string }) {
@@ -27,6 +31,7 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
   const [officeAmounts,setOfficeAmounts]=useState<Record<string,string>>({});
   const [periodPickerOpen,setPeriodPickerOpen]=useState(false);
   const salaryPeriods = salaryExpensePeriods(currentSchoolYear());
+  const [creatingEmployee,setCreatingEmployee]=useState(false);
   const [pickerOpen,setPickerOpen]=useState(false);
   const [driverPayments, setDriverPayments] = useState<DriverPayment[]>(expense?.driverId ? [{driverId:expense.driverId,transferId:expense.transferId ?? '',schoolKey:expense.schoolKey ?? '',name:expense.name.replace(/^(ЗП|Аванс) — /,''),amount:String(expense.amount)}] : []);
   useEffect(()=>{
@@ -49,14 +54,14 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
   const [comment, setComment] = useState(expense?.comment ?? '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const recipients = employees.filter(employee => (employee.status === 'active' || employee.id===expense?.employeeId) && employee.role !== 'driver' && (!officeDepartment || EMPLOYEE_DEPARTMENTS.find(item => item.key === officeDepartment)?.roles.includes(employee.role)));
+  const recipients = employees.filter(employee => employee.role !== 'driver' && (!officeDepartment || EMPLOYEE_DEPARTMENTS.find(item => item.key === officeDepartment)?.roles.includes(employee.role)));
   const activeDrivers = drivers.filter(driver => (driver.status === 'active' || driver.driverId===expense?.driverId));
   const transferSchool = (transfer: typeof drivers[number]['transfers'][number]) => SCHOOL_TABS.find(tab => tab.key !== 'ALL' && (tab.key === transfer.branchShort || tab.label === transfer.branchShort))?.key ?? getBranchFilter(transfer.branchShort, transfer.branchCode);
   const loading = department === 'drivers' ? driversLoading : isLoading;
   const loadingError = department === 'drivers' ? driversError : loadError;
   const batch = driverPayments;
   const total = paymentType==='expense' ? (Number(amount)||0)*(Number(quantity)||0) : department === 'drivers' ? batch.reduce((sum,row)=>sum+(selectedPeriods.length?periodTotal(periodAmounts(selectedPeriods,row.amount,row.periodAmounts)):Number(row.amount)||0),0) : selectedPeriods.length>1?periodTotal(periodAmounts(selectedPeriods,amount,officeAmounts)):Number(amount)||0;
-  const overlayOpen=pickerOpen || periodPickerOpen;
+  const overlayOpen=pickerOpen || periodPickerOpen || creatingEmployee;
   const mainDialog=useRef<HTMLDivElement>(null);
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;mainDialog.current?.focus();return()=>previous?.focus();},[]);
   const close=()=>{if(!busy && !overlayOpen)onClose();};
@@ -145,7 +150,7 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
     </> : <>
     <div className="expense-field full"><span id="payment-department-label">Кому выплачиваем</span><div className="payment-segments" role="group" aria-labelledby="payment-department-label">{[{key:'office',label:'Офис'},{key:'drivers',label:'Водители'}].map(item=><button type="button" key={item.key} disabled={expense?.source==='advance' && item.key!==(expense.recipientType==='driver' || expense.driverId?'drivers':'office')} aria-pressed={department===item.key} onClick={()=>{if(department===item.key)return;setDepartment(item.key);setError('');}}>{item.label}</button>)}</div></div>
     <label className="expense-field full">{department==='drivers'?'Школа':'Отдел'}<select required={paymentType==='salary' && department==='office'} value={department==='drivers'?school:officeDepartment} onChange={event=>{if(department==='drivers')setSchool(event.target.value);else{setOfficeDepartment(event.target.value);setEmployeeId('');}}}><option value="">{department==='drivers'?'Все школы':'Все отделы'}</option>{department==='drivers'?SCHOOL_TABS.filter(row=>row.key!=='ALL').map(row=><option key={row.key} value={row.key}>{row.label}</option>):EMPLOYEE_DEPARTMENTS.map(item=><option key={item.key} value={item.key}>{item.label}</option>)}</select></label>
-    <div className="expense-field full"><span id="payment-recipient-label">Получатели</span>{department==='drivers'?<button type="button" className="payment-recipient-button" aria-labelledby="payment-recipient-label" onClick={()=>setPickerOpen(true)} disabled={driversLoading || Boolean(driversError)}><span>{batch.length?`Выбрано водителей: ${batch.length}`:'Выбрать водителей'}</span><span>Выбрать →</span></button>:<select aria-labelledby="payment-recipient-label" required value={employeeId} onChange={event=>setEmployeeId(event.target.value)} disabled={isLoading}><option value="">Выберите сотрудника</option>{recipients.map(row=><option key={row.id} value={row.id}>{row.fullName}</option>)}</select>}</div>
+    <div className="expense-field full payment-office-recipient"><span id="payment-recipient-label">Получатели</span>{department==='drivers'?<button type="button" className="payment-recipient-button" aria-labelledby="payment-recipient-label" onClick={()=>setPickerOpen(true)} disabled={driversLoading || Boolean(driversError)}><span>{batch.length?`Выбрано водителей: ${batch.length}`:'Выбрать водителей'}</span><span>Выбрать →</span></button>:<NotionSelect ariaLabel="Получатели" searchable searchPlaceholder="Поиск сотрудника" value={employeeId} options={recipients.map(row=>({value:row.id,label:row.fullName}))} onChange={setEmployeeId} disabled={isLoading} placeholder="Выберите сотрудника" footerAction={{label:'Добавить нового',onClick:()=>setCreatingEmployee(true)}}/>}</div>
     <div className="expense-field"><span id="payment-period-label">Периоды выплаты</span><button type="button" className="payment-recipient-button" aria-labelledby="payment-period-label" onClick={()=>setPeriodPickerOpen(true)}><span>{selectedPeriods.length===1?salaryPeriods.find(period=>period.key===selectedPeriods[0])?.label:selectedPeriods.length?`Выбрано периодов: ${selectedPeriods.length}`:'Выберите периоды'}</span><span>▾</span></button></div>
     <label className="expense-field">Сумма, сом<input required={department!=='drivers'} readOnly={department==='drivers' || selectedPeriods.length>1} type="number" min="0.01" step="0.01" value={department==='drivers' || selectedPeriods.length>1?total:amount} onChange={event=>{setAmount(event.target.value);if(selectedPeriods.length===1)setOfficeAmounts(current=>({...current,[selectedPeriods[0]]:event.target.value}));}}/></label>
     </>}
@@ -157,5 +162,5 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
   </fieldset>
     {(error || paymentType!=='expense' && loadingError) && <p className="expense-form-error" role="alert">{error || 'Не удалось загрузить получателей выплаты'}</p>}
     <button className="expenses-add" type="submit" disabled={busy || paymentType!=='expense' && (!department || loading || Boolean(loadingError))}>{busy ? `Сохранение… ${savedCount}` : savedCount ? 'Повторить оставшиеся выплаты' : expense ? 'Сохранить изменения' : paymentType==='expense'?'Добавить расход':paymentType === 'salary' ? 'Выплатить зарплату' : 'Выдать аванс'}</button>
-  </form></div>{pickerOpen && <DriverPaymentPicker drivers={activeDrivers} allDrivers={drivers} school={school} initial={driverPayments} salary={paymentType==='salary'} periods={salaryPeriods.filter(period=>selectedPeriods.includes(period.key))} transferSchool={transferSchool} onClose={()=>setPickerOpen(false)} onConfirm={rows=>{setDriverPayments(rows);setPickerOpen(false);setError('');}}/>}{periodPickerOpen && <PaymentPeriodPicker periods={salaryPeriods} selected={selectedPeriods} amounts={periodAmounts(selectedPeriods,amount,officeAmounts)} allocate={department==='office'} onClose={()=>setPeriodPickerOpen(false)} onConfirm={(keys,values)=>{setSelectedPeriods(keys);setOfficeAmounts(Object.fromEntries(keys.map((key,index)=>[key,values[key]??(index===0?amount:'')])));if(keys.length===1)setAmount(values[keys[0]]??amount);setDriverPayments(current=>current.map(row=>{const values=periodAmounts(keys,row.amount,row.periodAmounts);return {...row,periodAmounts:values,amount:String(periodTotal(values))};}));setPeriodPickerOpen(false);setError('');}}/>}</div>;
+  </form></div>{pickerOpen && <DriverPaymentPicker drivers={activeDrivers} allDrivers={drivers} school={school} initial={driverPayments} salary={paymentType==='salary'} periods={salaryPeriods.filter(period=>selectedPeriods.includes(period.key))} transferSchool={transferSchool} onClose={()=>setPickerOpen(false)} onConfirm={rows=>{setDriverPayments(rows);setPickerOpen(false);setError('');}}/>}{periodPickerOpen && <PaymentPeriodPicker periods={salaryPeriods} selected={selectedPeriods} amounts={periodAmounts(selectedPeriods,amount,officeAmounts)} allocate={department==='office'} onClose={()=>setPeriodPickerOpen(false)} onConfirm={(keys,values)=>{setSelectedPeriods(keys);setOfficeAmounts(Object.fromEntries(keys.map((key,index)=>[key,values[key]??(index===0?amount:'')])));if(keys.length===1)setAmount(values[keys[0]]??amount);setDriverPayments(current=>current.map(row=>{const values=periodAmounts(keys,row.amount,row.periodAmounts);return {...row,periodAmounts:values,amount:String(periodTotal(values))};}));setPeriodPickerOpen(false);setError('');}}/>}{creatingEmployee && createPortal(<EmployeeCardModal employee={null} paymentRecipientOnly restrictedRole={(EMPLOYEE_DEPARTMENTS.find(item=>item.key===officeDepartment)?.roles.filter(role=>role!=='driver') ?? ['manager','b2b_manager','logist','senior_logist','b2b_logist','cashier']) as EmployeeRole[]} sessionToken={sessionToken} onClose={()=>setCreatingEmployee(false)} onDeleted={()=>setCreatingEmployee(false)} onChanged={employee=>{queryClient.setQueryData<Employee[]>(QK.employees,(current:Employee[]|undefined)=>[...(current??[]).filter(item=>item.id!==employee.id),employee]);setEmployeeId(employee.id);setCreatingEmployee(false);}}/>,document.body)}</div>;
 }

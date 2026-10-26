@@ -71,7 +71,7 @@ test('editing an existing salary uses the same card and retains identity',()=>{
   const record = {...expenseRows[0],source:'manual' as const,category:'office' as const,paymentMethod:'cashless' as const,subcategory:'ЗП',employeeId:'employee-1',departmentKey:'finance',salaryPeriodKey:'2026-10-1'};
   render(<ExpenseModal {...props} initialCategory="office" expense={record}/>);
   expect(screen.getByRole('button',{name:'Зарплата'})).toHaveAttribute('aria-pressed','true');
-  expect(screen.getByRole('combobox',{name:'Получатели'})).toHaveValue('employee-1');
+  expect(screen.getByRole('button',{name:'Получатели'})).toHaveTextContent('Сотрудник');
 });
 
 test('edits a price in place, saves and recalculates the total', async()=>{

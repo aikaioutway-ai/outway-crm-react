@@ -24,15 +24,20 @@ test.each([true,false])('row plus preserves school and transfer for another reci
   expect(reserve.transfers).toEqual([]);
 });
 
-test('current recipient menu keeps the assigned driver and opens all drivers only in an added row',()=>{
+test('recipient menu has pinned current driver, search and one create action; added row can be removed',()=>{
   const reserve={driverId:'reserve',fullName:'Резервный водитель',status:'reserve',transfers:[]} as any;
   render(<DriverPaymentPicker {...props} salary allDrivers={[...drivers,reserve]}/>);
   fireEvent.click(screen.getByRole('button',{name:'Водитель для Водитель 1'}));
-  expect(screen.queryByRole('option',{name:'Резервный водитель'})).not.toBeInTheDocument();
-  expect(screen.getByRole('button',{name:'Добавить нового водителя'})).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('option',{name:'Добавить водителя'}));
+  expect(screen.queryByRole('option',{name:'Добавить водителя'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Добавить нового'})).toBeInTheDocument();
+  fireEvent.change(screen.getByRole('textbox',{name:'Поиск водителя в списке'}),{target:{value:'Резервный'}});
   expect(screen.getByRole('option',{name:'Резервный водитель'})).toBeInTheDocument();
+  expect(screen.queryByRole('option',{name:'Водитель 2'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('option',{name:'Резервный водитель'}));
   expect(screen.getByRole('button',{name:'Водитель для Водитель 1'})).toHaveTextContent('Водитель 1');
   expect(document.querySelector('.transfer-group-before')).toBeInTheDocument();
-  expect(document.querySelector('.transfer-group-following')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Удалить получателя Резервный водитель'}));
+  expect(screen.queryByRole('button',{name:'Водитель для Резервный водитель'})).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Водитель для Водитель 1'})).toBeInTheDocument();
+  expect(screen.getByRole('combobox',{name:'Трансфер для Водитель 1'})).toHaveDisplayValue('№1');
 });

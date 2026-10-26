@@ -23,6 +23,8 @@ interface NotionSelectProps {
   onEscape?: () => void;
   onClose?: () => void;
   ariaLabel?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
   footerAction?: { label: string; onClick: () => void };
 }
 
@@ -40,13 +42,16 @@ export default function NotionSelect({
   onClose,
   ariaLabel,
   footerAction,
+  searchable=false,
+  searchPlaceholder='Поиск',
 }: NotionSelectProps) {
   const [open, setOpen] = useState(Boolean(autoFocus));
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
-  const hasFooter=Boolean(footerAction);
+  const [search,setSearch]=useState('');
+  const hasFooter=Boolean(footerAction) || searchable;
   const selected = options.find(option => option.value === value);
 
   const close = useCallback(() => {
@@ -119,7 +124,7 @@ export default function NotionSelect({
         aria-haspopup="listbox"
         type="button"
         disabled={disabled}
-        onClick={() => { if (open) close(); else setOpen(true); }}
+        onClick={() => { if (open) close(); else {setSearch('');setOpen(true);} }}
         style={{
           width: '100%',
           height: isCell ? 38 : 24,
@@ -180,12 +185,12 @@ export default function NotionSelect({
         <div
           ref={panelRef}
           className="notion-select-panel"
-          role={footerAction ? "dialog" : "listbox"}
+          role={hasFooter ? "dialog" : "listbox"}
           aria-label="Выберите вариант"
           style={{
             ...panelStyle,
             maxHeight: 340,
-            overflowY: footerAction ? 'hidden' : 'auto',
+            overflowY: hasFooter ? 'hidden' : 'auto',
             padding: '12px 12px 10px',
             border: '1px solid #E5ECEF',
             borderRadius: 10,
@@ -194,11 +199,15 @@ export default function NotionSelect({
           }}
           onClick={event => event.stopPropagation()}
         >
-          <div style={{ color: '#777', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+          {!searchable && <div style={{ color: '#777', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
             Выберите вариант
-          </div>
-          <div role={footerAction?'listbox':undefined} style={{ display: 'grid', gridTemplateColumns:'minmax(0,1fr)', gap: 7, maxHeight: footerAction ? Math.min(230,window.innerHeight-140) : undefined, overflowY: footerAction ? 'auto' : undefined }}>
-            {options.map((option) => {
+          </div>}
+          {searchable && <>
+            {selected && <button type="button" className="notion-select-current" onClick={close}><Check size={15}/>{selected.label}</button>}
+            <input className="notion-select-search" aria-label={searchPlaceholder} placeholder={searchPlaceholder} value={search} onChange={event=>setSearch(event.target.value)}/>
+          </>}
+          <div role={hasFooter?'listbox':undefined} style={{ display: 'grid', gridTemplateColumns:'minmax(0,1fr)', gap: 7, maxHeight: hasFooter ? Math.min(searchable?170:230,window.innerHeight-200) : undefined, overflowY: hasFooter ? 'auto' : undefined }}>
+            {options.filter(option=>!searchable || option.value!==value && option.label.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru'))).map((option) => {
               const active = option.value === value;
               return (
                 <button

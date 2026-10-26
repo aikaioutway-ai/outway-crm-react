@@ -247,6 +247,6 @@
 .payment-transfer-row select{width:100%;min-width:0}
 .payment-transfer-row>.expense-cancel{display:grid;place-items:center;padding:8px}
 @media(max-width:800px){.payment-picker-row.payment-transfer-row{grid-template-columns:17px minmax(0,1fr) minmax(0,1fr) 40px}.payment-transfer-row>.payment-picker-amount:nth-of-type(3){grid-column:2/4}.payment-transfer-row>.payment-picker-amounts{grid-column:2/4}.payment-transfer-row>.expense-cancel{grid-column:4;grid-row:1/4}}
-.payment-driver-choice .notion-select-trigger{height:40px!important;border:1px solid var(--border)!important;border-radius:10px!important;background:var(--surface)!important;padding:0 10px!important;font-size:13px!important;font-weight:400!important;box-shadow:none!important}
+.payment-driver-choice .notion-select-trigger,.payment-office-recipient .notion-select-trigger{height:40px!important;border:1px solid var(--border)!important;border-radius:10px!important;background:var(--surface)!important;padding:0 10px!important;font-size:13px!important;font-weight:400!important;box-shadow:none!important}
 .payment-picker-row.transfer-group-before{border-bottom-left-radius:0;border-bottom-right-radius:0;margin-bottom:-8px;border-bottom-style:dashed}
 .payment-picker-row.transfer-group-following{border-top-left-radius:0;border-top-right-radius:0;border-top:0}
