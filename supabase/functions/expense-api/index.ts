@@ -148,7 +148,14 @@ Deno.serve(async req => {
     if (body.action === 'create' || body.action === 'update') {
       const incoming = expensePayload(body.expense);
       if (incoming?.driver_id) {
-        const { data, error } = await supabase.from('v2_transfers').select('id').eq('id', incoming.transfer_id).eq('driver_id', incoming.driver_id).maybeSingle();
+        let transferQuery = supabase.from('v2_transfers').select('id').eq('id', incoming.transfer_id);
+        if (body.expense?.temporaryDriver !== true) transferQuery = transferQuery.eq('driver_id', incoming.driver_id);
+        else {
+          const { data: driver, error: driverError } = await supabase.from('v2_drivers').select('id').eq('id', incoming.driver_id).maybeSingle();
+          if (driverError) throw driverError;
+          if (!driver) return response({ ok: false, error: 'Водитель не найден' }, 400);
+        }
+        const { data, error } = await transferQuery.maybeSingle();
         if (error) throw error;
         if (!data) return response({ ok: false, error: 'Выберите трансфер выбранного водителя' }, 400);
       }

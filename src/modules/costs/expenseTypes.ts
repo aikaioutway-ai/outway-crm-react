@@ -26,6 +26,7 @@ export interface ExpenseRecord {
 }
 
 export interface NewExpenseRecord {
+  temporaryDriver?: boolean;
   name: string;
   category: ExpenseCategory;
   subcategory: string;

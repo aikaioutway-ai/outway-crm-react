@@ -287,3 +287,19 @@ test('if the old expense cannot be removed, the new driver advance is rolled bac
  expect(deleteV2DriverAdvance).toHaveBeenCalledWith('driver-advance-id');
  expect(saved).not.toHaveBeenCalled();
 });
+
+test('salary includes a manually added driver with another current school',async()=>{
+  const saved=jest.fn();
+  render(<EmployeeAdvanceModal onClose={jest.fn()} onSaved={saved} initialPaymentType="salary" initialScope="drivers"/>);
+  fireEvent.change(screen.getByRole('combobox',{name:'Школа'}),{target:{value:'TIS'}});
+  fireEvent.click(screen.getByRole('button',{name:'Получатели'}));
+  fireEvent.click(screen.getByRole('button',{name:'Добавить временного водителя'}));
+  fireEvent.change(screen.getByRole('combobox',{name:'Временный водитель'}),{target:{value:'driver-b'}});
+  fireEvent.change(screen.getByRole('combobox',{name:'Трансфер для Водитель Б'}),{target:{value:'transfer-a'}});
+  fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма для Водитель Б'}),{target:{value:'5000'}});
+  fireEvent.click(screen.getByRole('button',{name:'Готово'}));
+  choosePeriod();
+  fireEvent.click(screen.getByRole('button',{name:'Выплатить зарплату'}));
+  await waitFor(()=>expect(saved).toHaveBeenCalledTimes(1));
+  expect(createExpense).toHaveBeenCalledWith(expect.objectContaining({temporaryDriver:true,driverId:'driver-b',transferId:'transfer-a',schoolKey:'TIS',unitPrice:5000}),undefined);
+});
