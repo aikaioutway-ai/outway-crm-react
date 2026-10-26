@@ -2,29 +2,16 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import ReceiptModal from './ReceiptModal';
 import { fetchFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 jest.mock('../../services/financeService', () => ({ fetchFamilyPayment: jest.fn(), updateFamilyPayment: jest.fn() }));
-jest.mock('./pdfReceipt', () => ({ renderPdfPages: jest.fn() }));
-import { renderPdfPages } from './pdfReceipt';
 const fetchPayment = jest.mocked(fetchFamilyPayment);
 const update = jest.mocked(updateFamilyPayment);
 const payment = { id: 'p1', familyId: 'f1', amount: 6800, paymentType: 'cash' as const, paymentDate: '2026-10-21', status: 'Подтверждено' as const, createdAt: '2026-10-21', receiptCode: '', receiptBank: '', receiptTime: '', receiptCardLast4: '', comment: '' };
-beforeEach(() => {
-  jest.resetAllMocks();
-  global.ResizeObserver = jest.fn().mockImplementation(() => ({ observe: jest.fn(), disconnect: jest.fn() }));
-  jest.mocked(renderPdfPages).mockImplementation(async () => [1, 2].map(number => {
-    const textLayer = document.createElement('div');
-    textLayer.textContent = `Текст страницы ${number}`;
-    return { image: `data:image/png;base64,page${number}`, width: 600, height: 800, textLayer };
-  })); fetchPayment.mockResolvedValue(payment); update.mockResolvedValue(undefined); });
+beforeEach(() => { jest.resetAllMocks(); fetchPayment.mockResolvedValue(payment); update.mockResolvedValue(undefined); });
 
-test('shows PDF with selectable page text, edits receipt fields, saves metadata without changing amount and keeps failed draft', async () => {
+test('embeds original PDF, edits receipt fields, saves metadata without changing amount and keeps failed draft', async () => {
   const saved = jest.fn();
   render(<ReceiptModal paymentId="p1" subtitle="Родитель" receiptUrl="/check.pdf" canEdit onClose={jest.fn()} onSaved={saved}/>);
-  expect(await screen.findByAltText('Чек платежа')).toHaveAttribute('src', 'data:image/png;base64,page1');
-  expect(screen.getByText('Текст страницы 1')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', {name: 'Следующая страница'}));
-  expect(screen.getByAltText('Чек платежа')).toHaveAttribute('src', 'data:image/png;base64,page2');
-  expect(screen.getByText('Текст страницы 2')).toBeInTheDocument();
-  expect(screen.queryByText('Текст страницы 1')).not.toBeInTheDocument();
+  expect(screen.getByTitle('PDF-чек платежа')).toHaveAttribute('src', '/check.pdf#view=Fit&toolbar=0&navpanes=0');
+  expect(screen.queryByAltText('Чек платежа')).not.toBeInTheDocument();
   const code = await screen.findByLabelText('Код чека');
   fireEvent.change(code, {target: {value: 'receipt-123'}});
   update.mockRejectedValueOnce(new Error('Дубль в другой семье'));
@@ -52,4 +39,9 @@ test('without a saved payment shows only the receipt and closes on Escape', () =
   expect(screen.queryByLabelText('Код чека')).not.toBeInTheDocument();
   fireEvent.keyDown(window, {key: 'Escape'});
   expect(close).toHaveBeenCalled();
+});
+
+test('embeds a local PDF before payment is saved', () => {
+  render(<ReceiptModal receiptUrl="blob:local" pdf onClose={jest.fn()} />);
+  expect(screen.getByTitle('PDF-чек платежа')).toHaveAttribute('src', 'blob:local#view=Fit&toolbar=0&navpanes=0');
 });
