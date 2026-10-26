@@ -152,7 +152,8 @@ export function matchesLogisticsMapFilter(row: Pick<ChildRow, 'status' | 'transf
   // Отказы видны на карте только по фишке «Отказ»; в «Все» и по трансферам их нет.
   if (transferFilter === 'rejected') return row.status === 'rejected';
   if (row.status === 'rejected') return false;
-  if (transferFilter === 'empty') return isNewLogisticsRow(row);
+  // «Без трансфера» на карте — те же дети, что в счётчике и таблице: все без трансфера или на тестовом.
+  if (transferFilter === 'empty') return !row.transferNumber || Boolean(row.isTestTransfer);
   return !transferFilter || row.transferNumber === transferFilter;
 }
 
