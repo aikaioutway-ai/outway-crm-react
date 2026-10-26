@@ -26,3 +26,12 @@ export function isEmployeeSessionActive(sessionToken?: string, now = Date.now())
 export function isEmployeeSessionExpiredMessage(message: string): boolean {
   return message.includes(EMPLOYEE_SESSION_EXPIRED_MESSAGE);
 }
+
+// For display only; the server independently verifies the signed session.
+export function getEmployeeSessionRole(sessionToken?: string): string | null {
+  try {
+    if (!sessionToken) return null;
+    const part = sessionToken.split('.')[0].replaceAll('-', '+').replaceAll('_', '/');
+    return JSON.parse(atob(part + '='.repeat((4 - part.length % 4) % 4))).role ?? null;
+  } catch { return null; }
+}
