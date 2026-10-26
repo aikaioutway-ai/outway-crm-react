@@ -49,6 +49,7 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
       filterKey: number,
       label: number,
       count: transferRows.length,
+      temporary: transferRows.some(row => /^Временный водитель №\d+$/.test(row.fullName.trim())),
       vehicleType: transferRows.find(row => row.vehicleType === 'microbus')?.vehicleType
         ?? transferRows.find(row => row.vehicleType === 'minivan')?.vehicleType
         ?? transferRows.find(row => row.vehicleType === 'sedan')?.vehicleType,
@@ -79,12 +80,13 @@ export default function DriversTransferDashboard({ schoolKey, rightReserveWidth 
           key={cell.filterKey || 'all'}
           label={cell.label}
           color={transferCellColor(cell)}
+          alert={'temporary' in cell && Boolean(cell.temporary)}
           active={cell.count > 0}
           selected={selectedKey === cell.filterKey}
           value={cell.count}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
           onContextMenu={event=>showTaskContextMenu(event,/^\d+$/.test(cell.filterKey)?{type:'transfer',id:'',schoolKey,transferNumber:Number(cell.filterKey),label:`Трансфер № ${cell.filterKey}`} : ['empty','new','rejected'].includes(cell.filterKey)?{type:'group',id:`${schoolKey}:${cell.filterKey==='rejected'?'rejected':'new'}`,schoolKey,group:cell.filterKey==='rejected'?'rejected':'new',label:cell.filterKey==='rejected'?'Отказные заявки':'Новые заявки'}:{type:'school',id:schoolKey,schoolKey,label:schoolKey})}
-          title={cell.count > 0 ? `Водителей: ${cell.count}${cell.vehicleType ? ` · ${VT_LABEL[cell.vehicleType] ?? cell.vehicleType}` : ''}` : undefined}
+          title={cell.count > 0 ? `Водителей: ${cell.count}${'temporary' in cell && cell.temporary ? ' · Временный водитель' : ''}${cell.vehicleType ? ` · ${VT_LABEL[cell.vehicleType] ?? cell.vehicleType}` : ''}` : undefined}
         />
       ))}
       </TransferBarPages>
