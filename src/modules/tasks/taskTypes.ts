@@ -3,7 +3,7 @@ export type TaskStatus = 'new' | 'in_progress' | 'review' | 'done' | 'cancelled'
 export type TaskTargetType = 'general' | 'school' | 'transfer' | 'child' | 'family' | 'driver' | 'group';
 export interface TaskTarget { type: TaskTargetType; id: string; label: string; schoolKey?: string; schoolKeys?: string[]; group?: 'new' | 'rejected'; transferId?: string; transferNumber?: number; familyId?: string; childId?: string; driverId?: string }
 export interface CrmTask {
-  id: string; title: string; description: string; creator_id: string; assignee_id: string; observer_id?: string;
+  id: string; title: string; description: string; creator_id: string; assignee_id: string; assignee_ids?: string[]; assignment_department?: string; observer_id?: string;
   due_at: string; priority: 'normal' | 'urgent'; status: TaskStatus; requires_review: boolean;
   target: TaskTarget; school_key?: string; accepted_at?: string; result: string;
   completed_at?: string; version: number; created_at: string; updated_at: string;
@@ -26,13 +26,15 @@ export const TASK_COMPOSER_EVENT = 'outway-task-compose';
 export function openTaskComposer(target: TaskTarget) { window.dispatchEvent(new CustomEvent(TASK_COMPOSER_EVENT,{detail:target})); }
 
 export const TASK_DEPARTMENTS: Record<string,{label:string;roles:UserRole[]}> = {
-  logistics:{label:'Логистика',roles:['logist','senior_logist','b2b_logist']},
+  logistics:{label:'Логистика',roles:['logist','b2b_logist']},
   management:{label:'Менеджеры',roles:['manager','b2b_manager']},
   finance:{label:'Финансы',roles:['cashier']},
-  leadership:{label:'Руководство',roles:['admin','gen_director','director']},
+  leadership:{label:'Руководство',roles:['admin','gen_director','director','senior_logist']},
 };
 export const TASK_OBSERVER_ROLES: UserRole[] = ['gen_director','director','senior_logist','cashier'];
 export function taskDepartment(role?: UserRole) { return Object.entries(TASK_DEPARTMENTS).find(([,department])=>role && department.roles.includes(role))?.[0] ?? ''; }
 
 export const canViewTeamTasks = (role: string) => ['admin','gen_director','director','senior_logist','cashier'].includes(role);
 export interface TaskCounts { total: number; open: number; completed: number; overdue: number; review: number }
+
+export const taskAssigneeIds = (task: Pick<CrmTask,'assignee_id'|'assignee_ids'>): string[] => task.assignee_ids?.length ? task.assignee_ids : [task.assignee_id];

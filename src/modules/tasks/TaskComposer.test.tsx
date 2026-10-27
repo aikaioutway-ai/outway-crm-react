@@ -1,10 +1,10 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import TaskComposer from './TaskComposer';
-import { mutateTask } from '../../services/taskService';
+import { mutateTask, useTaskMetadata } from '../../services/taskService';
 import type { CrmTask, TaskTarget } from './taskTypes';
 
 jest.mock('../../services/taskService',()=>({
-  useTaskMetadata:()=>({data:{employees:[
+  useTaskMetadata:jest.fn(()=>({data:{multipleAssignees:true,employees:[
     {id:'employee',full_name:'Логист Тест',role:'logist',status:'active'},
     {id:'manager',full_name:'Менеджер Тест',role:'manager',status:'active'},
     {id:'observer',full_name:'Гендиректор Тест',role:'gen_director',status:'active'},
@@ -13,7 +13,7 @@ jest.mock('../../services/taskService',()=>({
     {id:'cashier',full_name:'Кассир Тест',role:'cashier',status:'active'},
     {id:'admin',full_name:'Администратор Тест',role:'admin',status:'active'},
     {id:'dismissed',full_name:'Уволенный',role:'cashier',status:'dismissed'},
-  ]}}),
+  ]}})),
   useResolvedTaskTarget:()=>({}),
   useTaskTargets:(_token:string,type:string,school:string,_search:string,_enabled:boolean,context?:{transferId?:string;group?:string})=>({data:{targets:school!=='TIS'?[]:type==='transfer'?[{type:'transfer',id:'transfer',label:'TIS · № 3',schoolKey:'TIS',transferNumber:3}]:[
     {type:'child',id:'child',label:'Ребёнок Маршрут',schoolKey:'TIS',transferId:'transfer'},
@@ -22,7 +22,12 @@ jest.mock('../../services/taskService',()=>({
   ].filter(child=>(!context?.transferId || child.transferId===context.transferId) && (!context?.group || child.group===context.group))}}),
   mutateTask:jest.fn().mockResolvedValue({}),
 }));
-const change=(label:string,value:string)=>{if(label==='Школа' && !screen.queryByLabelText('Школа'))fireEvent.click(screen.getByRole('button',{name:'Выбрать школу, трансфер или ребёнка'}));fireEvent.change(screen.getByLabelText(label),{target:{value}});};
+const openRecipients=()=>{const button=screen.getByRole('button',{name:'Ответственный'});if(button.getAttribute('aria-expanded')!=='true')fireEvent.click(button);};
+const change=(label:string,value:string)=>{
+  if(label==='Ответственный'){openRecipients();fireEvent.click(screen.getByRole('checkbox',{name:value==='employee'?/Логист Тест/:/Менеджер Тест/}));return;}
+  if(label==='Школа' && !screen.queryByLabelText('Школа'))fireEvent.click(screen.getByRole('button',{name:'Выбрать школу, трансфер или ребёнка'}));
+  fireEvent.change(screen.getByLabelText(label),{target:{value}});
+};
 function fillResponsible(){change('Отдел ответственного','logistics');change('Ответственный','employee');change('Наблюдатель','observer');}
 beforeEach(()=>jest.clearAllMocks());
 
@@ -54,11 +59,12 @@ test.each([['group:new','new','Ребёнок Новый'],['group:rejected','re
   await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','create',expect.objectContaining({target:expect.objectContaining({type:'group',id:`TIS:${group}`,group,schoolKey:'TIS'})}),undefined));
 });
 
-test('department limits employees and changing it clears selected assignee',()=>{
+test('department filters checkboxes and preserves selected employees',()=>{
   render(<TaskComposer token="session" onClose={jest.fn()}/>);change('Отдел ответственного','logistics');change('Ответственный','employee');
-  expect(within(screen.getByLabelText('Ответственный')).queryByRole('option',{name:/Менеджер Тест/})).not.toBeInTheDocument();
-  change('Отдел ответственного','management');expect(screen.getByLabelText('Ответственный')).toHaveValue('');
-  expect(within(screen.getByLabelText('Ответственный')).queryByRole('option',{name:/Логист Тест/})).not.toBeInTheDocument();
+  expect(screen.queryByRole('checkbox',{name:/Менеджер Тест/})).not.toBeInTheDocument();
+  change('Отдел ответственного','management');openRecipients();
+  expect(screen.getByRole('button',{name:'Ответственный'})).toHaveTextContent('Логист Тест');
+  expect(screen.queryByRole('checkbox',{name:/Логист Тест/})).not.toBeInTheDocument();
 });
 
 test('observer choices contain only the four requested active leadership roles',()=>{
@@ -107,4 +113,54 @@ test('school context has no child search and lists transfers before application 
   const labels=within(screen.getByLabelText('Трансфер')).getAllByRole('option').map(option=>option.textContent);
   expect(labels.indexOf('TIS · № 3')).toBeLessThan(labels.indexOf('Новые'));
   expect(labels.indexOf('TIS · № 3')).toBeLessThan(labels.indexOf('Отказные'));
+});
+
+
+
+test('keeps the original fields and selects people across departments with checkboxes',async()=>{
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);
+  expect(screen.queryByLabelText('Кому поставить задачу')).not.toBeInTheDocument();
+  change('Что нужно сделать','Проверить маршрут вместе');change('Отдел ответственного','management');change('Ответственный','manager');
+  change('Отдел ответственного','logistics');change('Ответственный','employee');
+  expect(screen.getByRole('button',{name:'Ответственный'})).toHaveTextContent('Менеджер Тест, Логист Тест');
+  fireEvent.click(screen.getByRole('button',{name:'Поставить задачу'}));
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','create',expect.objectContaining({assigneeIds:['manager','employee'],assignmentDepartment:null}),undefined));
+});
+
+test('whole department checkbox selects logistics without its head',async()=>{
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);change('Что нужно сделать','Проверить маршруты');change('Отдел ответственного','logistics');openRecipients();
+  fireEvent.click(screen.getByRole('checkbox',{name:'Весь отдел'}));
+  expect(screen.getByRole('checkbox',{name:/Логист Тест/})).toBeChecked();
+  expect(screen.queryByRole('checkbox',{name:/Начальник Тест/})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Поставить задачу'}));
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','create',expect.objectContaining({assigneeIds:['employee'],assignmentDepartment:'logistics'}),undefined));
+});
+
+test('leadership includes the logistics head',()=>{
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);change('Отдел ответственного','leadership');openRecipients();
+  expect(screen.getByRole('checkbox',{name:/Начальник Тест/})).toBeInTheDocument();
+});
+
+test('can remove selections and requires at least one participant',()=>{
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);change('Что нужно сделать','Общая задача');change('Отдел ответственного','management');change('Ответственный','manager');
+  fireEvent.click(screen.getByRole('checkbox',{name:/Менеджер Тест/}));fireEvent.click(screen.getByRole('button',{name:'Поставить задачу'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('выберите исполнителей');expect(mutateTask).not.toHaveBeenCalled();
+});
+
+test('editing preserves every participant without extra assignment modes',async()=>{
+  const task={id:'shared',title:'Общая задача',description:'',assignee_id:'employee',assignee_ids:['employee','manager'],due_at:'2099-01-01T12:00:00Z',priority:'normal',requires_review:true,target:{type:'general',id:'',label:'Общая задача'},version:3} as CrmTask;
+  render(<TaskComposer token="session" task={task} onClose={jest.fn()}/>);
+  expect(screen.getByRole('button',{name:'Ответственный'})).toHaveTextContent('Логист Тест, Менеджер Тест');
+  fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','edit',expect.objectContaining({assigneeIds:['employee','manager'],version:3}),'shared'));
+});
+
+test('old server never silently saves only the first selected participant',()=>{
+  const metadata=useTaskMetadata as jest.Mock;
+  const current=metadata();metadata.mockReturnValue({...current,data:{...current.data,multipleAssignees:false}});
+  render(<TaskComposer token="session" onClose={jest.fn()}/>);
+  change('Что нужно сделать','Общая задача');change('Отдел ответственного','management');change('Ответственный','manager');change('Отдел ответственного','logistics');change('Ответственный','employee');
+  fireEvent.click(screen.getByRole('button',{name:'Поставить задачу'}));
+  expect(screen.getByRole('alert')).toHaveTextContent('после обновления сервера');expect(mutateTask).not.toHaveBeenCalled();
+  metadata.mockReturnValue(current);
 });

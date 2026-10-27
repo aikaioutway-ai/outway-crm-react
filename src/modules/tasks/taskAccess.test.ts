@@ -1,4 +1,4 @@
-import { countTask, taskReadScope } from '../../../supabase/functions/task-api/access';
+import { countTask, taskReadScope, taskVisibilityFilter } from '../../../supabase/functions/task-api/access';
 
 test('only general director and admin can read every task', () => {
   expect(taskReadScope('gen_director').all).toBe(true);
@@ -20,4 +20,11 @@ test('completed and cancelled tasks never count as overdue', () => {
   expect(countTask({...task,status:'done'},now)).toEqual({total:1,open:0,completed:1,overdue:0,review:0});
   expect(countTask({...task,status:'cancelled'},now).overdue).toBe(0);
   expect(countTask({...task,status:'review'},now).review).toBe(1);
+});
+
+
+test('visibility includes any participant and department colleagues using array predicates',()=>{
+  expect(taskVisibilityFilter('manager',['logist','b2b'])).toBe('creator_id.eq."manager",assignee_ids.cs.{"manager"},observer_id.eq."manager",assignee_ids.ov.{"logist","b2b"}');
+  expect(taskVisibilityFilter('employee',[])).not.toContain('assignee_ids.ov');
+  expect(taskVisibilityFilter('with,comma',[])).toContain('assignee_ids.cs.{"with,comma"}');
 });
