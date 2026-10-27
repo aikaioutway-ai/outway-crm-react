@@ -60,8 +60,22 @@ function formatInlineDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('ru-RU');
 }
 
+// Логистам в карточке нужны только контакты, дети и история: деньги и
+// документы семьи им не показываются и не загружаются.
+const LOGIST_TABS: Tab[] = ['overview', 'children', 'history'];
+
+function isLogistRole(role: string): boolean {
+  return role === 'logist' || role === 'senior_logist';
+}
+
+function startTab(role: string, initialTab: Tab, initialChildId?: string): Tab {
+  const tab = initialChildId && initialTab === 'overview' ? 'children' : initialTab;
+  return isLogistRole(role) && !LOGIST_TABS.includes(tab) ? 'overview' : tab;
+}
+
 export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', initialChildId, onUpdated, sessionToken }: Props) {
-  const [tab, setTab] = useState<Tab>(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
+  const isLogist = isLogistRole(userRole);
+  const [tab, setTab] = useState<Tab>(startTab(userRole, initialTab, initialChildId));
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
   const [discountChild, setDiscountChild] = useState<Child | null>(null);
@@ -98,7 +112,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setSavedFamily(family);
     setDraftFamily(family);
     setEditing(false);
-    setTab(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
+    setTab(startTab(userRole, initialTab, initialChildId));
     setFinanceLoaded(false);
     setAuditLoaded(false);
     void loadChildren().catch(() => {
@@ -109,7 +123,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     void loadFinance().catch(() => {
       if (activeFamilyIdRef.current === family.id) setFinanceLoaded(false);
     });
-    loadDocuments();
+    if (!isLogist) loadDocuments();
     fetchV2Branches().then(next => { if (activeFamilyIdRef.current === family.id) setBranches(next); }).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
@@ -151,6 +165,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     }
   }
   async function loadFinance(kids?: Child[]) {
+    if (isLogist) return;
     const requestedFamilyId = family.id;
     setLoadingFinance(true);
     try {
@@ -370,9 +385,12 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         if (!ok) throw new Error('child-save-failed');
       }
 
-      const nextDocuments = await saveFamilyDocuments(family.id, draftDocuments);
-      setSavedDocuments(nextDocuments);
-      setDraftDocuments(nextDocuments.map(document => ({ ...document, scanFile: null })));
+      // Логист документы не загружает — сохранение пустого списка удалило бы их.
+      if (!isLogist) {
+        const nextDocuments = await saveFamilyDocuments(family.id, draftDocuments);
+        setSavedDocuments(nextDocuments);
+        setDraftDocuments(nextDocuments.map(document => ({ ...document, scanFile: null })));
+      }
 
       const nextChildren = await loadChildren();
       if (financeLoaded) await loadFinance(nextChildren);
@@ -657,16 +675,17 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <button type="button" aria-label="Закрыть карточку" onClick={onClose} style={closeButtonStyle}><X size={16} /></button>
           </div>
             <div className="family-card-metrics">
-              <SideMetric label="Баланс счёта" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
+              {!isLogist && <SideMetric label="Баланс счёта" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />}
               <SideMetric label="Стоимость в месяц" value={money(familyMonthlyPrice)} />
-              <SideMetric label="Задолженность" value={financeLoaded ? money(totalDebt) : '…'} alert={totalDebt > 0} />
-              <SideMetric label="Платежи на проверке" value={financeLoaded ? money(pendingAmount) : '…'} pending={pendingAmount > 0} />
+              {!isLogist && <SideMetric label="Задолженность" value={financeLoaded ? money(totalDebt) : '…'} alert={totalDebt > 0} />}
+              {!isLogist && <SideMetric label="Платежи на проверке" value={financeLoaded ? money(pendingAmount) : '…'} pending={pendingAmount > 0} />}
             </div>
         </header>
 
       <div className="family-card-navigation">
           <nav aria-label="Разделы карточки клиента" className="family-card-tabs">
             {TABS.filter(item => {
+              if (isLogist) return LOGIST_TABS.includes(item.key);
               if (item.key === 'history') return userRole === 'admin' || userRole === 'gen_director';
               return true;
             }).map(item => {

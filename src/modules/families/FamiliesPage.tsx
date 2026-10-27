@@ -17,7 +17,7 @@ import {
 } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
-import { familiesTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
+import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
 import AccrualDialog, { AccrualDialogState } from './AccrualDialog';
@@ -1264,7 +1264,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     try {
       const shouldLoadTransportMeta = mode === 'logistics' || isDriversModule;
       const [families, transfers, drivers] = await Promise.all([
-        queryClient.fetchQuery(force ? { ...familiesTableQuery, staleTime: 0 } : familiesTableQuery),
+        mode === 'logistics'
+          ? queryClient.fetchQuery(force ? { ...logisticsTableQuery, staleTime: 0 } : logisticsTableQuery)
+          : queryClient.fetchQuery(force ? { ...familiesTableQuery, staleTime: 0 } : familiesTableQuery),
         shouldLoadTransportMeta ? fetchV2TransfersDashboard().catch(() => []) : Promise.resolve([]),
         shouldLoadTransportMeta ? fetchV2DriversTable().catch(() => []) : Promise.resolve([]),
       ]);
@@ -2722,6 +2724,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           : column;
       return configuredColumn;
     });
+    if (mode === 'logistics') {
+      // Логистика не загружает деньги семей — колонки счёта ей не показываются.
+      const accountColumns = new Set(['debtAmount', 'balance', 'totalCharged', 'totalPaid', 'pendingPayment']);
+      for (let index = dataCols.length - 1; index >= 0; index--) {
+        if (accountColumns.has(String(dataCols[index].key))) dataCols.splice(index, 1);
+      }
+    }
     if (isDirectoryMode || mode === 'logistics') {
       // Как в «Начислениях»: даты заявки и посадки — отдельные колонки сразу после ребёнка.
       const childIndex = dataCols.findIndex(column => column.key === 'childName');

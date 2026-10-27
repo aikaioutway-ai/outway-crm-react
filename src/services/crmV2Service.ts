@@ -21,6 +21,7 @@ export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
   queryClient.invalidateQueries({ queryKey: QK.logisticsBadgeCount });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
+  queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   queryClient.invalidateQueries({ queryKey: QK.transfersDashboard });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
@@ -604,8 +605,9 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
   const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
     fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    // Без финансов (Логистика) сводки и кошельки не запрашиваются вовсе.
+    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
+    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
     withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
     fetchV2Branches(),
   ]);

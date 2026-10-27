@@ -50,6 +50,21 @@ export function useFamiliesTable(options?: { enabled?: boolean }): UseQueryResul
   });
 }
 
+/** Та же таблица семей для Логистики, но без денег: балансы, долги и
+ * платежи на проверке логистике не нужны и не запрашиваются. */
+export const logisticsTableQuery = {
+  queryKey: QK.logisticsTable,
+  queryFn: (): Promise<FamilyListRow[]> => fetchV2FamiliesTable(false),
+  staleTime: 5 * 60 * 1000,
+};
+
+export function useLogisticsTable(options?: { enabled?: boolean }): UseQueryResult<FamilyListRow[]> {
+  return useQuery({
+    ...logisticsTableQuery,
+    enabled: options?.enabled ?? true,
+  });
+}
+
 /** Постраничная загрузка «Справочник»/«Заявки» через RPC get_families_page.
  * Все фильтры входят в queryKey — смена страницы/школы/поиска естественно
  * даёт отдельный (и кэшируемый) запрос вместо ручного релоада. keepPreviousData

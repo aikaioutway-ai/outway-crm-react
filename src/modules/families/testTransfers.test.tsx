@@ -1,16 +1,16 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import LogisticsSchoolTransferDashboard from './LogisticsSchoolTransferDashboard';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { updateV2TransferVehicleType } from '../../services/crmV2Service';
 import { __resetTestTransfers, isInTestTransfer, isTestTransfer, setTestTransfer, TEST_TRANSFER_COLOR } from './testTransfers';
 
-jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferNumbers: () => [] }));
+jest.mock('../../hooks/useCrmQueries', () => ({ useLogisticsTable: jest.fn(), useSchoolTransferNumbers: () => [] }));
 jest.mock('../../services/crmV2Service', () => ({
   clearV2TransferVehicleType: jest.fn(),
   updateV2TransferVehicleType: jest.fn(),
 }));
 
-const mockedUseFamiliesTable = useFamiliesTable as jest.MockedFunction<typeof useFamiliesTable>;
+const mockedUseLogisticsTable = useLogisticsTable as jest.MockedFunction<typeof useLogisticsTable>;
 const child = (rowId: string, transferNumber: string, status = 'boarded') => ({
   rowId, branchFilter: 'AES', branchId: 'branch-1', schoolId: 'school-1', status, transferNumber, vehicleType: 'microbus',
 });
@@ -28,7 +28,7 @@ test('test mark is stored per school and transfer, and ignores rejected children
 });
 
 test('marking a transfer as test greys it out, counts its children as without transfer and never touches the database', () => {
-  mockedUseFamiliesTable.mockReturnValue({
+  mockedUseLogisticsTable.mockReturnValue({
     data: [child('c1', '1'), child('c2', '1'), child('c3', '')],
     refetch: jest.fn(),
   } as any);

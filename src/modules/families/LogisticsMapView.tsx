@@ -7,7 +7,7 @@ import {
   FamilyListRow,
   V2BranchOption,
 } from '../../services/crmV2Service';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { queryClient, QK } from '../../services/queryClient';
 import { Family, VehicleType } from '../../types';
 import { loadYandexMaps } from '../../utils/yandexMaps';
@@ -130,7 +130,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
 }
 
 export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, sessionToken, onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsMapViewProps) {
-  const { data: rows = null } = useFamiliesTable();
+  const { data: rows = null } = useLogisticsTable();
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [mapReady, setMapReady] = useState(false);
