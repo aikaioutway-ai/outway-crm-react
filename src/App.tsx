@@ -34,7 +34,7 @@ import {
   getEmployeeSessionExpiresAt,
   isEmployeeSessionActive,
 } from './services/employeeSession';
-import { useFamiliesTable } from './hooks/useCrmQueries';
+import { useLogisticsBadgeCount } from './hooks/useCrmQueries';
 import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilyListRow, fetchV2Family } from './services/crmV2Service';
@@ -317,9 +317,9 @@ export default function App() {
     });
   }, [currentUser]);
 
-  const badgesQuery = useFamiliesTable({ enabled: !!currentUser });
-  const badges: Partial<Record<NavSection, number>> = currentUser && badgesQuery.data
-    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length, tasks: taskBadge }
+  const logisticsBadgeQuery = useLogisticsBadgeCount({ enabled: !!currentUser });
+  const badges: Partial<Record<NavSection, number>> = currentUser && logisticsBadgeQuery.data !== undefined
+    ? { logistics: logisticsBadgeQuery.data, tasks: taskBadge }
     : { tasks: taskBadge };
 
   const tabBarStyle: React.CSSProperties = {

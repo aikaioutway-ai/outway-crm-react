@@ -9,6 +9,7 @@ import {
   fetchRefundsTable,
   fetchBranchStats,
   fetchSchoolApplicationCounts,
+  fetchLogisticsBadgeCount,
   fetchV2PayrollEntriesForPeriod,
   fetchV2PayrollApproval,
   fetchV2PayrollApprovalsForPeriod,
@@ -127,6 +128,14 @@ export function useSchoolApplicationCounts(): Record<string, number> | undefined
     queryFn: fetchSchoolApplicationCounts,
   });
   return data;
+}
+
+export function useLogisticsBadgeCount(options?: { enabled?: boolean }): UseQueryResult<number> {
+  return useQuery({
+    queryKey: QK.logisticsBadgeCount,
+    queryFn: fetchLogisticsBadgeCount,
+    enabled: options?.enabled ?? true,
+  });
 }
 
 export function useEmployees(options?: { enabled?: boolean }): UseQueryResult<Employee[]> {

@@ -19,6 +19,7 @@ export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
 export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
+  queryClient.invalidateQueries({ queryKey: QK.logisticsBadgeCount });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   queryClient.invalidateQueries({ queryKey: QK.transfersDashboard });
@@ -1000,6 +1001,20 @@ export async function fetchBranchStats(): Promise<BranchStat[]> {
     debtSum: Number(row.debt_sum ?? 0),
     balance: Number(row.balance ?? 0),
   }));
+}
+
+// Статусы детей, которые попадают в «Логистику» (всё, кроме новых заявок и
+// отказов) — те же, что mapChildStatus переводит не в 'new'/'rejected'.
+const LOGISTICS_CHILD_STATUSES = ['active', 'boarded', 'waiting', 'paused', 'inactive', 'archive'];
+
+/** Цифра у «Логистики» в меню: база сама считает детей, таблица семей не грузится. */
+export async function fetchLogisticsBadgeCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('v2_children')
+    .select('id', { count: 'exact', head: true })
+    .in('status', LOGISTICS_CHILD_STATUSES);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
 }
 
 /** Minimal application counter for overview school rows; financial data is not loaded. */
