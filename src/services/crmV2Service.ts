@@ -27,6 +27,38 @@ export function invalidateFamiliesCache(): void {
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
 }
 
+// Изменения коллег приходят по realtime пачками (массовая посадка, перенос
+// маршрута). CRM ждёт паузу и обновляет экран один раз, а фоновая вкладка
+// обновится только когда сотрудник к ней вернётся.
+export const REALTIME_REFRESH_DELAY_MS = 3000;
+let realtimeRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+let realtimeRefreshPending = false;
+
+function runPendingRealtimeRefresh(): void {
+  if (!realtimeRefreshPending) return;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  realtimeRefreshPending = false;
+  invalidateFamiliesCache();
+}
+
+export function scheduleRealtimeFamiliesRefresh(): void {
+  realtimeRefreshPending = true;
+  clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(runPendingRealtimeRefresh, REALTIME_REFRESH_DELAY_MS);
+}
+
+/** Подписка на возврат во вкладку: догоняет изменения, пришедшие пока она была в фоне. */
+export function watchRealtimeRefreshOnReturn(): () => void {
+  if (typeof document === 'undefined') return () => {};
+  const onVisibility = () => { if (document.visibilityState === 'visible') runPendingRealtimeRefresh(); };
+  document.addEventListener('visibilitychange', onVisibility);
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibility);
+    clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshPending = false;
+  };
+}
+
 function derivePaymentStatus(totalCharged: number, totalPaid: number, debtAmount: number): 'no_charges' | 'paid' | 'partial' | 'debt' {
   if (totalCharged === 0) return 'no_charges';
   if (debtAmount <= 0) return 'paid';

@@ -43,7 +43,7 @@ import { TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/task
 import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
-import { invalidateFamiliesCache } from './services/crmV2Service';
+import { scheduleRealtimeFamiliesRefresh, watchRealtimeRefreshOnReturn } from './services/crmV2Service';
 import { useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
 import './index.css';
 
@@ -253,12 +253,13 @@ export default function App() {
 
   useEffect(() => {
     if (!currentUser) return;
+    const stopWatching = watchRealtimeRefreshOnReturn();
     const channel = supabase
       .channel('crm-transfer-allocation-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_children' }, invalidateFamiliesCache)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_transfers' }, invalidateFamiliesCache)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_children' }, scheduleRealtimeFamiliesRefresh)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_transfers' }, scheduleRealtimeFamiliesRefresh)
       .subscribe();
-    return () => { void supabase.removeChannel(channel); };
+    return () => { stopWatching(); void supabase.removeChannel(channel); };
   }, [currentUser]);
 
   useEffect(() => {
