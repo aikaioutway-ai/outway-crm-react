@@ -37,7 +37,7 @@ import {
 import { useLogisticsBadgeCount } from './hooks/useCrmQueries';
 import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible } from './modules/families/constants';
 import { Family, UserRole } from './types';
-import { FamilyListRow, fetchV2Family } from './services/crmV2Service';
+import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
@@ -173,7 +173,7 @@ export default function App() {
     if (schoolKey === 'ALL') setManagerTransferFilter('');
     setManagerSchoolKey(schoolKey);
   };
-  const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilyListRow) => {
+  const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilySearchHit) => {
     if (!canAccessManagerSchool(schoolKey)) return;
     setManagerOpenFamilySearch(searchQuery);
     setManagerSearchChild({ id: row.rowId, query: searchQuery });
@@ -188,7 +188,7 @@ export default function App() {
     if (schoolKey === 'ALL') setLogisticsTransferFilter('');
     setLogisticsSchoolKey(schoolKey);
   };
-  const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilyListRow) => {
+  const handleLogisticsOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilySearchHit) => {
     if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     setLogisticsSearch(searchQuery);
     setLogisticsSearchChild({ id: row.rowId, query: searchQuery });

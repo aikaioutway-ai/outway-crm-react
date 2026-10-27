@@ -5,7 +5,7 @@ import { ALL_PERIODS } from './constants';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React, { useEffect, useState } from 'react';
 import { FamilyListRow, PeriodChargeStats, fetchChargesForPeriod } from '../../services/crmV2Service';
-import { useFamiliesTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, useSchoolTransferNumbers, useSchoolTransferStats } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import { isNewUnassignedRow } from './familiesRowHelpers';
@@ -47,7 +47,10 @@ function childCountOf(rows: FamilyListRow[]): number {
 }
 
 export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools, schoolTier = '1.0' }: SchoolTransferDashboardProps) {
-  const { data: rows } = useFamiliesTable();
+  // В «Справочнике» плашки считает база; таблица семей с деньгами нужна только финансовым вкладкам.
+  const isDirectory = mode === 'directory';
+  const { data: familyRows } = useFamiliesTable({ enabled: !isDirectory });
+  const { data: transferStats } = useSchoolTransferStats(schoolKey, { enabled: isDirectory });
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const [periodDebts, setPeriodDebts] = useState<PeriodChargeStats[]>([]);
   useEffect(() => {
@@ -63,21 +66,31 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   }, [mode, periodKey]);
 
 
-  if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier) || !rows) return null;
+  if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier)) return null;
+  if (isDirectory ? !transferStats : !familyRows) return null;
 
-  const allSchoolRows = rows.filter(r => r.branchFilter === schoolKey);
+  const allSchoolRows = (familyRows ?? []).filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');
+  const serverGroup = (key: string) => transferStats?.[key] ?? { children: 0, debtSum: 0 };
+  const groupOf = (key: string, groupRows: () => FamilyListRow[]) => {
+    if (isDirectory) return { debtSum: serverGroup(key).debtSum, childCount: serverGroup(key).children };
+    const selected = groupRows();
+    return { debtSum: debtSumOf(selected), childCount: childCountOf(selected) };
+  };
+  const usedTransferNumbers = isDirectory
+    ? Object.keys(transferStats ?? {}).filter(key => /^\d+$/.test(key))
+    : schoolRows.map(row => row.transferNumber);
 
-  const transferCells = Array.from({ length: transferCellCount([...schoolRows.map(row => row.transferNumber), ...schoolTransferNumbers], selectedKey) }, (_, i) => {
+  const transferCells = Array.from({ length: transferCellCount([...usedTransferNumbers, ...schoolTransferNumbers], selectedKey) }, (_, i) => {
     const number = String(i + 1);
     const assignedRows = schoolRows.filter(r => r.transferNumber === number);
     return {
       filterKey: number,
       label: number,
-      debtSum: debtSumOf(assignedRows),
-      childCount: childCountOf(assignedRows),
-      unboardedCount: mode === 'directory'
-        ? assignedRows.filter(row => row.status !== 'boarded').length
+      ...groupOf(number, () => assignedRows),
+      // Красный счётчик показывается только в финансовых вкладках.
+      unboardedCount: isDirectory
+        ? 0
         : new Set(assignedRows.filter(row => periodKey === 'ALL'
           ? (row.childDebtAmount ?? row.debtAmount) > 0
           : periodDebts.some(debt => debt.debt > 0 && (debt.childId ? debt.childId === row.rowId : debt.familyId === row.familyId)))
@@ -87,10 +100,10 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   });
 
   const statusCells = [
-    { filterKey: 'new', label: '?', debtSum: debtSumOf(allSchoolRows.filter(isNewUnassignedRow)), childCount: childCountOf(allSchoolRows.filter(isNewUnassignedRow)), tone: STATUS_CELL_TONE.new },
-    { filterKey: 'rejected', label: '×', debtSum: debtSumOf(allSchoolRows.filter(r => r.status === 'rejected')), childCount: childCountOf(allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
+    { filterKey: 'new', label: '?', ...groupOf('new', () => allSchoolRows.filter(isNewUnassignedRow)), tone: STATUS_CELL_TONE.new },
+    { filterKey: 'rejected', label: '×', ...groupOf('rejected', () => allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
     // «Все» — рабочие дети без отказников: отказники видны только по своей фишке.
-    { filterKey: '', label: '≡', debtSum: debtSumOf(schoolRows), childCount: childCountOf(schoolRows), tone: STATUS_CELL_TONE.all },
+    { filterKey: '', label: '≡', ...groupOf('all', () => schoolRows), tone: STATUS_CELL_TONE.all },
   ];
 
   const cells = [...transferCells, ...statusCells];

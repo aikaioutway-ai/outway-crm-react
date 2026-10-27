@@ -1,14 +1,26 @@
 import React, { useMemo, useState } from 'react';
-import { FamilyListRow } from '../../services/crmV2Service';
-import { isSchoolAllowed, schoolTabsForTier } from './constants';
+import { SchoolDirectoryBranchStat } from '../../services/crmV2Service';
+import { getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import SchoolDashboardTable from './SchoolDashboardTable';
 
-export function computeDirectoryStats(rows: Pick<FamilyListRow, 'branchFilter' | 'status' | 'transferNumber'>[], allowedSchools?: string[], tier: SchoolTier = '1.0') {
-  return schoolTabsForTier(tier).filter(s => s.key !== 'ALL' && isSchoolAllowed(s.key, allowedSchools, tier)).map(school => {
-    const children = rows.filter(row => row.branchFilter === school.key);
-    return { ...school, applications: children.length, newRequests: children.filter(row => row.status === 'new' && !row.transferNumber).length, boarded: children.filter(row => row.status === 'boarded').length, rejected: children.filter(row => row.status === 'rejected').length };
-  });
+/** Цифры по школе = сумма цифр её филиалов (та же группировка getBranchFilter, что у вкладок). */
+export function directoryCountsForSchool(branches: SchoolDirectoryBranchStat[], schoolKey: string) {
+  return branches
+    .filter(branch => getBranchFilter(branch.branchName, branch.branchCode) === schoolKey)
+    .reduce((acc, branch) => ({
+      applications: acc.applications + branch.applications,
+      newRequests: acc.newRequests + branch.newRequests,
+      boarded: acc.boarded + branch.boarded,
+      rejected: acc.rejected + branch.rejected,
+    }), { applications: 0, newRequests: 0, boarded: 0, rejected: 0 });
+}
+
+export function computeDirectoryStats(branches: SchoolDirectoryBranchStat[], allowedSchools?: string[], tier: SchoolTier = '1.0') {
+  return schoolTabsForTier(tier).filter(s => s.key !== 'ALL' && isSchoolAllowed(s.key, allowedSchools, tier)).map(school => ({
+    ...school,
+    ...directoryCountsForSchool(branches, school.key),
+  }));
 }
 
 export const DIRECTORY_COLORS = { label: '#64748B', applications: '#7C3AED', newRequests: '#2563EB', boarded: '#059669', rejected: '#DC2626' };
@@ -18,9 +30,9 @@ const columns = [
 ] as const;
 type SortKey = typeof columns[number][0];
 
-export default function DirectorySchoolDashboard({ rows, allowedSchools, schoolTier = '1.0', onSelectSchool }: { rows: FamilyListRow[]; allowedSchools?: string[]; schoolTier?: SchoolTier; onSelectSchool: (key: string) => void }) {
+export default function DirectorySchoolDashboard({ branches, allowedSchools, schoolTier = '1.0', onSelectSchool }: { branches: SchoolDirectoryBranchStat[]; allowedSchools?: string[]; schoolTier?: SchoolTier; onSelectSchool: (key: string) => void }) {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'label', asc: true });
-  const stats = useMemo(() => computeDirectoryStats(rows, allowedSchools, schoolTier), [rows, allowedSchools, schoolTier]);
+  const stats = useMemo(() => computeDirectoryStats(branches, allowedSchools, schoolTier), [branches, allowedSchools, schoolTier]);
   const sorted = [...stats].sort((a, b) => {
     const av = a[sort.key], bv = b[sort.key];
     const comparison = typeof av === 'string' ? av.localeCompare(String(bv)) : Number(av) - Number(bv);

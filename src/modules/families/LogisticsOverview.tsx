@@ -5,7 +5,7 @@ import { ManagerSearch } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import { useEffect, useMemo, useState } from 'react';
-import { FamilyListRow } from '../../services/crmV2Service';
+import { FamilyListRow, FamilySearchHit } from '../../services/crmV2Service';
 import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, isSchoolAllowed } from './constants';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
@@ -19,7 +19,7 @@ type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 
 
 interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
-  onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilyListRow) => void;
+  onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilySearchHit) => void;
   onDrivers: () => void;
   view: 'table' | 'map' | 'schools';
   onViewChange: (view: 'table' | 'map' | 'schools') => void;

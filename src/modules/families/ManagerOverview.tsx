@@ -6,8 +6,8 @@ import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { List, Plus, Search, X } from 'lucide-react';
-import { fetchChargesForPeriod, FamilyListRow, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { useFamiliesTable, useBranchStats } from '../../hooks/useCrmQueries';
+import { fetchChargesForPeriod, FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
+import { useFamiliesTable, useBranchStats, useFamilySearch, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
 import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
 import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
@@ -45,7 +45,7 @@ interface ManagerOverviewProps {
   onModeChange: (mode: ManagerMode) => void;
   onSelectSchool: (key: string) => void;
   onSidebarWidthChange?: (width: number) => void;
-  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilyListRow) => void;
+  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilySearchHit) => void;
   allowedSchools?: string[];
   schoolTier?: SchoolTier;
 }
@@ -125,11 +125,15 @@ export function computeSchoolStatsFromBranches(branches: BranchStat[], tier: Sch
   });
 }
 
-export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact = false }: {
-  rows: FamilyListRow[];
-  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilyListRow) => void;
+/** Без rows поиск идёт в базе (только найденные строки), с rows — по уже
+ * загруженному списку экрана (Логистика). */
+export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact = false, allowedSchools, schoolTier = '1.0' }: {
+  rows?: FamilySearchHit[];
+  onOpenFamily?: (schoolKey: string, familyId: string, searchQuery: string, row: FamilySearchHit) => void;
   collapsible?: boolean;
   compact?: boolean;
+  allowedSchools?: string[];
+  schoolTier?: SchoolTier;
 }) {
   const [query, setQuery] = useState('');
   const [focused, setFocused] = useState(false);
@@ -139,11 +143,25 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
 
   const normalizedQuery = query.trim().toLowerCase();
   const digitsQuery = phoneQueryDigits(query) ?? '';
+  const isServerSearch = !rows;
+  const [serverQuery, setServerQuery] = useState({ text: '', digits: '' });
+  useEffect(() => {
+    if (!isServerSearch) return;
+    const timer = window.setTimeout(() => setServerQuery({ text: normalizedQuery, digits: digitsQuery }), 250);
+    return () => window.clearTimeout(timer);
+  }, [isServerSearch, normalizedQuery, digitsQuery]);
+  const serverSearch = useFamilySearch(isServerSearch ? serverQuery.text : '', isServerSearch ? serverQuery.digits : '');
+  const serverPending = isServerSearch && (serverSearch.isFetching || serverQuery.text !== normalizedQuery || serverQuery.digits !== digitsQuery);
 
   const suggestions = useMemo(() => {
     if (normalizedQuery.length < 2 && digitsQuery.length < 3) return [];
+    if (!rows) {
+      return (serverSearch.data ?? [])
+        .filter(row => isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier))
+        .slice(0, 8);
+    }
     const seen = new Set<string>();
-    const matches: FamilyListRow[] = [];
+    const matches: FamilySearchHit[] = [];
     for (const row of rows) {
       if (seen.has(row.rowId)) continue;
       const haystack = `${row.parentName} ${row.childName}`.toLowerCase();
@@ -156,7 +174,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
       }
     }
     return matches;
-  }, [rows, normalizedQuery, digitsQuery, query]);
+  }, [rows, normalizedQuery, digitsQuery, query, serverSearch.data, allowedSchools, schoolTier]);
 
   useEffect(() => { setActiveIndex(0); }, [query]);
 
@@ -168,7 +186,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const select = (row: FamilyListRow) => {
+  const select = (row: FamilySearchHit) => {
     // Подсказки ищут по полному имени из базы, включая отчество. Таблица
     // отображает и индексирует имя через formatName (фамилия + имя), поэтому
     // после выбора передаём ту же нормализованную форму и не получаем пустой список.
@@ -247,7 +265,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
       {showDropdown && (
         <div style={{ position: 'absolute', top: 'calc(100% + 6px)', left: 0, right: 0, background: '#fff', border: '1px solid var(--border)', borderRadius: 12, boxShadow: '0 12px 30px rgba(23, 34, 47, 0.12)', zIndex: 90, maxHeight: 320, overflowY: 'auto' }}>
           {suggestions.length === 0 ? (
-            <div style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-2)' }}>Ничего не найдено</div>
+            <div style={{ padding: '14px 16px', fontSize: 13, color: 'var(--text-2)' }}>{serverPending ? 'Поиск…' : serverSearch.isError ? 'Не удалось выполнить поиск' : 'Ничего не найдено'}</div>
           ) : suggestions.map((row, i) => {
             const tab = SCHOOL_DIRECTORY.find(t => t.key === row.branchFilter);
             return (
@@ -282,8 +300,9 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
 
   // Стандартный вид («За всё время») — лёгкий RPC-агрегат по филиалам.
   const branchStatsQuery = useBranchStats();
-  // Rows also supply the boarding alerts beside each school.
-  const familiesQuery = useFamiliesTable();
+  // Справочник берёт цифры из базы; таблица семей с деньгами нужна только финансовым вкладкам.
+  const directoryQuery = useSchoolDirectoryStats();
+  const familiesQuery = useFamiliesTable({ enabled: mode !== 'directory' });
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
     () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier)) ?? null,
@@ -363,7 +382,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
           <div className="manager-overview-period">
             {mode !== 'directory' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
           </div>
-          <div className="manager-overview-search"><ManagerSearch rows={accessibleRows ?? []} onOpenFamily={onOpenFamily} /></div>
+          <div className="manager-overview-search"><ManagerSearch onOpenFamily={onOpenFamily} allowedSchools={allowedSchools} schoolTier={schoolTier} /></div>
           <div className="overview-icon-actions">
             <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
             <button type="button" className="overview-icon-button overview-icon-button--primary" title="Новый заказ" aria-label="Новый заказ" onClick={() => setShowNewFamily(true)}><Plus size={18} aria-hidden="true"/></button>
@@ -371,7 +390,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
           </div>
         </DashboardTopPanel>
 
-        {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? <DirectorySchoolDashboard rows={accessibleRows ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} /> : (
+        {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
         <SchoolDashboardTable commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },

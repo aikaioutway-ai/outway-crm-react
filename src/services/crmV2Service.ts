@@ -20,6 +20,9 @@ export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
   queryClient.invalidateQueries({ queryKey: QK.logisticsBadgeCount });
+  queryClient.invalidateQueries({ queryKey: QK.schoolDirectoryStats });
+  queryClient.invalidateQueries({ queryKey: ['schoolTransferStats'] });
+  queryClient.invalidateQueries({ queryKey: ['familySearch'] });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
   queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
@@ -1049,6 +1052,69 @@ export async function fetchLogisticsBadgeCount(): Promise<number> {
     .in('status', LOGISTICS_CHILD_STATUSES);
   if (error) throw new Error(error.message);
   return count ?? 0;
+}
+
+export interface SchoolDirectoryBranchStat {
+  branchId: string;
+  branchCode: string;
+  branchShort: string;
+  branchName: string;
+  applications: number;
+  newRequests: number;
+  boarded: number;
+  rejected: number;
+}
+
+/** Цифры «Справочника» по филиалам — считает база (get_school_directory_stats). */
+export async function fetchSchoolDirectoryStats(): Promise<SchoolDirectoryBranchStat[]> {
+  const { data, error } = await supabase.rpc('get_school_directory_stats');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    branchId: String(row.branch_id),
+    branchCode: row.branch_code ?? '',
+    branchShort: row.branch_short ?? row.branch_code ?? '',
+    branchName: row.branch_name ?? row.branch_short ?? row.branch_code ?? '',
+    applications: Number(row.applications ?? 0),
+    newRequests: Number(row.new_requests ?? 0),
+    boarded: Number(row.boarded ?? 0),
+    rejected: Number(row.rejected ?? 0),
+  }));
+}
+
+export interface SchoolTransferGroupStat {
+  children: number;
+  debtSum: number;
+}
+
+/** Плашки трансферов школы в «Справочнике»: ключ — номер трансфера или
+ * 'new' / 'rejected' / 'all'; долг семьи учитывается один раз. */
+export async function fetchSchoolTransferStats(branchIds: string[]): Promise<Record<string, SchoolTransferGroupStat>> {
+  const { data, error } = await supabase.rpc('get_school_transfer_stats', { p_branch_ids: branchIds });
+  if (error) throw new Error(error.message);
+  const result: Record<string, SchoolTransferGroupStat> = {};
+  (data ?? []).forEach((row: any) => {
+    result[String(row.group_key)] = { children: Number(row.children ?? 0), debtSum: Number(row.debt_sum ?? 0) };
+  });
+  return result;
+}
+
+export type FamilySearchHit = Pick<FamilyListRow, 'rowId' | 'familyId' | 'parentName' | 'phone' | 'secondPhone' | 'childName' | 'status' | 'transferNumber' | 'branchFilter'>;
+
+/** Подсказки поиска менеджера: база ищет по «родитель ребёнок» и по цифрам телефона. */
+export async function searchFamilyChildren(text: string, digits: string): Promise<FamilySearchHit[]> {
+  const { data, error } = await supabase.rpc('search_family_children', { p_text: text, p_digits: digits, p_limit: 50 });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    rowId: String(row.child_id),
+    familyId: String(row.family_id),
+    parentName: row.parent_name ?? '',
+    phone: row.phone ?? '',
+    secondPhone: row.second_phone ?? '',
+    childName: row.child_name ?? '',
+    status: mapChildStatus(row.child_status),
+    transferNumber: row.transfer_number ? String(row.transfer_number) : null,
+    branchFilter: getBranchFilter(row.branch_name ?? null, row.branch_code ?? ''),
+  }));
 }
 
 /** Minimal application counter for overview school rows; financial data is not loaded. */

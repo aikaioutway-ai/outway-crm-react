@@ -10,6 +10,14 @@ import {
   fetchBranchStats,
   fetchSchoolApplicationCounts,
   fetchLogisticsBadgeCount,
+  fetchSchoolDirectoryStats,
+  fetchSchoolTransferStats,
+  searchFamilyChildren,
+  fetchV2Branches,
+  SchoolDirectoryBranchStat,
+  SchoolTransferGroupStat,
+  FamilySearchHit,
+  V2BranchOption,
   fetchV2PayrollEntriesForPeriod,
   fetchV2PayrollApproval,
   fetchV2PayrollApprovalsForPeriod,
@@ -150,6 +158,37 @@ export function useLogisticsBadgeCount(options?: { enabled?: boolean }): UseQuer
     queryKey: QK.logisticsBadgeCount,
     queryFn: fetchLogisticsBadgeCount,
     enabled: options?.enabled ?? true,
+  });
+}
+
+export function useSchoolDirectoryStats(): UseQueryResult<SchoolDirectoryBranchStat[]> {
+  return useQuery({ queryKey: QK.schoolDirectoryStats, queryFn: fetchSchoolDirectoryStats });
+}
+
+export function useV2Branches(): UseQueryResult<V2BranchOption[]> {
+  return useQuery({ queryKey: QK.v2Branches, queryFn: fetchV2Branches, staleTime: Infinity });
+}
+
+/** Плашки трансферов одной школы: филиалы школы находятся по той же
+ * группировке getBranchFilter, что и вкладки школ. */
+export function useSchoolTransferStats(schoolKey: string, options?: { enabled?: boolean }): UseQueryResult<Record<string, SchoolTransferGroupStat>> {
+  const { data: branches } = useV2Branches();
+  const branchIds = (branches ?? [])
+    .filter(branch => getBranchFilter(branch.name, branch.code) === schoolKey)
+    .map(branch => branch.id);
+  return useQuery({
+    queryKey: QK.schoolTransferStats(branchIds),
+    queryFn: () => fetchSchoolTransferStats(branchIds),
+    enabled: (options?.enabled ?? true) && Boolean(branches),
+  });
+}
+
+export function useFamilySearch(text: string, digits: string): UseQueryResult<FamilySearchHit[]> {
+  return useQuery({
+    queryKey: QK.familySearch(text, digits),
+    queryFn: () => searchFamilyChildren(text, digits),
+    enabled: text.length >= 2 || digits.length >= 3,
+    placeholderData: keepPreviousData,
   });
 }
 
