@@ -1,4 +1,3 @@
-import CellComments from './core/comments/CellComments';
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import SalaryExpensesView, { SalaryScope } from './modules/costs/SalaryExpensesView';
@@ -418,7 +417,6 @@ export default function App() {
 
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
-      <CellComments token={currentUser.sessionToken} />
       <Sidebar
         active={section === 'drivers' ? 'logistics' : section}
         onChange={setSection}
