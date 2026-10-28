@@ -1,6 +1,5 @@
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
-import SchoolsMap from './SchoolsMap';
 import { ManagerSearch } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
@@ -21,8 +20,8 @@ interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
   onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilyListRow) => void;
   onDrivers: () => void;
-  view: 'table' | 'map' | 'schools';
-  onViewChange: (view: 'table' | 'map' | 'schools') => void;
+  view: 'table' | 'map';
+  onViewChange: (view: 'table' | 'map') => void;
   allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
 }
@@ -187,7 +186,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        {view === 'schools' ? <SchoolsMap allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
+        <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
           columns={[
             { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
             { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },
@@ -201,7 +200,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           ascending={sortState.dir === 'asc'}
           onSort={key => handleSort(key as SortKey)}
           onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
-        />}
+        />
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

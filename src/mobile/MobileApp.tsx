@@ -44,7 +44,7 @@ function MoreSection({ user, onLogout, onOpenDesktop }: {
 
   if (nav.page?.kind === 'employees') return <EmployeesSection user={user} onBack={nav.back} />;
 
-  const hasDesktopOnly = canAccessSection(user.role, 'b2b', user.id) || canAccessSection(user.role, 'market', user.id);
+  const hasDesktopOnly = canAccessSection(user.role, 'b2b', user.id);
   return (
     <Screen pageKey="more:home" title="Ещё">
       <div className="m-card">

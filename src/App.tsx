@@ -54,7 +54,6 @@ const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
-const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
 const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
 const TaskComposer = lazy(() => import('./modules/tasks/TaskComposer'));
@@ -70,7 +69,6 @@ function SectionLoading() {
 }
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
-  dispatch: 'Диспетчер — в разработке',
   settings:  'Настройки — в разработке',
 };
 
@@ -140,7 +138,7 @@ export default function App() {
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
-  const [logisticsView, setLogisticsView] = useState<'table' | 'map' | 'schools'>('table');
+  const [logisticsView, setLogisticsView] = useState<'table' | 'map'>('table');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
@@ -181,7 +179,6 @@ export default function App() {
   const handleLogisticsSelectSchool = (schoolKey: string) => {
     if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     if (schoolKey === 'ALL') setLogisticsView('table');
-    else if (logisticsView === 'schools') setLogisticsView('map');
     if (schoolKey === 'ALL') setLogisticsTransferFilter('');
     setLogisticsSchoolKey(schoolKey);
   };
@@ -548,7 +545,7 @@ export default function App() {
                           setDriversTransferFilter(logisticsTransferFilter);
                           setDriversSearch(logisticsSearch);
                           setSection('drivers');
-                        } else if (key !== 'schools') setLogisticsView(key);
+                        } else setLogisticsView(key);
                       }} />
                     </div>
                   </>
@@ -744,19 +741,6 @@ export default function App() {
               />
             )}
           </div>
-        ) : section === 'dispatch' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                {sectionLabel('Диспетчер')}
-                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
-                {extraTabs(true)}
-              </div>
-            </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: 'var(--text-2)', fontSize: 16, fontWeight: 600 }}>
-              {PLACEHOLDERS.dispatch}
-            </div>
-          </div>
         ) : section === 'expenses' ? (
 
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -769,17 +753,6 @@ export default function App() {
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} onOpenSalary={scope=>{setSalaryScope(scope);setFinanceView('salary');}} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
 
-          </div>
-        ) : section === 'market' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                {sectionLabel('Маркет')}
-                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
-                {extraTabs(true)}
-              </div>
-            </div>
-            <MarketModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
           </div>
         ) : section === 'tasks' ? (
           <TasksModule user={currentUser} context={taskContext ?? undefined} onClearContext={()=>setTaskContext(null)} onOpenTarget={target => void openTaskTarget(target)} />

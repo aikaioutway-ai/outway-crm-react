@@ -4,7 +4,7 @@ import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks';
 
 interface SidebarProps {
   active: NavSection;
@@ -30,24 +30,19 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
 ];
 
-export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
-
-export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
+export function getAllowedSections(role: UserRole, _userId?: string): NavSection[] {
   let sections: NavSection[];
-  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
-  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b', 'market'];
-  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
+  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
+  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses'];
   else if (role === 'manager')      sections = ['families'];
-  else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
-  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses', 'employees', 'b2b'];
+  else if (role === 'logist')       sections = ['logistics', 'drivers'];
+  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'expenses', 'employees', 'b2b'];
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
   else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
   else sections = ['families'];
   sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
-
-  const withMarket: NavSection[] = userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
-  return [...withMarket, 'tasks'];
-
+  return [...sections, 'tasks'];
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
