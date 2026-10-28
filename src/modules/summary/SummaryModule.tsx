@@ -101,12 +101,10 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
             { key: 'school', label: 'Школы', total: rows.length, color: '#64748B' },
             { key: 'microbusCount', label: 'Микроавтобусы', total: totals.microbusCount, color: KPI_COLORS.childrenCount },
             { key: 'revenue', label: 'Revenue', total: money(totals.revenue), color: KPI_COLORS.charged },
-            { key: 'cogs', label: `COGS · ${workingDays} дн.`, total: money(totals.cogs), color: '#B45309' },
+            { key: 'cogs', label: 'COGS', total: money(totals.cogs), color: '#B45309' },
             { key: 'revenueTax', label: 'Revenue Tax 4%', total: money(totals.revenueTax), color: '#64748B' },
             { key: 'grossProfit', label: 'Gross Profit', total: money(totals.grossProfit), color: totals.grossProfit < 0 ? 'var(--danger)' : KPI_COLORS.paid },
-            { key: 'opex', label: 'OPEX', total: EMPTY, color: '#94A3B8' },
-            { key: 'da', label: 'D&A', total: EMPTY, color: '#94A3B8' },
-            { key: 'netProfit', label: 'Net Profit', total: EMPTY, color: '#94A3B8' },
+            { key: 'workingDays', label: 'Кол-во дней', total: workingDays, color: '#94A3B8' },
           ]}
           rows={sortedRows.map(row => ({
             key: row.key,
@@ -118,9 +116,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
               cogs: money(row.cogs),
               revenueTax: money(row.revenueTax),
               grossProfit: money(row.grossProfit),
-              opex: EMPTY,
-              da: EMPTY,
-              netProfit: EMPTY,
+              workingDays,
             },
           }))}
           sortKey={sortState.key}
