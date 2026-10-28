@@ -8,7 +8,7 @@ import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
+import Sidebar, { canAccessSpending, canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import { setCrmActor } from './services/crmActor';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
@@ -51,6 +51,7 @@ import './index.css';
 // сотрудник больше не скачивает код всех модулей CRM при каждом входе.
 const loadFamiliesPage = () => import('./modules/families/FamiliesPage');
 const FamiliesPage = lazy(loadFamiliesPage);
+const SpendingModule = lazy(() => import('./modules/spending/SpendingModule'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
@@ -756,6 +757,8 @@ export default function App() {
               />
             )}
           </div>
+        ) : section === 'spending' ? (
+          canAccessSpending(currentUser?.id) && <SpendingModule key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
         ) : section === 'expenses' ? (
 
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

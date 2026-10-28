@@ -8,6 +8,7 @@ export interface NotionSelectOption {
   label: string;
   color?: string;
   bg?: string;
+  badge?: string;
 }
 
 interface NotionSelectProps {
@@ -20,6 +21,8 @@ interface NotionSelectProps {
   width?: number | string;
   panelWidth?: number;
   autoFocus?: boolean;
+  inlinePanel?: boolean;
+  modalPanel?: boolean;
   onEscape?: () => void;
   onClose?: () => void;
   ariaLabel?: string;
@@ -38,6 +41,8 @@ export default function NotionSelect({
   width,
   panelWidth,
   autoFocus,
+  inlinePanel = false,
+  modalPanel = false,
   onEscape,
   onClose,
   ariaLabel,
@@ -60,7 +65,7 @@ export default function NotionSelect({
   }, [onClose]);
 
   useLayoutEffect(() => {
-    if (!open || !buttonRef.current) return;
+    if (!open || inlinePanel || modalPanel || !buttonRef.current) return;
     const rect = buttonRef.current.getBoundingClientRect();
     const nextWidth = panelWidth ?? Math.max(rect.width, variant === 'cell' ? 220 : 190);
     setPanelStyle({
@@ -70,7 +75,7 @@ export default function NotionSelect({
       width: nextWidth,
       zIndex: 2400,
     });
-  }, [open, panelWidth, variant, hasFooter]);
+  }, [open, panelWidth, variant, hasFooter, inlinePanel, modalPanel]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -100,7 +105,9 @@ export default function NotionSelect({
     };
   }, [close, onEscape, open]);
 
+  useEffect(() => { if (!modalPanel || !open) return; const previous = document.activeElement as HTMLElement | null; panelRef.current?.querySelector<HTMLInputElement>('input')?.focus(); return () => previous?.focus(); }, [modalPanel, open]);
   const isCell = variant === 'cell';
+  const renderPanel = (content: React.ReactElement) => modalPanel ? createPortal(<div className="notion-select-modal-overlay" onMouseDown={event => { if(event.target === event.currentTarget) close(); }} onKeyDown={event => { event.stopPropagation(); if(event.key === 'Escape') close(); if(event.key === 'Tab') { const nodes = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button,input') || []); const first = nodes[0], last = nodes[nodes.length - 1]; if(event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus(); } else if(!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus(); } } }}>{content}</div>, document.body) : inlinePanel ? content : createPortal(content, document.body);
 
   return (
     <div
@@ -181,15 +188,16 @@ export default function NotionSelect({
         <ChevronDown size={14} style={{ flexShrink: 0, color: 'var(--text-2)' }} />
       </button>
 
-      {open && !disabled && createPortal(
+      {open && !disabled && renderPanel(
         <div
           ref={panelRef}
           className="notion-select-panel"
           role={hasFooter ? "dialog" : "listbox"}
-          aria-label="Выберите вариант"
+          aria-modal={modalPanel || undefined}
+          aria-label={modalPanel ? "Выбор водителя" : "Выберите вариант"}
           style={{
-            ...panelStyle,
-            maxHeight: 340,
+            ...(modalPanel ? { position: 'relative' as const, width: 'min(560px, calc(100vw - 32px))' } : inlinePanel ? { position: 'relative' as const, width: '100%', marginTop: 6 } : panelStyle),
+            maxHeight: modalPanel ? '85dvh' : 340,
             overflowY: hasFooter ? 'hidden' : 'auto',
             padding: '12px 12px 10px',
             border: '1px solid #E5ECEF',
@@ -199,6 +207,7 @@ export default function NotionSelect({
           }}
           onClick={event => event.stopPropagation()}
         >
+          {modalPanel && <div className="notion-select-modal-head"><strong>Выбор водителя</strong><button type="button" aria-label="Закрыть выбор водителя" onClick={close}><X size={18}/></button></div>}
           {!searchable && <div style={{ color: '#777', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
             Выберите вариант
           </div>}
@@ -206,8 +215,8 @@ export default function NotionSelect({
             {selected && <button type="button" className="notion-select-current" onClick={close}><Check size={15}/>{selected.label}</button>}
             <input className="notion-select-search" aria-label={searchPlaceholder} placeholder={searchPlaceholder} value={search} onChange={event=>setSearch(event.target.value)}/>
           </>}
-          <div role={hasFooter?'listbox':undefined} style={{ display: 'grid', gridTemplateColumns:'minmax(0,1fr)', gap: 7, maxHeight: hasFooter ? Math.min(searchable?170:230,window.innerHeight-200) : undefined, overflowY: hasFooter ? 'auto' : undefined }}>
-            {options.filter(option=>!searchable || option.value!==value && option.label.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru'))).map((option) => {
+          <div role={hasFooter?'listbox':undefined} style={{ display: 'grid', gridTemplateColumns:'minmax(0,1fr)', gap: 7, maxHeight: hasFooter ? Math.min(modalPanel ? 360 : searchable?170:230,window.innerHeight-200) : undefined, overflowY: hasFooter ? 'auto' : undefined }}>
+            {options.filter(option=>!searchable || option.value!==value && (`${option.label} ${option.badge || ''}`).toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru'))).map((option) => {
               const active = option.value === value;
               return (
                 <button
@@ -262,13 +271,13 @@ export default function NotionSelect({
                   >
                     {option.label}
                   </span>
+                  {option.badge && <small className="notion-select-option-badge">{option.badge}</small>}
                 </button>
               );
             })}
           </div>
           {footerAction && <button type="button" className="notion-select-footer" onClick={()=>{close();footerAction.onClick();}}>{footerAction.label}</button>}
-        </div>,
-        document.body
+        </div>
       )}
     </div>
   );

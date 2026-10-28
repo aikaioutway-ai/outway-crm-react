@@ -38,3 +38,10 @@ test('Schools 2.0 is shown only in the expanded Sidebar', () => {
   expect(onChange).toHaveBeenCalledWith('schools2');
   expect(getAllowedSections('logist', 'logist')).not.toContain('schools2');
 });
+
+test('spending is available only to the owner account', () => {
+  expect(getAllowedSections('admin', 'emp-admin')).toContain('spending');
+  expect(getAllowedSections('admin', 'other-admin')).not.toContain('spending');
+  expect(getAllowedSections('gen_director', 'director')).not.toContain('spending');
+  expect(getAllowedSections('cashier', 'cashier')).not.toContain('spending');
+});

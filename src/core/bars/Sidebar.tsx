@@ -4,7 +4,7 @@ import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary' | 'spending';
 
 interface SidebarProps {
   active: NavSection;
@@ -28,6 +28,7 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
+  { key: 'spending', label: 'Расходы', icon: <Wallet size={18} /> },
   { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
@@ -46,6 +47,8 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else sections = ['families'];
   sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
 
+  if (canAccessSpending(userId)) sections = sections.flatMap(section => section === 'expenses' ? [section, 'spending'] : [section]);
+
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
   return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks'] : [...sections, 'tasks'];
@@ -57,6 +60,10 @@ export const OWNER_EMPLOYEE_ID = 'emp-admin';
 // «Сводка» — итоги компании только для владельца и гендиректора.
 export function canAccessSummary(role: UserRole, userId?: string): boolean {
   return userId === OWNER_EMPLOYEE_ID || role === 'gen_director';
+}
+
+export function canAccessSpending(userId?: string): boolean {
+  return userId === OWNER_EMPLOYEE_ID;
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
