@@ -35,7 +35,6 @@ import {
   getEmployeeSessionExpiresAt,
   isEmployeeSessionActive,
 } from './services/employeeSession';
-import { useFamiliesTable } from './hooks/useCrmQueries';
 import { SCHOOL_TABS, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilyListRow, fetchV2Family } from './services/crmV2Service';
@@ -311,10 +310,9 @@ export default function App() {
     });
   }, [currentUser]);
 
-  const badgesQuery = useFamiliesTable({ enabled: !!currentUser });
-  const badges: Partial<Record<NavSection, number>> = currentUser && badgesQuery.data
-    ? { logistics: badgesQuery.data.filter(row => row.status !== 'new' && row.status !== 'rejected').length, tasks: taskBadge }
-    : { tasks: taskBadge };
+  // В сайдбаре виден только счётчик задач (значок Логистики скрыт),
+  // поэтому полную таблицу семей на старте не грузим.
+  const badges: Partial<Record<NavSection, number>> = { tasks: taskBadge };
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
