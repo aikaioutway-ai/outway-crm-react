@@ -3385,11 +3385,20 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
               onRowReject={canRejectFamilies ? async (row) => {
-                if (!window.confirm(`Перевести семью "${row.parentName}" в «Отказ»? Все данные сохранятся.`)) return;
+                // Отказ = трансфер Х только для ребёнка из строки; братья и сёстры не меняются.
+                // Строка без детей (пустая семья) — отказ всей семьи.
+                const isChildRow = !row.rowId.endsWith('_empty');
+                const question = isChildRow
+                  ? `Отправить «${row.childName || 'ребёнка'}» в трансфер Х (отказ)? Остальные дети семьи не изменятся.`
+                  : `Перевести семью "${row.parentName}" в «Отказ»? Все данные сохранятся.`;
+                if (!window.confirm(question)) return;
                 try {
-                  await rejectV2Family(row.familyId, userName);
+                  if (isChildRow) await updateV2Child(row.rowId, { status: 'rejected' });
+                  else await rejectV2Family(row.familyId, userName);
                   setRows(prev => {
-                    const next = prev.map(item => item.familyId === row.familyId ? { ...item, status: 'rejected' } : item);
+                    const next = prev.map(item => (isChildRow ? item.rowId === row.rowId : item.familyId === row.familyId)
+                      ? { ...item, status: 'rejected', transferNumber: null }
+                      : item);
                     familiesRowsCache = next;
                     return next;
                   });
