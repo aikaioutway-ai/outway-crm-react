@@ -2730,21 +2730,21 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       dataCols.splice(childIndex + 1, 0, dateColumn('childCreatedAt', 'Дата заявки'), dateColumn('transferAssignedAt', 'Дата посадки'));
     }
     if (isDirectoryMode) {
-      // Точки: депозит, затем два прошлых месяца и текущий. Зелёная — оплачено, красная — нет.
-      dataCols.push({
-        key: 'paymentDots',
-        label: 'Депозит · мес.',
-        type: 'text',
-        category: 'Финансы',
-        width: 110,
-        visible: true,
-        sortable: false,
-        filterable: false,
-        getValue: () => '',
-        render: (_value, row) => row.rowId.endsWith('_empty')
-          ? null
-          : <PaymentDots dots={paymentDotsByChild[row.rowId]} periods={PAYMENT_DOTS_PERIODS} />,
-      });
+      // Точки оплат прямо в ячейке ребёнка: депозит, затем два прошлых месяца и текущий.
+      // При редактировании ФИО вместо ячейки показывается поле ввода, и точки скрываются.
+      const childIndex = dataCols.findIndex(column => column.key === 'childName');
+      if (childIndex >= 0) {
+        const childCol = dataCols[childIndex];
+        dataCols[childIndex] = {
+          ...childCol,
+          render: (value, row) => (
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{childCol.render ? childCol.render(value, row) : String(value ?? '')}</span>
+              {!row.rowId.endsWith('_empty') && <PaymentDots dots={paymentDotsByChild[row.rowId]} periods={PAYMENT_DOTS_PERIODS} />}
+            </span>
+          ),
+        };
+      }
     }
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
