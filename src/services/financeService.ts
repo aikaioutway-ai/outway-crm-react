@@ -359,6 +359,13 @@ export async function fetchFamilyPayment(paymentId: string): Promise<FamilyPayme
   return mapPayment(data);
 }
 
+/** Имена детей семьи — для названия скачиваемого чека. */
+export async function fetchFamilyChildNames(familyId: string): Promise<string[]> {
+  const { data, error } = await supabase.from('v2_children').select('child_name').eq('family_id', familyId);
+  if (error) throw new Error(error.message);
+  return (data ?? []).map(row => String(row.child_name ?? '')).filter(Boolean);
+}
+
 export async function updateFamilyPayment(paymentId: string, updates: {
   amount?: number;
   receiptCode?: string;

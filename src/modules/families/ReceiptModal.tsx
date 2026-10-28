@@ -2,7 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Download, ExternalLink, X } from 'lucide-react';
 import { FamilyPayment } from '../../types';
-import { fetchFamilyPayment, updateFamilyPayment } from '../../services/financeService';
+import { fetchFamilyChildNames, fetchFamilyPayment, updateFamilyPayment } from '../../services/financeService';
+import { receiptDownloadName } from './receiptFileName';
 import './ReceiptModal.css';
 
 type Props = {
@@ -28,14 +29,14 @@ function receiptFileName(url: string): string {
 }
 
 // Хранилище отдаёт файл «на скачивание» по параметру download; локальный blob: скачивается атрибутом ссылки.
-function receiptDownloadUrl(url: string): string {
+function receiptDownloadUrl(url: string, fileName: string): string {
   if (url.startsWith('blob:')) return url;
-  return `${url}${url.includes('?') ? '&' : '?'}download=${encodeURIComponent(receiptFileName(url))}`;
+  return `${url}${url.includes('?') ? '&' : '?'}download=${encodeURIComponent(fileName)}`;
 }
 
-function ReceiptActions({ url }: { url: string }) {
+function ReceiptActions({ url, fileName = receiptFileName(url) }: { url: string; fileName?: string }) {
   return <>
-    <a href={receiptDownloadUrl(url)} download={receiptFileName(url)} aria-label="Скачать чек" title="Скачать"><Download size={17}/></a>
+    <a href={receiptDownloadUrl(url, fileName)} download={fileName} aria-label="Скачать чек" title="Скачать"><Download size={17}/></a>
     <a href={url} target="_blank" rel="noreferrer" aria-label="Открыть чек в новой вкладке" title="Открыть в новой вкладке"><ExternalLink size={17}/></a>
   </>;
 }
@@ -51,10 +52,15 @@ export default function ReceiptModal({ receiptUrl, title = 'Чек платеж�
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [childNames, setChildNames] = useState<string[]>([]);
   useEffect(() => {
     if (!paymentId) return;
     let current = true;
-    fetchFamilyPayment(paymentId).then(value => { if (current) setPayment(value); }).catch(reason => { if (current) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить платёж'); });
+    fetchFamilyPayment(paymentId).then(value => {
+      if (!current) return;
+      setPayment(value);
+      fetchFamilyChildNames(value.familyId).then(names => { if (current) setChildNames(names); }).catch(() => { /* без имён останется исходное название файла */ });
+    }).catch(reason => { if (current) setError(reason instanceof Error ? reason.message : 'Не удалось загрузить платёж'); });
     return () => { current = false; };
   }, [paymentId]);
   useEffect(() => {
@@ -88,7 +94,7 @@ export default function ReceiptModal({ receiptUrl, title = 'Чек платеж�
     <section className={`ow-modal receipt-modal${paymentId ? '' : ' is-view-only'}`} role="dialog" aria-modal="true" aria-label={title}>
       <div className="receipt-modal-document"><ReceiptDocument key={receiptUrl} url={receiptUrl} pdf={pdf} /></div>
       {paymentId && <div className="receipt-modal-side">
-        <header><div><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</div><div className="receipt-modal-actions"><ReceiptActions url={receiptUrl}/><button type="button" aria-label="Закрыть просмотр чека" onClick={onClose}><X size={18}/></button></div></header>
+        <header><div><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</div><div className="receipt-modal-actions"><ReceiptActions url={receiptUrl} fileName={payment ? receiptDownloadName({ childNames, parentName: subtitle, amount: payment.amount, originalName: receiptFileName(receiptUrl) }) : undefined}/><button type="button" aria-label="Закрыть просмотр чека" onClick={onClose}><X size={18}/></button></div></header>
         {!payment && !error && <p role="status" className="receipt-modal-note">Загрузка реквизитов…</p>}
         {payment && <form onSubmit={save}>
           <div className="receipt-modal-summary">Сумма: <strong>{payment.amount.toLocaleString('ru-RU')} сом</strong> · {payment.status}</div>
