@@ -2017,11 +2017,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
   }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats]);
 
+  const showPaymentDots = mode !== 'logistics' && !isDriversModule;
   const paymentDotChunks = useMemo(() => {
-    if (!isDirectoryMode) return [] as string[][];
+    // Логистика деньги семьи не загружает и не показывает (docs/project-memory.md).
+    if (!showPaymentDots) return [] as string[][];
     const ids = Array.from(new Set(filteredSorted.map(row => row.rowId).filter(id => !id.endsWith("_empty"))));
     return Array.from({ length: Math.ceil(ids.length / PAYMENT_DOTS_CHUNK) }, (_, index) => ids.slice(index * PAYMENT_DOTS_CHUNK, (index + 1) * PAYMENT_DOTS_CHUNK));
-  }, [filteredSorted, isDirectoryMode]);
+  }, [filteredSorted, showPaymentDots]);
   const paymentDotsByChild = useQueries({
     queries: paymentDotChunks.map(ids => ({
       queryKey: ['childPaymentDots', PAYMENT_DOTS_PERIODS.map(periodKey).join(','), ids],
@@ -2729,7 +2731,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       const childIndex = dataCols.findIndex(column => column.key === 'childName');
       dataCols.splice(childIndex + 1, 0, dateColumn('childCreatedAt', 'Дата заявки'), dateColumn('transferAssignedAt', 'Дата посадки'));
     }
-    if (isDirectoryMode) {
+    if (showPaymentDots) {
       // Точки оплат прямо в ячейке ребёнка: депозит, затем два прошлых месяца и текущий.
       // При редактировании ФИО вместо ячейки показывается поле ввода, и точки скрываются.
       const childIndex = dataCols.findIndex(column => column.key === 'childName');
@@ -2750,7 +2752,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily, paymentDotsByChild]);
+  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily, paymentDotsByChild, showPaymentDots]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows
