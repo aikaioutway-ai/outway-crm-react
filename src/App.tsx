@@ -49,7 +49,8 @@ import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
 // сотрудник больше не скачивает код всех модулей CRM при каждом входе.
-const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
+const loadFamiliesPage = () => import('./modules/families/FamiliesPage');
+const FamiliesPage = lazy(loadFamiliesPage);
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
@@ -115,6 +116,14 @@ export default function App() {
 
   const isMobileViewport = useIsMobileViewport();
   const [forceDesktop, setForceDesktop] = useForceDesktop();
+  // Код Менеджера, Логистики и Кассира (один модуль) подгружаем в фоне
+  // сразу после входа, чтобы при первом клике по разделу ждать только данные.
+  useEffect(() => {
+    if (!currentUser) return;
+    const timer = window.setTimeout(() => { void loadFamiliesPage().catch(() => undefined); }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [currentUser]);
+
   useEffect(() => {
     let active = true;
     const compose = (event: Event) => { if (currentUser) setTaskTarget((event as CustomEvent<TaskTarget>).detail); };
