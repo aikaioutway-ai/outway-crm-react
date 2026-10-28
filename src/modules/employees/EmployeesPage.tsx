@@ -6,7 +6,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Building2, CalendarDays, FileText, Plus, Save, Search, ShieldCheck, Trash2, WalletCards, X } from 'lucide-react';
 import { ColumnDef, DataTable } from '../../core/tables/DataTable';
 import { Employee, EmployeeRole, EmployeeStatus, UserRole } from '../../types';
-import { createDefaultEmployeeDocuments, createEmployeeAdvance, deleteEmployee, deleteEmployeeAdvance, EmployeeAdvance, EmployeeDocument, EmployeeDraft, fetchEmployeeAdvances, fetchEmployeeDocuments, fetchEmployees, saveEmployee, saveEmployeeDocuments } from '../../services/employeeService';
+import { createDefaultEmployeeDocuments, createEmployeeAdvance, deleteEmployee, deleteEmployeeAdvance, EmployeeAdvance, EmployeeDocument, EmployeeDraft, fetchAllEmployeeDocuments, fetchEmployeeAdvances, fetchEmployeeDocuments, fetchEmployees, saveEmployee, saveEmployeeDocuments } from '../../services/employeeService';
 import { fetchV2PayrollEntriesForPeriod, V2PayrollEntry } from '../../services/crmV2Service';
 import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { SCHOOL_TABS } from '../families/constants';
@@ -87,9 +87,8 @@ export default function EmployeesPage({ viewerRole, sessionToken }: { viewerRole
   const load = async () => {
     setLoading(true);
     try {
-      const employees = await fetchEmployees();
-      const documents = await Promise.all(employees.map(async employee => { try { return await fetchEmployeeDocuments(employee.id); } catch { return createDefaultEmployeeDocuments(); } }));
-      setRows(employees.map((employee, index) => ({ ...employee, missingDocumentCount: documents[index].filter(document => !document.number.trim() || !document.scanUrl).length })));
+      const [employees, documentsByEmployee] = await Promise.all([fetchEmployees(), fetchAllEmployeeDocuments().catch(() => new Map<string, EmployeeDocument[]>())]);
+      setRows(employees.map(employee => ({ ...employee, missingDocumentCount: (documentsByEmployee.get(employee.id) ?? createDefaultEmployeeDocuments()).filter(document => !document.number.trim() || !document.scanUrl).length })));
       setLoadError('');
     } catch (error) { setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить сотрудников'); }
     finally { setLoading(false); }

@@ -17,6 +17,7 @@ export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
  * полной перезагрузки CRM. React Query сам решит, кому из подписанных
  * компонентов сейчас нужен повторный запрос. */
 export function invalidateFamiliesCache(): void {
+  invalidateCashierFamilyLookup();
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
@@ -401,6 +402,30 @@ async function fetchAllRows<T = any>(
       if (batch.length < SUPABASE_PAGE_SIZE) return rows;
     }
   }
+}
+
+// Справочник родителей и детей общий для трёх таблиц кассира
+// (на проверке, подтверждённые, возвраты). Порции грузятся параллельно,
+// а повторные открытия в течение минуты берут уже загруженное.
+const CASHIER_LOOKUP_PARALLEL_PAGES = 3;
+const CASHIER_LOOKUP_TTL_MS = 60 * 1000;
+type CashierFamilyLookup = { families: any[]; children: any[] };
+let cashierLookupCache: { at: number; promise: Promise<CashierFamilyLookup> } | null = null;
+
+function fetchCashierFamilyLookup(): Promise<CashierFamilyLookup> {
+  if (cashierLookupCache && Date.now() - cashierLookupCache.at < CASHIER_LOOKUP_TTL_MS) return cashierLookupCache.promise;
+  const promise = Promise.all([
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').order('id').range(from, to), CASHIER_LOOKUP_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('id, family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').order('id').range(from, to), CASHIER_LOOKUP_PARALLEL_PAGES),
+  ]).then(([families, children]) => ({ families, children }));
+  const entry = { at: Date.now(), promise };
+  cashierLookupCache = entry;
+  promise.catch(() => { if (cashierLookupCache === entry) cashierLookupCache = null; });
+  return promise;
+}
+
+export function invalidateCashierFamilyLookup(): void {
+  cashierLookupCache = null;
 }
 
 export function mapV2Family(row: any, children: any[] = []): Family {
@@ -1391,11 +1416,14 @@ async function fetchV2DriversTableUncached(): Promise<V2DriverTableRow[]> {
         .neq('status', 'archive')
         .order('transfer_number', { ascending: true })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('transfer_id').neq('status', 'rejected').range(from, to)),
+    // Детей и документов водителей больше 1000: порции грузим одновременно,
+    // а не по очереди. Сортировка по id нужна, чтобы порции не пересекались.
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('transfer_id').neq('status', 'rejected').order('id').range(from, to), 2),
     fetchAllRows<any>((from, to) => supabase
       .from('v2_driver_documents')
       .select('driver_id, document_type, document_number, issued_at, expires_at, required, scan_url')
-      .range(from, to)).catch(() => []),
+      .order('id')
+      .range(from, to), 2).catch(() => []),
   ]);
 
   const childCountByTransfer: Record<string, number> = {};
@@ -2271,15 +2299,14 @@ export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> 
 }
 
 async function fetchCashierPaymentsTableUncached(): Promise<CashierPaymentRow[]> {
-  const [payments, families, children] = await Promise.all([
+  const [payments, { families, children }] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')
         .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, comment, created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+    fetchCashierFamilyLookup(),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
@@ -2360,14 +2387,13 @@ export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
 }
 
 async function fetchPaymentsTableUncached(): Promise<PaymentTableRow[]> {
-  const [payments, families, children] = await Promise.all([
+  const [payments, { families, children }] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')
         .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, created_at')
         .order('created_at', { ascending: false })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+    fetchCashierFamilyLookup(),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
@@ -2444,14 +2470,13 @@ export async function fetchRefundsTable(): Promise<RefundTableRow[]> {
 }
 
 async function fetchRefundsTableUncached(): Promise<RefundTableRow[]> {
-  const [refunds, families, children] = await Promise.all([
+  const [refunds, { families, children }] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_refunds')
         .select('id, family_id, amount, comment, status, requested_by, requested_at, created_at')
         .order('created_at', { ascending: false })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+    fetchCashierFamilyLookup(),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
