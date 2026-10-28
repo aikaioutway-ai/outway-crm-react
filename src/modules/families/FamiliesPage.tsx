@@ -4,7 +4,9 @@ import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import PaymentDots from './PaymentDots';
+import { paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { driverMatchesSchool, isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
@@ -17,7 +19,7 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolInTier, schoolTabsForTier
 } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
-import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchChildPaymentDots, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -81,6 +83,13 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   textarea.remove();
   return copied;
 }
+
+// Точки оплат грузятся частями по 100 детей: адрес запроса остаётся коротким,
+// а при подгрузке следующей страницы таблицы уже загруженные части не повторяются.
+const PAYMENT_DOTS_CHUNK = 100;
+const PAYMENT_DOTS_PERIODS = paymentDotPeriods();
+const combinePaymentDots = (results: UseQueryResult<Record<string, ChildPaymentDots>>[]) =>
+  Object.assign({}, ...results.map(result => result.data ?? {})) as Record<string, ChildPaymentDots>;
 
 export interface ChildRow {
   rowId: string;
@@ -2007,6 +2016,20 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
   }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats]);
+
+  const paymentDotChunks = useMemo(() => {
+    if (!isDirectoryMode) return [] as string[][];
+    const ids = Array.from(new Set(filteredSorted.map(row => row.rowId).filter(id => !id.endsWith("_empty"))));
+    return Array.from({ length: Math.ceil(ids.length / PAYMENT_DOTS_CHUNK) }, (_, index) => ids.slice(index * PAYMENT_DOTS_CHUNK, (index + 1) * PAYMENT_DOTS_CHUNK));
+  }, [filteredSorted, isDirectoryMode]);
+  const paymentDotsByChild = useQueries({
+    queries: paymentDotChunks.map(ids => ({
+      queryKey: ['childPaymentDots', PAYMENT_DOTS_PERIODS.map(periodKey).join(','), ids],
+      queryFn: () => fetchChildPaymentDots(ids, PAYMENT_DOTS_PERIODS),
+      staleTime: 60_000,
+    })),
+    combine: combinePaymentDots,
+  });
   // Отмеченные, но скрытые поиском или фильтром дети в массовые действия не попадают.
   const selectedAccrualRows = selectedAccrualIds.size ? filteredSorted.filter(row => selectedAccrualIds.has(row.rowId)) : [];
 
@@ -2706,11 +2729,28 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       const childIndex = dataCols.findIndex(column => column.key === 'childName');
       dataCols.splice(childIndex + 1, 0, dateColumn('childCreatedAt', 'Дата заявки'), dateColumn('transferAssignedAt', 'Дата посадки'));
     }
+    if (isDirectoryMode) {
+      // Точки: депозит, затем два прошлых месяца и текущий. Зелёная — оплачено, красная — нет.
+      dataCols.push({
+        key: 'paymentDots',
+        label: 'Депозит · мес.',
+        type: 'text',
+        category: 'Финансы',
+        width: 110,
+        visible: true,
+        sortable: false,
+        filterable: false,
+        getValue: () => '',
+        render: (_value, row) => row.rowId.endsWith('_empty')
+          ? null
+          : <PaymentDots dots={paymentDotsByChild[row.rowId]} periods={PAYMENT_DOTS_PERIODS} />,
+      });
+    }
     return isChargesMode || isRequestsModule || isPaymentsMode
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily]);
+  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily, paymentDotsByChild]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows

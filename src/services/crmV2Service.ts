@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { chargeState, periodKey, type ChildPaymentDots, type DotPeriod } from '../modules/families/paymentDotsModel';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
@@ -2656,4 +2657,33 @@ async function fetchRefundsTableUncached(): Promise<RefundTableRow[]> {
       createdAt: String(r.created_at ?? ''),
     };
   });
+}
+
+/**
+ * Статусы оплат для точек в таблице: депозит и выбранные месяцы.
+ * Берём начисления только переданных детей — это одна страница таблицы.
+ */
+export async function fetchChildPaymentDots(childIds: string[], periods: DotPeriod[]): Promise<Record<string, ChildPaymentDots>> {
+  const result: Record<string, ChildPaymentDots> = {};
+  childIds.forEach(id => { result[id] = { deposit: 'none', months: {} }; });
+  if (childIds.length === 0) return result;
+  const wanted = new Set(periods.map(periodKey));
+  const { data, error } = await supabase
+    .from('v2_charges')
+    .select('child_id, charge_type, period_month, period_year, status')
+    .in('child_id', childIds);
+  if (error) throw new Error(error.message);
+  (data ?? []).forEach((row: any) => {
+    const dots = result[String(row.child_id)];
+    if (!dots) return;
+    const state = chargeState(row.status);
+    if (state === 'none') return;
+    if (row.charge_type === 'deposit') {
+      dots.deposit = state;
+      return;
+    }
+    const key = periodKey({ month: Number(row.period_month), year: Number(row.period_year) });
+    if (row.charge_type === 'monthly' && wanted.has(key)) dots.months[key] = state;
+  });
+  return result;
 }
