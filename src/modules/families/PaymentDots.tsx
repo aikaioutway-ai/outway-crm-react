@@ -26,10 +26,10 @@ const dotStyle = (state: ChargeState): React.CSSProperties => ({
   border: state === 'none' ? '1.5px solid #CBD5E1' : 'none',
 });
 
-const barStyle = (state: ChargeState): React.CSSProperties => ({
+const barStyle = (state: ChargeState, large: boolean): React.CSSProperties => ({
   display: 'block',
-  width: 26,
-  height: 5,
+  width: large ? 32 : 26,
+  height: large ? 6 : 5,
   borderRadius: 3,
   boxSizing: 'border-box',
   background: state === 'none' ? '#EEF1F4' : STATE_COLOR[state],
@@ -41,7 +41,7 @@ const SHORT_MONTH = (name: string) => name.slice(0, 3);
  * Статус оплат: депозит, отступ, затем месяцы.
  * dots — маленькие точки для таблиц, bars — полоски с подписями для карточки.
  */
-export default function PaymentDots({ dots, periods, variant = 'dots' }: { dots?: ChildPaymentDots; periods: DotPeriod[]; variant?: 'dots' | 'bars' }) {
+export default function PaymentDots({ dots, periods, variant = 'dots', large = false }: { dots?: ChildPaymentDots; periods: DotPeriod[]; variant?: 'dots' | 'bars'; large?: boolean }) {
   const items = [
     { label: 'Депозит', short: 'Деп', state: dots?.deposit ?? 'none' },
     ...periods.map(period => {
@@ -53,11 +53,11 @@ export default function PaymentDots({ dots, periods, variant = 'dots' }: { dots?
 
   if (variant === 'bars') {
     return (
-      <span title={title} aria-label={title} style={{ display: 'inline-flex', alignItems: 'flex-end', gap: 4, opacity: dots ? 1 : 0.4 }}>
+      <span title={title} aria-label={title} style={{ display: 'inline-flex', alignItems: 'flex-end', gap: large ? 6 : 4, opacity: dots ? 1 : 0.4 }}>
         {items.map((item, index) => (
-          <span key={item.label} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: 3, marginRight: index === 0 ? 6 : 0 }}>
-            <span style={barStyle(item.state)} />
-            <span style={{ fontSize: 10, lineHeight: 1, color: 'var(--text-2, #64748B)', fontWeight: 500 }}>{item.short}</span>
+          <span key={item.label} style={{ display: 'inline-flex', flexDirection: 'column', alignItems: 'center', gap: large ? 5 : 3, marginRight: index === 0 ? (large ? 10 : 6) : 0 }}>
+            <span style={barStyle(item.state, large)} />
+            <span style={{ fontSize: large ? 11 : 10, lineHeight: 1, color: 'var(--text-2, #64748B)', fontWeight: 500 }}>{item.short}</span>
           </span>
         ))}
       </span>

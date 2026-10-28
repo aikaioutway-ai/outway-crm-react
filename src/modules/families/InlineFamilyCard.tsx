@@ -671,7 +671,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             </div>
             {savedChildIds.length > 0 && (
               <div className="family-card-payment-bars" title="Оплаты семьи по всем детям">
-                <PaymentDots variant="bars" dots={paymentDotsQuery.data ? combineDots(savedChildIds.map(id => paymentDotsQuery.data![id]).filter(Boolean)) : undefined} periods={PAYMENT_DOT_PERIODS} />
+                <PaymentDots variant="bars" large dots={paymentDotsQuery.data ? combineDots(savedChildIds.map(id => paymentDotsQuery.data![id]).filter(Boolean)) : undefined} periods={PAYMENT_DOT_PERIODS} />
               </div>
             )}
             {saveMsg && <div role="status" className={`family-card-save-msg${saveMsg === 'Ошибка' ? ' is-error' : ''}`}>{saveMsg}</div>}
