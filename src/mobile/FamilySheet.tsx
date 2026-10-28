@@ -1,4 +1,5 @@
 import TaskButton from '../modules/tasks/TaskButton';
+import { TRANSFER_NUMBER_VALUES } from '../modules/families/constants';
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { useFamiliesTable } from '../hooks/useCrmQueries';
@@ -10,7 +11,7 @@ import { formatName } from '../utils/format';
 import { schoolLabel } from './data';
 import { CHILD_STATUS_OPTIONS, ErrorBox, InfoRow, PhoneRow, SelectField, Sheet, Skeletons, StatusBadge, TransferBadge } from './ui';
 
-const TRANSFER_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1));
+const TRANSFER_NUMBERS = TRANSFER_NUMBER_VALUES;
 const STOP_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1));
 
 /** Номера для выбора: 1–30 плюс текущий, если он больше. */

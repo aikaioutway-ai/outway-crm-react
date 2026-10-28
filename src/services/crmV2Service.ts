@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
-import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+import { getBranchFilter, MAX_TRANSFER_NUMBER, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone, phoneQueryDigits } from '../utils/format';
 import {
@@ -1247,6 +1247,9 @@ export async function ensureV2Transfer(params: {
   vehicleType: VehicleType;
 }): Promise<string> {
   if (!params.branchId) throw new Error('У ребенка не указан филиал');
+  if (!Number.isInteger(params.transferNumber) || params.transferNumber < 1 || params.transferNumber > MAX_TRANSFER_NUMBER) {
+    throw new Error(`Номер трансфера должен быть от 1 до ${MAX_TRANSFER_NUMBER}`);
+  }
 
   const { data: existing, error: selectError } = await supabase
     .from('v2_transfers')

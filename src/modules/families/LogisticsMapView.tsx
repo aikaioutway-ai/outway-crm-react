@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { TRANSFER_NUMBER_VALUES } from './constants';
 import { createPortal } from 'react-dom';
 import {
   fetchV2Branches,
@@ -102,7 +103,7 @@ function escapeHtml(value: string): string {
   }[char] as string));
 }
 
-const TRANSFER_SELECT_OPTIONS = Array.from({ length: 30 }, (_, i) => String(i + 1));
+const TRANSFER_SELECT_OPTIONS = TRANSFER_NUMBER_VALUES;
 const STOP_SELECT_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
 
 function buildSelectOptions(options: string[], selected: string | null): string {

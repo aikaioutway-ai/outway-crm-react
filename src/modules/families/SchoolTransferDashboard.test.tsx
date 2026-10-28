@@ -27,16 +27,13 @@ test('directory transfer marker shows how many children are in the transfer', ()
 });
 
 
-test('manager can select a transfer above 15 and still sees its boarding alert', () => {
+test('school shows only transfers 1–15 and no pages beyond them', () => {
   (useSchoolTransferStats as jest.Mock).mockReturnValue({ data: { 20: { children: 1, debtSum: 0 }, all: { children: 1, debtSum: 0 } } });
-  const onSelect = jest.fn();
-  render(<SchoolTransferDashboard schoolKey="AES" onSelect={onSelect} />);
-  fireEvent.click(screen.getByRole('button', { name: 'Следующие трансферы' }));
-  const transfer = screen.getByRole('button', { name: /20/ });
-  expect(transfer).toHaveTextContent('1');
-  expect(transfer).not.toHaveTextContent('!');
-  fireEvent.click(transfer);
-  expect(onSelect).toHaveBeenCalledWith('20');
+  render(<SchoolTransferDashboard schoolKey="AES" onSelect={jest.fn()} />);
+  expect(screen.getByRole('button', { name: '15' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '16' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '20' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Следующие трансферы' })).not.toBeInTheDocument();
 });
 
 

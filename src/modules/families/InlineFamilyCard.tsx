@@ -1,4 +1,5 @@
 import FilterableTable from '../../core/tables/FilterableTable';
+import { TRANSFER_NUMBER_VALUES } from './constants';
 import './InlineFamilyCard.css';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
@@ -51,7 +52,7 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'minivan', label: 'Минивэн' },
   { value: 'sedan', label: 'Седан' },
 ];
-const TRANSFER_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }))];
+const TRANSFER_OPTIONS = [{ value: '', label: '-' }, ...TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `№ ${value}` }))];
 const STOP_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))];
 
 function formatInlineDate(value?: string): string {

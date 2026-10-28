@@ -1,14 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { MAX_TRANSFER_NUMBER } from '../../modules/families/constants';
 
 export const TRANSFERS_PER_PAGE = 15;
 
-export function transferCellCount(numbers: Array<string | number | null | undefined>, selectedKey = ''): number {
-  const max = [...numbers, selectedKey].reduce<number>((highest, value) => {
-    const number = Number(value);
-    return Number.isSafeInteger(number) && number > highest ? number : highest;
-  }, 0);
-  return Math.max(1, Math.ceil(max / TRANSFERS_PER_PAGE)) * TRANSFERS_PER_PAGE;
+export function transferCellCount(_numbers?: Array<string | number | null | undefined>, _selectedKey = ''): number {
+  return MAX_TRANSFER_NUMBER;
 }
 
 export default function TransferBarPages({ scopeKey, selectedKey = '', counts, children }: {

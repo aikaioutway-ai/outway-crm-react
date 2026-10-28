@@ -1,4 +1,5 @@
 import { reserveTemporaryDriverName } from '../../services/expenseService';
+import { TRANSFER_NUMBER_VALUES } from '../families/constants';
 import FilterableTable from '../../core/tables/FilterableTable';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X } from 'lucide-react';
@@ -29,7 +30,7 @@ const DISTRICTS = [
   'Рабочий',
 ];
 
-const TRANSFER_NUMBERS = Array.from({ length: 20 }, (_, index) => index + 1);
+const TRANSFER_NUMBERS = TRANSFER_NUMBER_VALUES.map(Number);
 const VEHICLE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'microbus', label: VT_LABEL.microbus ?? 'Микроавтобус' },
   { value: 'minivan', label: VT_LABEL.minivan ?? 'Минивэн' },

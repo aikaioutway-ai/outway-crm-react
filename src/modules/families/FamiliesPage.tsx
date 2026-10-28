@@ -1,4 +1,5 @@
 import { withFormerTransferDrivers } from '../drivers/formerTransferDrivers';
+import { TRANSFER_NUMBER_VALUES } from './constants';
 import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
@@ -191,8 +192,8 @@ const MODE_LABEL: Record<FamiliesMode, string> = {
   logistics: 'Логистика',
 };
 
-const TRANSFER_OPTIONS = Array.from({ length: 30 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }));
-const TRANSFER_BAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
+const TRANSFER_OPTIONS = TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `№ ${value}` }));
+const TRANSFER_BAR_OPTIONS = TRANSFER_NUMBER_VALUES;
 const STOP_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 const CHILD_STATUS_OPTIONS = [
   { value: 'new', label: 'Новый' },

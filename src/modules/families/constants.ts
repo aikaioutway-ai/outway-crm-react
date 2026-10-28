@@ -210,6 +210,11 @@ function getSeasonStartYear(): number {
 const SEASON_YEAR = getSeasonStartYear();
 const NEXT_SEASON_YEAR = SEASON_YEAR + 1;
 
+// Решение владельца 2026-10-28: в школе не больше 15 трансферов, номера 1–15.
+// Тот же лимит проверяет база (триггер на v2_transfers).
+export const MAX_TRANSFER_NUMBER = 15;
+export const TRANSFER_NUMBER_VALUES = Array.from({ length: MAX_TRANSFER_NUMBER }, (_, index) => String(index + 1));
+
 export const ALL_PERIODS = [
   { key: 'deposit', month: 0,  year: SEASON_YEAR,      label: 'Депозит' },
   { key: '9',       month: 9,  year: SEASON_YEAR,      label: `Сентябрь ${SEASON_YEAR}` },
