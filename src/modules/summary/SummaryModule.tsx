@@ -99,12 +99,12 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
           commentContext={`forecast:${period.key}`}
           columns={[
             { key: 'school', label: 'Школы', total: rows.length, color: '#64748B' },
-            { key: 'microbusCount', label: 'Микроавтобусы', total: totals.microbusCount, color: KPI_COLORS.childrenCount },
+            { key: 'microbusCount', label: 'Buses', total: totals.microbusCount, color: KPI_COLORS.childrenCount },
             { key: 'revenue', label: 'Revenue', total: money(totals.revenue), color: KPI_COLORS.charged },
             { key: 'cogs', label: 'COGS', total: money(totals.cogs), color: '#B45309' },
             { key: 'revenueTax', label: 'Revenue Tax 4%', total: money(totals.revenueTax), color: '#64748B' },
             { key: 'grossProfit', label: 'Gross Profit', total: money(totals.grossProfit), color: totals.grossProfit < 0 ? 'var(--danger)' : KPI_COLORS.paid },
-            { key: 'workingDays', label: 'Кол-во дней', total: workingDays, color: '#94A3B8' },
+            { key: 'workingDays', label: 'Days', total: workingDays, color: '#94A3B8' },
           ]}
           rows={sortedRows.map(row => ({
             key: row.key,
