@@ -13,8 +13,16 @@ export const queryClient = new QueryClient({
 
 export const QK = {
   branchStats: ['branchStats'] as const,
+  summaryForecast: (year: number, month: number) => ['summaryForecast', year, month] as const,
+  summaryWorkingDays: ['summaryWorkingDays'] as const,
   schoolApplicationCounts: ['schoolApplicationCounts'] as const,
+  logisticsBadgeCount: ['logisticsBadgeCount'] as const,
+  schoolDirectoryStats: ['schoolDirectoryStats'] as const,
+  schoolTransferStats: (branchIds: string[]) => ['schoolTransferStats', branchIds] as const,
+  familySearch: (text: string, digits: string) => ['familySearch', text, digits] as const,
+  v2Branches: ['v2Branches'] as const,
   familiesTable: ['familiesTable'] as const,
+  logisticsTable: ['logisticsTable'] as const,
   familiesPage: (filters: Record<string, unknown>) => ['familiesPage', filters] as const,
   driversTable: ['driversTable'] as const,
   transfersDashboard: ['transfersDashboard'] as const,

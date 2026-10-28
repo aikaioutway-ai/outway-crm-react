@@ -48,7 +48,7 @@ function driverOf(rows: FamilyListRow[], drivers: V2DriverTableRow[]): V2DriverT
 
 export function transferTitle(transfer: string): string {
   if (transfer === NO_TRANSFER) return 'Без трансфера';
-  if (transfer === REJECTED) return 'Отказ';
+  if (transfer === REJECTED) return 'Трансфер Х';
   return `Трансфер №${transfer}`;
 }
 

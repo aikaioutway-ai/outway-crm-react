@@ -7,6 +7,8 @@ interface ManagerPeriodBarProps {
   onPeriodKeyChange: (key: string) => void;
   periods?: ReadonlyArray<{ key: string; month: number; year: number; label: string }>;
   showAll?: boolean;
+  periodTitle?: (period: { key: string; label: string }) => string;
+  onPeriodContextMenu?: (periodKey: string, event: React.MouseEvent) => void;
 }
 
 export default function ManagerPeriodBar({
@@ -14,6 +16,8 @@ export default function ManagerPeriodBar({
   onPeriodKeyChange,
   periods = ALL_PERIODS,
   showAll = true,
+  periodTitle,
+  onPeriodContextMenu,
 }: ManagerPeriodBarProps) {
   const specialButtonStyle = (active: boolean): React.CSSProperties => ({
     width: 36,
@@ -79,7 +83,8 @@ export default function ManagerPeriodBar({
           <button
             key={period.key}
             onClick={() => onPeriodKeyChange(period.key)}
-            title={period.label}
+            onContextMenu={onPeriodContextMenu ? event => { event.preventDefault(); onPeriodContextMenu(period.key, event); } : undefined}
+            title={periodTitle ? periodTitle(period) : period.label}
             aria-label={period.label}
             style={{ flex: 1, minWidth: 34, height: 28, padding: '0 6px', borderRadius: 8, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: active ? 850 : 700, background: active ? 'var(--accent)' : 'transparent', color: active ? '#fff' : '#465066', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums', transition: 'background .15s ease, color .15s ease' }}
           >

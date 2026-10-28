@@ -8,7 +8,7 @@ import { createEmployeeAdvance } from '../../services/employeeService';
 
 jest.mock('../../services/expenseService', () => ({ createExpense: jest.fn().mockResolvedValue({id:'saved'}),updateExpense:jest.fn().mockImplementation(async(id,row)=>({...row,id})),deleteExpense:jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/crmV2Service', () => ({ createV2DriverAdvance: jest.fn().mockResolvedValue('driver-advance-id'), deleteV2DriverAdvance: jest.fn().mockResolvedValue(undefined) }));
-jest.mock('../../services/employeeService', () => ({ createEmployeeAdvance: jest.fn().mockResolvedValue({id:'employee-advance-id'}), deleteEmployeeAdvance: jest.fn().mockResolvedValue(undefined) }));
+jest.mock('../../services/employeeService', () => ({ createDefaultEmployeeDocuments:()=>[],createEmployeeAdvance: jest.fn().mockResolvedValue({id:'employee-advance-id'}), deleteEmployeeAdvance: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../services/queryClient', () => ({ queryClient: { invalidateQueries: jest.fn() } }));
 jest.mock('../../hooks/useCrmQueries', () => ({
   useEmployees: () => ({ data: [{ id: 'office', fullName: 'Офисный сотрудник', status: 'active', role: 'manager' }] }),
@@ -26,7 +26,7 @@ function choosePeriod(){fireEvent.click(screen.getByRole('button',{name:'Пер�
 test('office and drivers retain the same main fields without an inline driver list',()=>{
   render(<EmployeeAdvanceModal onClose={jest.fn()} onSaved={jest.fn()}/>);
   expect(screen.getByRole('combobox',{name:'Отдел'})).toBeInTheDocument();
-  expect(screen.getByRole('combobox',{name:'Получатели'})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Водители'}));
   expect(screen.getByRole('combobox',{name:'Школа'})).toBeInTheDocument();
   expect(screen.getByRole('option',{name:'Все школы'})).toBeInTheDocument();
@@ -79,7 +79,7 @@ test('office salary saves the employee and department',async()=>{
   render(<EmployeeAdvanceModal sessionToken="session" onClose={jest.fn()} onSaved={jest.fn()}/>);
   fireEvent.click(screen.getByRole('button',{name:'Зарплата'}));
   fireEvent.change(screen.getByRole('combobox',{name:'Отдел'}),{target:{value:'service'}});
-  fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
+  fireEvent.click(screen.getByRole('button',{name:'Получатели'}));fireEvent.click(screen.getByRole('option',{name:'Офисный сотрудник'}));
   choosePeriod();fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма, сом'}),{target:{value:'2000'}});
   fireEvent.click(screen.getByRole('button',{name:'Выплатить зарплату'}));
   await waitFor(()=>expect(createExpense).toHaveBeenCalledWith(expect.objectContaining({category:'office',employeeId:'office',departmentKey:'service',unitPrice:2000}),'session'));
@@ -103,14 +103,14 @@ test('retry skips driver advances successfully saved before a failure',async()=>
   fireEvent.click(screen.getByRole('button',{name:'Повторить оставшиеся выплаты'}));
   await waitFor(()=>expect(close).toHaveBeenCalledTimes(1));
   expect(createV2DriverAdvance).toHaveBeenCalledTimes(3);
-  expect(createV2DriverAdvance).toHaveBeenLastCalledWith(expect.objectContaining({driverId:'driver-b',amount:700}));
+  expect(createV2DriverAdvance).toHaveBeenLastCalledWith(expect.objectContaining({driverId:'driver-a',amount:500}));
 });
 
 test('office salary across two periods uses explicit amounts and does not duplicate the total',async()=>{
   const close=jest.fn();render(<EmployeeAdvanceModal sessionToken="session" onClose={close} onSaved={jest.fn()}/>);
   fireEvent.click(screen.getByRole('button',{name:'Зарплата'}));
   fireEvent.change(screen.getByRole('combobox',{name:'Отдел'}),{target:{value:'service'}});
-  fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
+  fireEvent.click(screen.getByRole('button',{name:'Получатели'}));fireEvent.click(screen.getByRole('option',{name:'Офисный сотрудник'}));
   fireEvent.click(screen.getByRole('button',{name:'Периоды выплаты'}));
   const checkboxes=screen.getAllByRole('checkbox');
   fireEvent.click(checkboxes[0]);fireEvent.click(checkboxes[1]);
@@ -172,7 +172,7 @@ test('editing salary uses payout fields and updates instead of issuing another p
  const saved=jest.fn();
  render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
  expect(screen.getByRole('dialog',{name:'Редактирование выплаты'})).toBeInTheDocument();
- expect(screen.getByRole('combobox',{name:'Получатели'})).toHaveValue('office');
+ expect(screen.getByRole('button',{name:'Получатели'})).toHaveTextContent('Офисный сотрудник');
  fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма, сом'}),{target:{value:'2500'}});
  fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
  await waitFor(()=>expect(saved).toHaveBeenCalled());
@@ -185,7 +185,7 @@ test('editing an advance keeps the payout identity and does not create another a
  const expense={id:'employee-advance-original',name:'Аванс — Офисный сотрудник',category:'office',subcategory:'Аванс',source:'advance',employeeId:'office',departmentKey:'service',amount:70000,unitPrice:70000,quantity:1,expenseDate:'2026-10-14',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
  const saved=jest.fn();
  render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
- expect(screen.getByRole('combobox',{name:'Получатели'})).toHaveValue('office');
+ expect(screen.getByRole('button',{name:'Получатели'})).toHaveTextContent('Офисный сотрудник');
  fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма, сом'}),{target:{value:'75000'}});
  fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
  await waitFor(()=>expect(saved).toHaveBeenCalled());
@@ -202,7 +202,7 @@ test('one card keeps payment details while switching between expense, salary and
  fireEvent.change(screen.getByRole('textbox',{name:'№ платёжного поручения'}),{target:{value:'777'}});
  fireEvent.click(screen.getByRole('button',{name:'Зарплата'}));
  expect(screen.getByRole('dialog')).toBe(dialog);
- expect(screen.getByRole('combobox',{name:'Получатели'})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Аванс'}));
  expect(screen.getByRole('dialog')).toBe(dialog);
  fireEvent.click(screen.getByRole('button',{name:'Расход'}));
@@ -232,7 +232,7 @@ test('converting an ordinary expense to salary updates its category and subcateg
  const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={jest.fn()} onRecordSaved={saved}/>);
  fireEvent.click(screen.getByRole('button',{name:'Зарплата'}));
  fireEvent.change(screen.getByRole('combobox',{name:'Отдел'}),{target:{value:'service'}});
- fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
+ fireEvent.click(screen.getByRole('button',{name:'Получатели'}));fireEvent.click(screen.getByRole('option',{name:'Офисный сотрудник'}));
  fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
  await waitFor(()=>expect(saved).toHaveBeenCalled());
  expect(updateExpense).toHaveBeenCalledWith('legacy-expense',expect.objectContaining({category:'office',subcategory:'ЗП',employeeId:'office',salaryPeriodKey:'2026-10-1'}),undefined);
@@ -248,7 +248,7 @@ test('legacy expense can switch to driver advance and exposes advance in subcate
  expect(screen.getByRole('button',{name:'Аванс'})).toHaveAttribute('aria-pressed','true');
  expect(screen.getByRole('button',{name:'Водители'})).toBeEnabled();
  fireEvent.click(screen.getByRole('button',{name:'Офис'}));
- expect(screen.getByRole('combobox',{name:'Получатели'})).toBeInTheDocument();
+ expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
  fireEvent.click(screen.getByRole('button',{name:'Водители'}));
  expect(screen.getByRole('button',{name:'Получатели'})).toBeInTheDocument();
 });
@@ -257,7 +257,7 @@ test('reclassifying a manual expense as an office advance moves it to the employ
  const expense={id:'legacy',name:'Расход',category:'office',subcategory:'Прочее',source:'manual',amount:5000,unitPrice:5000,quantity:1,expenseDate:'2026-10-15',paymentMethod:'cashless',comment:'',createdAt:''} as ExpenseRecord;
  const saved=jest.fn();render(<EmployeeAdvanceModal expense={expense} onClose={jest.fn()} onSaved={saved}/>);
  fireEvent.click(screen.getByRole('button',{name:'Аванс'}));
- fireEvent.change(screen.getByRole('combobox',{name:'Получатели'}),{target:{value:'office'}});
+ fireEvent.click(screen.getByRole('button',{name:'Получатели'}));fireEvent.click(screen.getByRole('option',{name:'Офисный сотрудник'}));
  fireEvent.click(screen.getByRole('button',{name:'Сохранить изменения'}));
  await waitFor(()=>expect(saved).toHaveBeenCalled());
  expect(createEmployeeAdvance).toHaveBeenCalledWith('office',5000,'2026-10-15','',expect.objectContaining({schoolKey:'OFFICE'}));
@@ -286,4 +286,30 @@ test('if the old expense cannot be removed, the new driver advance is rolled bac
  expect(await screen.findByText('Нет доступа')).toBeInTheDocument();
  expect(deleteV2DriverAdvance).toHaveBeenCalledWith('driver-advance-id');
  expect(saved).not.toHaveBeenCalled();
+});
+
+test('salary includes a manually added driver with another current school',async()=>{
+  const saved=jest.fn();
+  render(<EmployeeAdvanceModal onClose={jest.fn()} onSaved={saved} initialPaymentType="salary" initialScope="drivers"/>);
+  fireEvent.change(screen.getByRole('combobox',{name:'Школа'}),{target:{value:'TIS'}});
+  fireEvent.click(screen.getByRole('button',{name:'Получатели'}));
+  fireEvent.click(screen.getByRole('button',{name:'Добавить водителя к TIS · № 3'}));
+  fireEvent.click(screen.getByRole('option',{name:'Водитель Б'}));
+  fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма для Водитель Б'}),{target:{value:'5000'}});
+  fireEvent.click(screen.getByRole('button',{name:'Готово'}));
+  choosePeriod();
+  fireEvent.click(screen.getByRole('button',{name:'Выплатить зарплату'}));
+  await waitFor(()=>expect(saved).toHaveBeenCalledTimes(1));
+  expect(createExpense).toHaveBeenCalledWith(expect.objectContaining({temporaryDriver:true,driverId:'driver-b',transferId:'transfer-a',schoolKey:'TIS',unitPrice:5000}),undefined);
+});
+
+test('office recipient menu supports search and opens the existing inactive employee form',()=>{
+  render(<EmployeeAdvanceModal onClose={jest.fn()} onSaved={jest.fn()}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Получатели'}));
+  fireEvent.change(screen.getByRole('textbox',{name:'Поиск сотрудника'}),{target:{value:'Офисный'}});
+  expect(screen.getByRole('option',{name:'Офисный сотрудник'})).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Добавить нового'}));
+  expect(screen.getByRole('dialog',{name:'Новый сотрудник'})).toBeInTheDocument();
+  expect(screen.getByLabelText('Статус')).toHaveValue('inactive');
+  expect(screen.getByLabelText('Статус')).toBeDisabled();
 });

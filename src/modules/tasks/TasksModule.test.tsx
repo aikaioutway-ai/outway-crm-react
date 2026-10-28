@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import TasksModule from './TasksModule';
 import { useTasks } from '../../services/taskService';
 jest.mock('../../services/taskService',()=>({
@@ -36,4 +36,33 @@ test('department dashboard can be collapsed and expanded',()=>{
   expect(screen.getByText('Статистика команды')).toBeVisible();
   fireEvent.click(toggle);
   expect(toggle).toHaveAttribute('aria-expanded','false');
+});
+
+
+test('personal lists show active tasks and completed lists load only when expanded',()=>{
+  (useTasks as jest.Mock).mockClear();
+  render(<TasksModule user={user}/>);
+  const initial=(useTasks as jest.Mock).mock.calls;
+  expect(initial.some(([,filters])=>filters.status==='done')).toBe(false);
+  for(const view of ['mine','created','watching'])expect(initial.some(([,filters])=>filters.view===view && filters.status==='active')).toBe(true);
+  const toggle=screen.getByRole('button',{name:'Выполненные задачи'});
+  expect(toggle).toHaveAttribute('aria-expanded','false');fireEvent.click(toggle);
+  const completed=screen.getByLabelText('Выполненные задачи');
+  for(const name of ['Мои задачи','Поставленные мной','Наблюдаю'])expect(within(completed).getByRole('heading',{name})).toBeInTheDocument();
+  for(const view of ['mine','created','watching'])expect((useTasks as jest.Mock).mock.calls.some(([,filters])=>filters.view===view && filters.status==='done')).toBe(true);
+  expect(within(completed).queryByRole('button',{name:/Поставить задачу:/})).not.toBeInTheDocument();
+  fireEvent.click(toggle);expect(toggle).toHaveAttribute('aria-expanded','false');expect(screen.queryByLabelText('Выполненные задачи')).not.toBeInTheDocument();
+});
+
+
+test('overdue cards use the full-card warning and completed tasks stay in the completed section',()=>{
+  const task={id:'warning',title:'Просроченная проверка',creator_id:'actor',assignee_id:'actor',due_at:'2000-01-01T00:00:00Z',status:'in_progress',priority:'normal'};
+  (useTasks as jest.Mock).mockImplementation((_token,filters)=>({data:{rows:filters.status==='done'?[{...task,id:'done',title:'Готовая проверка',status:'done'}]:filters.status==='active'?[task]:[],total:1},refetch:jest.fn()}));
+  render(<TasksModule user={user}/>);
+  expect(screen.queryByText('Готовая проверка')).not.toBeInTheDocument();
+  expect(screen.getAllByText('Просроченная проверка')[0].closest('article')).toHaveClass('tasks-card-overdue');
+  fireEvent.click(screen.getByRole('button',{name:'Выполненные задачи'}));
+  const completed=screen.getByLabelText('Выполненные задачи');
+  expect(within(completed).getAllByText('Готовая проверка')).toHaveLength(3);
+  expect(within(completed).getAllByText('Готовая проверка')[0].closest('article')).not.toHaveClass('tasks-card-overdue');
 });

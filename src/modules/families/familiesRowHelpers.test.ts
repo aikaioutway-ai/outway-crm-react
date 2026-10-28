@@ -1,7 +1,7 @@
 import { isNewUnassignedRow, matchesLogisticsMapFilter, transferIdentityKey, transferVehicleSummary } from './familiesRowHelpers';
 
 describe('logistics map filters', () => {
-  it('shows only new unassigned children and test transfers in new requests', () => {
+  it('shows every child without a transfer and test transfers, like the counter and the table', () => {
     const rows = [
       { status: 'new', transferNumber: null },
       { status: 'boarded', transferNumber: '2', isTestTransfer: true },
@@ -11,7 +11,7 @@ describe('logistics map filters', () => {
       { status: 'rejected', transferNumber: null },
       { status: 'rejected', transferNumber: '2', isTestTransfer: true },
     ];
-    expect(rows.filter(row => matchesLogisticsMapFilter(row, 'empty'))).toEqual(rows.slice(0, 2));
+    expect(rows.filter(row => matchesLogisticsMapFilter(row, 'empty'))).toEqual(rows.slice(0, 4));
   });
 
   it.each(['', 'empty', '2'])('excludes rejections for filter %s even with a transfer', filter => {

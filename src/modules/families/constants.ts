@@ -1,3 +1,4 @@
+import type { SchoolTier } from './SchoolTierTabs';
 // Один источник правды для отображения школ, зон, транспорта
 
 export const SCHOOL_DIRECTORY: { key: string; label: string; codes: string[]; branches: string[]; logo?: string }[] = [
@@ -31,10 +32,19 @@ const HIDDEN_SCHOOL_NAMES = new Set([
   ...SCHOOL_DIRECTORY.filter(school=>SCHOOL_TIER_2_KEYS.includes(school.key)).flatMap(school=>[school.key,school.label,...school.branches]),
   'LIGHT_PRIMARY','LA PRIMARY','INDIGO_WEST','BILIM_JOLU',
 ].map(value=>value.trim().toUpperCase()));
-export function isSchoolVisible(key:string):boolean {
-  return !HIDDEN_SCHOOL_NAMES.has(String(key??'').trim().toUpperCase());
+// Школы 2.0 скрыты из обычной CRM и видны только в отдельном разделе «Школы 2.0».
+export function isSchoolInTier(key:string, tier:SchoolTier='1.0'):boolean {
+  const normalized=String(key??'').trim().toUpperCase();
+  if(normalized==='ALL')return true;
+  return HIDDEN_SCHOOL_NAMES.has(normalized) === (tier==='2.0');
 }
-export const SCHOOL_TABS = SCHOOL_DIRECTORY.filter(school=>isSchoolVisible(school.key));
+export function isSchoolVisible(key:string):boolean {
+  return isSchoolInTier(key,'1.0');
+}
+export function schoolTabsForTier(tier:SchoolTier='1.0') {
+  return SCHOOL_DIRECTORY.filter(school=>isSchoolInTier(school.key,tier));
+}
+export const SCHOOL_TABS = schoolTabsForTier('1.0');
 
 
 // Школы с несколькими филиалами — схлопываются в один ряд, разворачиваются по клику
@@ -46,8 +56,8 @@ export const SCHOOL_GROUPS: { key: string; label: string; logo?: string; childre
   { key: 'ABL',    label: 'ABL',    logo: '/school-logos/ABL.png', children: ['ABL1', 'ABL2'] },
 ];
 
-export function isSchoolAllowed(schoolKey: string, allowedSchools?: string[]): boolean {
-  if(!isSchoolVisible(schoolKey))return false;
+export function isSchoolAllowed(schoolKey: string, allowedSchools?: string[], tier: SchoolTier = '1.0'): boolean {
+  if(!isSchoolInTier(schoolKey,tier))return false;
   if (!allowedSchools || allowedSchools.length === 0 || allowedSchools.some(key => key.toUpperCase() === 'ALL')) return true;
   const normalizedKey = schoolKey.toUpperCase();
   const normalizedAllowed = new Set(allowedSchools.map(key => key.toUpperCase()));
@@ -199,6 +209,29 @@ function getSeasonStartYear(): number {
 
 const SEASON_YEAR = getSeasonStartYear();
 const NEXT_SEASON_YEAR = SEASON_YEAR + 1;
+
+// Решение владельца 2026-10-28: в школе не больше 15 трансферов, номера 1–15.
+// Тот же лимит проверяет база (триггер на v2_transfers).
+export const MAX_TRANSFER_NUMBER = 15;
+export const TRANSFER_NUMBER_VALUES = Array.from({ length: MAX_TRANSFER_NUMBER }, (_, index) => String(index + 1));
+// Трансфер «Х» = отказ: выбор Х переводит ребёнка в статус «Отказ», база
+// снимает его с номера и пишет историю (см. миграцию rejected_children_transfer_x).
+export const TRANSFER_X = 'X';
+export const TRANSFER_X_LABEL = 'Х';
+export type TransferChoice = number | typeof TRANSFER_X;
+
+/** Значение из списка трансферов → номер, Х или «без трансфера». */
+export function parseTransferChoice(value: string | number | null | undefined): TransferChoice | undefined {
+  if (value === TRANSFER_X || value === TRANSFER_X_LABEL) return TRANSFER_X;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+/** Что показать в списке трансферов у ребёнка: у отказника всегда Х. */
+export function transferChoiceValue(status: string | null | undefined, transferNumber: string | number | null | undefined): string {
+  if (status === 'rejected') return TRANSFER_X;
+  return transferNumber ? String(transferNumber) : '';
+}
 
 export const ALL_PERIODS = [
   { key: 'deposit', month: 0,  year: SEASON_YEAR,      label: 'Депозит' },

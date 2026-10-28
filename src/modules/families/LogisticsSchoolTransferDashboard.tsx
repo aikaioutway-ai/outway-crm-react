@@ -6,7 +6,7 @@ import TransferBarPages, { transferCellCount } from '../../core/dashboard/Transf
 import React, { useEffect, useMemo, useState } from 'react';
 import { Check, ListTodo } from 'lucide-react';
 import { isTestTransfer, setTestTransfer, TEST_TRANSFER_COLOR, useTestTransfers } from './testTransfers';
-import { useFamiliesTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
+import { useLogisticsTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
 import { clearV2TransferVehicleType, updateV2TransferVehicleType } from '../../services/crmV2Service';
 import { VehicleType } from '../../types';
 
@@ -26,7 +26,7 @@ const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }
 
 
 export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
-  const { data: rows, refetch } = useFamiliesTable();
+  const { data: rows, refetch } = useLogisticsTable();
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const [vehicleMenu, setVehicleMenu] = useState<{
     x: number;

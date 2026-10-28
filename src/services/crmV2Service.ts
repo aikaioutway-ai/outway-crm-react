@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
-import { getBranchFilter, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone, phoneQueryDigits } from '../utils/format';
 import {
@@ -20,10 +20,47 @@ export function invalidateFamiliesCache(): void {
   invalidateCashierFamilyLookup();
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
+  queryClient.invalidateQueries({ queryKey: QK.logisticsBadgeCount });
+  queryClient.invalidateQueries({ queryKey: QK.schoolDirectoryStats });
+  queryClient.invalidateQueries({ queryKey: ['schoolTransferStats'] });
+  queryClient.invalidateQueries({ queryKey: ['familySearch'] });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
+  queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   queryClient.invalidateQueries({ queryKey: QK.transfersDashboard });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
+}
+
+// Изменения коллег приходят по realtime пачками (массовая посадка, перенос
+// маршрута). CRM ждёт паузу и обновляет экран один раз, а фоновая вкладка
+// обновится только когда сотрудник к ней вернётся.
+export const REALTIME_REFRESH_DELAY_MS = 3000;
+let realtimeRefreshTimer: ReturnType<typeof setTimeout> | undefined;
+let realtimeRefreshPending = false;
+
+function runPendingRealtimeRefresh(): void {
+  if (!realtimeRefreshPending) return;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  realtimeRefreshPending = false;
+  invalidateFamiliesCache();
+}
+
+export function scheduleRealtimeFamiliesRefresh(): void {
+  realtimeRefreshPending = true;
+  clearTimeout(realtimeRefreshTimer);
+  realtimeRefreshTimer = setTimeout(runPendingRealtimeRefresh, REALTIME_REFRESH_DELAY_MS);
+}
+
+/** Подписка на возврат во вкладку: догоняет изменения, пришедшие пока она была в фоне. */
+export function watchRealtimeRefreshOnReturn(): () => void {
+  if (typeof document === 'undefined') return () => {};
+  const onVisibility = () => { if (document.visibilityState === 'visible') runPendingRealtimeRefresh(); };
+  document.addEventListener('visibilitychange', onVisibility);
+  return () => {
+    document.removeEventListener('visibilitychange', onVisibility);
+    clearTimeout(realtimeRefreshTimer);
+    realtimeRefreshPending = false;
+  };
 }
 
 function derivePaymentStatus(totalCharged: number, totalPaid: number, debtAmount: number): 'no_charges' | 'paid' | 'partial' | 'debt' {
@@ -67,6 +104,7 @@ export interface V2DriverTransferOption {
 }
 
 export interface V2DriverTableRow {
+  previousAssignment?: boolean;
   rowId: string;
   driverId: string;
   fullName: string;
@@ -142,6 +180,7 @@ export function createDefaultV2DriverDocuments(): V2DriverDocumentInput[] {
 }
 
 export interface NewV2DriverInput {
+  status?: string;
   fullName: string;
   phone: string;
   secondPhone?: string;
@@ -626,8 +665,9 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
   const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
     fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    // Без финансов (Логистика) сводки и кошельки не запрашиваются вовсе.
+    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
+    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
     withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
     fetchV2Branches(),
   ]);
@@ -1025,6 +1065,83 @@ export async function fetchBranchStats(): Promise<BranchStat[]> {
   }));
 }
 
+// Статусы детей, которые попадают в «Логистику» (всё, кроме новых заявок и
+// отказов) — те же, что mapChildStatus переводит не в 'new'/'rejected'.
+const LOGISTICS_CHILD_STATUSES = ['active', 'boarded', 'waiting', 'paused', 'inactive', 'archive'];
+
+/** Цифра у «Логистики» в меню: база сама считает детей, таблица семей не грузится. */
+export async function fetchLogisticsBadgeCount(): Promise<number> {
+  const { count, error } = await supabase
+    .from('v2_children')
+    .select('id', { count: 'exact', head: true })
+    .in('status', LOGISTICS_CHILD_STATUSES);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+export interface SchoolDirectoryBranchStat {
+  branchId: string;
+  branchCode: string;
+  branchShort: string;
+  branchName: string;
+  applications: number;
+  newRequests: number;
+  boarded: number;
+  rejected: number;
+}
+
+/** Цифры «Справочника» по филиалам — считает база (get_school_directory_stats). */
+export async function fetchSchoolDirectoryStats(): Promise<SchoolDirectoryBranchStat[]> {
+  const { data, error } = await supabase.rpc('get_school_directory_stats');
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    branchId: String(row.branch_id),
+    branchCode: row.branch_code ?? '',
+    branchShort: row.branch_short ?? row.branch_code ?? '',
+    branchName: row.branch_name ?? row.branch_short ?? row.branch_code ?? '',
+    applications: Number(row.applications ?? 0),
+    newRequests: Number(row.new_requests ?? 0),
+    boarded: Number(row.boarded ?? 0),
+    rejected: Number(row.rejected ?? 0),
+  }));
+}
+
+export interface SchoolTransferGroupStat {
+  children: number;
+  debtSum: number;
+}
+
+/** Плашки трансферов школы в «Справочнике»: ключ — номер трансфера или
+ * 'new' / 'rejected' / 'all'; долг семьи учитывается один раз. */
+export async function fetchSchoolTransferStats(branchIds: string[]): Promise<Record<string, SchoolTransferGroupStat>> {
+  const { data, error } = await supabase.rpc('get_school_transfer_stats', { p_branch_ids: branchIds });
+  if (error) throw new Error(error.message);
+  const result: Record<string, SchoolTransferGroupStat> = {};
+  (data ?? []).forEach((row: any) => {
+    result[String(row.group_key)] = { children: Number(row.children ?? 0), debtSum: Number(row.debt_sum ?? 0) };
+  });
+  return result;
+}
+
+export type FamilySearchHit = Pick<FamilyListRow, 'rowId' | 'familyId' | 'parentName' | 'phone' | 'secondPhone' | 'childName' | 'status' | 'transferNumber' | 'branchFilter'>;
+
+/** Подсказки поиска менеджера: база ищет по «родитель ребёнок» и по цифрам телефона. */
+export async function searchFamilyChildren(text: string, digits: string): Promise<FamilySearchHit[]> {
+  const { data, error } = await supabase.rpc('search_family_children', { p_text: text, p_digits: digits, p_limit: 50 });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    rowId: String(row.child_id),
+    familyId: String(row.family_id),
+    parentName: row.parent_name ?? '',
+    phone: row.phone ?? '',
+    secondPhone: row.second_phone ?? '',
+    childName: row.child_name ?? '',
+    status: mapChildStatus(row.child_status),
+    transferNumber: row.transfer_number ? String(row.transfer_number) : null,
+    branchFilter: getBranchFilter(row.branch_name ?? null, row.branch_code ?? ''),
+  }));
+}
+
 /** Minimal application counter for overview school rows; financial data is not loaded. */
 export async function fetchSchoolApplicationCounts(): Promise<Record<string, number>> {
   const counts: Record<string, number> = {};
@@ -1155,6 +1272,9 @@ export async function ensureV2Transfer(params: {
   vehicleType: VehicleType;
 }): Promise<string> {
   if (!params.branchId) throw new Error('У ребенка не указан филиал');
+  if (!Number.isInteger(params.transferNumber) || params.transferNumber < 1 || params.transferNumber > MAX_TRANSFER_NUMBER) {
+    throw new Error(`Номер трансфера должен быть от 1 до ${MAX_TRANSFER_NUMBER}`);
+  }
 
   const { data: existing, error: selectError } = await supabase
     .from('v2_transfers')
@@ -1282,13 +1402,25 @@ async function repriceV2ChildrenForTransfer(params: {
 export async function updateV2ChildRoute(params: {
   child: Child;
   vehicleType: VehicleType;
-  transferNumber?: number;
+  transferNumber?: TransferChoice;
   stopNumber?: number;
   timeMorning?: string;
   source?: TransferRepricingSource;
   actorId?: string | null;
   actorName?: string | null;
 }): Promise<void> {
+  // Х = отказ: база сама снимет ребёнка с номера и запишет историю.
+  if (params.transferNumber === TRANSFER_X) {
+    await updateV2Child(params.child.id, { status: 'rejected', stop_order: null });
+    return;
+  }
+  if (params.transferNumber) {
+    // Отказника на номер не посадить, пока он в отказе: возвращаем его в «Новые».
+    const { data: current, error: statusError } = await supabase
+      .from('v2_children').select('status').eq('id', params.child.id).single();
+    if (statusError) throw new Error(statusError.message);
+    if (current?.status === 'rejected') await updateV2Child(params.child.id, { status: 'new' });
+  }
   if (!params.transferNumber) {
     await updateV2Child(params.child.id, {
       transfer_id: null,
@@ -1539,7 +1671,7 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
       address: input.address?.trim() || null,
       // Резерв — это активный водитель без назначенного трансфера, а не
       // неактивный статус. Принадлежность к резерву вычисляется по transferCount.
-      status: 'active',
+      status: input.status ?? 'active',
       comment: comment || null,
     })
     .select('id')

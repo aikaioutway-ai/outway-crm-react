@@ -36,3 +36,21 @@ test('creator confirms deletion with a reason and the current task version',asyn
   await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','delete',expect.objectContaining({version:2,comment:'Ошибочно создана'}),'task'));
   expect(onClose).toHaveBeenCalled();
 });
+
+
+test('secondary participant can accept and sees all participant names',async()=>{
+  detail.mockReturnValue({data:{task:{...task,assignee_id:'manager',assignee_ids:['manager','logist']},events:[]},refetch:jest.fn()});
+  render(<TaskDetail id="task" user={user} employees={employees} onClose={jest.fn()}/>);
+  expect(screen.getByText('Менеджер, Логист')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Принять в работу'}));
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','accept',expect.objectContaining({version:2}),'task'));
+});
+
+test('secondary participant can send the shared result for review',async()=>{
+  detail.mockReturnValue({data:{task:{...task,assignee_id:'manager',assignee_ids:['manager','logist'],status:'in_progress'},events:[]},refetch:jest.fn()});
+  render(<TaskDetail id="task" user={user} employees={employees} onClose={jest.fn()}/>);
+  fireEvent.click(screen.getByRole('button',{name:'Отправить на проверку'}));
+  fireEvent.change(screen.getByLabelText('Что сделано?'),{target:{value:'Совместно проверили маршрут'}});
+  fireEvent.click(screen.getByRole('button',{name:'Сохранить результат'}));
+  await waitFor(()=>expect(mutateTask).toHaveBeenCalledWith('session','submit',expect.objectContaining({result:'Совместно проверили маршрут'}),'task'));
+});

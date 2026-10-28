@@ -28,10 +28,10 @@ test('opens selected transfer page and resets when the school changes', () => {
   expect(screen.getByRole('button', { name: '#1' })).toBeInTheDocument();
 });
 
-test('rounds the maximum assigned or selected transfer to complete pages', () => {
+test('a school always shows transfers 1–15, even if a higher number exists in the base', () => {
   expect(transferCellCount([])).toBe(15);
   expect(transferCellCount(['15', null, 'invalid'])).toBe(15);
-  expect(transferCellCount(['16'])).toBe(30);
-  expect(transferCellCount(['31'])).toBe(45);
-  expect(transferCellCount([], '20')).toBe(30);
+  expect(transferCellCount(['16'])).toBe(15);
+  expect(transferCellCount(['31'])).toBe(15);
+  expect(transferCellCount([], '20')).toBe(15);
 });

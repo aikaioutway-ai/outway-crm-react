@@ -1,36 +1,38 @@
-import { DIRECTORY_COLORS } from './DirectorySchoolDashboard';
+import { DIRECTORY_COLORS, directoryCountsForSchool } from './DirectorySchoolDashboard';
 import { ManagerMode } from './ManagerModeTabs';
 import React, { useMemo } from 'react';
-import { useBranchStats, useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useBranchStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
 import { computeSchoolStatsFromBranches, KPI_COLORS } from './ManagerOverview';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { money } from '../../utils/pricing';
 import { isSchoolAllowed } from './constants';
+import type { SchoolTier } from './SchoolTierTabs';
 
 interface SchoolKpiStripProps {
   schoolKey: string;
   mode?: ManagerMode;
   rightReserveWidth?: number;
   allowedSchools?: string[];
+  schoolTier?: SchoolTier;
 }
 
-export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools }: SchoolKpiStripProps) {
+export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools, schoolTier = '1.0' }: SchoolKpiStripProps) {
   const { data: branches } = useBranchStats();
-  const { data: rows } = useFamiliesTable();
+  const directoryQuery = useSchoolDirectoryStats();
 
   const stat = useMemo(() => (
-    branches ? computeSchoolStatsFromBranches(branches).find(s => s.key === schoolKey) : undefined
-  ), [branches, schoolKey]);
+    branches ? computeSchoolStatsFromBranches(branches, schoolTier).find(s => s.key === schoolKey) : undefined
+  ), [branches, schoolKey, schoolTier]);
 
-  if (!isSchoolAllowed(schoolKey, allowedSchools) || !stat) return null;
+  if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier) || !stat) return null;
 
   if (mode === 'directory') {
-    const children = (rows ?? []).filter(row => row.branchFilter === schoolKey);
+    const counts = directoryCountsForSchool(directoryQuery.data ?? [], schoolKey);
     const metrics = [
-      ['applications', 'К-во заявок', children.length],
-      ['newRequests', 'Новые заявки', children.filter(row => row.status === 'new' && !row.transferNumber).length],
-      ['boarded', 'Посажены', children.filter(row => row.status === 'boarded').length],
-      ['rejected', 'Отказ', children.filter(row => row.status === 'rejected').length],
+      ['applications', 'К-во заявок', counts.applications],
+      ['newRequests', 'Новые заявки', counts.newRequests],
+      ['boarded', 'Посажены', counts.boarded],
+      ['rejected', 'Отказ', counts.rejected],
     ] as const;
     return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
       <KpiChip iconBackground="transparent" icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} />} label="Школа" value={stat.label} color={stat.color} />

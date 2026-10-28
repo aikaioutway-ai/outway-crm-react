@@ -105,3 +105,36 @@ export async function fetchDriverPayments(driverId:string,sessionToken?:string):
   }));
   return [...salaryRows,...advanceRows].sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
 }
+
+export interface TransferDriverHistoryEntry {
+  id: string;
+  transferId: string;
+  previousDriverId: string | null;
+  driverId: string | null;
+  previousDriverName: string | null;
+  driverName: string | null;
+  eventType: 'initial' | 'change';
+  recordedAt: string;
+}
+
+export async function fetchTransferDriverHistory(transferId: string, sessionToken?: string, before?: { recordedAt: string; id: string }): Promise<TransferDriverHistoryEntry[]> {
+  const data = await callExpenseApi(sessionToken, { action: 'listTransferDriverHistory', transferId, before });
+  return (data.rows ?? []).map((row: Record<string, any>) => ({
+    id: String(row.id), transferId: String(row.transfer_id),
+    previousDriverId: row.previous_driver_id ?? null, driverId: row.driver_id ?? null,
+    previousDriverName: row.previous_driver_name ?? null, driverName: row.driver_name ?? null,
+    eventType: row.event_type, recordedAt: String(row.recorded_at),
+  }));
+}
+
+export async function fetchTransferDriversHistory(transferIds: string[], sessionToken?: string): Promise<TransferDriverHistoryEntry[]> {
+  if (!transferIds.length) return [];
+  const data = await callExpenseApi(sessionToken,{action:'listTransferDriversHistory',transferIds});
+  return (data.rows ?? []).map((row: Record<string,any>)=>({id:String(row.id),transferId:String(row.transfer_id),previousDriverId:row.previous_driver_id??null,driverId:row.driver_id??null,previousDriverName:row.previous_driver_name??null,driverName:row.driver_name??null,eventType:row.event_type,recordedAt:String(row.recorded_at)}));
+}
+
+export async function reserveTemporaryDriverName(sessionToken: string): Promise<string> {
+  const data = await callExpenseApi(sessionToken,{action:'reserveTemporaryDriverName'});
+  if (typeof data.name !== 'string' || !/^Временный водитель №[1-9]\d*$/.test(data.name)) throw new Error('Не удалось получить номер временного водителя');
+  return data.name;
+}

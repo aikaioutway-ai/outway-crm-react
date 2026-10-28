@@ -7,7 +7,7 @@ import TaskComposer from '../../modules/tasks/TaskComposer';
 import TaskDetail from '../../modules/tasks/TaskDetail';
 import {
   canViewTeamTasks, CrmTask, isTaskOverdue, ROLE_LABELS, TARGET_LABELS, TASK_DEPARTMENTS, TASK_STATUS,
-  TaskFilters, TaskStatus, TaskTarget, taskDate, taskDepartment,
+  TaskFilters, TaskStatus, TaskTarget, taskDate, taskDepartment, taskAssigneeIds,
 } from '../../modules/tasks/taskTypes';
 import '../../modules/tasks/TasksModule.css';
 import { Screen } from '../nav';
@@ -62,7 +62,7 @@ function defaultStatus(list: ListKey): StatusKey {
 
 function TaskCard({ task, names, list, onOpen }: { task: CrmTask; names: Map<string, string>; list: ListKey; onOpen: () => void }) {
   const overdue = isTaskOverdue(task);
-  const assignee = names.get(task.assignee_id) ?? '—';
+  const assignee = taskAssigneeIds(task).map(id=>names.get(id) ?? id).join(', ');
   const creator = names.get(task.creator_id) ?? '—';
   // В «Моих задачах» исполнитель — я сам, важнее кто поставил; в остальных списках — кому.
   const people = list === 'mine' ? `от ${creator}` : `${assignee} · от ${creator}`;
@@ -139,7 +139,7 @@ export default function TasksSection({ user, context, onClearContext, onOpenTarg
 
   const query = search.trim().toLowerCase();
   const rows = useMemo(
-    () => (tasks.data?.rows ?? []).filter(task => !query || [task.title, task.description, task.target.label, names.get(task.assignee_id), names.get(task.creator_id)]
+    () => (tasks.data?.rows ?? []).filter(task => !query || [task.title, task.description, task.target.label, taskAssigneeIds(task).map(id=>names.get(id)).join(' '), names.get(task.creator_id)]
       .some(value => String(value ?? '').toLowerCase().includes(query))),
     [tasks.data?.rows, query, names],
   );

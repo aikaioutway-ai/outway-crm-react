@@ -1,4 +1,6 @@
 import FilterableTable from '../../core/tables/FilterableTable';
+import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
+import { TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
 import './InlineFamilyCard.css';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
@@ -51,8 +53,14 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'minivan', label: 'Минивэн' },
   { value: 'sedan', label: 'Седан' },
 ];
-const TRANSFER_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }))];
+const TRANSFER_OPTIONS = [{ value: '', label: '-' }, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `№ ${value}` }))];
 const STOP_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))];
+const TRANSFER_X_BADGE = '#64748B';
+// Х = отказ: ребёнка с номера снимает база. Номер для отказника вернёт его в «Новые».
+function transferChoicePatch(value: string): Partial<Child> {
+  if (value === TRANSFER_X) return { status: 'rejected' };
+  return { transferNumber: value ? Number(value) : undefined };
+}
 
 function formatInlineDate(value?: string): string {
   if (!value) return '—';
@@ -60,8 +68,22 @@ function formatInlineDate(value?: string): string {
   return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString('ru-RU');
 }
 
+// Логистам в карточке нужны только контакты, дети и история: деньги и
+// документы семьи им не показываются и не загружаются.
+const LOGIST_TABS: Tab[] = ['overview', 'children', 'history'];
+
+function isLogistRole(role: string): boolean {
+  return role === 'logist' || role === 'senior_logist';
+}
+
+function startTab(role: string, initialTab: Tab, initialChildId?: string): Tab {
+  const tab = initialChildId && initialTab === 'overview' ? 'children' : initialTab;
+  return isLogistRole(role) && !LOGIST_TABS.includes(tab) ? 'overview' : tab;
+}
+
 export default function InlineFamilyCard({ family, onClose, userRole = 'manager', userName = 'Менеджер', initialTab = 'overview', initialChildId, onUpdated, sessionToken }: Props) {
-  const [tab, setTab] = useState<Tab>(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
+  const isLogist = isLogistRole(userRole);
+  const [tab, setTab] = useState<Tab>(startTab(userRole, initialTab, initialChildId));
   const [children, setChildren] = useState<Child[]>([]);
   const [charges, setCharges] = useState<Charge[]>([]);
   const [discountChild, setDiscountChild] = useState<Child | null>(null);
@@ -98,7 +120,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     setSavedFamily(family);
     setDraftFamily(family);
     setEditing(false);
-    setTab(initialChildId && initialTab === 'overview' ? 'children' : initialTab);
+    setTab(startTab(userRole, initialTab, initialChildId));
     setFinanceLoaded(false);
     setAuditLoaded(false);
     void loadChildren().catch(() => {
@@ -109,7 +131,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     void loadFinance().catch(() => {
       if (activeFamilyIdRef.current === family.id) setFinanceLoaded(false);
     });
-    loadDocuments();
+    if (!isLogist) loadDocuments();
     fetchV2Branches().then(next => { if (activeFamilyIdRef.current === family.id) setBranches(next); }).catch(() => setBranches([]));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [family.id]);
@@ -151,6 +173,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     }
   }
   async function loadFinance(kids?: Child[]) {
+    if (isLogist) return;
     const requestedFamilyId = family.id;
     setLoadingFinance(true);
     try {
@@ -370,9 +393,12 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         if (!ok) throw new Error('child-save-failed');
       }
 
-      const nextDocuments = await saveFamilyDocuments(family.id, draftDocuments);
-      setSavedDocuments(nextDocuments);
-      setDraftDocuments(nextDocuments.map(document => ({ ...document, scanFile: null })));
+      // Логист документы не загружает — сохранение пустого списка удалило бы их.
+      if (!isLogist) {
+        const nextDocuments = await saveFamilyDocuments(family.id, draftDocuments);
+        setSavedDocuments(nextDocuments);
+        setDraftDocuments(nextDocuments.map(document => ({ ...document, scanFile: null })));
+      }
 
       const nextChildren = await loadChildren();
       if (financeLoaded) await loadFinance(nextChildren);
@@ -657,16 +683,17 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
             <button type="button" aria-label="Закрыть карточку" onClick={onClose} style={closeButtonStyle}><X size={16} /></button>
           </div>
             <div className="family-card-metrics">
-              <SideMetric label="Баланс счёта" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />
+              {!isLogist && <SideMetric label="Баланс счёта" value={financeLoaded ? money(mainBalance) : '…'} alert={financeLoaded && mainBalance < 0} />}
               <SideMetric label="Стоимость в месяц" value={money(familyMonthlyPrice)} />
-              <SideMetric label="Задолженность" value={financeLoaded ? money(totalDebt) : '…'} alert={totalDebt > 0} />
-              <SideMetric label="Платежи на проверке" value={financeLoaded ? money(pendingAmount) : '…'} pending={pendingAmount > 0} />
+              {!isLogist && <SideMetric label="Задолженность" value={financeLoaded ? money(totalDebt) : '…'} alert={totalDebt > 0} />}
+              {!isLogist && <SideMetric label="Платежи на проверке" value={financeLoaded ? money(pendingAmount) : '…'} pending={pendingAmount > 0} />}
             </div>
         </header>
 
       <div className="family-card-navigation">
           <nav aria-label="Разделы карточки клиента" className="family-card-tabs">
             {TABS.filter(item => {
+              if (isLogist) return LOGIST_TABS.includes(item.key);
               if (item.key === 'history') return userRole === 'admin' || userRole === 'gen_director';
               return true;
             }).map(item => {
@@ -1398,21 +1425,6 @@ function DetailMapLink({ label, url }: { label: string; url: string }) {
   );
 }
 
-const CHILD_STATUS_COLORS: Record<string, { bg: string; color: string }> = {
-  boarded:  { bg: '#E7F5EE', color: '#0F6B48' },
-  waiting:  { bg: '#FDF3DD', color: '#8A5A00' },
-  new:      { bg: '#EAF1FD', color: '#2952A3' },
-  paused:   { bg: '#EEF1F4', color: '#4A5563' },
-  rejected: { bg: '#FBEAEA', color: '#A12C2C' },
-}
-const CHILD_STATUS_OPTIONS_INLINE = [
-  { value: 'new', label: 'Новый' },
-  { value: 'waiting', label: 'Ожидание' },
-  { value: 'boarded', label: 'Посажен' },
-  { value: 'rejected', label: 'Отказ' },
-  { value: 'paused', label: 'Пауза' },
-];
-
 function ChildCard({
   child,
   index,
@@ -1439,7 +1451,6 @@ function ChildCard({
   // новый ребёнок (ещё не сохранён) сразу открыт — его нужно заполнить
   const expanded = true;
   const s = child.status ?? 'new';
-  const col = CHILD_STATUS_COLORS[s] ?? CHILD_STATUS_COLORS.new;
   const basePrice = Number(child.basePrice || child.finalPrice || 0);
   const finalPrice = Number(child.finalPrice || 0);
   const hasDiscount = basePrice > finalPrice;
@@ -1460,9 +1471,7 @@ function ChildCard({
           </span>
 
         </div>
-        <span style={{ background: col.bg, color: col.color, borderRadius: 999, fontSize: 11, fontWeight: 600, padding: '4px 9px', whiteSpace: 'nowrap', flexShrink: 0 }}>
-          {CHILD_STATUS_OPTIONS_INLINE.find(item => item.value === s)?.label ?? s}
-        </span>
+        <span style={{ flexShrink: 0 }}><TransferNumberBadge number={transferChoiceValue(s, child.transferNumber)} vehicleType={child.vehicleType} /></span>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, flexShrink: 0 }}>
           {hasDiscount && <span style={{ fontSize: 11, color: 'var(--text-3)', textDecoration: 'line-through' }}>{money(basePrice)}</span>}
           <span style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--text)' }}>{money(finalPrice)}</span>
@@ -1495,9 +1504,8 @@ function ChildCard({
       {expanded && (
         <div style={{ padding: '2px 14px 14px', borderTop: '1px solid #F1F5F9' }}>
           {editing && (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr auto', gap: 10, alignItems: 'center', padding: '10px 0' }} onClick={event => event.stopPropagation()}>
+            <div style={{ padding: '10px 0' }} onClick={event => event.stopPropagation()}>
               <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong />
-              <EditableSelect value={s} options={CHILD_STATUS_OPTIONS_INLINE} onCommit={value => onSaveChild(child, { status: value as Child['status'] })} width={110} panelWidth={140} />
             </div>
           )}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6, paddingTop: 10 }} onClick={event => event.stopPropagation()}>
@@ -1538,7 +1546,7 @@ function ChildCard({
               },
               {
                 label: 'Трансфер',
-                content: editing ? <EditableSelect value={child.transferNumber ? String(child.transferNumber) : ''} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} width={60} panelWidth={130} /> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : <ReadOnlyValue value="—" />,
+                content: editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber)} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, transferChoicePatch(value))} width={60} panelWidth={130} /> : child.status === 'rejected' ? <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : <ReadOnlyValue value="—" />,
               },
               {
                 label: 'Остановка',
@@ -1620,20 +1628,19 @@ function ChildrenOverviewTable({
       {children.length === 0 ? <p>Добавьте первого ребёнка в режиме редактирования.</p> : (
         <div className="family-children-table-wrap">
           <FilterableTable className="family-children-table">
-            <thead><tr>{['Ребёнок', 'Школа / класс', 'Транспорт', 'Трансфер', 'Остановка', 'Статус', 'В месяц', ''].map((label, index) => <th scope="col" key={index}>{label}</th>)}</tr></thead>
+            <thead><tr>{['Ребёнок', 'Школа / класс', 'Транспорт', 'Трансфер', 'Остановка', 'В месяц', ''].map((label, index) => <th scope="col" key={index}>{label}</th>)}</tr></thead>
             <tbody>{children.map((child, index) => (
               <React.Fragment key={child.id}>
               <tr ref={child.id === focusChildId ? focusedRow : undefined} className={child.id === focusChildId ? 'is-focused' : ''}>
                 <td>{editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : <strong>{formatName(child.childName)}</strong>}</td>
                 <td><span>{child.branchShort || child.schoolCode}</span><span className="family-children-secondary">{child.class ? (/класс/i.test(child.class) ? child.class : `${child.class} класс`) : 'Класс не указан'}</span></td>
                 <td>{VEHICLE_TYPE_OPTIONS.find(option => option.value === child.vehicleType)?.label || '—'}<span className="family-children-secondary">Зона {child.zone}</span></td>
-                <td>{editing ? <EditableSelect value={String(child.transferNumber || '')} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, { transferNumber: value ? Number(value) : undefined })} /> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : '—'}</td>
+                <td>{editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber)} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, transferChoicePatch(value))} /> : child.status === 'rejected' ? <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : '—'}</td>
                 <td>{editing ? <EditableSelect value={String(child.stopNumber || '')} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} /> : child.stopNumber || '—'}</td>
-                <td>{editing ? <EditableSelect value={child.status || 'new'} options={CHILD_STATUS_OPTIONS_INLINE} onCommit={value => onSaveChild(child, { status: value as Child['status'] })} /> : <span className="family-children-status" style={{ color: (CHILD_STATUS_COLORS[child.status || 'new'] || CHILD_STATUS_COLORS.new).color, background: (CHILD_STATUS_COLORS[child.status || 'new'] || CHILD_STATUS_COLORS.new).bg }}>{CHILD_STATUS_OPTIONS_INLINE.find(option => option.value === (child.status || 'new'))?.label || '—'}</span>}</td>
                 <td className="family-children-price"><strong>{money(Number(child.finalPrice || 0))}</strong>{childDiscountLabel(child) !== '—' && <span className="family-children-secondary">{childDiscountLabel(child)}</span>}</td>
                 <td><div style={{ display: 'flex', gap: 6 }}><button type="button" className="family-children-action" onClick={() => setDetailChildId(detailChildId === child.id ? null : child.id)} aria-expanded={detailChildId === child.id}>{detailChildId === child.id ? 'Скрыть' : editing ? 'Настроить' : 'Подробнее'}</button>{!editing && onEditDiscount && <button type="button" className="family-children-action" onClick={() => onEditDiscount(child)}>Скидка</button>}</div></td>
               </tr>
-              {detailChildId === child.id && <tr className="family-child-detail-row"><td colSpan={8}>
+              {detailChildId === child.id && <tr className="family-child-detail-row"><td colSpan={7}>
                 <ChildCard child={child} index={index} branches={branches} onSaveChild={onSaveChild} onDeleteChild={onDeleteChild} busy={busy} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={onEditDiscount} />
               </td></tr>}
               </React.Fragment>

@@ -22,6 +22,10 @@ interface NotionSelectProps {
   autoFocus?: boolean;
   onEscape?: () => void;
   onClose?: () => void;
+  ariaLabel?: string;
+  searchable?: boolean;
+  searchPlaceholder?: string;
+  footerAction?: { label: string; onClick: () => void };
 }
 
 export default function NotionSelect({
@@ -36,12 +40,18 @@ export default function NotionSelect({
   autoFocus,
   onEscape,
   onClose,
+  ariaLabel,
+  footerAction,
+  searchable=false,
+  searchPlaceholder='Поиск',
 }: NotionSelectProps) {
   const [open, setOpen] = useState(Boolean(autoFocus));
   const [panelStyle, setPanelStyle] = useState<React.CSSProperties>({});
   const rootRef = useRef<HTMLDivElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
   const panelRef = useRef<HTMLDivElement | null>(null);
+  const [search,setSearch]=useState('');
+  const hasFooter=Boolean(footerAction) || searchable;
   const selected = options.find(option => option.value === value);
 
   const close = useCallback(() => {
@@ -56,11 +66,11 @@ export default function NotionSelect({
     setPanelStyle({
       position: 'fixed',
       left: Math.min(rect.left, window.innerWidth - nextWidth - 10),
-      top: Math.min(rect.bottom + 6, window.innerHeight - 260),
+      top: Math.max(10, Math.min(rect.bottom + 6, window.innerHeight - (hasFooter ? Math.min(340,window.innerHeight-20) : 260) - 10)),
       width: nextWidth,
       zIndex: 2400,
     });
-  }, [open, panelWidth, variant]);
+  }, [open, panelWidth, variant, hasFooter]);
 
   useEffect(() => {
     if (!autoFocus) return;
@@ -109,11 +119,12 @@ export default function NotionSelect({
       <button
         ref={buttonRef}
         className="notion-select-trigger"
+        aria-label={ariaLabel}
         aria-expanded={open}
         aria-haspopup="listbox"
         type="button"
         disabled={disabled}
-        onClick={() => { if (open) close(); else setOpen(true); }}
+        onClick={() => { if (open) close(); else {setSearch('');setOpen(true);} }}
         style={{
           width: '100%',
           height: isCell ? 38 : 24,
@@ -170,16 +181,16 @@ export default function NotionSelect({
         <ChevronDown size={14} style={{ flexShrink: 0, color: 'var(--text-2)' }} />
       </button>
 
-      {open && createPortal(
+      {open && !disabled && createPortal(
         <div
           ref={panelRef}
           className="notion-select-panel"
-          role="listbox"
+          role={hasFooter ? "dialog" : "listbox"}
           aria-label="Выберите вариант"
           style={{
             ...panelStyle,
             maxHeight: 340,
-            overflowY: 'auto',
+            overflowY: hasFooter ? 'hidden' : 'auto',
             padding: '12px 12px 10px',
             border: '1px solid #E5ECEF',
             borderRadius: 10,
@@ -188,11 +199,15 @@ export default function NotionSelect({
           }}
           onClick={event => event.stopPropagation()}
         >
-          <div style={{ color: '#777', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
+          {!searchable && <div style={{ color: '#777', fontSize: 13, fontWeight: 600, marginBottom: 10 }}>
             Выберите вариант
-          </div>
-          <div style={{ display: 'grid', gap: 7 }}>
-            {options.map((option) => {
+          </div>}
+          {searchable && <>
+            {selected && <button type="button" className="notion-select-current" onClick={close}><Check size={15}/>{selected.label}</button>}
+            <input className="notion-select-search" aria-label={searchPlaceholder} placeholder={searchPlaceholder} value={search} onChange={event=>setSearch(event.target.value)}/>
+          </>}
+          <div role={hasFooter?'listbox':undefined} style={{ display: 'grid', gridTemplateColumns:'minmax(0,1fr)', gap: 7, maxHeight: hasFooter ? Math.min(searchable?170:230,window.innerHeight-200) : undefined, overflowY: hasFooter ? 'auto' : undefined }}>
+            {options.filter(option=>!searchable || option.value!==value && option.label.toLocaleLowerCase('ru').includes(search.toLocaleLowerCase('ru'))).map((option) => {
               const active = option.value === value;
               return (
                 <button
@@ -215,6 +230,7 @@ export default function NotionSelect({
                   }}
                   style={{
                     minHeight: 32,
+                    minWidth: 0,
                     border: 'none',
 
                     borderRadius: 6,
@@ -240,6 +256,8 @@ export default function NotionSelect({
                       fontSize: 14,
                       fontWeight: active ? 750 : 650,
                       whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
                     }}
                   >
                     {option.label}
@@ -248,6 +266,7 @@ export default function NotionSelect({
               );
             })}
           </div>
+          {footerAction && <button type="button" className="notion-select-footer" onClick={()=>{close();footerAction.onClick();}}>{footerAction.label}</button>}
         </div>,
         document.body
       )}

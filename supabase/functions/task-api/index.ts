@@ -1,4 +1,4 @@
-import { taskReadScope, countTask, type TaskCounts } from './access.ts';
+import { taskReadScope, taskVisibilityFilter, countTask, type TaskCounts } from './access.ts';
 import { SCHOOL_TABS } from './schools.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
@@ -106,11 +106,11 @@ Deno.serve(async req => {
     const leader = LEADERS.has(employee.role);
     const scope = taskReadScope(employee.role);
     const colleagues = scope.roles.length ? checked(await db.from('v2_employees').select('id').in('role', scope.roles)) ?? [] : [];
-    const colleagueIds = colleagues.map((row: any) => JSON.stringify(String(row.id))).join(',');
-    const visible = (query: any) => scope.all ? query.is('deleted_at', null) : query.is('deleted_at', null).or(`creator_id.eq.${employee.id},assignee_id.eq.${employee.id},observer_id.eq.${employee.id}${colleagueIds ? `,assignee_id.in.(${colleagueIds})` : ''}`);
+    const visibilityFilter = taskVisibilityFilter(String(employee.id), colleagues.map((row: any)=>String(row.id)));
+    const visible = (query: any) => scope.all ? query.is('deleted_at', null) : query.is('deleted_at', null).or(visibilityFilter);
     if (body.action === 'metadata') {
       const employees = checked(await db.from('v2_employees').select('id,full_name,role,status').neq('role','driver').order('full_name'));
-      return response({ok:true,employees,canViewAll:scope.team,targetTypes:String(employee.role).startsWith('b2b_')?['general','driver']:['general','school','transfer','child','family','driver','group']});
+      return response({ok:true,employees,canViewAll:scope.team,multipleAssignees:true,targetTypes:String(employee.role).startsWith('b2b_')?['general','driver']:['general','school','transfer','child','family','driver','group']});
     }
     if (body.action === 'summary') {
       const summary=checked(await db.rpc('v2_task_summary',{p_actor_id:employee.id}));
@@ -120,14 +120,18 @@ Deno.serve(async req => {
       const byEmployee: Record<string, TaskCounts> = {};
       const tracked = scope.all ? checked(await db.from('v2_employees').select('id').eq('status', 'active').neq('role', 'driver')) ?? [] : colleagues;
       for (const person of tracked) byEmployee[person.id] = { total: 0, open: 0, completed: 0, overdue: 0, review: 0 };
+      const trackedIds = new Set(tracked.map((person: any)=>String(person.id)));
       const now = Date.now();
       for (let offset = 0; ; offset += 1000) {
-        const rows = checked(await visible(db.from('v2_tasks').select('id,assignee_id,status,due_at')).order('id').range(offset, offset + 999)) ?? [];
+        const rows = checked(await visible(db.from('v2_tasks').select('id,assignee_id,assignee_ids,status,due_at')).order('id').range(offset, offset + 999)) ?? [];
         for (const row of rows) {
           const counts = countTask(row, now);
-          const current = byEmployee[row.assignee_id] ?? { total: 0, open: 0, completed: 0, overdue: 0, review: 0 };
-          for (const key of Object.keys(counts) as Array<keyof TaskCounts>) current[key] += counts[key];
-          byEmployee[row.assignee_id] = current;
+          for (const id of row.assignee_ids ?? [row.assignee_id]) {
+            if (!scope.all && !trackedIds.has(id) && id!==employee.id) continue;
+            const current = byEmployee[id] ?? { total: 0, open: 0, completed: 0, overdue: 0, review: 0 };
+            for (const key of Object.keys(counts) as Array<keyof TaskCounts>) current[key] += counts[key];
+            byEmployee[id] = current;
+          }
         }
         if (rows.length < 1000) break;
       }
@@ -138,16 +142,16 @@ Deno.serve(async req => {
       const filters = body.filters ?? {};
       if (filters.view==='created') query=query.eq('creator_id',employee.id);
       else if (filters.view==='watching') query=query.eq('observer_id',employee.id);
-      else if (filters.view!=='all' || !scope.team) query=query.eq('assignee_id',employee.id);
+      else if (filters.view!=='all' || !scope.team) query=query.contains('assignee_ids',[employee.id]);
       if (filters.status && filters.status!=='active' && filters.status!=='all') query=query.eq('status',filters.status);
       else if (filters.status!=='all') query=query.in('status',['new','in_progress','review']);
-      if (filters.assigneeId) query=query.eq('assignee_id',String(filters.assigneeId));
+      if (filters.assigneeId) query=query.contains('assignee_ids',[String(filters.assigneeId)]);
       if (filters.department) {
-        const departments: Record<string,string[]>={logistics:['logist','senior_logist','b2b_logist'],management:['manager','b2b_manager'],finance:['cashier'],leadership:['admin','gen_director','director']};
+        const departments: Record<string,string[]>={logistics:['logist','b2b_logist'],management:['manager','b2b_manager'],finance:['cashier'],leadership:['admin','gen_director','director','senior_logist']};
         const roles=departments[String(filters.department)];
         if (!roles) throw new Error('Неизвестный отдел');
         const assignees=checked(await db.from('v2_employees').select('id').in('role',roles)) ?? [];
-        query=query.in('assignee_id',assignees.map((e: any)=>e.id));
+        query=query.overlaps('assignee_ids',assignees.map((e: any)=>e.id));
       }
       if (filters.schoolKey) {
         const key = String(filters.schoolKey);

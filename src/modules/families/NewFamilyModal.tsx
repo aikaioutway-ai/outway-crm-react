@@ -1,4 +1,5 @@
-import { isSchoolVisible } from './constants';
+import { isSchoolInTier } from './constants';
+import type { SchoolTier } from './SchoolTierTabs';
 import React, { useState } from 'react';
 import { X, ChevronDown } from 'lucide-react';
 
@@ -20,9 +21,9 @@ const SCHOOL_LINKS: { name: string; code: string; url: string; logo: string }[] 
   { name: 'Международная школа Сан Арип', code: 'SANARIP', logo: '/school-logos/SNP.png', url: 'https://clinquant-sprite-ec8c20.netlify.app/?s=1018' },
 ];
 
-interface Props { onClose: () => void; }
+interface Props { onClose: () => void; schoolTier?: SchoolTier; }
 
-export default function NewFamilyModal({ onClose }: Props) {
+export default function NewFamilyModal({ onClose, schoolTier = '1.0' }: Props) {
   const [selected, setSelected] = useState('');
   const [open, setOpen]         = useState(false);
 
@@ -93,7 +94,7 @@ export default function NewFamilyModal({ onClose }: Props) {
                   border: '1px solid var(--border)',
                   overflow: 'hidden', maxHeight: 360, overflowY: 'auto',
                 }}>
-                  {SCHOOL_LINKS.filter(school=>isSchoolVisible(school.code)).map((s, i) => (
+                  {SCHOOL_LINKS.filter(school=>isSchoolInTier(school.code, schoolTier)).map((s, i) => (
                     <div
                       key={s.code + i}
                       onClick={() => { setSelected(s.code); setOpen(false); }}

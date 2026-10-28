@@ -4,8 +4,8 @@ import { ManagerSearch } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import { useEffect, useMemo, useState } from 'react';
-import { FamilyListRow } from '../../services/crmV2Service';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { FamilyListRow, FamilySearchHit } from '../../services/crmV2Service';
+import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, isSchoolAllowed } from './constants';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -18,7 +18,7 @@ type SortKey = 'school' | 'newRequests' | 'microbusAverage' | 'transferCount' | 
 
 interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
-  onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilyListRow) => void;
+  onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilySearchHit) => void;
   onDrivers: () => void;
   view: 'table' | 'map';
   onViewChange: (view: 'table' | 'map') => void;
@@ -113,7 +113,7 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
 }
 
 export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers }: LogisticsOverviewProps) {
-  const { data: allRows = null } = useFamiliesTable();
+  const { data: allRows = null } = useLogisticsTable();
   const rows = useMemo(
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
     [allRows, allowedSchools],

@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ListTodo, Users, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { BarChart3, ListTodo, Users, School, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary';
 
 interface SidebarProps {
   active: NavSection;
@@ -20,8 +20,11 @@ interface SidebarProps {
   columnsActive?: boolean;
 }
 
-const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
+// expandedOnly — пункт виден только в раскрытом меню.
+const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly?: boolean }[] = [
+  { key: 'summary',   label: 'Сводка',     icon: <BarChart3 size={18} /> },
   { key: 'families',  label: 'Менеджер',   icon: <Users size={18} /> },
+  { key: 'schools2',  label: 'Школы 2.0',  icon: <School size={18} />, expandedOnly: true },
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
@@ -30,7 +33,7 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode }[] = [
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
 ];
 
-export function getAllowedSections(role: UserRole, _userId?: string): NavSection[] {
+export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
   let sections: NavSection[];
   if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
   else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
@@ -42,7 +45,18 @@ export function getAllowedSections(role: UserRole, _userId?: string): NavSection
   else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
   else sections = ['families'];
   sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
-  return [...sections, 'tasks'];
+
+  // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
+  sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
+  return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks'] : [...sections, 'tasks'];
+}
+
+// Владелец компании (учётная запись администратора).
+export const OWNER_EMPLOYEE_ID = 'emp-admin';
+
+// «Сводка» — итоги компании только для владельца и гендиректора.
+export function canAccessSummary(role: UserRole, userId?: string): boolean {
+  return userId === OWNER_EMPLOYEE_ID || role === 'gen_director';
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
@@ -65,7 +79,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
       setCollapsedBySection(prev => ({ ...prev, [active]: true }));
     }
   }, [active, collapseSignal]);
-  const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId));
+  const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId) && !(collapsed && item.expandedOnly));
   const tools = [
     { label: 'Фильтры', icon: <SlidersHorizontal size={17} />, onClick: onFiltersClick, active: filtersActive },
     { label: 'Колонки', icon: <Columns3 size={17} />, onClick: onColumnsClick, active: columnsActive },

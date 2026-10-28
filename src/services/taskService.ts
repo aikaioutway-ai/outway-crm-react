@@ -19,8 +19,8 @@ export async function callTaskApi<T>(sessionToken: string | undefined, body: Rec
   }
   return data as T;
 }
-export function useTaskMetadata(token?: string): UseQueryResult<{employees:TaskEmployee[];canViewAll:boolean;targetTypes?:TaskTarget['type'][]}> {
-  return useQuery({queryKey:['tasks',token,'metadata'],queryFn:()=>callTaskApi<{employees:TaskEmployee[];canViewAll:boolean;targetTypes?:TaskTarget['type'][]}>(token,{action:'metadata'}),enabled:Boolean(token),staleTime:60000,retry:1});
+export function useTaskMetadata(token?: string): UseQueryResult<{employees:TaskEmployee[];canViewAll:boolean;multipleAssignees?:boolean;targetTypes?:TaskTarget['type'][]}> {
+  return useQuery({queryKey:['tasks',token,'metadata'],queryFn:()=>callTaskApi<{employees:TaskEmployee[];canViewAll:boolean;multipleAssignees?:boolean;targetTypes?:TaskTarget['type'][]}>(token,{action:'metadata'}),enabled:Boolean(token),staleTime:60000,retry:1});
 }
 export function useTaskSummary(token?: string): UseQueryResult<TaskSummary> {
   return useQuery({queryKey:['tasks',token,'summary'],queryFn:async()=>(await callTaskApi<{summary:TaskSummary}>(token,{action:'summary'})).summary,enabled:Boolean(token),staleTime:30000,refetchInterval:60000,retry:1});

@@ -1,6 +1,6 @@
 import { supabase } from './supabase';
 import { EMPLOYEE_SESSION_EXPIRED_EVENT, EMPLOYEE_SESSION_EXPIRED_MESSAGE } from './employeeSession';
-import { createExpense, deleteExpense, updateExpense, fetchDriverPayments } from './expenseService';
+import { createExpense, deleteExpense, updateExpense, fetchDriverPayments, fetchTransferDriverHistory, reserveTemporaryDriverName } from './expenseService';
 
 jest.mock('./supabase', () => ({
   supabase: { functions: { invoke: jest.fn() } },
@@ -119,4 +119,17 @@ test('driver history requests and maps only the chosen driver across both paymen
   expect(rows).toEqual([expect.objectContaining({id:'salary-same-id',kind:'salary',periodKey:'2026-10-1',amount:700}),expect.objectContaining({id:'advance-same-id',kind:'advance',periodKey:'2026-10',amount:300})]);
 });
 
+});
+
+test('transfer history preserves driver snapshots and sends the stable pagination cursor',async()=>{
+  invoke.mockResolvedValue({data:{ok:true,rows:[{id:'event',transfer_id:'transfer',previous_driver_id:'old',driver_id:'new',previous_driver_name:'Старое имя',driver_name:'Новое имя',event_type:'change',recorded_at:'2026-10-26T08:00:00Z'}]},error:null});
+  const before={recordedAt:'2026-10-27T08:00:00Z',id:'cursor'};
+  await expect(fetchTransferDriverHistory('transfer','session',before)).resolves.toEqual([{id:'event',transferId:'transfer',previousDriverId:'old',driverId:'new',previousDriverName:'Старое имя',driverName:'Новое имя',eventType:'change',recordedAt:'2026-10-26T08:00:00Z'}]);
+  expect(invoke).toHaveBeenCalledWith('expense-api',expect.objectContaining({body:{action:'listTransferDriverHistory',transferId:'transfer',before},headers:{'x-employee-session':'session'}}));
+});
+
+test('requests the next temporary driver name through the authenticated server',async()=>{
+  invoke.mockResolvedValue({data:{ok:true,name:'Временный водитель №105'},error:null});
+  await expect(reserveTemporaryDriverName('session')).resolves.toBe('Временный водитель №105');
+  expect(invoke).toHaveBeenCalledWith('expense-api',expect.objectContaining({body:{action:'reserveTemporaryDriverName'},headers:{'x-employee-session':'session'}}));
 });

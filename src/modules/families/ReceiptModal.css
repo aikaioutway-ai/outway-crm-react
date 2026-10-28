@@ -4,15 +4,13 @@
 .receipt-modal.is-view-only { grid-template-columns: minmax(0, 1fr); }
 .receipt-modal-document { position: relative; min-width: 0; min-height: 0; overflow: hidden; padding: 16px; background: var(--surface-2); display: flex; align-items: center; justify-content: center; }
 .receipt-modal-document img { display: block; width: 100%; height: 100%; object-fit: contain; }
-.receipt-modal-placeholder { color: var(--text-2); font-size: 13px; }
-.receipt-modal-pager { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 4px 6px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; font-size: 12px; color: var(--text-2); }
-.receipt-modal-pager button { display: grid; place-items: center; width: 26px; height: 26px; border: 0; border-radius: 6px; background: transparent; color: var(--text); cursor: pointer; }
-.receipt-modal-pager button:disabled { opacity: .35; cursor: default; }
 .receipt-modal-side { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); background: var(--surface); }
 .receipt-modal-side header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .receipt-modal-side header strong { font-size: 15px; }
 .receipt-modal-side header small { display: block; margin-top: 4px; color: var(--text-2); font-size: 12px; }
-.receipt-modal-side header button, .receipt-modal-close { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.receipt-modal-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.receipt-modal-actions button, .receipt-modal-actions a { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; text-decoration: none; }
+.receipt-modal-actions a:hover, .receipt-modal-actions button:hover { background: var(--border); }
 .receipt-modal-close { position: absolute; top: 12px; right: 12px; }
 .receipt-modal-side form { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; }
 .receipt-modal-summary { margin-bottom: 14px; font-size: 12px; color: var(--text-2); }
@@ -31,3 +29,5 @@
   .receipt-modal { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; width: calc(100vw - 24px); height: calc(100dvh - 24px); }
   .receipt-modal-side { border-left: 0; border-top: 1px solid var(--border); max-height: 50%; }
 }
+
+.receipt-modal-pdf { display: block; width: 100%; height: 100%; border: 0; }

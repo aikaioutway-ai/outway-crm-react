@@ -91,6 +91,34 @@ Deno.serve(async req => {
 
     const body = await req.json();
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
+    if (body.action === 'listTransferDriversHistory') {
+      const roles = new Set(['admin','gen_director','director','cashier','logist','senior_logist','b2b_logist']);
+      if (!roles.has(session.role)) return response({ ok: false, error: 'Нет доступа к истории трансфера' }, 403);
+      const ids=body.transferIds;
+      if (!Array.isArray(ids) || !ids.length || ids.length>500 || ids.some(id=>typeof id!=='string' || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id))) return response({ok:false,error:'Выберите трансферы'},400);
+      const rows:Record<string,unknown>[]=[];
+      for(let start=0;;start+=1000){
+        const {data,error}=await supabase.from('v2_transfer_driver_history').select('*').in('transfer_id',ids).order('id').range(start,start+999);
+        if(error)throw error;
+        rows.push(...(data??[]));
+        if((data?.length??0)<1000)break;
+      }
+      return response({ok:true,rows});
+    }
+    if (body.action === 'listTransferDriverHistory') {
+      const roles = new Set(['admin','gen_director','director','cashier','logist','senior_logist','b2b_logist']);
+      if (!roles.has(session.role)) return response({ ok: false, error: 'Нет доступа к истории трансфера' }, 403);
+      const transferId = String(body.transferId ?? '');
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(transferId)) return response({ ok: false, error: 'Выберите трансфер' }, 400);
+      const before = body.before;
+      if (before !== undefined && (!before || typeof before !== 'object' || !/^\d{4}-\d{2}-\d{2}T[0-9:.+-]+Z?$/.test(String(before.recordedAt)) || !Number.isFinite(Date.parse(before.recordedAt)) || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(before.id)))) return response({ ok: false, error: 'Неверный указатель истории' }, 400);
+      let query = supabase.from('v2_transfer_driver_history').select('*').eq('transfer_id', transferId)
+        .order('recorded_at', { ascending: false }).order('id', { ascending: false }).limit(100);
+      if (before) query = query.or(`recorded_at.lt.${before.recordedAt},and(recorded_at.eq.${before.recordedAt},id.lt.${before.id})`);
+      const { data, error } = await query;
+      if (error) throw error;
+      return response({ ok: true, rows: data ?? [] });
+    }
     if (body.action === 'listDriverPayments') {
       const roles = new Set(['admin','gen_director','director','cashier','logist','senior_logist','b2b_logist']);
       if (!roles.has(session.role)) return response({ ok: false, error: 'Нет доступа к выплатам водителей' }, 403);
@@ -109,6 +137,12 @@ Deno.serve(async req => {
       };
       const [salaries,advances]=await Promise.all([readRows('v2_expenses'),readRows('v2_driver_advances')]);
       return response({ok:true,salaries,advances});
+    }
+    if (body.action === 'reserveTemporaryDriverName') {
+      if (!new Set(['admin','gen_director','director','cashier','logist','senior_logist','b2b_logist']).has(session.role)) return response({ok:false,error:'Нет доступа к созданию водителей'},403);
+      const {data,error}=await supabase.rpc('reserve_v2_temporary_driver_name');
+      if(error)throw error;
+      return response({ok:true,name:data});
     }
     if (!ALLOWED_ROLES.has(session.role)) return response({ ok: false, error: 'Нет доступа к расходам' }, 403);
     if (body.action === 'paymentCapabilities') return response({ ok: true, recipientDetails: true });
@@ -148,7 +182,14 @@ Deno.serve(async req => {
     if (body.action === 'create' || body.action === 'update') {
       const incoming = expensePayload(body.expense);
       if (incoming?.driver_id) {
-        const { data, error } = await supabase.from('v2_transfers').select('id').eq('id', incoming.transfer_id).eq('driver_id', incoming.driver_id).maybeSingle();
+        let transferQuery = supabase.from('v2_transfers').select('id').eq('id', incoming.transfer_id);
+        if (body.expense?.temporaryDriver !== true) transferQuery = transferQuery.eq('driver_id', incoming.driver_id);
+        else {
+          const { data: driver, error: driverError } = await supabase.from('v2_drivers').select('id').eq('id', incoming.driver_id).maybeSingle();
+          if (driverError) throw driverError;
+          if (!driver) return response({ ok: false, error: 'Водитель не найден' }, 400);
+        }
+        const { data, error } = await transferQuery.maybeSingle();
         if (error) throw error;
         if (!data) return response({ ok: false, error: 'Выберите трансфер выбранного водителя' }, 400);
       }

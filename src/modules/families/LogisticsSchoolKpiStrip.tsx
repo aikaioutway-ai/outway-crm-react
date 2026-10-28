@@ -1,7 +1,7 @@
 import React, { useMemo } from 'react';
 import { Bus, Car, Inbox } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
@@ -50,7 +50,7 @@ function transferStats(rows: FamilyListRow[]) {
 }
 
 export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: LogisticsSchoolKpiStripProps) {
-  const { data: rows } = useFamiliesTable();
+  const { data: rows } = useLogisticsTable();
   const testMarks = useTestTransfers();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);

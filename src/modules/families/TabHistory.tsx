@@ -28,6 +28,7 @@ const ACTION_LABEL: Record<string, string> = {
   delete_child:           'Удалён ребёнок',
   remove_child:           'Удалён ребёнок',
   child_status_change:    'Смена статуса ребёнка',
+  transfer_x:             'Отправлен в трансфер Х',
   // Финансы
   payment_submit:         'Внесён платёж',
   payment_confirm:        'Платёж подтверждён',
@@ -186,7 +187,15 @@ function routeChangeDetails(entry: AuditEntry): string {
   return Array.from(transitions).slice(0, 2).join('; ') || 'Прежние и новые значения не сохранены';
 }
 
+function transferXDetails(entry: AuditEntry): string {
+  const before = parseValue(entry.oldValue);
+  const old = before && typeof before === 'object' ? before as Record<string, unknown> : {};
+  const parts = [old.child_name ? String(old.child_name) : '', old.transfer_number ? `был № ${old.transfer_number}` : ''];
+  return parts.filter(Boolean).join(' · ');
+}
+
 function describeChange(entry: AuditEntry): string {
+  if (entry.action === 'transfer_x') return transferXDetails(entry);
   const concise = conciseAction(entry);
   if (concise === 'Изменён трансфер') return routeChangeDetails(entry);
   if (concise) return '';
@@ -208,6 +217,7 @@ function describeChange(entry: AuditEntry): string {
 }
 
 function actionLabel(entry: AuditEntry): string {
+  if (entry.action === 'transfer_x') return ACTION_LABEL.transfer_x;
   const concise = conciseAction(entry);
   if (concise) return concise;
   if (ACTION_LABEL[entry.action]) return ACTION_LABEL[entry.action];

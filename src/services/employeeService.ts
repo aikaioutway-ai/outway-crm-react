@@ -144,7 +144,7 @@ export async function authenticateEmployee(
 
 // ─── СОЗДАНИЕ / ОБНОВЛЕНИЕ ──────────────────────────────────────────────────
 
-export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
+export async function saveEmployee(draft: EmployeeDraft, sessionToken?: string): Promise<Employee[]> {
   const now = new Date().toISOString();
 
   const row: Record<string, unknown> = {
@@ -166,24 +166,23 @@ export async function saveEmployee(draft: EmployeeDraft): Promise<Employee[]> {
     row.password_hash = await hashPassword(draft.password.trim());
   }
 
-  if (draft.id) {
-    const { error } = await supabase.from('v2_employees').update(row).eq('id', draft.id);
-    if (error) throw new Error(error.message);
-  } else {
-    row.id = `emp-${Date.now()}`;
-    row.created_at = now;
-    const { error } = await supabase.from('v2_employees').insert(row);
-    if (error) throw new Error(error.message);
-  }
+  await callEmployeeWriteApi(sessionToken, { action: 'saveEmployee', employee: { ...row, ...(draft.id ? { id: draft.id } : {}) } });
 
   return fetchEmployees();
 }
 
 // ─── УДАЛЕНИЕ ───────────────────────────────────────────────────────────────
 
-export async function deleteEmployee(id: string): Promise<Employee[]> {
-  const { error } = await supabase.from('v2_employees').delete().eq('id', id);
-  if (error) throw new Error(error.message);
+async function callEmployeeWriteApi(sessionToken: string | undefined, body: Record<string, unknown>) {
+  if (!sessionToken) throw new Error('Войдите в CRM заново');
+  const { data, error } = await supabase.functions.invoke('employee-api', {
+    headers: { 'x-employee-session': sessionToken }, body,
+  });
+  if (error || !data?.ok) throw new Error(data?.error || 'Не удалось сохранить сотрудника. Проверьте доступ и обновление сервера.');
+}
+
+export async function deleteEmployee(id: string, sessionToken?: string): Promise<Employee[]> {
+  await callEmployeeWriteApi(sessionToken, { action: 'deleteEmployee', employeeId: id });
   return fetchEmployees();
 }
 

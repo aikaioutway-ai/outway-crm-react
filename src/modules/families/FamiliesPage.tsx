@@ -1,3 +1,6 @@
+import { withFormerTransferDrivers } from '../drivers/formerTransferDrivers';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
+import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
@@ -11,10 +14,11 @@ import { Family, FamilyPayment, PaymentType, UserRole, VehicleType, Zone } from 
 import { getPriceByZone, money } from '../../utils/pricing';
 import { setChildDiscountChoice } from '../../services/discountService';
 import {
-  SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolVisible
+  SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolInTier, schoolTabsForTier
 } from './constants';
+import type { SchoolTier } from './SchoolTierTabs';
 import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
-import { familiesTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
+import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
 import AccrualDialog, { AccrualDialogState } from './AccrualDialog';
@@ -142,6 +146,7 @@ export interface ChildRow {
 type FamiliesMode = 'requests' | 'payments' | 'charges' | 'debtors' | 'directory' | 'cashier' | 'logistics';
 
 interface FamiliesPageProps {
+  schoolTier?: SchoolTier;
   initialOpenDriverId?: string;
   mode?: FamiliesMode;
   accrualsView?: boolean;
@@ -187,23 +192,9 @@ const MODE_LABEL: Record<FamiliesMode, string> = {
   logistics: 'Логистика',
 };
 
-const TRANSFER_OPTIONS = Array.from({ length: 30 }, (_, i) => ({ value: String(i + 1), label: `№ ${i + 1}` }));
-const TRANSFER_BAR_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
+const TRANSFER_OPTIONS = TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `№ ${value}` }));
+const TRANSFER_BAR_OPTIONS = TRANSFER_NUMBER_VALUES;
 const STOP_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
-const CHILD_STATUS_OPTIONS = [
-  { value: 'new', label: 'Новый' },
-  { value: 'waiting', label: 'Ожидание' },
-  { value: 'boarded', label: 'Посажен' },
-  { value: 'paused', label: 'Пауза' },
-  { value: 'rejected', label: 'Отказ' },
-];
-const CHILD_STATUS_TONE: Record<string, { bg: string; color: string }> = {
-  new: { bg: '#E0F2F1', color: '#0F5F5F' },
-  waiting: { bg: '#FEF3C7', color: '#92400E' },
-  boarded: { bg: '#DCFCE7', color: '#166534' },
-  paused: { bg: '#EDE9FE', color: '#5B21B6' },
-  rejected: { bg: '#ECEFF3', color: 'var(--text)' },
-};
 const PAYMENT_METHOD_OPTIONS: { value: PaymentType; label: string }[] = [
   { value: 'cash', label: 'Наличные' },
   { value: 'transfer', label: 'АйКай Мбанк' },
@@ -230,18 +221,6 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   {
     key: 'childClass', label: 'Класс', type: 'text', category: 'Клиент', width: 65, editable: true,
     render: (val) => <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)' }}>{val ? `${val} кл.` : '—'}</span>,
-  },
-  {
-    key: 'status', label: 'Статус', type: 'select', category: 'Клиент', width: 105, editable: true,
-    editOptions: CHILD_STATUS_OPTIONS,
-    render: (val) => {
-      const tone = CHILD_STATUS_TONE[String(val)] ?? CHILD_STATUS_TONE.new;
-      return (
-        <span style={{ display: 'inline-flex', padding: '3px 8px', borderRadius: 7, background: tone.bg, color: tone.color, fontSize: 11, fontWeight: 600, whiteSpace: 'nowrap' }}>
-          {CHILD_STATUS_OPTIONS.find(option => option.value === val)?.label ?? '—'}
-        </span>
-      );
-    },
   },
   {
     key: 'secondPhone', label: 'Второй телефон', type: 'text', category: 'Клиент', width: 125, editable: true, visible: false,
@@ -309,7 +288,8 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   },
   {
     key: 'transferNumber', label: '№ Трансфера', type: 'select', category: 'Маршрут', width: 100, editable: true,
-    editOptions: [{ value: '', label: '—' }, ...TRANSFER_OPTIONS],
+    editOptions: [{ value: '', label: '—' }, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...TRANSFER_OPTIONS],
+    getValue: (row) => transferChoiceValue(row.status, row.transferNumber),
     render: (val, row) => <TransferNumberBadge number={val} vehicleType={row.vehicleType} />,
   },
   {
@@ -344,7 +324,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
     type: 'text',
     category: 'Водитель',
     width: 190,
-    render: value => <span style={{ fontWeight: 600, color: 'var(--text)' }}>{value || '—'}</span>,
+    render: (value,row) => <span style={{ fontWeight: 600, color: 'var(--text)' }}>{value || '—'}{row.previousAssignment && <small style={{display:'block',color:'var(--text-2)'}}>Ранее на трансфере</small>}</span>,
   },
   { key: 'phone', label: 'Телефон', type: 'text', category: 'Водитель', width: 145, render: value => <span className="dt-phone">{formatPhoneDisplay(value as string) || '—'}</span> },
   { key: 'secondPhone', label: 'Доп. телефон', type: 'text', category: 'Водитель', width: 145, visible: false, render: value => <span className="dt-phone">{formatPhoneDisplay(value as string) || '—'}</span> },
@@ -364,7 +344,7 @@ const DRIVER_COLUMNS: ColumnDef<V2DriverTableRow>[] = [
         fontSize: 11,
         fontWeight: 600,
       }}>
-        {value === 'active' ? 'Активен' : value || '—'}
+        {{active:'Активен',inactive:'Неактивен',vacation:'Отпуск',dismissed:'Уволен',archive:'Архив',reserve:'Резерв'}[String(value)] || value || '—'}
       </span>
     ),
   },
@@ -734,7 +714,9 @@ function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
   }
 }
 
-export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0' }: FamiliesPageProps) {
+  // В разделе «Школы 2.0» таблица работает только со школами 2.0.
+  const schoolTabs = useMemo(() => schoolTabsForTier(schoolTier), [schoolTier]);
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
   const canRejectFamilies = ['admin', 'manager', 'logist', 'senior_logist', 'director', 'gen_director'].includes(userRole);
   const { data: b2bOrders = [] } = useB2BOrders();
@@ -1258,7 +1240,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     try {
       const shouldLoadTransportMeta = mode === 'logistics' || isDriversModule;
       const [families, transfers, drivers] = await Promise.all([
-        queryClient.fetchQuery(force ? { ...familiesTableQuery, staleTime: 0 } : familiesTableQuery),
+        mode === 'logistics'
+          ? queryClient.fetchQuery(force ? { ...logisticsTableQuery, staleTime: 0 } : logisticsTableQuery)
+          : queryClient.fetchQuery(force ? { ...familiesTableQuery, staleTime: 0 } : familiesTableQuery),
         shouldLoadTransportMeta ? fetchV2TransfersDashboard().catch(() => []) : Promise.resolve([]),
         shouldLoadTransportMeta ? fetchV2DriversTable().catch(() => []) : Promise.resolve([]),
       ]);
@@ -1507,13 +1491,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           await load(false);
           return true;
         }
-        if (key === 'status') {
-          if (value === 'rejected' && !window.confirm(`Перевести «${row.childName || row.parentName}» в «Отказ»?`)) return false;
-          // Статус меняет семейную скидку и может создать начисление при посадке.
-          await updateV2Child(row.rowId, { status: value });
-          await load(false);
-          return true;
-        }
         const updates: Record<string, unknown> = {};
         const rowPatch: Partial<ChildRow> = {};
         if (key === 'childName') {
@@ -1547,6 +1524,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         }
 
         if (key === 'transferNumber') {
+          if (value === TRANSFER_X && !window.confirm(`Отправить «${row.childName || row.parentName}» в трансфер Х (отказ)?`)) return false;
           await updateV2ChildRoute({
             child: {
               id: row.rowId,
@@ -1561,7 +1539,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               vehicleType: row.vehicleType as VehicleType,
             },
             vehicleType: row.vehicleType as VehicleType,
-            transferNumber: value ? Number(value) : undefined,
+            transferNumber: parseTransferChoice(value),
             stopNumber: row.stopNumber ? Number(row.stopNumber) : undefined,
             timeMorning: row.timeMorning ?? undefined,
             source: 'transfer_move',
@@ -1762,11 +1740,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
   // Проверяем доступна ли вкладка сотруднику (сравнение без учёта регистра)
   const isTabAllowed = useCallback((tabKey: string) => {
-    if(!isSchoolVisible(tabKey))return false;
+    if(!isSchoolInTier(tabKey, schoolTier))return false;
     if (!hasSchoolRestriction) return true;
     if (tabKey === 'ALL') return true;
     return allowedSchools!.some(k => k.toLowerCase() === tabKey.toLowerCase());
-  }, [allowedSchools, hasSchoolRestriction]);
+  }, [allowedSchools, hasSchoolRestriction, schoolTier]);
 
   const matchesSingleTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
     if (row.branchFilter === tabItem.key) return true;
@@ -1776,21 +1754,21 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   }, []);
 
   const rowMatchesSchoolTab = useCallback((row: ChildRow, tabItem: typeof SCHOOL_TABS[number]) => {
-    if(!isSchoolVisible(row.branchFilter))return false;
+    if(!isSchoolInTier(row.branchFilter, schoolTier))return false;
     if (tabItem.key === 'ALL') {
       if (!hasSchoolRestriction) return true;
       // «Все школы» для ограниченного сотрудника — не «вообще все», а объединение
       // его собственных разрешённых школ (раньше тут была строка, всегда
       // возвращавшая true для любого сотрудника с непустым allowedSchools).
-      return SCHOOL_TABS.some(t => (
+      return schoolTabs.some(t => (
         allowedSchools!.some(k => k.toLowerCase() === t.key.toLowerCase()) && matchesSingleTab(row, t)
       ));
     }
     if (!isTabAllowed(tabItem.key)) return false;
     return matchesSingleTab(row, tabItem);
-  }, [allowedSchools, hasSchoolRestriction, isTabAllowed, matchesSingleTab]);
+  }, [allowedSchools, hasSchoolRestriction, isTabAllowed, matchesSingleTab, schoolTabs, schoolTier]);
 
-  const tab = useMemo(() => SCHOOL_TABS.find(t => t.key === activeTab), [activeTab]);
+  const tab = useMemo(() => schoolTabs.find(t => t.key === activeTab), [activeTab, schoolTabs]);
 
   // Постраничная загрузка для «Заявки»/«Справочник» — единственных режимов,
   // переведённых на серверную пагинацию (RPC get_families_page). Остальные
@@ -1803,23 +1781,23 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const FAMILIES_PAGE_SIZE = 100;
 
   const activeTabKeys = useMemo(() => {
-    const allTabKeys = SCHOOL_TABS.filter(t => t.key !== 'ALL').map(t => t.key);
+    const allTabKeys = schoolTabs.filter(t => t.key !== 'ALL').map(t => t.key);
     const base = (!tab || tab.key === 'ALL') ? allTabKeys : [tab.key];
     if (!hasSchoolRestriction) return base;
     return base.filter(key => isTabAllowed(key));
-  }, [tab, hasSchoolRestriction, isTabAllowed]);
+  }, [tab, hasSchoolRestriction, isTabAllowed, schoolTabs]);
 
   // Резолвим выбранную школьную вкладку (+ ограничение allowedSchools) в
   // конкретные branch_id — RPC ничего не знает про SCHOOL_TABS/BRANCH_TO_FILTER,
   // эта группировка остаётся клиентской (как и в get_branch_stats).
   const branchIdsForPage = useMemo(() => {
     const branches = branchStatsForPaging.data ?? [];
-    if((!tab || tab.key==='ALL') && !hasSchoolRestriction)return branches.filter(branch=>isSchoolVisible(branch.branchName) && isSchoolVisible(getBranchFilter(branch.branchName,branch.branchCode))).map(branch=>branch.branchId);
+    if((!tab || tab.key==='ALL') && !hasSchoolRestriction)return branches.filter(branch=>isSchoolInTier(branch.branchName, schoolTier) && isSchoolInTier(getBranchFilter(branch.branchName,branch.branchCode), schoolTier)).map(branch=>branch.branchId);
     const keySet = new Set(activeTabKeys);
     return branches
       .filter(b => keySet.has(getBranchFilter(b.branchName, b.branchCode)))
       .map(b => b.branchId);
-  }, [activeTabKeys, branchStatsForPaging.data, tab, hasSchoolRestriction]);
+  }, [activeTabKeys, branchStatsForPaging.data, tab, hasSchoolRestriction, schoolTier]);
 
   const branchesReadyForPaging = branchStatsForPaging.isSuccess;
 
@@ -2066,7 +2044,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     }
     return items;
   }, [isDirectoryMode, matchesSchool, matchesSearch, rows]);
-  const schoolButtonItems = SCHOOL_TABS;
+  const schoolButtonItems = schoolTabs;
   const schoolSidebarFullLabel: Record<string, string> = {
     TIS: 'Тенсай',
     ERU: 'Эрудит-ISIT',
@@ -2127,16 +2105,22 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     ? driverRows.find(driver => driver.driverId === activeDirectoryTransfer.driverId) ?? null
     : null;
   const dashboardWorkRows = logisticsWorkRows(dashboardSchoolRows);
+  const historyTransfers=useMemo(()=>dashboardTransfers.filter(transfer=>{
+    const key=getBranchFilter(transfer.branchShort,transfer.branchCode);
+    return isSchoolInTier(key,schoolTier) && (selectedDashboardSchool?.key==='ALL' ? schoolButtonItems.some(item=>item.key===key) : key===selectedDashboardSchool?.key) && (!/^\d+$/.test(quickTransfer) || transfer.transferNumber===quickTransfer);
+  }),[dashboardTransfers,quickTransfer,schoolButtonItems,selectedDashboardSchool,schoolTier]);
+  const formerDriversQuery=useQuery({queryKey:['transferDriversHistory',historyTransfers.map(item=>item.id),authToken],queryFn:()=>fetchTransferDriversHistory(historyTransfers.map(item=>item.id),authToken),enabled:isDriversModule && Boolean(authToken) && historyTransfers.length>0,retry:false});
+  const driverRowsWithHistory=useMemo(()=>withFormerTransferDrivers(driverRows,historyTransfers,formerDriversQuery.data??[]),[driverRows,historyTransfers,formerDriversQuery.data]);
   const filteredDriverRows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return driverRows.filter(row => {
+    return driverRowsWithHistory.filter(row => {
       if(!isVisibleDriver(row))return false;
       const isReserveSelected = selectedDashboardSchool?.key === DRIVER_RESERVE_KEY;
       if (
         selectedDashboardSchool
         && selectedDashboardSchool.key !== 'ALL'
         && !isReserveSelected
-        && isReserveDriver(row)
+        && isReserveDriver(row) && !row.previousAssignment
       ) {
         return false;
       }
@@ -2148,7 +2132,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       if (!schoolMatch) return false;
       if (dashboardVehicleFilter !== 'all' && row.vehicleType !== dashboardVehicleFilter) return false;
       if (quickTransfer === 'empty' && row.transferCount > 0) return false;
-      if (quickTransfer === 'inactive' && row.status === 'active') return false;
+      if (quickTransfer === 'inactive' && row.status === 'active' && !row.previousAssignment) return false;
       if (quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive') {
         const transferNumbers = row.transferNumbers
           .split(',')
@@ -2172,22 +2156,22 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         row.address,
         row.comment,
       ].some(value => String(value ?? '').toLowerCase().includes(q));
-    });
-  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRows, quickTransfer, search, selectedDashboardSchool]);
+    }).sort((a,b)=>Number(Boolean(a.previousAssignment))-Number(Boolean(b.previousAssignment)) || Number(b.status==='active')-Number(a.status==='active') || a.fullName.localeCompare(b.fullName,'ru'));
+  }, [dashboardSchoolRows, dashboardVehicleFilter, driverRowsWithHistory, quickTransfer, search, selectedDashboardSchool]);
   const selectedDriver = selectedDriverId
     ? driverRows.find(row => row.driverId === selectedDriverId) ?? null
     : null;
   const driverBranchOptions = useMemo(() => (
-    driverBranches.filter(branch => isSchoolVisible(branch.shortName || branch.code) && isSchoolVisible(branch.name))
-  ), [driverBranches]);
+    driverBranches.filter(branch => isSchoolInTier(branch.shortName || branch.code, schoolTier) && isSchoolInTier(branch.name, schoolTier))
+  ), [driverBranches, schoolTier]);
   // Школа водителя не хранится отдельно: она определяется школой его трансфера.
   // Поэтому выбор школы в карточке только сужает список трансферов.
   const driverTransferOptions = useMemo(() => {
     if (!selectedDriver || !driverBranchDraftId) return [];
     return dashboardTransfers
-      .filter(transfer => transfer.branchId === driverBranchDraftId && isSchoolVisible(transfer.branchShort) && isSchoolVisible(getBranchFilter(transfer.branchShort,transfer.branchCode)))
+      .filter(transfer => transfer.branchId === driverBranchDraftId && isSchoolInTier(transfer.branchShort, schoolTier) && isSchoolInTier(getBranchFilter(transfer.branchShort,transfer.branchCode), schoolTier))
       .sort((left, right) => Number(left.transferNumber) - Number(right.transferNumber));
-  }, [dashboardTransfers, driverBranchDraftId, selectedDriver]);
+  }, [dashboardTransfers, driverBranchDraftId, selectedDriver, schoolTier]);
   const changeDriverBranchDraft = (branchId: string) => {
     setDriverBranchDraftId(branchId);
     if (!dashboardTransfers.some(transfer => transfer.id === driverTransferDraftId && transfer.branchId === branchId)) {
@@ -2442,7 +2426,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       return { activeTab: schoolKey, quickChildStatus: 'new', quickTransfer: '' };
     }
     if (mode === 'cashier') {
-      const tab = SCHOOL_TABS.find(t => t.key === schoolKey);
+      const tab = schoolTabs.find(t => t.key === schoolKey);
       const schoolRows = tab ? rows.filter(r => rowMatchesSchoolTab(r, tab)) : rows;
       const counts: Record<string, number> = {};
       uniqueFamilyRows(schoolRows.filter(r => r.pendingPayment > 0)).forEach(r => {
@@ -2452,7 +2436,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       return { activeTab: schoolKey, quickTransfer: best?.[0] ?? '', quickChildStatus: '' };
     }
     return { activeTab: schoolKey, quickChildStatus: '', quickTransfer: '' };
-  }, [mode, rows, rowMatchesSchoolTab, userRole]);
+  }, [mode, rows, rowMatchesSchoolTab, schoolTabs, userRole]);
 
   const tableColumns: ColumnDef<ChildRow>[] = useMemo(() => {
     const openCardCol: ColumnDef<ChildRow> = {
@@ -2710,6 +2694,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           : column;
       return configuredColumn;
     });
+    if (mode === 'logistics') {
+      // Логистика не загружает деньги семей — колонки счёта ей не показываются.
+      const accountColumns = new Set(['debtAmount', 'balance', 'totalCharged', 'totalPaid', 'pendingPayment']);
+      for (let index = dataCols.length - 1; index >= 0; index--) {
+        if (accountColumns.has(String(dataCols[index].key))) dataCols.splice(index, 1);
+      }
+    }
     if (isDirectoryMode || mode === 'logistics') {
       // Как в «Начислениях»: даты заявки и посадки — отдельные колонки сразу после ребёнка.
       const childIndex = dataCols.findIndex(column => column.key === 'childName');
@@ -3254,6 +3245,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             </div>
           ) : null}
           {customTableContent ?? (isDriversModule ? (
+            <>
+            {formerDriversQuery.isError && <p role="status" style={{color:'var(--text-2)',padding:12}}>Прежние назначения недоступны: требуется обновление сервера истории. Текущие водители показаны ниже.</p>}
             <DataTable<V2DriverTableRow>
               getTaskTarget={row=>({type:'driver',id:row.driverId,label:row.fullName})}
               key="drivers_table"
@@ -3295,6 +3288,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 </button>
               )}
             />
+            </>
           ) : isCashierMode ? (
             <DataTable<CashierPaymentRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
@@ -3302,7 +3296,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               columns={activeTab === 'ALL' ? withSchoolColumn(cashierColumns, row => row.branchShort) : cashierColumns}
               data={(cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows).filter(r => {
                 if (!cashierRowMatchesSelectedPeriod(r, paymentsPeriodKey)) return false;
-                if (!SCHOOL_TABS.some(school => school.key !== 'ALL' && isTabAllowed(school.key) && [school.key, school.label].some(label => label.toLowerCase() === r.branchShort.toLowerCase()))) return false;
+                if (!schoolTabs.some(school => school.key !== 'ALL' && isTabAllowed(school.key) && [school.key, school.label].some(label => label.toLowerCase() === r.branchShort.toLowerCase()))) return false;
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();
                   if (bs !== tab.key.toLowerCase() && bs !== tab.label.toLowerCase()) return false;
@@ -3391,11 +3385,20 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               onShowPropertiesChange={v => onColumnsOpenChange?.(v)}
               onRowOpen={(row) => toggleExpandedFamily(row.familyId, row, 'overview')}
               onRowReject={canRejectFamilies ? async (row) => {
-                if (!window.confirm(`Перевести семью "${row.parentName}" в «Отказ»? Все данные сохранятся.`)) return;
+                // Отказ = трансфер Х только для ребёнка из строки; братья и сёстры не меняются.
+                // Строка без детей (пустая семья) — отказ всей семьи.
+                const isChildRow = !row.rowId.endsWith('_empty');
+                const question = isChildRow
+                  ? `Отправить «${row.childName || 'ребёнка'}» в трансфер Х (отказ)? Остальные дети семьи не изменятся.`
+                  : `Перевести семью "${row.parentName}" в «Отказ»? Все данные сохранятся.`;
+                if (!window.confirm(question)) return;
                 try {
-                  await rejectV2Family(row.familyId, userName);
+                  if (isChildRow) await updateV2Child(row.rowId, { status: 'rejected' });
+                  else await rejectV2Family(row.familyId, userName);
                   setRows(prev => {
-                    const next = prev.map(item => item.familyId === row.familyId ? { ...item, status: 'rejected' } : item);
+                    const next = prev.map(item => (isChildRow ? item.rowId === row.rowId : item.familyId === row.familyId)
+                      ? { ...item, status: 'rejected', transferNumber: null }
+                      : item);
                     familiesRowsCache = next;
                     return next;
                   });
@@ -4256,7 +4259,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 18 }}>
               <span style={{ fontSize: 15, fontWeight: 600, color: 'var(--text)' }}>
-                Фильтры · {SCHOOL_TABS.find(t => t.key === adminFilterOpen)?.label ?? adminFilterOpen}
+                Фильтры · {schoolTabs.find(t => t.key === adminFilterOpen)?.label ?? adminFilterOpen}
               </span>
               <button onClick={() => setAdminFilterOpen(null)} style={{ border: 'none', background: 'transparent', cursor: 'pointer', color: 'var(--text-2)', padding: 4 }}>
                 <X size={16} />
@@ -4329,6 +4332,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       )}
       {showNewDriver && (
         <NewDriverModal
+          sessionToken={authToken}
           branches={driverBranches}
           initialBranchKey={selectedDashboardSchool?.key}
           onClose={() => setShowNewDriver(false)}

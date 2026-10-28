@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, Check, Clock, MessageSquare, Pencil, Play, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { useTaskDetail, mutateTask } from '../../services/taskService';
 import { AuthenticatedUser } from '../../services/employeeService';
-import { canLeadTasks, isTaskOpen, isTaskOverdue, TASK_ACTIONS, TASK_STATUS, TARGET_LABELS, TaskEmployee, TaskTarget, taskDate } from './taskTypes';
+import { canLeadTasks, isTaskOpen, isTaskOverdue, TASK_ACTIONS, TASK_STATUS, TARGET_LABELS, TaskEmployee, TaskTarget, taskDate, taskAssigneeIds } from './taskTypes';
 import TaskComposer from './TaskComposer';
 export default function TaskDetail({id,user,employees,onClose,onOpenTarget,initialAction=''}:{id:string;user:AuthenticatedUser;employees:TaskEmployee[];onClose:()=>void;onOpenTarget?:(target:TaskTarget)=>void;initialAction?:string}) {
   const detail=useTaskDetail(user.sessionToken,id);
@@ -16,7 +16,7 @@ export default function TaskDetail({id,user,employees,onClose,onOpenTarget,initi
   const dialog=useRef<HTMLDivElement>(null);
   const names=new Map(employees.map(employee=>[employee.id,employee.full_name]));
   const editor=Boolean(task && (task.creator_id===user.id || canLeadTasks(user.role)));
-  const mine=task?.assignee_id===user.id;
+  const mine=Boolean(task && taskAssigneeIds(task).includes(user.id));
   useEffect(()=>{const previous=document.activeElement as HTMLElement|null;dialog.current?.focus();return()=>previous?.focus();},[]);
   const taskId=task?.id, taskResult=task?.result;
   useEffect(()=>{if(taskId)setResult(taskResult ?? '');},[taskId,taskResult]); // keep a draft while polling unchanged results
@@ -37,7 +37,7 @@ export default function TaskDetail({id,user,employees,onClose,onOpenTarget,initi
       {detail.isLoading ? <div className="tasks-empty">Загрузка…</div> : detail.error ? <div className="tasks-error" role="alert">{detail.error.message}<button onClick={()=>void detail.refetch()}>Повторить</button></div> : task ? <div className="tasks-detail-body">
         <div className="tasks-detail-badges"><span className={`tasks-status status-${task.status}`}>{TASK_STATUS[task.status]}</span>{task.priority==='urgent' && <span className="tasks-urgent">Срочная</span>}{isTaskOverdue(task) && <span className="tasks-overdue">Срок прошёл</span>}</div>
         <p className="tasks-description">{task.description || 'Описание не добавлено'}</p>
-        <div className="tasks-detail-grid"><div><small>ОТВЕТСТВЕННЫЙ</small><strong>{names.get(task.assignee_id) ?? task.assignee_id}</strong></div><div><small>СРОК</small><strong className={isTaskOverdue(task)?'tasks-overdue':''}><Clock size={14}/>{taskDate(task.due_at)}</strong></div><div><small>ПОСТАНОВЩИК</small><strong>{names.get(task.creator_id) ?? task.creator_id}</strong></div><div><small>НАБЛЮДАТЕЛЬ</small><strong>{task.observer_id ? names.get(task.observer_id) ?? task.observer_id : 'Не назначен'}</strong></div><div><small>КОНТРОЛЬ</small><strong>{task.requires_review?'Проверка постановщиком':'Закрывает исполнитель'}</strong></div></div>
+        <div className="tasks-detail-grid"><div><small>ИСПОЛНИТЕЛИ</small><strong>{taskAssigneeIds(task).map(id=>names.get(id) ?? id).join(', ')}</strong></div><div><small>СРОК</small><strong className={isTaskOverdue(task)?'tasks-overdue':''}><Clock size={14}/>{taskDate(task.due_at)}</strong></div><div><small>ПОСТАНОВЩИК</small><strong>{names.get(task.creator_id) ?? task.creator_id}</strong></div><div><small>НАБЛЮДАТЕЛЬ</small><strong>{task.observer_id ? names.get(task.observer_id) ?? task.observer_id : 'Не назначен'}</strong></div><div><small>КОНТРОЛЬ</small><strong>{task.requires_review?'Проверка постановщиком':'Закрывает исполнитель'}</strong></div></div>
         <div className="tasks-context"><div><small>{TARGET_LABELS[task.target.type]}</small><strong>{task.target.label}</strong></div>{task.target.type!=='general' && onOpenTarget && <button type="button" className="tasks-secondary" onClick={()=>onOpenTarget(task.target)}>Открыть <ArrowUpRight size={14}/></button>}</div>
         {task.result && <section className="tasks-result"><h3>Результат выполнения</h3><p>{task.result}</p></section>}
         <div className="tasks-detail-actions">
@@ -55,7 +55,7 @@ export default function TaskDetail({id,user,employees,onClose,onOpenTarget,initi
         </form>}
         {error && <p className="tasks-error" role="alert">{error}</p>}
         <section className="tasks-history"><h3><MessageSquare size={16}/>Обсуждение и история</h3><form onSubmit={event=>{event.preventDefault();void run('comment');}}><label className="tasks-sr-only" htmlFor="task-comment">Комментарий к задаче</label><textarea id="task-comment" maxLength={10000} value={message} onChange={e=>setMessage(e.target.value)} placeholder="Добавить комментарий…" rows={2} disabled={busy}/><button type="submit" aria-label="Отправить комментарий" className="tasks-primary" disabled={busy || !message.trim()}><Send size={15}/></button></form>
-          <ol>{[...(detail.data?.events ?? [])].reverse().map(event=><li key={event.id}><div><strong>{names.get(event.actor_id) ?? event.actor_id}</strong><time>{taskDate(event.created_at)}</time></div><span>{TASK_ACTIONS[event.action] ?? event.action}</span>{event.old_value?.due_at && event.new_value?.due_at && event.old_value.due_at!==event.new_value.due_at && <p>Срок: {taskDate(event.old_value.due_at)} → {taskDate(event.new_value.due_at)}</p>}{event.old_value?.assignee_id && event.new_value?.assignee_id && event.old_value.assignee_id!==event.new_value.assignee_id && <p>Ответственный: {names.get(event.old_value.assignee_id)} → {names.get(event.new_value.assignee_id)}</p>}{event.new_value?.observer_id && event.old_value?.observer_id!==event.new_value.observer_id && <p>Наблюдатель: {names.get(event.new_value.observer_id) ?? event.new_value.observer_id}</p>}{event.comment && <p>{event.comment}</p>}</li>)}</ol>
+          <ol>{[...(detail.data?.events ?? [])].reverse().map(event=><li key={event.id}><div><strong>{names.get(event.actor_id) ?? event.actor_id}</strong><time>{taskDate(event.created_at)}</time></div><span>{TASK_ACTIONS[event.action] ?? event.action}</span>{event.old_value?.due_at && event.new_value?.due_at && event.old_value.due_at!==event.new_value.due_at && <p>Срок: {taskDate(event.old_value.due_at)} → {taskDate(event.new_value.due_at)}</p>}{event.old_value && event.new_value && JSON.stringify(taskAssigneeIds(event.old_value))!==JSON.stringify(taskAssigneeIds(event.new_value)) && <p>Исполнители: {taskAssigneeIds(event.old_value).map(id=>names.get(id) ?? id).join(', ')} → {taskAssigneeIds(event.new_value).map(id=>names.get(id) ?? id).join(', ')}</p>}{event.new_value?.observer_id && event.old_value?.observer_id!==event.new_value.observer_id && <p>Наблюдатель: {names.get(event.new_value.observer_id) ?? event.new_value.observer_id}</p>}{event.comment && <p>{event.comment}</p>}</li>)}</ol>
         </section>
       </div>:null}
     </div>

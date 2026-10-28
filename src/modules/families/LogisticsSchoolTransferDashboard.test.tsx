@@ -1,11 +1,11 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import LogisticsSchoolTransferDashboard from './LogisticsSchoolTransferDashboard';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { updateV2TransferVehicleType } from '../../services/crmV2Service';
 
 jest.mock('../../hooks/useCrmQueries', () => ({
-  useFamiliesTable: jest.fn(),
+  useLogisticsTable: jest.fn(),
   useSchoolTransferNumbers: () => [],
 }));
 
@@ -14,7 +14,7 @@ jest.mock('../../services/crmV2Service', () => ({
   updateV2TransferVehicleType: jest.fn(),
 }));
 
-const mockedUseFamiliesTable = useFamiliesTable as jest.MockedFunction<typeof useFamiliesTable>;
+const mockedUseLogisticsTable = useLogisticsTable as jest.MockedFunction<typeof useLogisticsTable>;
 const mockedUpdateVehicleType = updateV2TransferVehicleType as jest.MockedFunction<typeof updateV2TransferVehicleType>;
 
 test('shows the selected vehicle type immediately and refreshes the transfer data', async () => {
@@ -22,7 +22,7 @@ test('shows the selected vehicle type immediately and refreshes the transfer dat
   const savePromise = new Promise<string>(resolve => { finishSave = resolve; });
   const refetch = jest.fn().mockResolvedValue({ data: [] });
 
-  mockedUseFamiliesTable.mockReturnValue({
+  mockedUseLogisticsTable.mockReturnValue({
     data: [{
       rowId: 'child-1',
       branchFilter: 'AES',

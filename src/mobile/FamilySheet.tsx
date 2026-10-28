@@ -1,4 +1,5 @@
 import TaskButton from '../modules/tasks/TaskButton';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from '../modules/families/constants';
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { useFamiliesTable } from '../hooks/useCrmQueries';
@@ -8,15 +9,21 @@ import { QK, queryClient } from '../services/queryClient';
 import { money } from '../utils/pricing';
 import { formatName } from '../utils/format';
 import { schoolLabel } from './data';
-import { CHILD_STATUS_OPTIONS, ErrorBox, InfoRow, PhoneRow, SelectField, Sheet, Skeletons, StatusBadge, TransferBadge } from './ui';
+import { ErrorBox, InfoRow, PhoneRow, SelectField, Sheet, Skeletons, TransferBadge } from './ui';
 
-const TRANSFER_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1));
+const TRANSFER_NUMBERS = TRANSFER_NUMBER_VALUES;
 const STOP_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1));
 
 /** Номера для выбора: 1–30 плюс текущий, если он больше. */
 function numberOptions(values: string[], current: string | null, emptyLabel: string, prefix: string) {
   const list = current && !values.includes(current) ? [...values, current] : values;
   return [{ value: '', label: emptyLabel }, ...list.map(value => ({ value, label: `${prefix}${value}` }))];
+}
+
+// «Х» стоит сразу после «Без трансфера», как в полной версии.
+function transferOptions(current: string | null) {
+  const [blank, ...numbers] = numberOptions(TRANSFER_NUMBERS, current, 'Без трансфера', '№');
+  return [blank, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...numbers];
 }
 
 function patchRow(childId: string, patch: Partial<FamilyListRow>) {
@@ -40,23 +47,9 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
   const [savingId, setSavingId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
-  const changeStatus = async (childId: string, childName: string, status: string) => {
-    if (status === 'rejected' && !window.confirm(`Перевести «${childName}» в «Отказ»?`)) return;
-    setSavingId(childId);
-    setError('');
-    try {
-      // Статус пересчитывает семейную скидку и может создать начисление при посадке.
-      await updateV2Child(childId, { status });
-      patchRow(childId, { status });
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : 'Не удалось сменить статус');
-    } finally {
-      setSavingId(null);
-    }
-  };
-
   /** Перенос в другой трансфер — как в полной версии: база пересчитывает цену под тип машины. */
   const changeTransfer = async (child: FamilyListRow, transfer: string) => {
+    if (transfer === TRANSFER_X && !window.confirm(`Отправить «${formatName(child.childName)}» в трансфер Х (отказ)?`)) return;
     setSavingId(child.rowId);
     setError('');
     try {
@@ -74,13 +67,16 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
           vehicleType: child.vehicleType as VehicleType,
         },
         vehicleType: child.vehicleType as VehicleType,
-        transferNumber: transfer ? Number(transfer) : undefined,
+        transferNumber: parseTransferChoice(transfer),
         stopNumber: child.stopNumber ? Number(child.stopNumber) : undefined,
         timeMorning: child.timeMorning ?? undefined,
         source: 'transfer_move',
         actorName: userName,
       });
-      patchRow(child.rowId, { transferNumber: transfer || null });
+      // Статус следует из трансфера: номер — ездит, пусто — не ездит, Х — отказ.
+      patchRow(child.rowId, transfer === TRANSFER_X
+        ? { transferNumber: null, status: 'rejected' }
+        : { transferNumber: transfer || null, status: transfer ? 'boarded' : 'new' });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось сменить трансфер');
     } finally {
@@ -171,10 +167,11 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
                     {[schoolLabel(child.branchFilter), child.childClass ? `${child.childClass} класс` : '', child.vehicleLabel].filter(Boolean).join(' · ')}
                   </div>
                 </div>
-                <StatusBadge status={child.status} />
               </div>
               <div className="m-card-meta">
-                <TransferBadge number={child.transferNumber} vehicleType={child.vehicleType} />
+                {child.status === 'rejected'
+                  ? <span className="m-badge">Трансфер {TRANSFER_X_LABEL}</span>
+                  : <TransferBadge number={child.transferNumber} vehicleType={child.vehicleType} />}
                 {child.stopNumber && <span className="m-badge">Остановка {child.stopNumber}</span>}
                 {child.timeMorning && <span className="m-badge">Утро {child.timeMorning.slice(0, 5)}</span>}
                 {showFinance && child.monthlyPrice > 0 && <span className="m-badge">{money(child.monthlyPrice)}/мес</span>}
@@ -184,10 +181,10 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
                   <div className="m-selects">
                     <SelectField
                       label="Трансфер"
-                      value={child.transferNumber ?? ''}
+                      value={transferChoiceValue(child.status, child.transferNumber)}
                       disabled={savingId === child.rowId}
                       onChange={transfer => changeTransfer(child, transfer)}
-                      options={numberOptions(TRANSFER_NUMBERS, child.transferNumber, 'Без трансфера', '№')}
+                      options={transferOptions(child.transferNumber)}
                     />
                     <SelectField
                       label="Остановка"
@@ -197,13 +194,6 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
                       options={numberOptions(STOP_NUMBERS, child.stopNumber, 'Не указана', '')}
                     />
                   </div>
-                  <SelectField
-                    label={savingId === child.rowId ? 'Сохраняю…' : 'Статус'}
-                    value={child.status}
-                    disabled={savingId === child.rowId}
-                    onChange={status => changeStatus(child.rowId, formatName(child.childName), status)}
-                    options={CHILD_STATUS_OPTIONS.map(option => ({ value: option.value, label: option.label }))}
-                  />
                 </div>
               )}
             </div>
