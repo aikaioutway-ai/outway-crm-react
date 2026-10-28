@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X } from 'lucide-react';
+import { Download, ExternalLink, X } from 'lucide-react';
 import { FamilyPayment } from '../../types';
 import { fetchFamilyPayment, updateFamilyPayment } from '../../services/financeService';
 import './ReceiptModal.css';
@@ -20,6 +20,24 @@ type Props = {
 
 export function isPdfReceipt(url: string): boolean {
   return /\.pdf(?:[?#]|$)/i.test(url);
+}
+
+function receiptFileName(url: string): string {
+  const name = decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() ?? '');
+  return name || 'receipt';
+}
+
+// Хранилище отдаёт файл «на скачивание» по параметру download; локальный blob: скачивается атрибутом ссылки.
+function receiptDownloadUrl(url: string): string {
+  if (url.startsWith('blob:')) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}download=${encodeURIComponent(receiptFileName(url))}`;
+}
+
+function ReceiptActions({ url }: { url: string }) {
+  return <>
+    <a href={receiptDownloadUrl(url)} download={receiptFileName(url)} aria-label="Скачать чек" title="Скачать"><Download size={17}/></a>
+    <a href={url} target="_blank" rel="noreferrer" aria-label="Открыть чек в новой вкладке" title="Открыть в новой вкладке"><ExternalLink size={17}/></a>
+  </>;
 }
 
 function ReceiptDocument({ url, pdf }: { url: string; pdf: boolean }) {
@@ -70,7 +88,7 @@ export default function ReceiptModal({ receiptUrl, title = 'Чек платеж�
     <section className={`ow-modal receipt-modal${paymentId ? '' : ' is-view-only'}`} role="dialog" aria-modal="true" aria-label={title}>
       <div className="receipt-modal-document"><ReceiptDocument key={receiptUrl} url={receiptUrl} pdf={pdf} /></div>
       {paymentId && <div className="receipt-modal-side">
-        <header><div><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</div><button type="button" aria-label="Закрыть просмотр чека" onClick={onClose}><X size={18}/></button></header>
+        <header><div><strong>{title}</strong>{subtitle && <small>{subtitle}</small>}</div><div className="receipt-modal-actions"><ReceiptActions url={receiptUrl}/><button type="button" aria-label="Закрыть просмотр чека" onClick={onClose}><X size={18}/></button></div></header>
         {!payment && !error && <p role="status" className="receipt-modal-note">Загрузка реквизитов…</p>}
         {payment && <form onSubmit={save}>
           <div className="receipt-modal-summary">Сумма: <strong>{payment.amount.toLocaleString('ru-RU')} сом</strong> · {payment.status}</div>
@@ -88,7 +106,7 @@ export default function ReceiptModal({ receiptUrl, title = 'Чек платеж�
         </form>}
         {error && <p className="receipt-modal-error" role="alert">{error}</p>}
       </div>}
-      {!paymentId && <button type="button" className="receipt-modal-close" aria-label="Закрыть просмотр чека" onClick={onClose}><X size={18}/></button>}
+      {!paymentId && <div className="receipt-modal-actions receipt-modal-close"><ReceiptActions url={receiptUrl}/><button type="button" aria-label="Закрыть просмотр чека" onClick={onClose}><X size={18}/></button></div>}
     </section>
   </div>, document.body);
 }

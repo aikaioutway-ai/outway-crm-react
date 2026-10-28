@@ -8,7 +8,9 @@
 .receipt-modal-side header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
 .receipt-modal-side header strong { font-size: 15px; }
 .receipt-modal-side header small { display: block; margin-top: 4px; color: var(--text-2); font-size: 12px; }
-.receipt-modal-side header button, .receipt-modal-close { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; }
+.receipt-modal-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.receipt-modal-actions button, .receipt-modal-actions a { display: grid; place-items: center; width: 32px; height: 32px; flex-shrink: 0; border: 0; border-radius: 6px; background: var(--surface-2); color: var(--text); cursor: pointer; text-decoration: none; }
+.receipt-modal-actions a:hover, .receipt-modal-actions button:hover { background: var(--border); }
 .receipt-modal-close { position: absolute; top: 12px; right: 12px; }
 .receipt-modal-side form { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; }
 .receipt-modal-summary { margin-bottom: 14px; font-size: 12px; color: var(--text-2); }
