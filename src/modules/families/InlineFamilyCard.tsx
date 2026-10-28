@@ -6,6 +6,7 @@ import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
 import React, { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../../services/queryClient';
 import PaymentDots from './PaymentDots';
 import { paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { AlertTriangle, Check, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
@@ -618,7 +619,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     queryFn: () => fetchChildPaymentDots(savedChildIds, PAYMENT_DOT_PERIODS),
     enabled: !isLogist && savedChildIds.length > 0,
     staleTime: 60_000,
-  });
+  }, queryClient);
   const cardDocuments = editing ? draftDocuments : savedDocuments;
   const teacherPricingAvailable = children.length > 0 && children.some(supportsTeacherPrice);
   const teacherPricingActive = teacherPricingAvailable && children.filter(supportsTeacherPrice).every(child => child.fixedPrice != null);
