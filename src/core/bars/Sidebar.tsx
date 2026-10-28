@@ -4,7 +4,7 @@ import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary';
 
 interface SidebarProps {
   active: NavSection;
@@ -33,16 +33,14 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
 ];
 
-export const MARKET_OWNER_EMPLOYEE_ID = 'emp-admin';
-
 export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
   let sections: NavSection[];
-  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b'];
-  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses', 'b2b', 'market'];
-  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'dispatch', 'expenses'];
+  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
+  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
+  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses'];
   else if (role === 'manager')      sections = ['families'];
-  else if (role === 'logist')       sections = ['logistics', 'drivers', 'dispatch'];
-  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'dispatch', 'expenses', 'employees', 'b2b'];
+  else if (role === 'logist')       sections = ['logistics', 'drivers'];
+  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'expenses', 'employees', 'b2b'];
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
   else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
   else sections = ['families'];
@@ -50,15 +48,15 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
-  const withMarket: NavSection[] = userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
-  const withSummary: NavSection[] = canAccessSummary(role, userId) ? [...withMarket, 'summary'] : withMarket;
-  return [...withSummary, 'tasks'];
-
+  return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks'] : [...sections, 'tasks'];
 }
+
+// Владелец компании (учётная запись администратора).
+export const OWNER_EMPLOYEE_ID = 'emp-admin';
 
 // «Сводка» — итоги компании только для владельца и гендиректора.
 export function canAccessSummary(role: UserRole, userId?: string): boolean {
-  return userId === MARKET_OWNER_EMPLOYEE_ID || role === 'gen_director';
+  return userId === OWNER_EMPLOYEE_ID || role === 'gen_director';
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {

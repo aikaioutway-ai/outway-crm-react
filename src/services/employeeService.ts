@@ -208,6 +208,23 @@ export async function fetchEmployeeDocuments(employeeId: string): Promise<Employ
   return createDefaultEmployeeDocuments().map(document => byType.get(document.type) ?? document);
 }
 
+/** Документы всех сотрудников одним запросом (для списка, без N запросов). */
+export async function fetchAllEmployeeDocuments(): Promise<Map<string, EmployeeDocument[]>> {
+  const { data, error } = await supabase.from('v2_employee_documents').select('*');
+  if (error) throw new Error(error.message);
+  const rowsByEmployee = new Map<string, any[]>();
+  (data ?? []).forEach(row => {
+    const key = String(row.employee_id);
+    rowsByEmployee.set(key, [...(rowsByEmployee.get(key) ?? []), row]);
+  });
+  const result = new Map<string, EmployeeDocument[]>();
+  rowsByEmployee.forEach((rows, employeeId) => {
+    const byType = new Map(rows.map(row => [row.document_type, mapEmployeeDocument(row)]));
+    result.set(employeeId, createDefaultEmployeeDocuments().map(document => byType.get(document.type) ?? document));
+  });
+  return result;
+}
+
 function safeFileName(name: string): string {
   return name.normalize('NFKD').replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^_+|_+$/g, '') || 'scan';
 }

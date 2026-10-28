@@ -4,7 +4,9 @@ import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
+import PaymentDots from './PaymentDots';
+import { paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { driverMatchesSchool, isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
@@ -17,7 +19,7 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolInTier, schoolTabsForTier
 } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
-import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchChildPaymentDots, fetchFamilyPaymentDots, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -81,6 +83,13 @@ async function copyTextToClipboard(text: string): Promise<boolean> {
   textarea.remove();
   return copied;
 }
+
+// Точки оплат грузятся частями по 100 детей: адрес запроса остаётся коротким,
+// а при подгрузке следующей страницы таблицы уже загруженные части не повторяются.
+const PAYMENT_DOTS_CHUNK = 100;
+const PAYMENT_DOTS_PERIODS = paymentDotPeriods();
+const combinePaymentDots = (results: UseQueryResult<Record<string, ChildPaymentDots>>[]) =>
+  Object.assign({}, ...results.map(result => result.data ?? {})) as Record<string, ChildPaymentDots>;
 
 export interface ChildRow {
   rowId: string;
@@ -2007,6 +2016,48 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       : filtered;
     return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
   }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats]);
+
+  // Точки видят все разделы с детьми, включая Логистику: по ним видно, когда ребёнка пора убрать.
+  const showPaymentDots = !isDriversModule;
+  const paymentDotChunks = useMemo(() => {
+    if (!showPaymentDots) return [] as string[][];
+    const ids = Array.from(new Set(filteredSorted.map(row => row.rowId).filter(id => !id.endsWith("_empty"))));
+    return Array.from({ length: Math.ceil(ids.length / PAYMENT_DOTS_CHUNK) }, (_, index) => ids.slice(index * PAYMENT_DOTS_CHUNK, (index + 1) * PAYMENT_DOTS_CHUNK));
+  }, [filteredSorted, showPaymentDots]);
+  const paymentDotsByChild = useQueries({
+    queries: paymentDotChunks.map(ids => ({
+      queryKey: ['childPaymentDots', PAYMENT_DOTS_PERIODS.map(periodKey).join(','), ids],
+      queryFn: () => fetchChildPaymentDots(ids, PAYMENT_DOTS_PERIODS),
+      staleTime: 60_000,
+    })),
+    combine: combinePaymentDots,
+  });
+
+  // Кассиру и в «Оплатах» — точки всей семьи у имени родителя: видно, за какие месяцы долг.
+  const familyDotChunks = useMemo(() => {
+    const source: { familyId: string }[] = isCashierMode ? (cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows) : isPaymentsMode ? paymentRows : [];
+    const ids = Array.from(new Set(source.map(row => row.familyId).filter(Boolean)));
+    return Array.from({ length: Math.ceil(ids.length / PAYMENT_DOTS_CHUNK) }, (_, index) => ids.slice(index * PAYMENT_DOTS_CHUNK, (index + 1) * PAYMENT_DOTS_CHUNK));
+  }, [isCashierMode, isPaymentsMode, cashierView, cashierConfirmedRows, cashierRows, paymentRows]);
+  const paymentDotsByFamily = useQueries({
+    queries: familyDotChunks.map(ids => ({
+      queryKey: ['familyPaymentDots', PAYMENT_DOTS_PERIODS.map(periodKey).join(','), ids],
+      queryFn: () => fetchFamilyPaymentDots(ids, PAYMENT_DOTS_PERIODS),
+      staleTime: 60_000,
+    })),
+    combine: combinePaymentDots,
+  });
+  const withParentDots = useCallback(<T extends { familyId: string }>(columns: ColumnDef<T>[]): ColumnDef<T>[] => columns.map(column => column.key !== 'parentName' ? column : {
+    ...column,
+    render: (value: unknown, row: T) => (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{column.render ? column.render(value as never, row) : String(value ?? '')}</span>
+        <PaymentDots dots={paymentDotsByFamily[row.familyId]} periods={PAYMENT_DOTS_PERIODS} />
+      </span>
+    ),
+  }), [paymentDotsByFamily]);
+  const cashierColumnsWithDots = useMemo(() => withParentDots(cashierColumns), [withParentDots, cashierColumns]);
+  const paymentTableColumnsWithDots = useMemo(() => withParentDots(paymentTableColumns), [withParentDots, paymentTableColumns]);
   // Отмеченные, но скрытые поиском или фильтром дети в массовые действия не попадают.
   const selectedAccrualRows = selectedAccrualIds.size ? filteredSorted.filter(row => selectedAccrualIds.has(row.rowId)) : [];
 
@@ -2438,7 +2489,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     return { activeTab: schoolKey, quickChildStatus: '', quickTransfer: '' };
   }, [mode, rows, rowMatchesSchoolTab, schoolTabs, userRole]);
 
-  const tableColumns: ColumnDef<ChildRow>[] = useMemo(() => {
+  const baseTableColumns: ColumnDef<ChildRow>[] = useMemo(() => {
     const openCardCol: ColumnDef<ChildRow> = {
       key: 'openCard',
       label: 'Оплата',
@@ -2711,6 +2762,18 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily]);
+
+  // Точки оплат прямо в ячейке ребёнка: депозит, затем месяцы сезона.
+  // При редактировании ФИО вместо ячейки показывается поле ввода, и точки скрываются.
+  const tableColumns = useMemo(() => !showPaymentDots ? baseTableColumns : baseTableColumns.map(column => column.key !== 'childName' ? column : {
+    ...column,
+    render: (value: unknown, row: ChildRow) => (
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, maxWidth: '100%' }}>
+        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{column.render ? column.render(value as never, row) : String(value ?? '')}</span>
+        {!row.rowId.endsWith('_empty') && <PaymentDots dots={paymentDotsByChild[row.rowId]} periods={PAYMENT_DOTS_PERIODS} />}
+      </span>
+    ),
+  }), [baseTableColumns, showPaymentDots, paymentDotsByChild]);
 
   const exportLogisticsRouteSheet = async (exportRows: ChildRow[]) => {
     const routeRows = exportRows
@@ -3293,7 +3356,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             <DataTable<CashierPaymentRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key={`cashier_table_${cashierView}`}
-              columns={activeTab === 'ALL' ? withSchoolColumn(cashierColumns, row => row.branchShort) : cashierColumns}
+              columns={activeTab === 'ALL' ? withSchoolColumn(cashierColumnsWithDots, row => row.branchShort) : cashierColumnsWithDots}
               data={(cashierView === 'confirmed' ? cashierConfirmedRows : cashierRows).filter(r => {
                 if (!cashierRowMatchesSelectedPeriod(r, paymentsPeriodKey)) return false;
                 if (!schoolTabs.some(school => school.key !== 'ALL' && isTabAllowed(school.key) && [school.key, school.label].some(label => label.toLowerCase() === r.branchShort.toLowerCase()))) return false;
@@ -3325,7 +3388,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             <DataTable<PaymentTableRow>
               getTaskTarget={row=>({type:'family',id:row.familyId,label:row.parentName})}
               key="payments_table"
-              columns={activeTab === 'ALL' ? withSchoolColumn(paymentTableColumns, row => row.branchShort) : paymentTableColumns}
+              columns={activeTab === 'ALL' ? withSchoolColumn(paymentTableColumnsWithDots, row => row.branchShort) : paymentTableColumnsWithDots}
               data={paymentRows.filter(r => {
                 if (tab && tab.key !== 'ALL') {
                   const bs = r.branchShort.toLowerCase();

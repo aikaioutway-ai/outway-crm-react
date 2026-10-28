@@ -5,13 +5,17 @@ import './InlineFamilyCard.css';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
 import React, { useEffect, useRef, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient } from '../../services/queryClient';
+import PaymentDots from './PaymentDots';
+import { combineDots, paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { AlertTriangle, Check, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
 import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
 import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { formatPhoneDisplay } from './familiesRowHelpers';
-import { addV2Audit, createV2Child, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
+import { addV2Audit, createV2Child, fetchChildPaymentDots, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
@@ -608,6 +612,14 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   const pendingAmount = payments.filter(p => p.status === 'На проверке').reduce((s, p) => s + p.amount, 0);
   const cardFamily = editing ? draftFamily : savedFamily;
   const cardChildren = editing ? draftChildren : children;
+  // Полоски оплат: депозит и месяцы сезона. Видят все, включая логиста — только статус, без сумм.
+  const savedChildIds = children.map(child => child.id).filter(Boolean);
+  const paymentDotsQuery = useQuery({
+    queryKey: ['childPaymentDots', PAYMENT_DOT_PERIODS.map(periodKey).join(','), savedChildIds],
+    queryFn: () => fetchChildPaymentDots(savedChildIds, PAYMENT_DOT_PERIODS),
+    enabled: savedChildIds.length > 0,
+    staleTime: 60_000,
+  }, queryClient);
   const cardDocuments = editing ? draftDocuments : savedDocuments;
   const teacherPricingAvailable = children.length > 0 && children.some(supportsTeacherPrice);
   const teacherPricingActive = teacherPricingAvailable && children.filter(supportsTeacherPrice).every(child => child.fixedPrice != null);
@@ -657,6 +669,11 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
                 ID: {family.id}
               </div>
             </div>
+            {savedChildIds.length > 0 && (
+              <div className="family-card-payment-bars" title="Оплаты семьи по всем детям">
+                <PaymentDots variant="bars" large dots={paymentDotsQuery.data ? combineDots(savedChildIds.map(id => paymentDotsQuery.data![id]).filter(Boolean)) : undefined} periods={PAYMENT_DOT_PERIODS} />
+              </div>
+            )}
             {saveMsg && <div role="status" className={`family-card-save-msg${saveMsg === 'Ошибка' ? ' is-error' : ''}`}>{saveMsg}</div>}
           </div>
           <div className="family-card-header-actions">
@@ -745,7 +762,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           )}
           {tab === 'children' && (
               <DetailPanel title={`Дети (${cardChildren.length})`}>
-                <ChildrenOverviewTable focusChildId={initialChildId} children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
+                <ChildrenOverviewTable paymentDots={paymentDotsQuery.data} focusChildId={initialChildId} children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
           )}
 
@@ -1591,7 +1608,10 @@ function ChildCard({
   );
 }
 
+const PAYMENT_DOT_PERIODS = paymentDotPeriods();
+
 function ChildrenOverviewTable({
+  paymentDots,
   children,
   focusChildId,
   branches,
@@ -1604,6 +1624,7 @@ function ChildrenOverviewTable({
   onEditDiscount,
   canManageDiscount,
 }: {
+  paymentDots?: Record<string, ChildPaymentDots>;
   children: Child[];
   focusChildId?: string;
   branches: V2BranchOption[];
@@ -1632,7 +1653,7 @@ function ChildrenOverviewTable({
             <tbody>{children.map((child, index) => (
               <React.Fragment key={child.id}>
               <tr ref={child.id === focusChildId ? focusedRow : undefined} className={child.id === focusChildId ? 'is-focused' : ''}>
-                <td>{editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : <strong>{formatName(child.childName)}</strong>}</td>
+                <td>{editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><strong>{formatName(child.childName)}</strong>{paymentDots && <PaymentDots dots={paymentDots[child.id]} periods={PAYMENT_DOT_PERIODS} />}</span>}</td>
                 <td><span>{child.branchShort || child.schoolCode}</span><span className="family-children-secondary">{child.class ? (/класс/i.test(child.class) ? child.class : `${child.class} класс`) : 'Класс не указан'}</span></td>
                 <td>{VEHICLE_TYPE_OPTIONS.find(option => option.value === child.vehicleType)?.label || '—'}<span className="family-children-secondary">Зона {child.zone}</span></td>
                 <td>{editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber)} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, transferChoicePatch(value))} /> : child.status === 'rejected' ? <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : '—'}</td>

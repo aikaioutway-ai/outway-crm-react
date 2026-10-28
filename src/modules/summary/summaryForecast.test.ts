@@ -1,5 +1,5 @@
 import { computeSummaryRows, DEFAULT_WORKING_DAYS, sumSummaryRows, workingDaysFor } from './summaryForecast';
-import { canAccessSection, getAllowedSections, MARKET_OWNER_EMPLOYEE_ID } from '../../core/bars/Sidebar';
+import { canAccessSection, getAllowedSections, OWNER_EMPLOYEE_ID } from '../../core/bars/Sidebar';
 
 test('forecast: COGS = microbuses × 4000 × days, tax 4%, gross profit', () => {
   const rows = computeSummaryRows([
@@ -26,7 +26,7 @@ test('working days default to 20 when the month is not set', () => {
 });
 
 test('Summary is visible only to the owner and the general director', () => {
-  expect(canAccessSection('admin', 'summary', MARKET_OWNER_EMPLOYEE_ID)).toBe(true);
+  expect(canAccessSection('admin', 'summary', OWNER_EMPLOYEE_ID)).toBe(true);
   expect(canAccessSection('gen_director', 'summary', 'general-director')).toBe(true);
   expect(canAccessSection('admin', 'summary', 'another-admin')).toBe(false);
   expect(getAllowedSections('director', 'director')).not.toContain('summary');

@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { chargeState, periodKey, worstState, type ChildPaymentDots, type DotPeriod } from '../modules/families/paymentDotsModel';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
@@ -17,6 +18,7 @@ export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
  * полной перезагрузки CRM. React Query сам решит, кому из подписанных
  * компонентов сейчас нужен повторный запрос. */
 export function invalidateFamiliesCache(): void {
+  invalidateCashierFamilyLookup();
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
   queryClient.invalidateQueries({ queryKey: QK.logisticsBadgeCount });
@@ -442,6 +444,30 @@ async function fetchAllRows<T = any>(
   }
 }
 
+// Справочник родителей и детей общий для трёх таблиц кассира
+// (на проверке, подтверждённые, возвраты). Порции грузятся параллельно,
+// а повторные открытия в течение минуты берут уже загруженное.
+const CASHIER_LOOKUP_PARALLEL_PAGES = 3;
+const CASHIER_LOOKUP_TTL_MS = 60 * 1000;
+type CashierFamilyLookup = { families: any[]; children: any[] };
+let cashierLookupCache: { at: number; promise: Promise<CashierFamilyLookup> } | null = null;
+
+function fetchCashierFamilyLookup(): Promise<CashierFamilyLookup> {
+  if (cashierLookupCache && Date.now() - cashierLookupCache.at < CASHIER_LOOKUP_TTL_MS) return cashierLookupCache.promise;
+  const promise = Promise.all([
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').order('id').range(from, to), CASHIER_LOOKUP_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('id, family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').order('id').range(from, to), CASHIER_LOOKUP_PARALLEL_PAGES),
+  ]).then(([families, children]) => ({ families, children }));
+  const entry = { at: Date.now(), promise };
+  cashierLookupCache = entry;
+  promise.catch(() => { if (cashierLookupCache === entry) cashierLookupCache = null; });
+  return promise;
+}
+
+export function invalidateCashierFamilyLookup(): void {
+  cashierLookupCache = null;
+}
+
 export function mapV2Family(row: any, children: any[] = []): Family {
   const firstChild = firstPresent(children, c => c.branch_id) ?? children[0];
   const branch = firstChild?.v2_school_branches;
@@ -638,8 +664,8 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
 
   const request = (async (): Promise<FamilyListRow[]> => {
   const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).order('id').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).order('id').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
     // Без финансов (Логистика) сводки и кошельки не запрашиваются вовсе.
     withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
     withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
@@ -1523,11 +1549,14 @@ async function fetchV2DriversTableUncached(): Promise<V2DriverTableRow[]> {
         .neq('status', 'archive')
         .order('transfer_number', { ascending: true })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('transfer_id').neq('status', 'rejected').range(from, to)),
+    // Детей и документов водителей больше 1000: порции грузим одновременно,
+    // а не по очереди. Сортировка по id нужна, чтобы порции не пересекались.
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('transfer_id').neq('status', 'rejected').order('id').range(from, to), 2),
     fetchAllRows<any>((from, to) => supabase
       .from('v2_driver_documents')
       .select('driver_id, document_type, document_number, issued_at, expires_at, required, scan_url')
-      .range(from, to)).catch(() => []),
+      .order('id')
+      .range(from, to), 2).catch(() => []),
   ]);
 
   const childCountByTransfer: Record<string, number> = {};
@@ -2403,15 +2432,14 @@ export async function fetchCashierPaymentsTable(): Promise<CashierPaymentRow[]> 
 }
 
 async function fetchCashierPaymentsTableUncached(): Promise<CashierPaymentRow[]> {
-  const [payments, families, children] = await Promise.all([
+  const [payments, { families, children }] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')
         .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, comment, created_at')
         .eq('status', 'pending')
         .order('created_at', { ascending: false })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+    fetchCashierFamilyLookup(),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
@@ -2491,15 +2519,19 @@ export async function fetchPaymentsTable(): Promise<PaymentTableRow[]> {
   return request;
 }
 
+// Оплат несколько тысяч: порции грузятся одновременно, а не по очереди.
+// Второй ключ сортировки (id) не даёт строкам переезжать между порциями.
+const PAYMENTS_PARALLEL_PAGES = 3;
+
 async function fetchPaymentsTableUncached(): Promise<PaymentTableRow[]> {
-  const [payments, families, children] = await Promise.all([
+  const [payments, { families, children }] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_payments')
         .select('id, family_id, amount, status, payment_method, receipt_url, receipt_code, payment_number, payment_date, actual_payment_date, created_at')
         .order('created_at', { ascending: false })
-        .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+        .order('id', { ascending: false })
+        .range(from, to), PAYMENTS_PARALLEL_PAGES),
+    fetchCashierFamilyLookup(),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
@@ -2576,14 +2608,13 @@ export async function fetchRefundsTable(): Promise<RefundTableRow[]> {
 }
 
 async function fetchRefundsTableUncached(): Promise<RefundTableRow[]> {
-  const [refunds, families, children] = await Promise.all([
+  const [refunds, { families, children }] = await Promise.all([
     fetchAllRows<any>((from, to) => supabase
         .from('v2_refunds')
         .select('id, family_id, amount, comment, status, requested_by, requested_at, created_at')
         .order('created_at', { ascending: false })
         .range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('id, parent_name, phone').range(from, to)),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select('family_id, child_name, v2_school_branches(short_name), v2_transfers(transfer_number)').range(from, to)),
+    fetchCashierFamilyLookup(),
   ]);
 
   const familyMap: Record<string, { parentName: string; phone: string }> = {};
@@ -2626,4 +2657,59 @@ async function fetchRefundsTableUncached(): Promise<RefundTableRow[]> {
       createdAt: String(r.created_at ?? ''),
     };
   });
+}
+
+/**
+ * Статусы оплат для точек в таблице: депозит и выбранные месяцы.
+ * Берём начисления только переданных детей — это одна страница таблицы.
+ */
+export async function fetchChildPaymentDots(childIds: string[], periods: DotPeriod[]): Promise<Record<string, ChildPaymentDots>> {
+  const result: Record<string, ChildPaymentDots> = {};
+  childIds.forEach(id => { result[id] = { deposit: 'none', months: {} }; });
+  if (childIds.length === 0) return result;
+  const wanted = new Set(periods.map(periodKey));
+  const { data, error } = await supabase
+    .from('v2_charges')
+    .select('child_id, charge_type, period_month, period_year, status')
+    .in('child_id', childIds);
+  if (error) throw new Error(error.message);
+  (data ?? []).forEach((row: any) => {
+    const dots = result[String(row.child_id)];
+    if (!dots) return;
+    const state = chargeState(row.status);
+    if (state === 'none') return;
+    if (row.charge_type === 'deposit') {
+      dots.deposit = state;
+      return;
+    }
+    const key = periodKey({ month: Number(row.period_month), year: Number(row.period_year) });
+    if (row.charge_type === 'monthly' && wanted.has(key)) dots.months[key] = state;
+  });
+  return result;
+}
+
+/** Точки оплат семьи: худший статус среди её детей по депозиту и каждому месяцу. */
+export async function fetchFamilyPaymentDots(familyIds: string[], periods: DotPeriod[]): Promise<Record<string, ChildPaymentDots>> {
+  const result: Record<string, ChildPaymentDots> = {};
+  familyIds.forEach(id => { result[id] = { deposit: 'none', months: {} }; });
+  if (familyIds.length === 0) return result;
+  const wanted = new Set(periods.map(periodKey));
+  const { data, error } = await supabase
+    .from('v2_charges')
+    .select('family_id, charge_type, period_month, period_year, status')
+    .in('family_id', familyIds);
+  if (error) throw new Error(error.message);
+  (data ?? []).forEach((row: any) => {
+    const dots = result[String(row.family_id)];
+    if (!dots) return;
+    const state = chargeState(row.status);
+    if (state === 'none') return;
+    if (row.charge_type === 'deposit') {
+      dots.deposit = worstState(dots.deposit, state);
+      return;
+    }
+    const key = periodKey({ month: Number(row.period_month), year: Number(row.period_year) });
+    if (row.charge_type === 'monthly' && wanted.has(key)) dots.months[key] = worstState(dots.months[key] ?? 'none', state);
+  });
+  return result;
 }

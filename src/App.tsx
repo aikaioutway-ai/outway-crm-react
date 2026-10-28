@@ -35,7 +35,6 @@ import {
   getEmployeeSessionExpiresAt,
   isEmployeeSessionActive,
 } from './services/employeeSession';
-import { useLogisticsBadgeCount } from './hooks/useCrmQueries';
 import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
@@ -50,11 +49,11 @@ import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
 // сотрудник больше не скачивает код всех модулей CRM при каждом входе.
-const FamiliesPage = lazy(() => import('./modules/families/FamiliesPage'));
+const loadFamiliesPage = () => import('./modules/families/FamiliesPage');
+const FamiliesPage = lazy(loadFamiliesPage);
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
-const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
 const SummaryModule = lazy(() => import('./modules/summary/SummaryModule'));
 const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
@@ -71,7 +70,6 @@ function SectionLoading() {
 }
 
 const PLACEHOLDERS: Partial<Record<NavSection, string>> = {
-  dispatch: 'Диспетчер — в разработке',
   settings:  'Настройки — в разработке',
 };
 
@@ -118,6 +116,14 @@ export default function App() {
 
   const isMobileViewport = useIsMobileViewport();
   const [forceDesktop, setForceDesktop] = useForceDesktop();
+  // Код Менеджера, Логистики и Кассира (один модуль) подгружаем в фоне
+  // сразу после входа, чтобы при первом клике по разделу ждать только данные.
+  useEffect(() => {
+    if (!currentUser) return;
+    const timer = window.setTimeout(() => { void loadFamiliesPage().catch(() => undefined); }, 1500);
+    return () => window.clearTimeout(timer);
+  }, [currentUser]);
+
   useEffect(() => {
     let active = true;
     const compose = (event: Event) => { if (currentUser) setTaskTarget((event as CustomEvent<TaskTarget>).detail); };
@@ -142,7 +148,7 @@ export default function App() {
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
-  const [logisticsView, setLogisticsView] = useState<'table' | 'map' | 'schools'>('table');
+  const [logisticsView, setLogisticsView] = useState<'table' | 'map'>('table');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
@@ -187,7 +193,6 @@ export default function App() {
   const handleLogisticsSelectSchool = (schoolKey: string) => {
     if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
     if (schoolKey === 'ALL') setLogisticsView('table');
-    else if (logisticsView === 'schools') setLogisticsView('map');
     if (schoolKey === 'ALL') setLogisticsTransferFilter('');
     setLogisticsSchoolKey(schoolKey);
   };
@@ -321,10 +326,9 @@ export default function App() {
     });
   }, [currentUser]);
 
-  const logisticsBadgeQuery = useLogisticsBadgeCount({ enabled: !!currentUser });
-  const badges: Partial<Record<NavSection, number>> = currentUser && logisticsBadgeQuery.data !== undefined
-    ? { logistics: logisticsBadgeQuery.data, tasks: taskBadge }
-    : { tasks: taskBadge };
+  // В сайдбаре виден только счётчик задач (значок Логистики скрыт),
+  // поэтому полную таблицу семей на старте не грузим.
+  const badges: Partial<Record<NavSection, number>> = { tasks: taskBadge };
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
@@ -554,7 +558,7 @@ export default function App() {
                           setDriversTransferFilter(logisticsTransferFilter);
                           setDriversSearch(logisticsSearch);
                           setSection('drivers');
-                        } else if (key !== 'schools') setLogisticsView(key);
+                        } else setLogisticsView(key);
                       }} />
                     </div>
                   </>
@@ -752,19 +756,6 @@ export default function App() {
               />
             )}
           </div>
-        ) : section === 'dispatch' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                {sectionLabel('Диспетчер')}
-                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
-                {extraTabs(true)}
-              </div>
-            </div>
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#fff', borderRadius: 14, color: 'var(--text-2)', fontSize: 16, fontWeight: 600 }}>
-              {PLACEHOLDERS.dispatch}
-            </div>
-          </div>
         ) : section === 'expenses' ? (
 
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
@@ -777,17 +768,6 @@ export default function App() {
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
             {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} onOpenSalary={scope=>{setSalaryScope(scope);setFinanceView('salary');}} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
 
-          </div>
-        ) : section === 'market' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
-            <div style={tabRowStyle}>
-              <div style={tabBarStyle}>
-                {sectionLabel('Маркет')}
-                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
-                {extraTabs(true)}
-              </div>
-            </div>
-            <MarketModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
           </div>
         ) : section === 'summary' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
