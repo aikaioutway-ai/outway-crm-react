@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { chargeState, periodKey, type ChildPaymentDots, type DotPeriod } from '../modules/families/paymentDotsModel';
+import { chargeState, periodKey, worstState, type ChildPaymentDots, type DotPeriod } from '../modules/families/paymentDotsModel';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
 import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
@@ -2684,6 +2684,32 @@ export async function fetchChildPaymentDots(childIds: string[], periods: DotPeri
     }
     const key = periodKey({ month: Number(row.period_month), year: Number(row.period_year) });
     if (row.charge_type === 'monthly' && wanted.has(key)) dots.months[key] = state;
+  });
+  return result;
+}
+
+/** Точки оплат семьи: худший статус среди её детей по депозиту и каждому месяцу. */
+export async function fetchFamilyPaymentDots(familyIds: string[], periods: DotPeriod[]): Promise<Record<string, ChildPaymentDots>> {
+  const result: Record<string, ChildPaymentDots> = {};
+  familyIds.forEach(id => { result[id] = { deposit: 'none', months: {} }; });
+  if (familyIds.length === 0) return result;
+  const wanted = new Set(periods.map(periodKey));
+  const { data, error } = await supabase
+    .from('v2_charges')
+    .select('family_id, charge_type, period_month, period_year, status')
+    .in('family_id', familyIds);
+  if (error) throw new Error(error.message);
+  (data ?? []).forEach((row: any) => {
+    const dots = result[String(row.family_id)];
+    if (!dots) return;
+    const state = chargeState(row.status);
+    if (state === 'none') return;
+    if (row.charge_type === 'deposit') {
+      dots.deposit = worstState(dots.deposit, state);
+      return;
+    }
+    const key = periodKey({ month: Number(row.period_month), year: Number(row.period_year) });
+    if (row.charge_type === 'monthly' && wanted.has(key)) dots.months[key] = worstState(dots.months[key] ?? 'none', state);
   });
   return result;
 }

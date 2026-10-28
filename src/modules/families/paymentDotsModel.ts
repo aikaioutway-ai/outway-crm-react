@@ -33,3 +33,22 @@ export function chargeState(status: string | null | undefined): ChargeState {
   if (status === 'unpaid') return 'unpaid';
   return 'none';
 }
+
+const STATE_WEIGHT: Record<ChargeState, number> = { none: 0, paid: 1, partial: 2, unpaid: 3 };
+
+/** Общий статус по нескольким начислениям: худший побеждает (не оплачено > частично > оплачено). */
+export function worstState(a: ChargeState, b: ChargeState): ChargeState {
+  return STATE_WEIGHT[b] > STATE_WEIGHT[a] ? b : a;
+}
+
+/** Точки семьи из точек её детей. */
+export function combineDots(list: ChildPaymentDots[]): ChildPaymentDots {
+  const result: ChildPaymentDots = { deposit: 'none', months: {} };
+  list.forEach(dots => {
+    result.deposit = worstState(result.deposit, dots.deposit);
+    Object.entries(dots.months).forEach(([key, state]) => {
+      result.months[key] = worstState(result.months[key] ?? 'none', state);
+    });
+  });
+  return result;
+}
