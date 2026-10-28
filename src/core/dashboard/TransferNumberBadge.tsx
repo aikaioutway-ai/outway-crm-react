@@ -3,7 +3,13 @@ import { VEHICLE_COLOR } from './TransferCell';
 
 const VEHICLE_LABEL: Record<string, string> = { microbus: 'Микроавтобус', minivan: 'Минивэн', sedan: 'Седан' };
 
+const TRANSFER_X_COLOR = '#64748B';
+
 export default function TransferNumberBadge({ number, vehicleType }: { number?: string | number | null; vehicleType?: string | null }) {
+  // «Х» — трансфер отказников.
+  if (number === 'X' || number === 'Х') {
+    return <span title="Трансфер Х · отказ" style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', minWidth: 32, height: 24, padding: '0 7px', borderRadius: 6, background: TRANSFER_X_COLOR, color: '#fff', fontSize: 12.5, fontWeight: 700, boxSizing: 'border-box' }}>Х</span>;
+  }
   const numbers = String(number ?? '').split(',').map(value => value.trim().replace(/^№\s*/, '')).filter(value => /^\d+$/.test(value) && Number(value) > 0);
   if (!numbers.length) return <span style={{ color: 'var(--text-3)' }}>—</span>;
   const color = VEHICLE_COLOR[vehicleType ?? ''] ?? '#64748B';

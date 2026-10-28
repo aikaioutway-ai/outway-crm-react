@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { TRANSFER_NUMBER_VALUES } from './constants';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
 import { createPortal } from 'react-dom';
 import {
   fetchV2Branches,
@@ -106,10 +106,11 @@ function escapeHtml(value: string): string {
 const TRANSFER_SELECT_OPTIONS = TRANSFER_NUMBER_VALUES;
 const STOP_SELECT_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
 
-function buildSelectOptions(options: string[], selected: string | null): string {
+function buildSelectOptions(options: string[], selected: string | null, withTransferX = false): string {
   const blank = `<option value="" ${selected ? '' : 'selected'}>—</option>`;
+  const x = withTransferX ? `<option value="${TRANSFER_X}" ${selected === TRANSFER_X ? 'selected' : ''}>${TRANSFER_X_LABEL}</option>` : '';
   const rest = options.map(value => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join('');
-  return blank + rest;
+  return blank + x + rest;
 }
 
 function buildBalloonBody(address: string, group: PointRow[]): string {
@@ -118,7 +119,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
       <button data-role="open-family" data-family-id="${row.familyId}" style="background:none;border:none;padding:0;margin-bottom:6px;font-weight:700;font-size:13px;color:#17222F;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">${escapeHtml(row.childName)}</button>
       <div style="display:flex;gap:6px;align-items:center;">
         <select data-role="transfer" style="width:88px;padding:4px 6px;border:1px solid #D7E0E3;border-radius:6px;font-size:12px;">
-          ${buildSelectOptions(TRANSFER_SELECT_OPTIONS, row.transferNumber)}
+          ${buildSelectOptions(TRANSFER_SELECT_OPTIONS, transferChoiceValue(row.status, row.transferNumber), true)}
         </select>
         <select data-role="stop" style="width:80px;padding:4px 6px;border:1px solid #D7E0E3;border-radius:6px;font-size:12px;">
           ${buildSelectOptions(STOP_SELECT_OPTIONS, row.stopNumber)}
@@ -306,7 +307,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                 vehicleType: row.vehicleType as VehicleType,
               },
               vehicleType: row.vehicleType as VehicleType,
-              transferNumber: transferValue ? Number(transferValue) : undefined,
+              transferNumber: parseTransferChoice(transferValue),
               stopNumber: stopValue ? Number(stopValue) : undefined,
               timeMorning: row.timeMorning ?? undefined,
               source: 'map',

@@ -1,5 +1,5 @@
 import TaskButton from '../modules/tasks/TaskButton';
-import { TRANSFER_NUMBER_VALUES } from '../modules/families/constants';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from '../modules/families/constants';
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { useFamiliesTable } from '../hooks/useCrmQueries';
@@ -18,6 +18,12 @@ const STOP_NUMBERS = Array.from({ length: 30 }, (_, index) => String(index + 1))
 function numberOptions(values: string[], current: string | null, emptyLabel: string, prefix: string) {
   const list = current && !values.includes(current) ? [...values, current] : values;
   return [{ value: '', label: emptyLabel }, ...list.map(value => ({ value, label: `${prefix}${value}` }))];
+}
+
+// «Х» стоит сразу после «Без трансфера», как в полной версии.
+function transferOptions(current: string | null) {
+  const [blank, ...numbers] = numberOptions(TRANSFER_NUMBERS, current, 'Без трансфера', '№');
+  return [blank, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...numbers];
 }
 
 function patchRow(childId: string, patch: Partial<FamilyListRow>) {
@@ -75,13 +81,15 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
           vehicleType: child.vehicleType as VehicleType,
         },
         vehicleType: child.vehicleType as VehicleType,
-        transferNumber: transfer ? Number(transfer) : undefined,
+        transferNumber: parseTransferChoice(transfer),
         stopNumber: child.stopNumber ? Number(child.stopNumber) : undefined,
         timeMorning: child.timeMorning ?? undefined,
         source: 'transfer_move',
         actorName: userName,
       });
-      patchRow(child.rowId, { transferNumber: transfer || null });
+      patchRow(child.rowId, transfer === TRANSFER_X
+        ? { transferNumber: null, status: 'rejected' }
+        : { transferNumber: transfer || null, ...(transfer && child.status === 'rejected' ? { status: 'new' } : {}) });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось сменить трансфер');
     } finally {
@@ -185,10 +193,10 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
                   <div className="m-selects">
                     <SelectField
                       label="Трансфер"
-                      value={child.transferNumber ?? ''}
+                      value={transferChoiceValue(child.status, child.transferNumber)}
                       disabled={savingId === child.rowId}
                       onChange={transfer => changeTransfer(child, transfer)}
-                      options={numberOptions(TRANSFER_NUMBERS, child.transferNumber, 'Без трансфера', '№')}
+                      options={transferOptions(child.transferNumber)}
                     />
                     <SelectField
                       label="Остановка"

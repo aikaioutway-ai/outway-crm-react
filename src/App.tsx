@@ -9,6 +9,7 @@ import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/Ma
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
+import { setCrmActor } from './services/crmActor';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
 import CashierSchoolKpiStrip from './modules/families/CashierSchoolKpiStrip';
@@ -99,6 +100,7 @@ function getSavedUser(): AuthenticatedUser | null {
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<AuthenticatedUser | null>(() => getSavedUser());
+  setCrmActor(currentUser?.id);
   const taskUserRef = useRef(currentUser?.id);
   taskUserRef.current = currentUser?.id;
   const currentUserRole = currentUser?.role ?? getSavedRole();

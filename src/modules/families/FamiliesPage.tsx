@@ -1,5 +1,5 @@
 import { withFormerTransferDrivers } from '../drivers/formerTransferDrivers';
-import { TRANSFER_NUMBER_VALUES } from './constants';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
 import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
@@ -314,7 +314,8 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   },
   {
     key: 'transferNumber', label: '№ Трансфера', type: 'select', category: 'Маршрут', width: 100, editable: true,
-    editOptions: [{ value: '', label: '—' }, ...TRANSFER_OPTIONS],
+    editOptions: [{ value: '', label: '—' }, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...TRANSFER_OPTIONS],
+    getValue: (row) => transferChoiceValue(row.status, row.transferNumber),
     render: (val, row) => <TransferNumberBadge number={val} vehicleType={row.vehicleType} />,
   },
   {
@@ -1570,7 +1571,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               vehicleType: row.vehicleType as VehicleType,
             },
             vehicleType: row.vehicleType as VehicleType,
-            transferNumber: value ? Number(value) : undefined,
+            transferNumber: parseTransferChoice(value),
             stopNumber: row.stopNumber ? Number(row.stopNumber) : undefined,
             timeMorning: row.timeMorning ?? undefined,
             source: 'transfer_move',

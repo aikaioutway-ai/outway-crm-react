@@ -214,6 +214,24 @@ const NEXT_SEASON_YEAR = SEASON_YEAR + 1;
 // Тот же лимит проверяет база (триггер на v2_transfers).
 export const MAX_TRANSFER_NUMBER = 15;
 export const TRANSFER_NUMBER_VALUES = Array.from({ length: MAX_TRANSFER_NUMBER }, (_, index) => String(index + 1));
+// Трансфер «Х» = отказ: выбор Х переводит ребёнка в статус «Отказ», база
+// снимает его с номера и пишет историю (см. миграцию rejected_children_transfer_x).
+export const TRANSFER_X = 'X';
+export const TRANSFER_X_LABEL = 'Х';
+export type TransferChoice = number | typeof TRANSFER_X;
+
+/** Значение из списка трансферов → номер, Х или «без трансфера». */
+export function parseTransferChoice(value: string | number | null | undefined): TransferChoice | undefined {
+  if (value === TRANSFER_X || value === TRANSFER_X_LABEL) return TRANSFER_X;
+  const number = Number(value);
+  return Number.isInteger(number) && number > 0 ? number : undefined;
+}
+
+/** Что показать в списке трансферов у ребёнка: у отказника всегда Х. */
+export function transferChoiceValue(status: string | null | undefined, transferNumber: string | number | null | undefined): string {
+  if (status === 'rejected') return TRANSFER_X;
+  return transferNumber ? String(transferNumber) : '';
+}
 
 export const ALL_PERIODS = [
   { key: 'deposit', month: 0,  year: SEASON_YEAR,      label: 'Депозит' },

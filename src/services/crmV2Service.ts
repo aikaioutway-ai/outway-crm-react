@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
-import { getBranchFilter, MAX_TRANSFER_NUMBER, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone, phoneQueryDigits } from '../utils/format';
 import {
@@ -1377,13 +1377,25 @@ async function repriceV2ChildrenForTransfer(params: {
 export async function updateV2ChildRoute(params: {
   child: Child;
   vehicleType: VehicleType;
-  transferNumber?: number;
+  transferNumber?: TransferChoice;
   stopNumber?: number;
   timeMorning?: string;
   source?: TransferRepricingSource;
   actorId?: string | null;
   actorName?: string | null;
 }): Promise<void> {
+  // Х = отказ: база сама снимет ребёнка с номера и запишет историю.
+  if (params.transferNumber === TRANSFER_X) {
+    await updateV2Child(params.child.id, { status: 'rejected', stop_order: null });
+    return;
+  }
+  if (params.transferNumber) {
+    // Отказника на номер не посадить, пока он в отказе: возвращаем его в «Новые».
+    const { data: current, error: statusError } = await supabase
+      .from('v2_children').select('status').eq('id', params.child.id).single();
+    if (statusError) throw new Error(statusError.message);
+    if (current?.status === 'rejected') await updateV2Child(params.child.id, { status: 'new' });
+  }
   if (!params.transferNumber) {
     await updateV2Child(params.child.id, {
       transfer_id: null,

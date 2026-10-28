@@ -26,7 +26,7 @@ interface TransferCellProps {
 }
 
 // Служебные ячейки ряда подписываем словами, а не символами.
-const SPECIAL_LABEL: Record<string, string> = { '—': 'Без №', '×': 'Отказ', '≡': 'Все' };
+const SPECIAL_LABEL: Record<string, string> = { '—': 'Без №', '×': 'Х', '≡': 'Все' };
 
 export default function TransferCell({
   label,
