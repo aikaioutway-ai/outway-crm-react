@@ -13,6 +13,8 @@ export const queryClient = new QueryClient({
 
 export const QK = {
   branchStats: ['branchStats'] as const,
+  summaryForecast: (year: number, month: number) => ['summaryForecast', year, month] as const,
+  summaryWorkingDays: ['summaryWorkingDays'] as const,
   schoolApplicationCounts: ['schoolApplicationCounts'] as const,
   logisticsBadgeCount: ['logisticsBadgeCount'] as const,
   schoolDirectoryStats: ['schoolDirectoryStats'] as const,

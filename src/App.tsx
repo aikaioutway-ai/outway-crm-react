@@ -55,6 +55,7 @@ const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 const MarketModule = lazy(() => import('./modules/market/MarketModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
+const SummaryModule = lazy(() => import('./modules/summary/SummaryModule'));
 const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
 const TaskComposer = lazy(() => import('./modules/tasks/TaskComposer'));
 const TaskFamilyCard = lazy(() => import('./modules/families/InlineFamilyCard'));
@@ -785,6 +786,27 @@ export default function App() {
               </div>
             </div>
             <MarketModule userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />
+          </div>
+        ) : section === 'summary' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
+            <div style={tabRowStyle}>
+              <div style={tabBarStyle}>
+                {sectionLabel('Сводка')}
+                {extraTabs(true)}
+              </div>
+            </div>
+            <SummaryModule
+              sessionToken={currentUser?.sessionToken}
+              onSelectSchool={(schoolKey, periodKey) => {
+                if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys, isSchoolVisible(schoolKey) ? '1.0' : '2.0')) return;
+                setManagerOpenFamilySearch('');
+                setManagerTransferFilter('');
+                setManagerSchoolMode('charges');
+                setManagerPeriodKey(periodKey);
+                setManagerSchoolKey(schoolKey);
+                setSection(managerSectionFor(schoolKey));
+              }}
+            />
           </div>
         ) : section === 'tasks' ? (
           <TasksModule user={currentUser} context={taskContext ?? undefined} onClearContext={()=>setTaskContext(null)} onOpenTarget={target => void openTaskTarget(target)} />

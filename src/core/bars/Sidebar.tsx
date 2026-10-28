@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { ListTodo, Users, School, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { BarChart3, ListTodo, Users, School, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks' | 'schools2';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'dispatch' | 'expenses' | 'market' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary';
 
 interface SidebarProps {
   active: NavSection;
@@ -22,6 +22,7 @@ interface SidebarProps {
 
 // expandedOnly — пункт виден только в раскрытом меню.
 const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly?: boolean }[] = [
+  { key: 'summary',   label: 'Сводка',     icon: <BarChart3 size={18} /> },
   { key: 'families',  label: 'Менеджер',   icon: <Users size={18} /> },
   { key: 'schools2',  label: 'Школы 2.0',  icon: <School size={18} />, expandedOnly: true },
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
@@ -50,8 +51,14 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
   const withMarket: NavSection[] = userId === MARKET_OWNER_EMPLOYEE_ID && !sections.includes('market') ? [...sections, 'market'] : sections;
-  return [...withMarket, 'tasks'];
+  const withSummary: NavSection[] = canAccessSummary(role, userId) ? [...withMarket, 'summary'] : withMarket;
+  return [...withSummary, 'tasks'];
 
+}
+
+// «Сводка» — итоги компании только для владельца и гендиректора.
+export function canAccessSummary(role: UserRole, userId?: string): boolean {
+  return userId === MARKET_OWNER_EMPLOYEE_ID || role === 'gen_director';
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
