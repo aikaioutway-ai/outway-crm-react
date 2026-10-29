@@ -14,6 +14,8 @@ import { computeSummaryRows, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTI
 const MONTH_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 type SortKey = 'school' | keyof Omit<SummarySchoolRow, 'key' | 'label' | 'logo'>;
 const EMPTY = '—';
+const FORECAST_TABS = [['v1', '1.0'], ['v2', '2.0']] as const;
+type ForecastTab = typeof FORECAST_TABS[number][0];
 
 interface Props {
   sessionToken?: string;
@@ -21,6 +23,7 @@ interface Props {
 }
 
 export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
+  const [tab, setTab] = useState<ForecastTab>('v1');
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'revenue', dir: 'desc' });
   const [daysMenu, setDaysMenu] = useState<{ periodKey: string; x: number; y: number } | null>(null);
@@ -61,7 +64,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
     <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', gap: 12, padding: '0 0 10px' }}>
       <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar">
         <div role="tablist" aria-label="Раздел сводки" className="ow-seg">
-          <button type="button" role="tab" className="ow-seg-btn" aria-selected>Прогноз</button>
+          {FORECAST_TABS.map(([key, label]) => <button key={key} type="button" role="tab" className="ow-seg-btn" aria-selected={tab === key} onClick={() => setTab(key)}>{label}</button>)}
         </div>
         <div className="manager-overview-period">
           <ManagerPeriodBar
@@ -85,7 +88,10 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
         </div>
       )}
 
-      {forecastQuery.isPending || daysQuery.isPending ? (
+      {tab === 'v2' ? (
+        // 2.0 — минивэны и седаны: расчёт подключим, когда владелец задаст ставки водителям за день.
+        <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Прогноз по минивэнам и седанам появится, когда будут заданы ставки водителям.</div>
+      ) : forecastQuery.isPending || daysQuery.isPending ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Загрузка прогноза…</div>
       ) : forecastQuery.isError || daysQuery.isError ? (
         <div role="alert" style={{ padding: 24, fontSize: 13 }}>
