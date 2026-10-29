@@ -13,8 +13,8 @@ import { transferStats } from '../families/LogisticsOverview';
 import { useTestTransfers } from '../families/testTransfers';
 import { useLogisticsTable, usePeriodChargeStats } from '../../hooks/useCrmQueries';
 import { ChevronLeft } from 'lucide-react';
-import SummarySchoolView from './SummarySchoolView';
-import { chargedByChild, computeSummaryRows, lightRevenueBySchool, lightSchoolChildren, REVENUE_TAX_RATE, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTIONS, workingDaysFor } from './summaryForecast';
+import SummarySchoolView, { SummarySchoolKpi } from './SummarySchoolView';
+import { chargedByChild, computeSummaryRows, LIGHT_VEHICLE_TYPES, MICROBUS_TYPES, revenueBySchool, REVENUE_TAX_RATE, schoolChildren, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTIONS, workingDaysFor } from './summaryForecast';
 
 const MONTH_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 type SortKey = 'school' | keyof Omit<SummarySchoolRow, 'key' | 'label' | 'logo'>;
@@ -24,14 +24,13 @@ type ForecastTab = typeof FORECAST_TABS[number][0];
 
 interface Props {
   sessionToken?: string;
-  onSelectSchool: (schoolKey: string, periodKey: string) => void;
   /** Открыть карточку семьи на этом ребёнке. */
   onOpenChild: (familyId: string, childId: string) => void;
 }
 
-export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChild }: Props) {
+export default function SummaryModule({ sessionToken, onOpenChild }: Props) {
   const [tab, setTab] = useState<ForecastTab>('v1');
-  // 2.0: школа открывается здесь же — дети в минивэнах и седанах и их начисления.
+  // Школа открывается здесь же: дети в трансферах вкладки (1.0 — микроавтобусы, 2.0 — минивэны и седаны) и их начисления.
   const [openSchoolKey, setOpenSchoolKey] = useState<string | null>(null);
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'revenue', dir: 'desc' });
@@ -44,10 +43,11 @@ export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChil
   });
   const daysQuery = useQuery({ queryKey: QK.summaryWorkingDays, queryFn: fetchSummaryWorkingDays });
   // 2.0: машины и пассажиры минивэнов и седанов — те же данные и правила подсчёта, что в Логистике.
-  const logisticsQuery = useLogisticsTable({ enabled: tab === 'v2' });
+  const needsChildren = tab === 'v2' || openSchoolKey !== null;
+  const logisticsQuery = useLogisticsTable({ enabled: needsChildren });
   const logisticsRows = logisticsQuery.data;
   // Начисления за месяц по детям — тот же запрос и кеш, что у экрана менеджера.
-  const chargesQuery = usePeriodChargeStats(period.key, { enabled: tab === 'v2' });
+  const chargesQuery = usePeriodChargeStats(period.key, { enabled: needsChildren });
   const chargedMap = useMemo(() => chargedByChild(chargesQuery.data), [chargesQuery.data]);
   // Подписка на пометки тестовых трансферов: они меняют подсчёт машин, как в Логистике.
   useTestTransfers();
@@ -75,7 +75,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChil
   // Revenue и налог — по начислениям за месяц; COGS и Gross Profit ждут ставок водителям за день.
   const lightRows = (() => {
     if (!isV2 || !logisticsRows) return [];
-    const revenueBySchool = lightRevenueBySchool(logisticsRows, chargedMap);
+    const lightRevenue = revenueBySchool(logisticsRows, chargedMap, LIGHT_VEHICLE_TYPES);
     const bySchool = new Map<string, NonNullable<typeof logisticsRows>>();
     logisticsRows.forEach(row => {
       if (!row.branchFilter) return;
@@ -87,17 +87,26 @@ export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChil
       const stats = transferStats(bySchool.get(key) ?? []);
       const school = SCHOOL_DIRECTORY.find(item => item.key === key);
       const forecastRow = rows.find(row => row.key === key);
-      const revenue = revenueBySchool.get(key) ?? 0;
+      const revenue = lightRevenue.get(key) ?? 0;
       return { key, label: forecastRow?.label ?? school?.label ?? key, logo: forecastRow?.logo ?? school?.logo, cars: stats.lightVehicleCount, passengers: stats.lightVehicleStudents, revenue, tax: Math.round(revenue * REVENUE_TAX_RATE) };
     }).filter(row => rows.some(item => item.key === row.key) || row.cars > 0)
       .sort((a, b) => a.label.localeCompare(b.label));
   })();
   const lightTotals = lightRows.reduce((acc, row) => ({ cars: acc.cars + row.cars, passengers: acc.passengers + row.passengers, revenue: acc.revenue + row.revenue, tax: acc.tax + row.tax }), { cars: 0, passengers: 0, revenue: 0, tax: 0 });
-  const openSchool = isV2 && openSchoolKey ? lightRows.find(row => row.key === openSchoolKey) : undefined;
   const openSchoolChildren = useMemo(
-    () => (openSchoolKey && logisticsRows ? lightSchoolChildren(logisticsRows, openSchoolKey, chargedMap) : []),
-    [openSchoolKey, logisticsRows, chargedMap],
+    () => (openSchoolKey && logisticsRows ? schoolChildren(logisticsRows, openSchoolKey, chargedMap, isV2 ? LIGHT_VEHICLE_TYPES : MICROBUS_TYPES) : []),
+    [openSchoolKey, logisticsRows, chargedMap, isV2],
   );
+  // Плашки школы — те же цифры, что в её строке таблицы «Прогноза».
+  const openSchool: { label: string; logo?: string; kpi: SummarySchoolKpi } | undefined = (() => {
+    if (!openSchoolKey) return undefined;
+    if (isV2) {
+      const row = lightRows.find(item => item.key === openSchoolKey);
+      return row && { label: row.label, logo: row.logo, kpi: { countLabel: 'Cars · Passengers', count: `${row.cars} · ${row.passengers}`, revenue: row.revenue, cogs: null, tax: row.tax, grossProfit: null } };
+    }
+    const row = rows.find(item => item.key === openSchoolKey);
+    return row && { label: row.label, logo: row.logo, kpi: { countLabel: 'Buses · Passengers', count: `${row.microbusCount} · ${openSchoolChildren.length}`, revenue: row.revenue, cogs: row.cogs, tax: row.revenueTax, grossProfit: row.grossProfit } };
+  })();
   const columns = [
     { key: 'school', label: 'Школы', total: isV2 ? lightRows.length : rows.length, color: '#64748B' },
     ...(isV2
@@ -173,18 +182,20 @@ export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChil
         </div>
       )}
 
-      {isV2 && (
+      {isV2 ? (
         <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Только минивэны и седаны. Revenue и налог — по начислениям за месяц. COGS, оплата водителю, остаток и Gross Profit появятся, когда будут заданы ставки водителям.</div>
+      ) : openSchoolKey && (
+        <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Только микроавтобусы. Оплата водителю и остаток по ребёнку появятся, когда будет решено, как ставка за микроавтобус делится на детей.</div>
       )}
 
-      {forecastQuery.isPending || daysQuery.isPending || (isV2 && (logisticsQuery.isPending || chargesQuery.isPending)) ? (
+      {forecastQuery.isPending || daysQuery.isPending || (needsChildren && (logisticsQuery.isPending || chargesQuery.isPending)) ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Загрузка прогноза…</div>
-      ) : forecastQuery.isError || daysQuery.isError || (isV2 && (logisticsQuery.isError || chargesQuery.isError)) ? (
+      ) : forecastQuery.isError || daysQuery.isError || (needsChildren && (logisticsQuery.isError || chargesQuery.isError)) ? (
         <div role="alert" style={{ padding: 24, fontSize: 13 }}>
-          Не удалось загрузить прогноз. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void forecastQuery.refetch(); void daysQuery.refetch(); if (isV2) { void logisticsQuery.refetch(); void chargesQuery.refetch(); } }}>Повторить</button>
+          Не удалось загрузить прогноз. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void forecastQuery.refetch(); void daysQuery.refetch(); if (needsChildren) { void logisticsQuery.refetch(); void chargesQuery.refetch(); } }}>Повторить</button>
         </div>
       ) : openSchool ? (
-        <SummarySchoolView label={openSchool.label} logo={openSchool.logo} cars={openSchool.cars} rows={openSchoolChildren} onOpenChild={onOpenChild} />
+        <SummarySchoolView label={openSchool.label} logo={openSchool.logo} kpi={openSchool.kpi} rows={openSchoolChildren} onOpenChild={onOpenChild} />
       ) : (isV2 ? !lightRows.length : !rows.length) ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>{isV2 ? 'Нет активных минивэнов и седанов.' : `За ${period.label.toLowerCase()} нет активных микроавтобусов и начислений.`}</div>
       ) : (
@@ -196,7 +207,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChil
           sortKey={isV2 ? 'school' : sortState.key}
           ascending={isV2 || sortState.dir === 'asc'}
           onSort={key => { if (!isV2 && (key === 'school' || key in totals)) handleSort(key as SortKey); }}
-          onSelect={key => isV2 ? setOpenSchoolKey(key) : onSelectSchool(key, period.key)}
+          onSelect={setOpenSchoolKey}
         />
       )}
 

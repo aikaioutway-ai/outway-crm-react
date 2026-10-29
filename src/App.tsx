@@ -814,15 +814,6 @@ export default function App() {
                   setTaskFamily(family);
                 } catch (error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть карточку'); }
               }}
-              onSelectSchool={(schoolKey, periodKey) => {
-                if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys, isSchoolVisible(schoolKey) ? '1.0' : '2.0')) return;
-                setManagerOpenFamilySearch('');
-                setManagerTransferFilter('');
-                setManagerSchoolMode('charges');
-                setManagerPeriodKey(periodKey);
-                setManagerSchoolKey(schoolKey);
-                setSection(managerSectionFor(schoolKey));
-              }}
             />
           </div>
         ) : section === 'tasks' ? (

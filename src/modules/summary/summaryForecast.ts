@@ -61,13 +61,16 @@ export function sumSummaryRows(rows: SummarySchoolRow[]) {
   }), { microbusCount: 0, revenue: 0, cogs: 0, revenueTax: 0, grossProfit: 0 });
 }
 
-// ─── 2.0: минивэны и седаны ──────────────────────────────────────────────────
-// Ставок водителям за минивэн и седан пока нет, поэтому COGS, оплата водителю,
-// остаток и Gross Profit не считаются. Revenue — начисления за месяц детям,
-// которые сидят в минивэнах и седанах (без отказников и тестовых трансферов).
+// ─── Экран школы и 2.0 ───────────────────────────────────────────────────────
+// 1.0 — микроавтобусы, 2.0 — минивэны и седаны. Ставок водителям за минивэн и
+// седан пока нет, поэтому в 2.0 COGS и Gross Profit не считаются. Оплата
+// водителю и остаток по ребёнку не считаются нигде: не решено, как ставка за
+// машину делится на детей. Revenue — начисления за месяц детям в трансферах
+// нужного типа (без отказников и тестовых трансферов).
+export const MICROBUS_TYPES: readonly string[] = ['microbus'];
 export const LIGHT_VEHICLE_TYPES: readonly string[] = ['minivan', 'sedan'];
 
-export interface LightChildRow {
+export interface ForecastChildRow {
   childId: string;
   familyId: string;
   childName: string;
@@ -77,8 +80,8 @@ export interface LightChildRow {
   tax: number;
 }
 
-export function isLightTransferChild(row: FamilyListRow): boolean {
-  return Boolean(row.transferNumber) && row.status !== 'rejected' && !isInTestTransfer(row) && LIGHT_VEHICLE_TYPES.includes(row.vehicleType);
+export function isTransferChildOf(row: FamilyListRow, vehicleTypes: readonly string[]): boolean {
+  return Boolean(row.transferNumber) && row.status !== 'rejected' && !isInTestTransfer(row) && vehicleTypes.includes(row.vehicleType);
 }
 
 export function chargedByChild(charges: PeriodChargeStats[] | undefined): Map<string, number> {
@@ -89,9 +92,9 @@ export function chargedByChild(charges: PeriodChargeStats[] | undefined): Map<st
   return map;
 }
 
-export function lightSchoolChildren(rows: FamilyListRow[], schoolKey: string, charged: Map<string, number>): LightChildRow[] {
+export function schoolChildren(rows: FamilyListRow[], schoolKey: string, charged: Map<string, number>, vehicleTypes: readonly string[]): ForecastChildRow[] {
   return rows
-    .filter(row => row.branchFilter === schoolKey && isLightTransferChild(row))
+    .filter(row => row.branchFilter === schoolKey && isTransferChildOf(row, vehicleTypes))
     .map(row => {
       const amount = charged.get(row.rowId) ?? 0;
       return {
@@ -107,10 +110,10 @@ export function lightSchoolChildren(rows: FamilyListRow[], schoolKey: string, ch
     .sort((a, b) => Number(a.transferNumber) - Number(b.transferNumber) || a.childName.localeCompare(b.childName, 'ru'));
 }
 
-export function lightRevenueBySchool(rows: FamilyListRow[], charged: Map<string, number>): Map<string, number> {
+export function revenueBySchool(rows: FamilyListRow[], charged: Map<string, number>, vehicleTypes: readonly string[]): Map<string, number> {
   const map = new Map<string, number>();
   rows.forEach(row => {
-    if (!row.branchFilter || !isLightTransferChild(row)) return;
+    if (!row.branchFilter || !isTransferChildOf(row, vehicleTypes)) return;
     map.set(row.branchFilter, (map.get(row.branchFilter) ?? 0) + (charged.get(row.rowId) ?? 0));
   });
   return map;

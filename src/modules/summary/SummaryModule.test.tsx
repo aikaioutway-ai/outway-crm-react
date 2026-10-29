@@ -19,11 +19,10 @@ jest.mock('../../services/summaryService', () => ({
   setSummaryWorkingDays: jest.fn(),
 }));
 
-const onSelectSchool = jest.fn();
 const onOpenChild = jest.fn();
 function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><SummaryModule onSelectSchool={onSelectSchool} onOpenChild={onOpenChild} /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><SummaryModule onOpenChild={onOpenChild} /></QueryClientProvider>);
 }
 
 beforeEach(() => {
@@ -76,7 +75,6 @@ test('tab 2.0 counts only minivan and sedan cars, passengers, revenue and tax, w
 
   // Клик по школе во 2.0 открывает экран школы здесь же: дети минивэнов и седанов.
   fireEvent.click(screen.getByText('Тестовая школа'));
-  expect(onSelectSchool).not.toHaveBeenCalled();
   expect(await screen.findByText('Оплата водителю')).toBeInTheDocument();
   expect(screen.getByText('Ребёнок c')).toBeInTheDocument();
   expect(screen.getByText('Ребёнок e')).toBeInTheDocument();
@@ -88,9 +86,18 @@ test('tab 2.0 counts only minivan and sedan cars, passengers, revenue and tax, w
   expect(screen.queryByText('Оплата водителю')).not.toBeInTheDocument();
 });
 
-test('school click in 1.0 still opens the manager screen', async () => {
+test('school click in 1.0 opens the forecast school screen with microbus children', async () => {
   (fetchSummaryForecast as jest.Mock).mockResolvedValue([{ branchId: '1', branchCode: 'TEST', branchName: 'Тестовая школа', revenue: 120000, microbusCount: 2 }]);
+  (useLogisticsTable as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [child('a', '1', 'microbus'), child('c', '2', 'minivan')] });
+  (usePeriodChargeStats as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [charge('a', 6000)] });
   show();
   fireEvent.click(await screen.findByText('Тестовая школа'));
-  expect(onSelectSchool).toHaveBeenCalledWith('TEST', expect.any(String));
+  expect(await screen.findByText('Ребёнок a')).toBeInTheDocument();
+  expect(screen.queryByText('Ребёнок c')).not.toBeInTheDocument();
+  // Плашки — те же цифры, что в строке школы: 2 микроавтобуса, Revenue 120 000, COGS 2 × 4000 × 20.
+  expect(screen.getByText('2 · 1')).toBeInTheDocument();
+  expect(screen.getByTitle(/^120\s000/)).toBeInTheDocument();
+  expect(screen.getByTitle(/^160\s000/)).toBeInTheDocument();
+  fireEvent.click(screen.getByText('Ребёнок a'));
+  expect(onOpenChild).toHaveBeenCalledWith('fam-a', 'a');
 });
