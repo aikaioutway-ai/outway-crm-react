@@ -190,3 +190,21 @@ test('opens all records from the form header and returns with one click', () => 
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getByRole('form', { name: 'Новая выплата COGS' })).toBeInTheDocument();
 });
+
+jest.mock('../../services/spendingService', () => ({ fetchSpendingEntries: jest.fn(), saveSpendingEntries: jest.fn(), deleteSpendingEntry: jest.fn() }));
+const cloud = jest.requireMock('../../services/spendingService');
+test('loads copied finance records and keeps the original classification visible', async () => {
+  cloud.saveSpendingEntries.mockResolvedValue(undefined);
+  cloud.fetchSpendingEntries.mockResolvedValue([{ id:'finance:v2_expenses:one', category:'OPEX',subcategory:'Аренда',date:'2026-10-01',amount:1250,description:'Аренда из Финансов',recipient:'',method:'Безналичные',sourceRef:'v2_expenses:one',originalCategory:'office',originalSubcategory:'Аренда' }]);
+  render(<SpendingModule userId="owner" role="admin" sessionToken="session" periodKey="ALL" />);
+  await waitFor(() => expect(cloud.fetchSpendingEntries).toHaveBeenCalledWith('session'));
+  fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
+  expect(await screen.findByText('Аренда из Финансов')).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name:'Редактировать Аренда из Финансов' }));
+  expect(screen.getByRole('form',{name:'Копия расхода из Финансов'})).toBeInTheDocument();
+  cloud.saveSpendingEntries.mockRejectedValueOnce(new Error('Сбой сохранения'));
+  fireEvent.change(screen.getByLabelText('Цена, сом'),{target:{value:'1500'}});
+  fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
+  expect(await screen.findByRole('alert')).toHaveTextContent('Сбой сохранения');
+  expect(screen.getByRole('form',{name:'Копия расхода из Финансов'})).toBeInTheDocument();
+});

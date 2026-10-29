@@ -41,7 +41,7 @@ export default function ExpenseComposer({ entry, subcategories, disabled, onSave
   const [payees, setPayees] = useState<OfficePayee[]>(entry.employeeId ? [{ id: entry.employeeId, name: entry.recipient, departmentKey: entry.departmentKey || '', amount: entry.amount }] : []);
   const [periods, setPeriods] = useState<string[]>(entry.category === 'Revenue Tax' ? (entry.taxPeriods || (entry.taxPeriodKey ? [entry.taxPeriodKey] : [])) : entry.salaryPeriodKey ? [entry.salaryPeriodKey.slice(0, 7)] : []);
   const [group, setGroup] = useState(Object.keys(OPEX_GROUPS).find(key => OPEX_GROUPS[key as keyof typeof OPEX_GROUPS].includes(entry.subcategory)) || Object.keys(OPEX_GROUPS)[0]);
-  const kinds = (group === 'ЗП' ? ['Авансы сотрудникам', 'Зарплата офиса'] : OPEX_GROUPS[group as keyof typeof OPEX_GROUPS]).filter(name => !['Подбор и обучение сотрудников', 'Административный транспорт', 'Пополнение баланса', 'Программы', 'Хостинг', 'Обслуживание IT', 'Компенсация за срыв перевозки', 'Такси вместо водителя'].includes(name));
+  const kinds = (group === 'ЗП' ? ['Авансы сотрудникам', 'Зарплата офиса'] : OPEX_GROUPS[group as keyof typeof OPEX_GROUPS]).filter(name => !['Налог', 'Подбор и обучение сотрудников', 'Административный транспорт', 'Пополнение баланса', 'Программы', 'Хостинг', 'Обслуживание IT', 'Компенсация за срыв перевозки', 'Такси вместо водителя'].includes(name));
   const isPayroll = entry.category === 'OPEX' && (['Авансы сотрудникам', 'Зарплата офиса'].includes(draft.subcategory) || group === 'Налоги');
   const hasMonthlyPeriod = entry.category === 'OPEX' && (['Аренда', 'Коммунальные услуги'].includes(draft.subcategory) || group === 'Банк');
   const isCompensation = entry.category === 'OPEX' && group === 'Компенсации';

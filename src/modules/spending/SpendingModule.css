@@ -266,15 +266,16 @@
   .spending-module .spending-workspace .payment-composer-inline { height: auto; min-height: var(--expense-composer-height); max-height: none; }
 }
 
-/* Fit every expense form below the cashier toolbar, keeping actions visible. */
+/* Keep forms compact while letting the page handle vertical scrolling. */
 .spending-module .spending-workspace { --expense-composer-height: min(740px, calc(100dvh - 180px)); }
 .spending-module .spending-workspace .payment-composer-inline {
   height: auto;
   min-height: 0;
-  max-height: var(--expense-composer-height);
+  max-height: none;
 }
 .spending-module .spending-workspace .payment-composer-inline > .payment-composer-body {
-  overflow: auto;
+  flex: 1 0 auto;
+  overflow: visible;
 }
 .spending-module .payment-composer-inline .payment-composer-main > .payment-period-section {
   margin-top: 12px;
@@ -394,3 +395,8 @@
 }
 
 .spending-module .spending-register { scroll-margin-top: 16px; }
+
+/* Keep copied finance details readable across the full register. */
+.spending-module table[aria-label="Записи расходов"] { min-width: 1500px; }
+.spending-module table[aria-label="Записи расходов"] td:nth-child(5),
+.spending-module table[aria-label="Записи расходов"] td:nth-child(8) { white-space: nowrap; }
