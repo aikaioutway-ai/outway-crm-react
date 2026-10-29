@@ -318,3 +318,20 @@ test('next page arrow on the last loaded page loads more rows and moves on', asy
   expect(screen.getByText('2 / 2')).toBeInTheDocument();
   expect(screen.getByText('Ребёнок 21')).toBeInTheDocument();
 });
+
+test('a table with checkboxes still opens the card from the row button', async () => {
+  const onRowOpen = jest.fn();
+  await render(
+    <DataTable
+      columns={columns}
+      data={[{ id: 'child-1', paymentMethod: 'cash' }]}
+      rowKey="id"
+      selectable
+      selectedKeys={new Set()}
+      onSelectedKeysChange={jest.fn()}
+      onRowOpen={onRowOpen}
+    />,
+  );
+  fireEvent.click(screen.getByTitle('Открыть карточку'));
+  expect(onRowOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'child-1' }));
+});

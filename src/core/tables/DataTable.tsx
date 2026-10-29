@@ -1041,7 +1041,7 @@ export function DataTable<T extends Record<string, any>>({
             ))}
           </div>
         ) : (
-          <table data-comment-table={commentTableKey || storageKey.replace(/_v\d+$/, '')} data-comment-context={commentContext} className="dt-table" style={{position:'relative'}}>
+          <table data-comment-table={commentTableKey || storageKey.replace(/_v\d+$/, '')} data-comment-context={commentContext} className={`dt-table${selectable && (onRowOpen || onRowClick) ? ' dt-table--select-open' : ''}`} style={{position:'relative'}}>
             {hideToolbar && <caption className="native-table-export"><TableDownloadButton onDownload={exportExcel}/></caption>}
             <thead>
               <tr>
@@ -1149,9 +1149,9 @@ export function DataTable<T extends Record<string, any>>({
                       ) : (
                         <span className="dt-row-number">{pageStart + idx + 1}</span>
                       )}
-                      {!selectable && (onRowOpen || onRowClick) && canRowOpen?.(row) !== false && (
+                      {(onRowOpen || onRowClick) && canRowOpen?.(row) !== false && (
                         <button
-                          className="dt-row-open-btn"
+                          className={selectable ? 'dt-row-open-btn dt-row-open-btn--beside' : 'dt-row-open-btn'}
                           title="Открыть карточку"
                           onClick={event => {
                             event.stopPropagation();

@@ -1256,6 +1256,20 @@ select.dt-cell-input {
   display: inline-flex;
 }
 
+/* Таблица с галочками (Начисления): галочка слева, «Открыть карточку» справа от неё. */
+.dt-table--select-open .dt-th--num,
+.dt-table--select-open .dt-td--num {
+  width: 64px;
+  min-width: 64px;
+  text-align: left;
+}
+
+.dt-row-open-btn--beside {
+  left: auto;
+  right: 6px;
+  transform: translateY(-50%);
+}
+
 .dt-row-open-btn:hover {
   border-color: #AAD4D4;
   color: #17222F;
