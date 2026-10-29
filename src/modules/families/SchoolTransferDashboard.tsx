@@ -7,8 +7,7 @@ import { FamilyListRow, PeriodChargeStats } from '../../services/crmV2Service';
 import { useFamiliesTable, usePeriodChargeStats, useSchoolTransferNumbers, useSchoolTransferStats } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
-import { isNewUnassignedRow, matchesVehicleTypes } from './familiesRowHelpers';
-import type { VehicleType } from '../../types';
+import { isNewUnassignedRow } from './familiesRowHelpers';
 
 interface SchoolTransferDashboardProps {
   schoolKey: string;
@@ -20,8 +19,6 @@ interface SchoolTransferDashboardProps {
   onSelect?: (key: string) => void;
   allowedSchools?: string[];
   schoolTier?: SchoolTier;
-  /** Показывать только трансферы этих типов машин (пусто — все). Работает в финансовых вкладках. */
-  vehicleTypes?: readonly VehicleType[];
 }
 
 
@@ -48,7 +45,7 @@ function childCountOf(rows: FamilyListRow[]): number {
   return rows.length;
 }
 
-export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools, schoolTier = '1.0', vehicleTypes }: SchoolTransferDashboardProps) {
+export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools, schoolTier = '1.0' }: SchoolTransferDashboardProps) {
   // В «Справочнике» плашки считает база; таблица семей с деньгами нужна только финансовым вкладкам.
   const isDirectory = mode === 'directory';
   const { data: familyRows } = useFamiliesTable({ enabled: !isDirectory });
@@ -61,7 +58,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier)) return null;
   if (isDirectory ? !transferStats : !familyRows) return null;
 
-  const allSchoolRows = (familyRows ?? []).filter(r => r.branchFilter === schoolKey && matchesVehicleTypes(r, vehicleTypes));
+  const allSchoolRows = (familyRows ?? []).filter(r => r.branchFilter === schoolKey);
   const schoolRows = allSchoolRows.filter(r => r.status !== 'rejected');
   const serverGroup = (key: string) => transferStats?.[key] ?? { children: 0, debtSum: 0 };
   const groupOf = (key: string, groupRows: () => FamilyListRow[]) => {
@@ -98,11 +95,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
     { filterKey: '', label: '≡', ...groupOf('all', () => schoolRows), tone: STATUS_CELL_TONE.all },
   ];
 
-  // С фильтром по машинам показываем только трансферы, где есть дети нужного типа.
-  const visibleTransferCells = vehicleTypes?.length && !isDirectory
-    ? transferCells.filter(cell => usedTransferNumbers.includes(cell.filterKey))
-    : transferCells;
-  const cells = [...visibleTransferCells, ...statusCells];
+  const cells = [...transferCells, ...statusCells];
   const badgeLabel = mode === 'charges' ? 'Должников' : 'Посадка не подтверждена';
 
   return (
@@ -114,7 +107,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
       paddingRight: rightReserveWidth,
       transition: 'padding-right .18s ease',
     }}>
-      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={visibleTransferCells.map(cell => cell.childCount)} >
+      <TransferBarPages scopeKey={schoolKey} selectedKey={selectedKey} counts={transferCells.map(cell => cell.childCount)} >
       {cells.map(cell => {
         const isTransfer = 'unboardedCount' in cell;
         return <TransferCell

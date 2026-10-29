@@ -41,7 +41,7 @@ import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type Sc
 import {
   childDebtAmount, compactMoney,
   downloadXlsxBuffer, driverDocumentExpired, driverDocumentMissing, formatDateShort, formatPhoneDisplay,
-  isNewUnassignedRow, logisticsWorkRows, matchesVehicleTypes, normalizeRows, paymentRowMatchesPeriod,
+  isNewUnassignedRow, logisticsWorkRows, normalizeRows, paymentRowMatchesPeriod,
   uniqueFamilyRows, vehicleTypeShortLabel, XLSX_BRAND,
 } from './familiesRowHelpers';
 import { buildDriverParentCardLines, buildDriverParentCardText } from './driverParentCard';
@@ -185,8 +185,6 @@ interface FamiliesPageProps {
   initialSearchChildId?: string;
   onInitialFamilyOpened?: () => void;
   cashierView?: 'pending' | 'confirmed';
-  /** Показывать только детей в трансферах этих типов машин (пусто — все). */
-  vehicleTypes?: readonly VehicleType[];
 }
 
 interface ModeFilters {
@@ -737,7 +735,7 @@ function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
   }
 }
 
-export default function FamiliesPage({ mode = 'requests', accrualsView = false, canEditBoardingDate = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0', vehicleTypes }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', accrualsView = false, canEditBoardingDate = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0' }: FamiliesPageProps) {
   // В разделе «Школы 2.0» таблица работает только со школами 2.0.
   const schoolTabs = useMemo(() => schoolTabsForTier(schoolTier), [schoolTier]);
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
@@ -1999,7 +1997,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     // server-side pagination is enabled. The server query still narrows the full
     // result set, while this prevents stale rows from flashing in the table.
     if (!matchesSearch(r)) return false;
-    if (!matchesVehicleTypes(r, vehicleTypes)) return false;
     if (mode === 'debtors' && childDebtAmount(r) <= 0) return false;
     if (mode === 'payments') {
       const hasPending = r.pendingPayment > 0 || r.pendingPaymentCount > 0;
@@ -2037,7 +2034,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     if (quickChildStatus && quickChildStatus !== 'new' && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [accrualsView, dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer, periodStatsByChild, periodStatsFiltered, vehicleTypes]);
+  }), [accrualsView, dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer, periodStatsByChild, periodStatsFiltered]);
 
   const filteredSorted = useMemo(() => {
     if (isDirectoryMode) {

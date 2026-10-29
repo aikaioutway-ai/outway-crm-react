@@ -11,10 +11,10 @@ import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import { KPI_COLORS } from '../families/ManagerOverview';
 import { transferStats } from '../families/LogisticsOverview';
 import { useTestTransfers } from '../families/testTransfers';
-import { useLogisticsTable } from '../../hooks/useCrmQueries';
-import { LIGHT_VEHICLE_TYPES } from '../families/familiesRowHelpers';
-import type { VehicleType } from '../../types';
-import { computeSummaryRows, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTIONS, workingDaysFor } from './summaryForecast';
+import { useLogisticsTable, usePeriodChargeStats } from '../../hooks/useCrmQueries';
+import { ChevronLeft } from 'lucide-react';
+import SummarySchoolView from './SummarySchoolView';
+import { chargedByChild, computeSummaryRows, lightRevenueBySchool, lightSchoolChildren, REVENUE_TAX_RATE, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTIONS, workingDaysFor } from './summaryForecast';
 
 const MONTH_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
 type SortKey = 'school' | keyof Omit<SummarySchoolRow, 'key' | 'label' | 'logo'>;
@@ -24,12 +24,15 @@ type ForecastTab = typeof FORECAST_TABS[number][0];
 
 interface Props {
   sessionToken?: string;
-  /** vehicleTypes — открыть школу только с этими типами машин (вкладка 2.0). */
-  onSelectSchool: (schoolKey: string, periodKey: string, vehicleTypes?: readonly VehicleType[]) => void;
+  onSelectSchool: (schoolKey: string, periodKey: string) => void;
+  /** Открыть карточку семьи на этом ребёнке. */
+  onOpenChild: (familyId: string, childId: string) => void;
 }
 
-export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
+export default function SummaryModule({ sessionToken, onSelectSchool, onOpenChild }: Props) {
   const [tab, setTab] = useState<ForecastTab>('v1');
+  // 2.0: школа открывается здесь же — дети в минивэнах и седанах и их начисления.
+  const [openSchoolKey, setOpenSchoolKey] = useState<string | null>(null);
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'revenue', dir: 'desc' });
   const [daysMenu, setDaysMenu] = useState<{ periodKey: string; x: number; y: number } | null>(null);
@@ -43,6 +46,9 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
   // 2.0: машины и пассажиры минивэнов и седанов — те же данные и правила подсчёта, что в Логистике.
   const logisticsQuery = useLogisticsTable({ enabled: tab === 'v2' });
   const logisticsRows = logisticsQuery.data;
+  // Начисления за месяц по детям — тот же запрос и кеш, что у экрана менеджера.
+  const chargesQuery = usePeriodChargeStats(period.key, { enabled: tab === 'v2' });
+  const chargedMap = useMemo(() => chargedByChild(chargesQuery.data), [chargesQuery.data]);
   // Подписка на пометки тестовых трансферов: они меняют подсчёт машин, как в Логистике.
   useTestTransfers();
   const saveDays = useMutation({ mutationFn: (input: { year: number; month: number; days: number }) => setSummaryWorkingDays(sessionToken, input) });
@@ -66,9 +72,10 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
 
   const isV2 = tab === 'v2';
   // 2.0 — минивэны и седаны: школы из 1.0 плюс школы, где есть легковые трансферы; без рабочих дней.
-  // Деньги появятся, когда владелец задаст ставки водителям за день.
+  // Revenue и налог — по начислениям за месяц; COGS и Gross Profit ждут ставок водителям за день.
   const lightRows = (() => {
     if (!isV2 || !logisticsRows) return [];
+    const revenueBySchool = lightRevenueBySchool(logisticsRows, chargedMap);
     const bySchool = new Map<string, NonNullable<typeof logisticsRows>>();
     logisticsRows.forEach(row => {
       if (!row.branchFilter) return;
@@ -80,11 +87,17 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
       const stats = transferStats(bySchool.get(key) ?? []);
       const school = SCHOOL_DIRECTORY.find(item => item.key === key);
       const forecastRow = rows.find(row => row.key === key);
-      return { key, label: forecastRow?.label ?? school?.label ?? key, logo: forecastRow?.logo ?? school?.logo, cars: stats.lightVehicleCount, passengers: stats.lightVehicleStudents };
+      const revenue = revenueBySchool.get(key) ?? 0;
+      return { key, label: forecastRow?.label ?? school?.label ?? key, logo: forecastRow?.logo ?? school?.logo, cars: stats.lightVehicleCount, passengers: stats.lightVehicleStudents, revenue, tax: Math.round(revenue * REVENUE_TAX_RATE) };
     }).filter(row => rows.some(item => item.key === row.key) || row.cars > 0)
       .sort((a, b) => a.label.localeCompare(b.label));
   })();
-  const lightTotals = lightRows.reduce((acc, row) => ({ cars: acc.cars + row.cars, passengers: acc.passengers + row.passengers }), { cars: 0, passengers: 0 });
+  const lightTotals = lightRows.reduce((acc, row) => ({ cars: acc.cars + row.cars, passengers: acc.passengers + row.passengers, revenue: acc.revenue + row.revenue, tax: acc.tax + row.tax }), { cars: 0, passengers: 0, revenue: 0, tax: 0 });
+  const openSchool = isV2 && openSchoolKey ? lightRows.find(row => row.key === openSchoolKey) : undefined;
+  const openSchoolChildren = useMemo(
+    () => (openSchoolKey && logisticsRows ? lightSchoolChildren(logisticsRows, openSchoolKey, chargedMap) : []),
+    [openSchoolKey, logisticsRows, chargedMap],
+  );
   const columns = [
     { key: 'school', label: 'Школы', total: isV2 ? lightRows.length : rows.length, color: '#64748B' },
     ...(isV2
@@ -93,9 +106,9 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
         { key: 'passengers', label: 'Passengers', total: lightTotals.passengers, color: '#0F766E' },
       ]
       : [{ key: 'microbusCount', label: 'Buses', total: totals.microbusCount, color: KPI_COLORS.childrenCount }]),
-    { key: 'revenue', label: 'Revenue', total: isV2 ? EMPTY : money(totals.revenue), color: KPI_COLORS.charged },
+    { key: 'revenue', label: 'Revenue', total: money(isV2 ? lightTotals.revenue : totals.revenue), color: KPI_COLORS.charged },
     { key: 'cogs', label: 'COGS', total: isV2 ? EMPTY : money(totals.cogs), color: '#B45309' },
-    { key: 'revenueTax', label: 'Revenue Tax 4%', total: isV2 ? EMPTY : money(totals.revenueTax), color: '#64748B' },
+    { key: 'revenueTax', label: 'Revenue Tax 4%', total: money(isV2 ? lightTotals.tax : totals.revenueTax), color: '#64748B' },
     { key: 'grossProfit', label: 'Gross Profit', total: isV2 ? EMPTY : money(totals.grossProfit), color: !isV2 && totals.grossProfit < 0 ? 'var(--danger)' : KPI_COLORS.paid },
     ...(isV2 ? [] : [{ key: 'workingDays', label: 'Days', total: workingDays, color: '#94A3B8' }]),
   ];
@@ -104,7 +117,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
       key: row.key,
       label: row.label,
       logo: row.logo,
-      values: { cars: row.cars, passengers: row.passengers, revenue: EMPTY, cogs: EMPTY, revenueTax: EMPTY, grossProfit: EMPTY },
+      values: { cars: row.cars, passengers: row.passengers, revenue: money(row.revenue), cogs: EMPTY, revenueTax: money(row.tax), grossProfit: EMPTY },
     }))
     : sortedRows.map(row => ({
       key: row.key,
@@ -130,8 +143,13 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0, flexDirection: 'column', gap: 12, padding: '0 0 10px' }}>
       <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar">
+        {openSchool && (
+          <button type="button" className="ow-btn ow-btn--ghost" onClick={() => setOpenSchoolKey(null)}>
+            <ChevronLeft size={16} aria-hidden="true" />Все школы
+          </button>
+        )}
         <div role="tablist" aria-label="Раздел сводки" className="ow-seg">
-          {FORECAST_TABS.map(([key, label]) => <button key={key} type="button" role="tab" className="ow-seg-btn" aria-selected={tab === key} onClick={() => setTab(key)}>{label}</button>)}
+          {FORECAST_TABS.map(([key, label]) => <button key={key} type="button" role="tab" className="ow-seg-btn" aria-selected={tab === key} onClick={() => { setTab(key); setOpenSchoolKey(null); }}>{label}</button>)}
         </div>
         <div className="manager-overview-period">
           <ManagerPeriodBar
@@ -156,15 +174,17 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
       )}
 
       {isV2 && (
-        <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Машины и пассажиры посчитаны по минивэнам и седанам. Revenue, COGS, налог и Gross Profit появятся, когда будут заданы ставки водителям.</div>
+        <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Только минивэны и седаны. Revenue и налог — по начислениям за месяц. COGS, оплата водителю, остаток и Gross Profit появятся, когда будут заданы ставки водителям.</div>
       )}
 
-      {forecastQuery.isPending || daysQuery.isPending || (isV2 && logisticsQuery.isPending) ? (
+      {forecastQuery.isPending || daysQuery.isPending || (isV2 && (logisticsQuery.isPending || chargesQuery.isPending)) ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Загрузка прогноза…</div>
-      ) : forecastQuery.isError || daysQuery.isError || (isV2 && logisticsQuery.isError) ? (
+      ) : forecastQuery.isError || daysQuery.isError || (isV2 && (logisticsQuery.isError || chargesQuery.isError)) ? (
         <div role="alert" style={{ padding: 24, fontSize: 13 }}>
-          Не удалось загрузить прогноз. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void forecastQuery.refetch(); void daysQuery.refetch(); if (isV2) void logisticsQuery.refetch(); }}>Повторить</button>
+          Не удалось загрузить прогноз. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void forecastQuery.refetch(); void daysQuery.refetch(); if (isV2) { void logisticsQuery.refetch(); void chargesQuery.refetch(); } }}>Повторить</button>
         </div>
+      ) : openSchool ? (
+        <SummarySchoolView label={openSchool.label} logo={openSchool.logo} cars={openSchool.cars} rows={openSchoolChildren} onOpenChild={onOpenChild} />
       ) : (isV2 ? !lightRows.length : !rows.length) ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>{isV2 ? 'Нет активных минивэнов и седанов.' : `За ${period.label.toLowerCase()} нет активных микроавтобусов и начислений.`}</div>
       ) : (
@@ -176,7 +196,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
           sortKey={isV2 ? 'school' : sortState.key}
           ascending={isV2 || sortState.dir === 'asc'}
           onSort={key => { if (!isV2 && (key === 'school' || key in totals)) handleSort(key as SortKey); }}
-          onSelect={key => isV2 ? onSelectSchool(key, period.key, LIGHT_VEHICLE_TYPES) : onSelectSchool(key, period.key)}
+          onSelect={key => isV2 ? setOpenSchoolKey(key) : onSelectSchool(key, period.key)}
         />
       )}
 

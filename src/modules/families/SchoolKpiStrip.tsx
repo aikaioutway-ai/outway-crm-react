@@ -8,8 +8,6 @@ import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { money } from '../../utils/pricing';
 import { isSchoolAllowed } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
-import type { VehicleType } from '../../types';
-import { matchesVehicleTypes } from './familiesRowHelpers';
 
 interface SchoolKpiStripProps {
   schoolKey: string;
@@ -20,8 +18,6 @@ interface SchoolKpiStripProps {
   /** Выбранный месяц ('ALL' — за всё время) и фишка трансфера ('' — все). */
   periodKey?: string;
   selectedKey?: string;
-  /** Считать только детей в трансферах этих типов машин (пусто — все). */
-  vehicleTypes?: readonly VehicleType[];
 }
 
 type DirectoryCounts = ReturnType<typeof directoryCountsForSchool>;
@@ -35,7 +31,7 @@ function directoryForSelection(counts: DirectoryCounts, groups: Record<string, {
   return { ...counts, applications: children, newRequests: 0, boarded: children, rejected: 0 };
 }
 
-export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools, schoolTier = '1.0', periodKey = 'ALL', selectedKey = '', vehicleTypes }: SchoolKpiStripProps) {
+export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReserveWidth = 0, allowedSchools, schoolTier = '1.0', periodKey = 'ALL', selectedKey = '' }: SchoolKpiStripProps) {
   const { data: branches } = useBranchStats();
   const directoryQuery = useSchoolDirectoryStats();
   const isDirectory = mode === 'directory';
@@ -45,9 +41,9 @@ export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReser
   const { data: transferStats } = useSchoolTransferStats(schoolKey, { enabled: isDirectory });
   const kpi = useMemo(() => {
     if (isDirectory || !familyRows || !periodQuery.data) return null;
-    const schoolRows = familyRows.filter(row => row.branchFilter === schoolKey && matchesVehicleTypes(row, vehicleTypes));
+    const schoolRows = familyRows.filter(row => row.branchFilter === schoolKey);
     return managerSchoolKpi(rowsForTransferSelection(schoolRows, selectedKey), periodQuery.data);
-  }, [isDirectory, familyRows, periodQuery.data, schoolKey, selectedKey, vehicleTypes]);
+  }, [isDirectory, familyRows, periodQuery.data, schoolKey, selectedKey]);
 
   const stat = useMemo(() => (
     branches ? computeSchoolStatsFromBranches(branches, schoolTier).find(s => s.key === schoolKey) : undefined

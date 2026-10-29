@@ -7,7 +7,7 @@ import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
-import { ChevronLeft, X } from 'lucide-react';
+import { ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessSpending, canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import { setCrmActor } from './services/crmActor';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
@@ -36,7 +36,7 @@ import {
   isEmployeeSessionActive,
 } from './services/employeeSession';
 import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible } from './modules/families/constants';
-import { Family, UserRole, VehicleType } from './types';
+import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { OPEN_TARGET_EVENT, TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
@@ -176,25 +176,19 @@ export default function App() {
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
   const [managerOpenFamilySearch, setManagerOpenFamilySearch] = useState('');
   const [managerPeriodKey, setManagerPeriodKey] = useState(currentPayrollPeriodKey);
-  // «Сводка 2.0» открывает школу только с минивэнами и седанами; в «Справочнике» фильтр не действует.
-  const [managerVehicleTypes, setManagerVehicleTypes] = useState<readonly VehicleType[] | null>(null);
   // «Школы 2.0» — тот же модуль «Менеджер», но только со школами 2.0.
   const isManagerSection = section === 'families' || section === 'schools2';
-  const managerActiveVehicleTypes = managerSchoolMode !== 'directory' && managerVehicleTypes ? managerVehicleTypes : undefined;
-  useEffect(() => { if (!isManagerSection) setManagerVehicleTypes(null); }, [isManagerSection]);
   const managerTier = section === 'schools2' ? '2.0' : '1.0';
   const managerSectionFor = (schoolKey: string): NavSection => isSchoolVisible(schoolKey) ? 'families' : 'schools2';
   const canAccessManagerSchool = (schoolKey: string) => isSchoolAllowed(schoolKey, currentUser?.schoolKeys, managerTier);
   const handleManagerSelectSchool = (schoolKey: string) => {
     if (schoolKey !== 'ALL' && !canAccessManagerSchool(schoolKey)) return;
-    setManagerVehicleTypes(null);
     setManagerOpenFamilySearch('');
     if (schoolKey === 'ALL') setManagerTransferFilter('');
     setManagerSchoolKey(schoolKey);
   };
   const handleManagerOpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilySearchHit) => {
     if (!canAccessManagerSchool(schoolKey)) return;
-    setManagerVehicleTypes(null);
     setManagerOpenFamilySearch(searchQuery);
     setManagerSearchChild({ id: row.rowId, query: searchQuery });
     setManagerTransferFilter(row.status === 'rejected' ? 'rejected' : row.transferNumber || 'empty');
@@ -663,16 +657,11 @@ export default function App() {
               <div style={tabBarStyle}>
                 {sectionLabel(managerTier === '2.0' ? 'Школы 2.0' : 'Менеджер')}
                 {managerSchoolKey && (
-                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); setManagerVehicleTypes(null); }} className="ow-btn ow-btn--ghost">
+                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
                     <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
                 {managerSchoolKey && <ManagerModeTabs canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
-                {managerSchoolKey && managerActiveVehicleTypes && (
-                  <button type="button" onClick={() => { setManagerVehicleTypes(null); setManagerTransferFilter(''); }} className="ow-btn ow-btn--ghost" title="Показать все трансферы">
-                    Только минивэны и седаны<X size={14} aria-hidden="true" />
-                  </button>
-                )}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
@@ -688,9 +677,9 @@ export default function App() {
                       <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
                     </div>
                   )}
-                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip vehicleTypes={managerActiveVehicleTypes} mode={managerSchoolMode} schoolKey={managerSchoolKey} periodKey={managerPeriodKey} selectedKey={managerTransferFilter} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
+                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} periodKey={managerPeriodKey} selectedKey={managerTransferFilter} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
                   {managerSchoolMode !== 'directory' ? (
-                    managerSchoolKey !== 'ALL' && <SchoolTransferDashboard vehicleTypes={managerActiveVehicleTypes} mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
+                    managerSchoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
                   ) : (
                     <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingTop: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                       <div style={{ flex: 1, minWidth: 0 }}>
@@ -717,7 +706,6 @@ export default function App() {
                   onColumnsOpenChange={setColumnsOpen}
                   onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
                   hideTransferBars
-                  vehicleTypes={managerActiveVehicleTypes}
                   externalQuickTransfer={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? '' : managerTransferFilter}
                   externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
                   externalPeriodKey={managerSchoolMode !== 'directory' ? managerPeriodKey : undefined}
@@ -818,13 +806,19 @@ export default function App() {
             </div>
             <SummaryModule
               sessionToken={currentUser?.sessionToken}
-              onSelectSchool={(schoolKey, periodKey, vehicleTypes) => {
+              onOpenChild={async (familyId, childId) => {
+                try {
+                  const family = await fetchV2Family(familyId);
+                  if (!family) throw new Error('Семья не найдена');
+                  setTaskChildId(childId);
+                  setTaskFamily(family);
+                } catch (error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть карточку'); }
+              }}
+              onSelectSchool={(schoolKey, periodKey) => {
                 if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys, isSchoolVisible(schoolKey) ? '1.0' : '2.0')) return;
                 setManagerOpenFamilySearch('');
                 setManagerTransferFilter('');
-                setManagerVehicleTypes(vehicleTypes ?? null);
-                // 2.0 (минивэны и седаны) открывает «Начисления», 1.0 — «Оплаты».
-                setManagerSchoolMode(vehicleTypes ? 'accruals' : 'charges');
+                setManagerSchoolMode('charges');
                 setManagerPeriodKey(periodKey);
                 setManagerSchoolKey(schoolKey);
                 setSection(managerSectionFor(schoolKey));
