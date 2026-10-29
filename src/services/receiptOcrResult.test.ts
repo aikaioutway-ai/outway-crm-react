@@ -9,3 +9,9 @@ test('does not manufacture missing time or accept a full account number',()=>{
  expect(normalizeReceiptOcrResult({time:'25:61',card_last4:'1033820000256673',amount:'bad'})).toMatchObject({time:null,card_last4:null,amount:null,bank:null});
  expect(normalizeReceiptOcrResult({})).toEqual({receipt_code:null,time:null,date:null,card_last4:null,bank:null,amount:null});
 });
+test('drops invented or truncated QR codes but keeps real ones',()=>{
+ expect(normalizeReceiptOcrResult({receipt_code:'QR_OsOO_AiKai_Group'}).receipt_code).toBeNull();
+ expect(normalizeReceiptOcrResult({receipt_code:'QR_452'}).receipt_code).toBeNull();
+ expect(normalizeReceiptOcrResult({receipt_code:'QR_45201a1070f-0eb7-7d78-96cb'}).receipt_code).toBe('QR_45201a1070f-0eb7-7d78-96cb');
+ expect(normalizeReceiptOcrResult({receipt_code:'MBIZ_S_c09d9781-19f7-4514-8a04-232ec4df284d'}).receipt_code).toBe('MBIZ_S_c09d9781-19f7-4514-8a04-232ec4df284d');
+});
