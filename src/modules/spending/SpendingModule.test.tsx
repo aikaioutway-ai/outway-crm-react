@@ -17,12 +17,12 @@ test('saves an independent expense, reloads it, and keeps personal totals separa
   fireEvent.change(screen.getByLabelText('Платёжное поручение'), { target: { value: 'ПП-42' } });
   fireEvent.change(screen.getByLabelText('Комментарий'), { target: { value: 'Комментарий к покупке' } });
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Все Все расходы за период/ }));
   expect(screen.getByText('Покупка продуктов')).toBeInTheDocument();
   cleanup();
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: 'Закрыть форму выплаты' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Все Все расходы за период/ }));
   expect(screen.getByText('Покупка продуктов')).toBeInTheDocument();
   expect(screen.getByText('ПП-42')).toBeInTheDocument();
   expect(screen.getByText('Комментарий к покупке')).toBeInTheDocument();
@@ -198,7 +198,7 @@ test('loads copied finance records and keeps the original classification visible
   cloud.fetchSpendingEntries.mockResolvedValue([{ id:'finance:v2_expenses:one', category:'OPEX',subcategory:'Аренда',salaryPeriodKey:'2026-10',date:'2026-10-01',amount:1250,description:'Аренда из Финансов',recipient:'',method:'Безналичные',sourceRef:'v2_expenses:one',originalCategory:'office',originalSubcategory:'Аренда' }]);
   render(<SpendingModule userId="owner" role="admin" sessionToken="session" periodKey="ALL" />);
   await waitFor(() => expect(cloud.fetchSpendingEntries).toHaveBeenCalledWith('session'));
-  fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Все Все расходы за период/ }));
   expect(await screen.findByText('Аренда из Финансов')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name:'Редактировать Аренда из Финансов' }));
   expect(screen.getByRole('form',{name:'Новый расход OPEX'})).toBeInTheDocument();
@@ -235,7 +235,7 @@ test('all-expenses tile follows the period and access rights, independently of c
 test('editing uses the creation forms and switching category changes the form without replacing the record',()=>{
   localStorage.setItem('outway-spending-v1:edit',JSON.stringify([{id:'existing',category:'CAPEX',subcategory:'Мебель',date:'2026-10-01',amount:100,description:'Стол',recipient:'Поставщик',method:'Безналичные',paymentOrderNumber:'42',comment:'Сохранить комментарий'}]));
   render(<SpendingModule userId="edit" role="admin" periodKey="ALL"/>);
-  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
   fireEvent.click(screen.getByRole('button',{name:'Редактировать Стол'}));
   expect(screen.getByRole('form',{name:'Новый расход CAPEX'})).toBeInTheDocument();
   fireEvent.change(screen.getByLabelText('Назначение'),{target:{value:'Стол после правки'}});
@@ -254,10 +254,33 @@ test('editing uses the creation forms and switching category changes the form wi
 test('historical non-driver logistics expenses remain ordinary expenses when editing',()=>{
   localStorage.setItem('outway-spending-v1:ordinary',JSON.stringify([{id:'ordinary',category:'Logistics',subcategory:'Прочее',date:'2026-10-01',amount:100,description:'Такси',recipient:'',method:'Безналичные'}]));
   render(<SpendingModule userId="ordinary" role="admin" periodKey="ALL"/>);
-  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
   fireEvent.click(screen.getByRole('button',{name:'Редактировать Такси'}));
   expect(screen.getByRole('form',{name:'Новый расход Logistics'})).toBeInTheDocument();
   expect(screen.queryByRole('button',{name:'Выбрать водителей'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
   expect(JSON.parse(localStorage.getItem('outway-spending-v1:ordinary')!)[0]).toMatchObject({id:'ordinary',category:'Logistics',subcategory:'Прочее',amount:100});
+});
+
+test('all-records buttons stay inside the chosen category and only the All tile opens every category',()=>{
+  const base={date:'2026-10-01',amount:100,recipient:'',method:'Безналичные'};
+  localStorage.setItem('outway-spending-v1:scope',JSON.stringify([
+    {...base,id:'cogs',category:'COGS',subcategory:'Авансы водителям',description:'Выплата COGS'},
+    {...base,id:'opex',category:'OPEX',subcategory:'Аренда',description:'Аренда OPEX'},
+    {...base,id:'personal',category:'Личное',subcategory:'Прочее',description:'Личный расход'},
+  ]));
+  render(<SpendingModule userId="scope" role="admin" periodKey="ALL"/>);
+  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  expect(screen.getByText('Выплата COGS')).toBeInTheDocument();
+  expect(screen.queryByText('Аренда OPEX')).not.toBeInTheDocument();
+  expect(screen.queryByText('Личный расход')).not.toBeInTheDocument();
+  expect(screen.getByRole('button',{name:/^COGS /})).toHaveAttribute('aria-pressed','true');
+  fireEvent.click(screen.getByRole('button',{name:/^OPEX /}));
+  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
+  expect(screen.queryByText('Выплата COGS')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
+  expect(screen.getByText('Выплата COGS')).toBeInTheDocument();
+  expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
+  expect(screen.getByText('Личный расход')).toBeInTheDocument();
 });
