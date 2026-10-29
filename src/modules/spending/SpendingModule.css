@@ -102,10 +102,7 @@
 .spending-module .compensation-child-search input { background: transparent; box-shadow: none; min-height: 0; padding: 0; }
 
 /* Every expense operation shares one stable frame and footer position. */
-/* The frame fits the visible module area (below the CRM top bar) so it never gets cut on 15"–24" screens; content scrolls inside. */
-.spending-module { container-type: size; }
-.spending-module .spending-workspace { --expense-composer-height: max(560px, calc(100dvh - 240px)); }
-@supports (height: 1cqh) { .spending-module .spending-workspace { --expense-composer-height: max(560px, calc(100cqh + 8px)); } }
+.spending-module .spending-workspace { --expense-composer-height: clamp(860px, 88dvh, 1040px); }
 .spending-module .spending-workspace .payment-composer-inline { width: 100%; height: var(--expense-composer-height); min-height: var(--expense-composer-height); max-height: var(--expense-composer-height); display: flex; flex-direction: column; box-sizing: border-box; }
 .spending-module .spending-workspace .payment-composer-inline > .payment-composer-head,
 .spending-module .spending-workspace .payment-composer-inline > .payment-composer-footer { flex-shrink: 0; }
