@@ -70,7 +70,7 @@ function workRows(rows: FamilyListRow[]): FamilyListRow[] {
   return rows.filter(row => row.status !== 'rejected' && !isInTestTransfer(row));
 }
 
-function transferStats(rows: FamilyListRow[]) {
+export function transferStats(rows: FamilyListRow[]) {
   const transferMap = new Map<string, { vehicleType: string; count: number }>();
   workRows(rows).forEach(row => {
     const key = transferIdentityKey(row);
@@ -85,12 +85,14 @@ function transferStats(rows: FamilyListRow[]) {
   const transfers = Array.from(transferMap.values());
   const microbusTransfers = transfers.filter(item => item.vehicleType === 'microbus');
   const microbusStudents = microbusTransfers.reduce((sum, item) => sum + item.count, 0);
-  const lightVehicleCount = transfers.filter(item => item.vehicleType === 'minivan' || item.vehicleType === 'sedan').length;
+  const lightVehicleTransfers = transfers.filter(item => item.vehicleType === 'minivan' || item.vehicleType === 'sedan');
+  const lightVehicleCount = lightVehicleTransfers.length;
   return {
     transferCount: transfers.length,
     microbusAverage: microbusTransfers.length ? microbusStudents / microbusTransfers.length : 0,
     microbusCount: microbusTransfers.length,
     lightVehicleCount,
+    lightVehicleStudents: lightVehicleTransfers.reduce((sum, item) => sum + item.count, 0),
   };
 }
 

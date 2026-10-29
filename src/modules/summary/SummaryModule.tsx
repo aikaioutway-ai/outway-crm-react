@@ -5,10 +5,13 @@ import '../../core/tables/DataTable.css';
 import { QK } from '../../services/queryClient';
 import { fetchSummaryForecast, fetchSummaryWorkingDays, setSummaryWorkingDays } from '../../services/summaryService';
 import { money } from '../../utils/pricing';
-import { ALL_PERIODS, currentPayrollPeriodKey } from '../families/constants';
+import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY } from '../families/constants';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import { KPI_COLORS } from '../families/ManagerOverview';
+import { transferStats } from '../families/LogisticsOverview';
+import { useTestTransfers } from '../families/testTransfers';
+import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { computeSummaryRows, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTIONS, workingDaysFor } from './summaryForecast';
 
 const MONTH_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
@@ -34,6 +37,11 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
     queryFn: () => fetchSummaryForecast(period.year, period.month),
   });
   const daysQuery = useQuery({ queryKey: QK.summaryWorkingDays, queryFn: fetchSummaryWorkingDays });
+  // 2.0: машины и пассажиры минивэнов и седанов — те же данные и правила подсчёта, что в Логистике.
+  const logisticsQuery = useLogisticsTable({ enabled: tab === 'v2' });
+  const logisticsRows = logisticsQuery.data;
+  // Подписка на пометки тестовых трансферов: они меняют подсчёт машин, как в Логистике.
+  useTestTransfers();
   const saveDays = useMutation({ mutationFn: (input: { year: number; month: number; days: number }) => setSummaryWorkingDays(sessionToken, input) });
 
   const workingDays = workingDaysFor(daysQuery.data, period.year, period.month);
@@ -54,10 +62,34 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
   }, [daysMenu]);
 
   const isV2 = tab === 'v2';
-  // 2.0 — минивэны и седаны: те же школы, что в 1.0, без рабочих дней. Цифры появятся, когда владелец задаст ставки водителям за день.
+  // 2.0 — минивэны и седаны: школы из 1.0 плюс школы, где есть легковые трансферы; без рабочих дней.
+  // Деньги появятся, когда владелец задаст ставки водителям за день.
+  const lightRows = (() => {
+    if (!isV2 || !logisticsRows) return [];
+    const bySchool = new Map<string, NonNullable<typeof logisticsRows>>();
+    logisticsRows.forEach(row => {
+      if (!row.branchFilter) return;
+      const list = bySchool.get(row.branchFilter);
+      if (list) list.push(row); else bySchool.set(row.branchFilter, [row]);
+    });
+    const keys = new Set([...rows.map(row => row.key), ...Array.from(bySchool.keys())]);
+    return Array.from(keys).map(key => {
+      const stats = transferStats(bySchool.get(key) ?? []);
+      const school = SCHOOL_DIRECTORY.find(item => item.key === key);
+      const forecastRow = rows.find(row => row.key === key);
+      return { key, label: forecastRow?.label ?? school?.label ?? key, logo: forecastRow?.logo ?? school?.logo, cars: stats.lightVehicleCount, passengers: stats.lightVehicleStudents };
+    }).filter(row => rows.some(item => item.key === row.key) || row.cars > 0)
+      .sort((a, b) => a.label.localeCompare(b.label));
+  })();
+  const lightTotals = lightRows.reduce((acc, row) => ({ cars: acc.cars + row.cars, passengers: acc.passengers + row.passengers }), { cars: 0, passengers: 0 });
   const columns = [
-    { key: 'school', label: 'Школы', total: rows.length, color: '#64748B' },
-    { key: 'microbusCount', label: isV2 ? 'Cars' : 'Buses', total: isV2 ? EMPTY : totals.microbusCount, color: KPI_COLORS.childrenCount },
+    { key: 'school', label: 'Школы', total: isV2 ? lightRows.length : rows.length, color: '#64748B' },
+    ...(isV2
+      ? [
+        { key: 'cars', label: 'Cars', total: lightTotals.cars, color: KPI_COLORS.childrenCount },
+        { key: 'passengers', label: 'Passengers', total: lightTotals.passengers, color: '#0F766E' },
+      ]
+      : [{ key: 'microbusCount', label: 'Buses', total: totals.microbusCount, color: KPI_COLORS.childrenCount }]),
     { key: 'revenue', label: 'Revenue', total: isV2 ? EMPTY : money(totals.revenue), color: KPI_COLORS.charged },
     { key: 'cogs', label: 'COGS', total: isV2 ? EMPTY : money(totals.cogs), color: '#B45309' },
     { key: 'revenueTax', label: 'Revenue Tax 4%', total: isV2 ? EMPTY : money(totals.revenueTax), color: '#64748B' },
@@ -65,11 +97,11 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
     ...(isV2 ? [] : [{ key: 'workingDays', label: 'Days', total: workingDays, color: '#94A3B8' }]),
   ];
   const tableRows = isV2
-    ? [...rows].sort((a, b) => a.label.localeCompare(b.label)).map(row => ({
+    ? lightRows.map(row => ({
       key: row.key,
       label: row.label,
       logo: row.logo,
-      values: { microbusCount: EMPTY, revenue: EMPTY, cogs: EMPTY, revenueTax: EMPTY, grossProfit: EMPTY },
+      values: { cars: row.cars, passengers: row.passengers, revenue: EMPTY, cogs: EMPTY, revenueTax: EMPTY, grossProfit: EMPTY },
     }))
     : sortedRows.map(row => ({
       key: row.key,
@@ -121,17 +153,17 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
       )}
 
       {isV2 && (
-        <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Прогноз по минивэнам и седанам появится, когда будут заданы ставки водителям.</div>
+        <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Машины и пассажиры посчитаны по минивэнам и седанам. Revenue, COGS, налог и Gross Profit появятся, когда будут заданы ставки водителям.</div>
       )}
 
-      {forecastQuery.isPending || daysQuery.isPending ? (
+      {forecastQuery.isPending || daysQuery.isPending || (isV2 && logisticsQuery.isPending) ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Загрузка прогноза…</div>
-      ) : forecastQuery.isError || daysQuery.isError ? (
+      ) : forecastQuery.isError || daysQuery.isError || (isV2 && logisticsQuery.isError) ? (
         <div role="alert" style={{ padding: 24, fontSize: 13 }}>
-          Не удалось загрузить прогноз. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void forecastQuery.refetch(); void daysQuery.refetch(); }}>Повторить</button>
+          Не удалось загрузить прогноз. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void forecastQuery.refetch(); void daysQuery.refetch(); if (isV2) void logisticsQuery.refetch(); }}>Повторить</button>
         </div>
-      ) : !rows.length ? (
-        <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>За {period.label.toLowerCase()} нет активных микроавтобусов и начислений.</div>
+      ) : (isV2 ? !lightRows.length : !rows.length) ? (
+        <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>{isV2 ? 'Нет активных минивэнов и седанов.' : `За ${period.label.toLowerCase()} нет активных микроавтобусов и начислений.`}</div>
       ) : (
         <SchoolDashboardTable
           commentScope="summary/SummaryModule:forecast"
