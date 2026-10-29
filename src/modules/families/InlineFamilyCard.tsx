@@ -1,4 +1,6 @@
 import FilterableTable from '../../core/tables/FilterableTable';
+import { canAccessSection } from '../../core/bars/Sidebar';
+import { openCrmTarget } from '../tasks/taskTypes';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import { TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
 import './InlineFamilyCard.css';
@@ -10,7 +12,7 @@ import { queryClient } from '../../services/queryClient';
 import PaymentDots from './PaymentDots';
 import { combineDots, paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { AlertTriangle, Check, CreditCard, ExternalLink, FileText, GraduationCap, LayoutDashboard, MapPin, MessageCircle, Phone, Clock, Plus, Search, X, Trash2, Pencil, RotateCcw } from 'lucide-react';
-import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, VehicleType, Zone } from '../../types';
+import { Family, Child, Charge, FamilyPayment, PaymentItem, Refund, UserRole, VehicleType, Zone } from '../../types';
 import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPriceByZone, getSiblingDiscountPercent, getZoneByDistance, money, supportsTeacherPrice, TEACHER_MONTHLY_PRICE } from '../../utils/pricing';
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
@@ -762,7 +764,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           )}
           {tab === 'children' && (
               <DetailPanel title={`Дети (${cardChildren.length})`}>
-                <ChildrenOverviewTable paymentDots={paymentDotsQuery.data} focusChildId={initialChildId} children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
+                <ChildrenOverviewTable paymentDots={paymentDotsQuery.data} focusChildId={initialChildId} children={cardChildren} branches={branches} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} canOpenDriver={canAccessSection(userRole as UserRole, 'drivers')} onEditDiscount={canManageDiscount && !editing ? setDiscountChild : undefined} onSaveChild={patchDraftChild} onAddChild={addDraftChild} onDeleteChild={deleteDraftChild} busy={savingAll} />
               </DetailPanel>
           )}
 
@@ -1610,6 +1612,19 @@ function ChildCard({
 
 const PAYMENT_DOT_PERIODS = paymentDotPeriods();
 
+// Водитель трансфера ребёнка: по нажатию — карточка водителя (как из задачи).
+function DriverCell({ child, canOpen }: { child: Child; canOpen?: boolean }) {
+  if (child.status === 'rejected' || !child.driverId) return <>—</>;
+  const name = child.driverName || 'Водитель';
+  return <>
+    {canOpen
+      ? <button type="button" className="family-driver-link" title="Открыть карточку водителя"
+          onClick={() => openCrmTarget({ type: 'driver', id: child.driverId!, label: name })}>{name}</button>
+      : <span>{name}</span>}
+    {child.driverPhone && <span className="family-children-secondary">{formatPhoneDisplay(child.driverPhone)}</span>}
+  </>;
+}
+
 function ChildrenOverviewTable({
   paymentDots,
   children,
@@ -1623,6 +1638,7 @@ function ChildrenOverviewTable({
   isAdmin,
   onEditDiscount,
   canManageDiscount,
+  canOpenDriver,
 }: {
   paymentDots?: Record<string, ChildPaymentDots>;
   children: Child[];
@@ -1636,6 +1652,7 @@ function ChildrenOverviewTable({
   isAdmin?: boolean;
   onEditDiscount?: (child: Child) => void;
   canManageDiscount?: boolean;
+  canOpenDriver?: boolean;
 }) {
   const focusedRow = useRef<HTMLTableRowElement>(null);
   const [detailChildId, setDetailChildId] = useState<string | null>(null);
@@ -1649,7 +1666,7 @@ function ChildrenOverviewTable({
       {children.length === 0 ? <p>Добавьте первого ребёнка в режиме редактирования.</p> : (
         <div className="family-children-table-wrap">
           <FilterableTable className="family-children-table">
-            <thead><tr>{['Ребёнок', 'Школа / класс', 'Транспорт', 'Трансфер', 'Остановка', 'В месяц', ''].map((label, index) => <th scope="col" key={index}>{label}</th>)}</tr></thead>
+            <thead><tr>{['Ребёнок', 'Школа / класс', 'Транспорт', 'Трансфер', 'Водитель', 'Остановка', 'В месяц', ''].map((label, index) => <th scope="col" key={index}>{label}</th>)}</tr></thead>
             <tbody>{children.map((child, index) => (
               <React.Fragment key={child.id}>
               <tr ref={child.id === focusChildId ? focusedRow : undefined} className={child.id === focusChildId ? 'is-focused' : ''}>
@@ -1657,11 +1674,12 @@ function ChildrenOverviewTable({
                 <td><span>{child.branchShort || child.schoolCode}</span><span className="family-children-secondary">{child.class ? (/класс/i.test(child.class) ? child.class : `${child.class} класс`) : 'Класс не указан'}</span></td>
                 <td>{VEHICLE_TYPE_OPTIONS.find(option => option.value === child.vehicleType)?.label || '—'}<span className="family-children-secondary">Зона {child.zone}</span></td>
                 <td>{editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber)} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, transferChoicePatch(value))} /> : child.status === 'rejected' ? <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : '—'}</td>
+                <td><DriverCell child={child} canOpen={canOpenDriver} /></td>
                 <td>{editing ? <EditableSelect value={String(child.stopNumber || '')} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} /> : child.stopNumber || '—'}</td>
                 <td className="family-children-price"><strong>{money(Number(child.finalPrice || 0))}</strong>{childDiscountLabel(child) !== '—' && <span className="family-children-secondary">{childDiscountLabel(child)}</span>}</td>
                 <td><div style={{ display: 'flex', gap: 6 }}><button type="button" className="family-children-action" onClick={() => setDetailChildId(detailChildId === child.id ? null : child.id)} aria-expanded={detailChildId === child.id}>{detailChildId === child.id ? 'Скрыть' : editing ? 'Настроить' : 'Подробнее'}</button>{!editing && onEditDiscount && <button type="button" className="family-children-action" onClick={() => onEditDiscount(child)}>Скидка</button>}</div></td>
               </tr>
-              {detailChildId === child.id && <tr className="family-child-detail-row"><td colSpan={7}>
+              {detailChildId === child.id && <tr className="family-child-detail-row"><td colSpan={8}>
                 <ChildCard child={child} index={index} branches={branches} onSaveChild={onSaveChild} onDeleteChild={onDeleteChild} busy={busy} editing={editing} isAdmin={isAdmin} canManageDiscount={canManageDiscount} onEditDiscount={onEditDiscount} />
               </td></tr>}
               </React.Fragment>

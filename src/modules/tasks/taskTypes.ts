@@ -23,6 +23,9 @@ export function taskLocalDate(value: string) { const date=new Date(value); retur
 export function taskDate(value: string) { return new Date(value).toLocaleString('ru-RU',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}); }
 export const TASK_VIEW_EVENT = 'outway-task-view';
 export const TASK_COMPOSER_EVENT = 'outway-task-compose';
+// Открыть связанную сущность (водителя, семью…) тем же путём, что и из задачи.
+export const OPEN_TARGET_EVENT = 'outway-open-target';
+export function openCrmTarget(target: TaskTarget) { window.dispatchEvent(new CustomEvent(OPEN_TARGET_EVENT,{detail:target})); }
 export function openTaskComposer(target: TaskTarget) { window.dispatchEvent(new CustomEvent(TASK_COMPOSER_EVENT,{detail:target})); }
 
 export const TASK_DEPARTMENTS: Record<string,{label:string;roles:UserRole[]}> = {

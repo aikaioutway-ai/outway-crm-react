@@ -39,7 +39,7 @@ import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayr
 import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
-import { TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
+import { OPEN_TARGET_EVENT, TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
@@ -411,6 +411,14 @@ export default function App() {
       }
     } catch(error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть объект'); }
   };
+  // Переход к связанной сущности из карточек (например, водитель ребёнка) — тем же путём, что из задачи.
+  const openTaskTargetRef = useRef(openTaskTarget);
+  openTaskTargetRef.current = openTaskTarget;
+  useEffect(() => {
+    const open = (event: Event) => { void openTaskTargetRef.current((event as CustomEvent<TaskTarget>).detail); };
+    window.addEventListener(OPEN_TARGET_EVENT, open);
+    return () => window.removeEventListener(OPEN_TARGET_EVENT, open);
+  }, []);
 
 
   if (!currentUser) {

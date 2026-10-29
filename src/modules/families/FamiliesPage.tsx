@@ -1,5 +1,5 @@
 import { withFormerTransferDrivers } from '../drivers/formerTransferDrivers';
-import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
+import { MAX_TRANSFER_NUMBER, parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
 import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
@@ -2221,6 +2221,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     if (!selectedDriver || !driverBranchDraftId) return [];
     return dashboardTransfers
       .filter(transfer => transfer.branchId === driverBranchDraftId && isSchoolInTier(transfer.branchShort, schoolTier) && isSchoolInTier(getBranchFilter(transfer.branchShort,transfer.branchCode), schoolTier))
+      // Номера трансферов только 1–15; старые пустые №16+ в базе не предлагаем.
+      .filter(transfer => Number(transfer.transferNumber) <= MAX_TRANSFER_NUMBER)
       .sort((left, right) => Number(left.transferNumber) - Number(right.transferNumber));
   }, [dashboardTransfers, driverBranchDraftId, selectedDriver, schoolTier]);
   const changeDriverBranchDraft = (branchId: string) => {

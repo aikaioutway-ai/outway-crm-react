@@ -70,6 +70,10 @@ export interface Child {
   routeSource?: string;
   transferId?: string;
   transferNumber?: number;
+  /** Водитель трансфера ребёнка (для перехода в карточку водителя). */
+  driverId?: string;
+  driverName?: string;
+  driverPhone?: string;
   stopNumber?: number;
   timeMorning?: string;
   status?: ChildStatus;

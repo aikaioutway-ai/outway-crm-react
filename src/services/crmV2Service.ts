@@ -528,6 +528,9 @@ export function mapV2Child(row: any, family: Family): Child {
     routeSource: undefined,
     transferId: row.transfer_id ?? undefined,
     transferNumber: row.v2_transfers?.transfer_number ?? undefined,
+    driverId: row.v2_transfers?.v2_drivers?.id ?? undefined,
+    driverName: row.v2_transfers?.v2_drivers?.full_name ?? undefined,
+    driverPhone: row.v2_transfers?.v2_drivers?.phone ?? undefined,
     stopNumber: row.stop_order ?? undefined,
     timeMorning: row.time_morning ?? undefined,
     status: mapChildStatus(row.status),
@@ -563,6 +566,13 @@ const CHILD_SELECT = `
   *,
   v2_school_branches(id, code, short_name, name),
   v2_transfers(id, transfer_number, driver_id, vehicle_type)
+`;
+
+// Карточка семьи дополнительно показывает водителя трансфера; общая таблица семей его не грузит.
+const CHILD_CARD_SELECT = `
+  *,
+  v2_school_branches(id, code, short_name, name),
+  v2_transfers(id, transfer_number, driver_id, vehicle_type, v2_drivers(id, full_name, phone))
 `;
 
 export interface PeriodChargeStats {
@@ -987,7 +997,7 @@ export async function fetchAllV2FamiliesPages(params: Omit<FamiliesPageParams, '
 export async function fetchV2Family(familyId: string): Promise<Family | null> {
   const [familyRes, childRes] = await Promise.all([
     supabase.from('v2_families').select('*').eq('id', familyId).single(),
-    supabase.from('v2_children').select(CHILD_SELECT).eq('family_id', familyId),
+    supabase.from('v2_children').select(CHILD_CARD_SELECT).eq('family_id', familyId),
   ]);
   if (familyRes.error) return null;
   if (childRes.error) throw new Error(childRes.error.message);
@@ -997,7 +1007,7 @@ export async function fetchV2Family(familyId: string): Promise<Family | null> {
 export async function fetchV2Children(family: Family): Promise<Child[]> {
   const { data, error } = await supabase
     .from('v2_children')
-    .select(CHILD_SELECT)
+    .select(CHILD_CARD_SELECT)
     .eq('family_id', family.id)
     .order('created_at', { ascending: true });
   if (error) throw new Error(error.message);

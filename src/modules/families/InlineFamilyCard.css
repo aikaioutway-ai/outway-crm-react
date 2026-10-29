@@ -246,3 +246,7 @@
 .client-expense-row > div { display: grid; gap: 6px; }
 .client-expense-row span { font-size: 12px; color: var(--text-2); }
 @media (max-width: 700px) { .family-money-grid .family-money-refund-list { grid-column: 1; grid-row: auto; } }
+
+/* Водитель в таблице «Дети»: имя ведёт в карточку водителя. */
+.family-driver-link { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; text-align: left; cursor: pointer; }
+.family-driver-link:hover { text-decoration: underline; text-underline-offset: 2px; }
