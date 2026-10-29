@@ -29,3 +29,15 @@ test('school records show school and transfer number', async () => {
   expect(screen.getByText('TIS')).toBeInTheDocument();
   expect(screen.getByText('11')).toBeInTheDocument();
 });
+
+test('COGS records show school and transfer first and hide the repeated category', async () => {
+  const cogs: SpendingEntry = { id: 'c1', category: 'COGS', subcategory: 'Авансы водителям', amount: 10000, date: '2026-10-15', description: 'Аванс — Алым', recipient: 'Алым', method: 'Безналичные', schoolKey: 'NOVA', transferId: 'transfer-8', driverId: 'driver' };
+  const reserve: SpendingEntry = { ...cogs, id: 'c2', transferId: undefined };
+  render(<SpendingRecordsTable category="COGS" transferNumbers={{ 'transfer-8': 8 }} rows={[cogs, reserve]} disabled={false} onEdit={jest.fn()} onDelete={jest.fn()} onSave={jest.fn()} />);
+  expect(await screen.findByText('№8')).toBeInTheDocument();
+  expect(screen.getByText('Резерв')).toBeInTheDocument();
+  const headers = screen.getAllByRole('columnheader').map(header => header.textContent?.trim() || '');
+  expect(headers.findIndex(text => text.startsWith('Школа'))).toBeLessThan(headers.findIndex(text => text.startsWith('Сумма')));
+  expect(headers.some(text => text.startsWith('Трансфер'))).toBe(true);
+  expect(headers.some(text => text.startsWith('Категория'))).toBe(false);
+});

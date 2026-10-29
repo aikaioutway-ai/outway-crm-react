@@ -2,12 +2,14 @@ jest.mock('./CompensationFamilyFinance', () => ({ __esModule: true, default: () 
 import React from 'react';
 import { fireEvent, render, screen, cleanup, within, waitFor } from '@testing-library/react';
 import SpendingModule from './SpendingModule';
+import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
+const SCHOOL_TABS_FOR_TEST = () => SCHOOL_TABS.find(item => item.key !== 'ALL' && isSchoolVisible(item.key))!.key;
 
 jest.mock('../../hooks/useCrmQueries', () => ({ useEmployees: () => ({ data: [{ id: 'staff1', fullName: 'Тестовый сотрудник', role: 'manager', status: 'active' }], isLoading: false, error: null }), useDriversTable: () => ({ data: [{ driverId: 'driver1', fullName: 'Тестовый водитель', status: 'active', transfers: [] }], isLoading: false, error: null }) }));
 
 jest.mock('./CompensationChildSearch', () => ({ __esModule: true, default: ({ onSelect }: { onSelect: (row: unknown) => Promise<void> }) => <button type="button" onClick={() => onSelect({ familyId: 'family1', childName: 'Ребёнок', branchFilter: 'TIS' })}>Выбрать ребёнка</button> }));
 
-beforeEach(() => { localStorage.clear(); localStorage.setItem('dt_cols:cashier_spending_records_v1', 'null'); Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => 'expense-test' }); });
+beforeEach(() => { localStorage.clear(); localStorage.setItem('dt_cols:cashier_spending_records_v1', 'null'); ['cashier_spending_cogs_records_v1','cashier_spending_cogs_school_records_v1','cashier_spending_school_records_v1'].forEach(key => localStorage.setItem(`dt_cols:${key}`, 'null')); Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => 'expense-test' }); });
 
 test('saves an independent expense, reloads it, and keeps personal totals separate', () => {
   render(<SpendingModule userId="owner" role="admin" />);
@@ -289,20 +291,20 @@ test('historical non-driver logistics expenses remain ordinary expenses when edi
 test('all-records buttons stay inside the chosen category and only the All tile opens every category',()=>{
   const base={date:'2026-10-01',amount:100,recipient:'',method:'Безналичные'};
   localStorage.setItem('outway-spending-v1:scope',JSON.stringify([
-    {...base,id:'cogs',category:'COGS',subcategory:'Авансы водителям',description:'Выплата COGS'},
+    {...base,id:'cogs',category:'COGS',subcategory:'Авансы водителям',description:'Выплата COGS',comment:'Комментарий COGS'},
     {...base,id:'opex',category:'OPEX',subcategory:'Аренда',description:'Аренда OPEX'},
     {...base,id:'personal',category:'Личное',subcategory:'Прочее',description:'Личный расход'},
   ]));
   render(<SpendingModule userId="scope" role="admin" periodKey="ALL"/>);
   fireEvent.click(screen.getByRole('button',{name:'Таблица расходов'}));
-  expect(screen.getByText('Выплата COGS')).toBeInTheDocument();
+  expect(screen.getByText('Комментарий COGS')).toBeInTheDocument();
   expect(screen.queryByText('Аренда OPEX')).not.toBeInTheDocument();
   expect(screen.queryByText('Личный расход')).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:/^COGS /})).toHaveAttribute('aria-pressed','true');
   fireEvent.click(screen.getByRole('button',{name:/^OPEX /}));
   fireEvent.click(screen.getByRole('button',{name:'Таблица расходов'}));
   expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
-  expect(screen.queryByText('Выплата COGS')).not.toBeInTheDocument();
+  expect(screen.queryByText('Комментарий COGS')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
   expect(screen.getByText('Выплата COGS')).toBeInTheDocument();
   expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
@@ -421,4 +423,19 @@ test('editing a record without an employee in office payroll keeps its amount fo
   expect(within(picker).getByLabelText('Сумма Тестовый сотрудник')).toHaveAttribute('placeholder', expect.stringMatching(/^10.000$/));
   fireEvent.click(within(picker).getByRole('checkbox'));
   expect(within(picker).getByLabelText('Сумма Тестовый сотрудник')).toHaveValue(10000);
+});
+
+test('extra trip school tiles show how many trips the school had', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  const school = SCHOOL_TABS_FOR_TEST();
+  localStorage.setItem('outway-spending-v1:trip-owner', JSON.stringify([
+    { id: 't1', category: 'Доп. Выезды', subcategory: 'Оплата водителю', date: today, amount: 6000, quantity: 3, unitPrice: 2000, description: 'Бишкек — Иссык-Куль', recipient: 'Водитель', method: 'Наличные', schoolKey: school },
+    { id: 't2', category: 'Доп. Выезды', subcategory: 'ГСМ', date: today, amount: 500, description: 'Бензин', recipient: '', method: 'Наличные', schoolKey: school },
+  ]));
+  render(<SpendingModule userId="trip-owner" role="admin" />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: /^Доп\. Выезды / }));
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  if (screen.queryByRole('region', { name: 'Записи расходов' })) fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  expect(screen.getByText('3 выезда')).toBeInTheDocument();
 });

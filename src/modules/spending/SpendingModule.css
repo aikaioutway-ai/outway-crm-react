@@ -710,3 +710,7 @@
 .spending-module .payment-carried small { color: #b3bec8; }
 .spending-module .payment-carried-amount { color: #8796a5; font-size: 11px; margin: 2px 0 0; }
 .payment-picker-footer strong.payment-carried, .office-payroll-overlay b.payment-carried { color: #9aa7b4; }
+
+/* Доп. Выезды: сколько выездов было у школы — метка в углу плитки. */
+.spending-module.spending-split-view .spending-school-expenses > button { position: relative; }
+.spending-trip-badge { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; background: #fff1e4; color: #b4621d; font-size: 11px; font-weight: 700; line-height: 16px; font-variant-numeric: tabular-nums; }
