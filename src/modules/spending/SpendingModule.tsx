@@ -1,9 +1,8 @@
 import { OPEX_GROUPS, OPEX_GROUP_LABELS, OPEX_SUBCATEGORIES, CAPEX_SUBCATEGORIES, normalizeExpenseClassification } from './expenseClassification';
 import React, { useEffect, useRef, useState } from 'react';
-import { X, ChevronRight } from 'lucide-react';
+import { School, Layers, LayoutGrid, Table2, WalletCards, Plus, X, ArrowDownWideNarrow, ArrowUpNarrowWide } from 'lucide-react';
 import { UserRole } from '../../types';
 import './SpendingModule.css';
-import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import ExpenseComposer from './ExpenseComposer';
 import SpendingRecordsTable from './SpendingRecordsTable';
 import { fetchSpendingEntries, saveSpendingEntries, deleteSpendingEntry } from '../../services/spendingService';
@@ -89,7 +88,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
     return () => cancelAnimationFrame(frame);
   }, [recordsScrollRequest]);
 
-  const [draft, setDraft] = useState<Entry | null>(() => blank('COGS'));
+  const [draft, setDraft] = useState<Entry | null>(null);
   const [showFormReturn, setShowFormReturn] = useState(false);
   useEffect(() => {
     let frame = 0;
@@ -121,6 +120,8 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
     return () => observer.disconnect();
   }, [draft?.category, draft?.id]);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [schoolView, setSchoolView] = useState<'cards' | 'table'>('cards');
+  const [amountSort, setAmountSort] = useState<'default' | 'asc' | 'desc'>('default');
   const [schoolFilter, setSchoolFilter] = useState<string | null>(null);
   useEffect(() => { if (columnsOpen) { setAllRecords(true); setSchoolFilter(null); setRecordsScrollRequest(value=>value+1); } }, [columnsOpen]);
   const personalAllowed = role === 'admin' || role === 'gen_director';
@@ -129,7 +130,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   const periodTotal = periodRows.reduce((sum, row) => sum + row.amount, 0);
 
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase('ru-RU');
-  const visible = periodRows.filter(row => (!normalizedSearch || [row.description, row.recipient, row.childName, row.category, row.subcategory, row.schoolKey, row.paymentOrderNumber, row.comment, String(row.amount)].filter(Boolean).join(' ').toLocaleLowerCase('ru-RU').includes(normalizedSearch)) && (allRecords || !schoolFilter || (schoolFilter.startsWith('opex:') ? OPEX_GROUPS[schoolFilter.slice(5) as keyof typeof OPEX_GROUPS]?.includes(row.subcategory) : (row.schoolKey || 'unassigned') === schoolFilter)) && (category === 'ALL' || row.category === category)).sort((a,b) => b.date.localeCompare(a.date));
+  const visible = periodRows.filter(row => (!normalizedSearch || [row.description, row.recipient, row.childName, row.category, row.subcategory, row.schoolKey, row.paymentOrderNumber, row.comment, String(row.amount)].filter(Boolean).join(' ').toLocaleLowerCase('ru-RU').includes(normalizedSearch)) && (allRecords || !schoolFilter || (schoolFilter.startsWith('subcategory:') ? row.subcategory === schoolFilter.slice(12) : schoolFilter.startsWith('opex:') ? OPEX_GROUPS[schoolFilter.slice(5) as keyof typeof OPEX_GROUPS]?.includes(row.subcategory) : (row.schoolKey || 'unassigned') === schoolFilter)) && (category === 'ALL' || row.category === category)).sort((a,b) => b.date.localeCompare(a.date));
   const persist = (next: Entry[], onSaved: () => void = () => {}, onFailed: () => void = () => {}) => {
     if (initial.error || busy || loadFailed) return false;
     const beforeById = new Map(rows.map(row => [row.id,row]));
@@ -154,10 +155,10 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
     try { localStorage.setItem(storageKey, JSON.stringify(next)); window.dispatchEvent(new Event('outway-spending-updated')); setRows(next); setError(''); onSaved(); return true; }
     catch { setError('Не удалось сохранить. Проверьте свободное место и настройки браузера.'); onFailed(); return false; }
   };
-  const schoolRows = (category === 'OPEX' ? Object.keys(OPEX_GROUPS).map(label => ({ key: `opex:${label}`, label })) : [...SCHOOL_TABS.filter(item => item.key !== 'ALL' && isSchoolVisible(item.key)).map(item => ({ key: item.key, label: item.label })), { key: 'unassigned', label: 'Общие расходы' }]).map(school => {
-    const payments = visible.filter(row => (school.key.startsWith('opex:') ? OPEX_GROUPS[school.label as keyof typeof OPEX_GROUPS].includes(row.subcategory) : (row.schoolKey || 'unassigned') === school.key));
+  const schoolRows = (category === 'OPEX' ? Object.keys(OPEX_GROUPS).map(label => ({ key: `opex:${label}`, label })) : category !== 'ALL' && ['Revenue Tax', 'CAPEX', 'Личное'].includes(category) ? SPENDING_CATEGORIES[category].map(label => ({ key: `subcategory:${label}`, label })) : [...SCHOOL_TABS.filter(item => item.key !== 'ALL' && isSchoolVisible(item.key)).map(item => ({ key: item.key, label: item.label })), { key: 'unassigned', label: 'Общие расходы' }]).map(school => {
+    const payments = visible.filter(row => (school.key.startsWith('subcategory:') ? row.subcategory === school.label : school.key.startsWith('opex:') ? OPEX_GROUPS[school.label as keyof typeof OPEX_GROUPS].includes(row.subcategory) : (row.schoolKey || 'unassigned') === school.key));
     return { ...school, count: payments.length, total: payments.reduce((sum,row) => sum + row.amount, 0), advance: payments.filter(row => row.subcategory === 'Авансы водителям').reduce((sum, row) => sum + row.amount, 0), salary: payments.filter(row => row.subcategory === 'Зарплата водителей').reduce((sum, row) => sum + row.amount, 0) };
-  }).filter(school => school.key !== 'unassigned' || school.total > 0);
+  }).filter(school => school.key !== 'unassigned' || school.total > 0).sort((a, b) => amountSort === 'default' ? 0 : amountSort === 'asc' ? a.total - b.total : b.total - a.total);
   const changeDraftCategory = (nextCategory: Category, current: Entry) => {
     if (!categories.includes(nextCategory) || busy) return;
     const driverCategory = ['COGS','Logistics','Доп. Выезды'].includes(nextCategory);
@@ -169,25 +170,50 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
       familyId:undefined,childName:undefined});
     setCategory(nextCategory); setSchoolFilter(null); setAllRecords(false);
   };
-  const openNewExpense = () => { setAllRecords(false); setDraft(blank(category === 'ALL' ? 'COGS' : category)); if (category === 'ALL') setCategory('COGS'); setSchoolFilter(null); scrollToWorkspace(); };
+  const [expenseScrollRequest, setExpenseScrollRequest] = useState(0);
+  const openNewExpense = () => { setExpenseScrollRequest(value => value + 1); setDraft(blank(category === 'ALL' ? 'COGS' : category)); if (category === 'ALL') setCategory('COGS'); };
+  const expenseDialog = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!draft) return;
+    const frame = requestAnimationFrame(() => {
+      const panel = expenseDialog.current;
+      const container = workspace.current;
+      if (!panel || !container) return;
+      container.scrollTo?.({ top: container.scrollTop + panel.getBoundingClientRect().top - container.getBoundingClientRect().top, behavior: 'smooth' });
+      panel.focus({preventScroll:true});
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [draft?.category, draft?.id, !!draft, expenseScrollRequest]);
   const driverForm = draft?.category === 'COGS' || !!draft && ['Доп. Выезды','Logistics'].includes(draft.category) && draft.subcategory === 'Оплата водителю';
-  const overviewVisible = !allRecords && category !== 'ALL' && category !== 'Revenue Tax' && category !== 'CAPEX' && category !== 'Личное' && !schoolFilter && !normalizedSearch;
-  const registerActions = <div className="spending-actions"><AllRecordsButton label="Все записи" onClick={openAllRecords}/><button type="button" className="payment-close" aria-label="Вернуться к новому расходу" title="Новый расход" onClick={openNewExpense}><X size={20} aria-hidden="true"/></button></div>;
-  return <section className={`spending-module${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
+  const overviewVisible = !allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch;
+  const showSchoolView = (view: 'cards' | 'table') => { if (view === 'table') { openAllRecords(); return; } setSchoolView(view); setDraft(null); setAllRecords(false); setSchoolFilter(null); scrollToWorkspace(); };
+  const registerActions = <div className="spending-actions" role="group" aria-label="Вид расходов">
+    <button type="button" className="overview-icon-button" aria-label={category === 'COGS' ? 'Карточки школ' : 'Плиточный вид'} title="Плиточный вид" aria-pressed={!draft && overviewVisible && schoolView === 'cards'} onClick={() => showSchoolView('cards')}><LayoutGrid size={18} /></button>
+    <button type="button" className="overview-icon-button" aria-label="Таблица расходов" title="Таблица расходов" aria-pressed={!draft && (allRecords || !!schoolFilter)} onClick={() => showSchoolView('table')}><Table2 size={18} /></button>
+    <button type="button" className="overview-icon-button spending-new-expense-button" aria-label="Вернуться к новому расходу" title="Окно расходов" aria-pressed={!!draft} onClick={openNewExpense}><WalletCards size={17} /><Plus className="spending-new-expense-plus" size={10} strokeWidth={3} aria-hidden="true" /></button>
+
+  </div>;
+  return <section className={`spending-module spending-split-view${embedded ? ' is-embedded' : ''}${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
     {!embedded && <header className="spending-header"><div><span className="spending-eyebrow">УПРАВЛЕНИЕ РАСХОДАМИ</span><h1>Расходы</h1></div><div className="spending-finance-periods"><ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} /></div></header>}
     {error && <p role="alert" className="spending-error">{error}{loadFailed && <button type="button" onClick={() => setReloadKey(value => value + 1)}>Повторить загрузку</button>}</p>}{busy && <p role="status">Обработка расходов…</p>}
-    <div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { setAllRecords(false); setCategory(key);  setSchoolFilter(null); setDraft(blank(key)); scrollToWorkspace(); }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={openEveryCategory}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
+    <div className="spending-split-layout"><div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { if (draft && !draft.id) { changeDraftCategory(key, draft); setExpenseScrollRequest(value => value + 1); } else { setAllRecords(false); setCategory(key); setSchoolFilter(null); setSchoolView('cards'); setDraft(null); scrollToWorkspace(); } }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={openEveryCategory}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
     <div className="spending-workspace" ref={workspace}>
 
 
-    {!allRecords && !normalizedSearch && draft && driverForm && <div className="spending-cogs-editor"><CogsPaymentForm categories={categories} onCategoryChange={changeDraftCategory} onAllRecords={openAllRecords} sessionToken={sessionToken} onPanelChange={setPickerOpen} key={`${draft.category}:${draft.id || 'new'}`} entry={draft} disabled={!!initial.error || busy || loadFailed} onCancel={() => { setDraft(null); scrollToWorkspace(); }} onSave={entries => { const next = draft.id ? rows.map(row => row.id === draft.id ? entries[0] : row) : [...rows, ...entries]; return persist(next, () => { setDraft(null); setCategory(draft.category); setSchoolFilter(null); }); }} /></div>}
-    {!allRecords && !normalizedSearch && draft && !driverForm && <ExpenseComposer categories={categories} onCategoryChange={changeDraftCategory} onAllRecords={openAllRecords} key={`${draft.category}:${draft.id || 'new'}`} entry={draft} onOpenClient={onOpenClient} subcategories={SPENDING_CATEGORIES[draft.category]} onSavePayroll={entries => { return persist(draft.id ? rows.flatMap(row => row.id === draft.id ? entries : [row]) : [...rows, ...entries], () => { setCategory(draft.category); setDraft(null); }); }} disabled={!!initial.error || busy || loadFailed} onCancel={() => { setDraft(null); scrollToWorkspace(); }} onSave={entry => { return persist(draft.id ? rows.map(row => row.id === draft.id ? entry : row) : [...rows, entry], () => { setCategory(entry.category); setDraft(null); }); }} />}
-    {(allRecords || !draft || normalizedSearch) && <div className={`spending-register${!allRecords && category !== 'ALL' && category !== 'Revenue Tax' && category !== 'CAPEX' && category !== 'Личное' && !schoolFilter && !normalizedSearch ? ' spending-register-schools' : ''}`}>{overviewVisible && <div className="spending-register-heading"><h2>{category}</h2>{registerActions}</div>}
-      {!allRecords && category !== 'ALL' && category !== 'Revenue Tax' && category !== 'CAPEX' && category !== 'Личное' && !schoolFilter && !normalizedSearch ? <div className="spending-table-wrap"><table aria-label={category === 'COGS' ? 'Выплаты по школам' : 'Расходы по школам'}><thead><tr><th>{category === 'OPEX' ? 'Статья расходов' : 'Школа'}</th><th className="spending-number">{category === 'COGS' ? 'Выплата аванса' : 'Расходы'}</th><th className="spending-number">{category === 'COGS' ? 'Выплата зарплаты' : 'Операций'}</th><th className="spending-number">Итого</th></tr></thead><tbody>{schoolRows.map(school => <tr key={school.key}><td><button className="spending-school-link" onClick={() => setSchoolFilter(school.key)}>{school.key.startsWith('opex:') ? OPEX_GROUP_LABELS[school.label] || school.label : school.label}<ChevronRight size={15} /></button></td><td className="spending-number">{money(category === 'COGS' ? school.advance : school.total)}</td><td className="spending-number">{category === 'COGS' ? money(school.salary) : school.count}</td><td className="spending-number"><b>{money(school.total)}</b></td></tr>)}</tbody><tfoot><tr><td>Итого</td><td className="spending-number">{money(schoolRows.reduce((sum, school) => sum + (category === 'COGS' ? school.advance : school.total), 0))}</td><td className="spending-number">{category === 'COGS' ? money(schoolRows.reduce((sum, school) => sum + school.salary, 0)) : schoolRows.reduce((sum,school) => sum + school.count,0)}</td><td className="spending-number">{money(schoolRows.reduce((sum, school) => sum + school.total, 0))}</td></tr></tfoot></table></div> : <>
-      {!allRecords && schoolFilter && <button className="spending-back" onClick={() => setSchoolFilter(null)}>← Все статьи</button>}
-      <SpendingRecordsTable title={category === 'ALL' ? 'Все расходы' : category} toolbarActions={registerActions} onBack={() => { setAllRecords(false); setDraft(null); setSchoolFilter(null); scrollToCategories(); }} columnsOpen={columnsOpen} onColumnsOpenChange={onColumnsOpenChange} rows={visible} disabled={busy || loadFailed || !!initial.error} onEdit={row => { setCategory(row.category); setAllRecords(false); setDraft({...row}); scrollToWorkspace(); }} onDelete={row => { if (window.confirm(`Удалить расход «${row.description}» на сумму ${money(row.amount)}?`)) persist(rows.filter(item=>item.id!==row.id)); }} onSave={entry => new Promise<boolean>(resolve => { if (!persist(rows.map(row => row.id === entry.id ? entry : row), () => resolve(true), () => resolve(false))) resolve(false); })} />
+    {<div className={`spending-register${!allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch ? ' spending-register-schools' : ''}`}>{overviewVisible && <div className="spending-register-heading"><h2>{category}</h2><div className="spending-overview-tools"><button type="button" className="overview-icon-button spending-sort-button" aria-label={amountSort === 'desc' ? 'Сортировать сумму по возрастанию' : 'Сортировать сумму по убыванию'} title={amountSort === 'desc' ? 'По сумме: по убыванию. Нажмите для возрастания' : 'Сортировать по сумме: по убыванию'} onClick={() => setAmountSort(value => value === 'desc' ? 'asc' : 'desc')}>{amountSort === 'asc' ? <ArrowUpNarrowWide size={18} /> : <ArrowDownWideNarrow size={18} />}</button>{registerActions}</div></div>}
+      {!allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch ? <div className="spending-school-overview"><div className="spending-school-strip spending-school-expenses" role="group" aria-label={category === 'COGS' ? 'Расходы по школам' : 'Расходы по статьям'}>{schoolRows.map(school => { const logo = SCHOOL_TABS.find(item => item.key === school.key)?.logo; return <button type="button" key={school.key} onClick={() => setSchoolFilter(school.key)}><span className="spending-school-logo">{logo ? <img src={logo} alt="" /> : school.key.startsWith('opex:') || school.key.startsWith('subcategory:') ? <Layers size={28} aria-hidden="true" /> : <School size={28} aria-hidden="true" />}</span><span className="spending-school-name">{school.key.startsWith('opex:') ? OPEX_GROUP_LABELS[school.label] || school.label : school.label}</span><strong>{money(school.total)}</strong></button>; })}</div></div> : <>
+      <SpendingRecordsTable showSchoolDetails={!!schoolFilter && !schoolFilter.startsWith('opex:') && !schoolFilter.startsWith('subcategory:')} title={category === 'ALL' ? 'Все расходы' : category} toolbarActions={registerActions} onBack={() => { setAllRecords(false); setDraft(null); setSchoolFilter(null); scrollToCategories(); }} columnsOpen={columnsOpen} onColumnsOpenChange={onColumnsOpenChange} rows={visible} disabled={busy || loadFailed || !!initial.error} onEdit={row => { setCategory(row.category); setAllRecords(false); setDraft({...row}); scrollToWorkspace(); }} onDelete={row => { if (window.confirm(`Удалить расход «${row.description}» на сумму ${money(row.amount)}?`)) persist(rows.filter(item=>item.id!==row.id)); }} onSave={entry => new Promise<boolean>(resolve => { if (!persist(rows.map(row => row.id === entry.id ? entry : row), () => resolve(true), () => resolve(false))) resolve(false); })} />
     </>}
     </div>}
+    {draft && <div className="spending-inline-expense"><div className="spending-expense-dialog" role="dialog" aria-modal="false" aria-label={draft.id ? 'Редактирование расхода' : 'Новый расход'} tabIndex={-1} ref={expenseDialog} onKeyDown={event => {
+      if (pickerOpen) return;
+      if (event.key === 'Escape') { event.stopPropagation(); setDraft(null); }
+
+    }}>
+    {draft && driverForm && <div className="spending-cogs-editor"><CogsPaymentForm categories={categories} onCategoryChange={changeDraftCategory} headerActions={<div className="spending-actions"><button type="button" className="overview-icon-button" aria-label="Закрыть окно расхода" onClick={() => setDraft(null)}><X size={18} /></button></div>} onAllRecords={openAllRecords} sessionToken={sessionToken} onPanelChange={setPickerOpen} key={`${draft.category}:${draft.id || 'new'}`} entry={draft} disabled={!!initial.error || busy || loadFailed} onCancel={() => { setDraft(null); scrollToWorkspace(); }} onSave={entries => { const next = draft.id ? rows.map(row => row.id === draft.id ? entries[0] : row) : [...rows, ...entries]; return persist(next, () => { setDraft(null); setCategory(draft.category); setSchoolFilter(null); }); }} /></div>}
+    {draft && !driverForm && <ExpenseComposer headerActions={<div className="spending-actions"><button type="button" className="overview-icon-button" aria-label="Закрыть окно расхода" onClick={() => setDraft(null)}><X size={18} /></button></div>} categories={categories} onCategoryChange={changeDraftCategory} onAllRecords={openAllRecords} key={`${draft.category}:${draft.id || 'new'}`} entry={draft} onOpenClient={onOpenClient} subcategories={SPENDING_CATEGORIES[draft.category]} onSavePayroll={entries => { return persist(draft.id ? rows.flatMap(row => row.id === draft.id ? entries : [row]) : [...rows, ...entries], () => { setCategory(draft.category); setDraft(null); }); }} disabled={!!initial.error || busy || loadFailed} onCancel={() => { setDraft(null); scrollToWorkspace(); }} onSave={entry => { return persist(draft.id ? rows.map(row => row.id === draft.id ? entry : row) : [...rows, entry], () => { setCategory(entry.category); setDraft(null); }); }} />}
+    </div></div>}
+    </div>
     </div>
     {showFormReturn && <button type="button" className="spending-return-to-form" aria-label="Вернуться к категориям расходов" title="Вернуться к категориям расходов" onClick={scrollToCategories}><span aria-hidden="true"><i /><i /></span></button>}
   </section>;

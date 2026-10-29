@@ -41,3 +41,14 @@ test('recipient menu has pinned current driver, search and one create action; ad
   expect(screen.getByRole('button',{name:'Водитель для Водитель 1'})).toBeInTheDocument();
   expect(screen.getByRole('combobox',{name:'Трансфер для Водитель 1'})).toHaveDisplayValue('№1');
 });
+
+test('typing an amount selects a compact recipient and moves it to the top', () => {
+  const {container}=render(<DriverPaymentPicker {...props} compactCards />);
+  const input=screen.getByRole('spinbutton',{name:'Сумма для Водитель 12'});
+  expect(input).toBeEnabled();
+  fireEvent.change(input,{target:{value:'2500'}});
+  expect(screen.getByRole('checkbox',{name:'Водитель 12'})).toBeChecked();
+  expect(container.querySelector('.payment-picker-row')).toHaveTextContent('Водитель 12');
+  fireEvent.keyDown(container.querySelector('.payment-picker-row')!,{key:'Enter'});
+  expect(screen.getByRole('checkbox',{name:'Водитель 12'})).not.toBeChecked();
+});

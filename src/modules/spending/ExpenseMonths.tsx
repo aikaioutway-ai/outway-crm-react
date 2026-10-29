@@ -1,30 +1,19 @@
-import React, { useState } from 'react';
-import { CalendarDays, Check, ChevronLeft, ChevronRight } from 'lucide-react';
-import { paymentQuarter } from './paymentQuarter';
+import React from 'react';
+import { CalendarDays } from 'lucide-react';
+
 export default function ExpenseMonths({ date, periods, onPeriods }: { date: string; periods: string[]; onPeriods: (value: string[]) => void }) {
-  const [month, setMonth] = useState(date.slice(0,7));
-  const quarter = paymentQuarter(month);
-  const shift = (delta: number) => { const [year, current] = month.split('-').map(Number); setMonth(new Date(Date.UTC(year, current - 1 + delta, 1)).toISOString().slice(0,7)); };
-  return (
-    <section className="payment-section payment-period-section">
-      <div className="payment-section-heading">
-        <h3>Периоды выплаты</h3>
-        <div className="spending-actions">
-          <button type="button" aria-label="Предыдущий квартал" onClick={() => shift(-3)}><ChevronLeft size={16} /></button>
-          <span>{quarter.number}-й квартал</span>
-          <button type="button" aria-label="Следующий квартал" onClick={() => shift(3)}><ChevronRight size={16} /></button>
-        </div>
-      </div>
-      <div className="payment-period-month-grid spending-periods cogs-period-cards">
-        {quarter.months.map(key => <fieldset key={key}>
-          <legend><CalendarDays size={18} aria-hidden="true" /><span>{new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${key}-01T00:00:00Z`))}</span></legend>
-          <label className="spending-check">
-            <input type="checkbox" aria-label={key} checked={periods.includes(key)} onChange={event => onPeriods(event.target.checked ? [...periods, key].sort() : periods.filter(item => item !== key))} />
-            <span>Весь месяц<small>период выплаты</small></span>
-            <Check className="cogs-period-check" size={17} aria-hidden="true" />
-          </label>
-        </fieldset>)}
-      </div>
-    </section>
-  );
+  const [year, month] = date.slice(0, 7).split('-').map(Number);
+  const startYear = year - (month < 9 ? 1 : 0);
+  const months = Array.from({ length: 12 }, (_, index) => new Date(Date.UTC(startYear, 8 + index, 1)).toISOString().slice(0, 7));
+  return <section className="payment-section payment-period-section">
+    <div className="payment-section-heading"><h3>Периоды выплаты</h3></div>
+    <div className="payment-period-month-grid spending-periods cogs-period-cards">
+      {months.map((key, index) => <React.Fragment key={key}>
+        {index % 3 === 0 && <h4 className="expense-quarter-divider">{index / 3 + 1}-й квартал</h4>}
+        <fieldset><legend><CalendarDays size={18} aria-hidden="true" /><span>{new Intl.DateTimeFormat('ru-RU', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${key}-01T00:00:00Z`))}</span></legend>
+          <button type="button" className="spending-period-button" aria-label={key} aria-pressed={periods.includes(key)} onClick={() => onPeriods(periods.includes(key) ? periods.filter(item => item !== key) : [...periods, key].sort())}><span>Весь месяц<small>период выплаты</small></span></button>
+        </fieldset>
+      </React.Fragment>)}
+    </div>
+  </section>;
 }

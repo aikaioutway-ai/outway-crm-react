@@ -12,6 +12,7 @@ beforeEach(() => { localStorage.clear(); localStorage.setItem('dt_cols:cashier_s
 test('saves an independent expense, reloads it, and keeps personal totals separate', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: /^Личное / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   fireEvent.change(screen.getByLabelText('Назначение'), { target: { value: 'Покупка продуктов' } });
   fireEvent.change(screen.getByLabelText('Сумма, сом'), { target: { value: '1500' } });
   fireEvent.change(screen.getByLabelText('Платёжное поручение'), { target: { value: 'ПП-42' } });
@@ -21,7 +22,7 @@ test('saves an independent expense, reloads it, and keeps personal totals separa
   expect(screen.getByText('Покупка продуктов')).toBeInTheDocument();
   cleanup();
   render(<SpendingModule userId="owner" role="admin" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Закрыть форму выплаты' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
   fireEvent.click(screen.getByRole('button', { name: /^Все Все расходы за период/ }));
   expect(screen.getByText('Покупка продуктов')).toBeInTheDocument();
   expect(screen.getByText('ПП-42')).toBeInTheDocument();
@@ -41,6 +42,7 @@ test('corrupt storage is not overwritten', () => {
   localStorage.setItem('outway-spending-v1:owner', 'broken');
   render(<SpendingModule userId="owner" role="admin" />);
   expect(screen.getByRole('alert')).toHaveTextContent('Сохранение отключено');
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getByRole('button', { name: 'Сохранить выплаты' })).toBeDisabled();
   expect(localStorage.getItem('outway-spending-v1:owner')).toBe('broken');
 });
@@ -48,12 +50,21 @@ test('corrupt storage is not overwritten', () => {
 test('creation replaces school overview and follows the selected category', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: /^COGS / }));
-  expect(screen.queryByRole('button', { name: /Добавить расход/ })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Закрыть форму выплаты' }));
-  expect(screen.getByRole('table', { name: 'Выплаты по школам' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
-  expect(screen.queryByRole('table', { name: 'Выплаты по школам' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /Добавить расход/ })).not.toBeInTheDocument();
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
+  expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.queryByRole('form', { name: 'Новая выплата COGS' })).not.toBeInTheDocument();
   expect(screen.getByRole('group', { name: 'Статья OPEX' })).toBeInTheDocument();
   expect(screen.queryByRole('heading', { name: 'К какой школе относится расход' })).not.toBeInTheDocument();
@@ -70,10 +81,12 @@ test('creation replaces school overview and follows the selected category', () =
 test('OPEX selects a kind beneath its category and saves a refund as a separate operation type', async () => {
   const openClient = jest.fn(async () => {});
   render(<SpendingModule userId="opex-owner" role="admin" onOpenClient={openClient} />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getByRole('form', { name: 'Новый расход OPEX' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Аванс' })).toBeInTheDocument();
-  expect(within(screen.getByRole('group', { name: 'Вид расхода' })).getAllByRole('button').map(button => button.textContent)).toEqual(['Аванс', 'ЗП']);
+  expect(within(screen.getByRole('group', { name: 'Вид расхода' })).getAllByRole('button').map(button => button.textContent)).toEqual(['Аванс', 'Зарплата']);
   fireEvent.click(screen.getByRole('button', { name: 'IT' }));
   expect(screen.getByRole('button', { name: 'Подписки' })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Пополнение баланса' })).not.toBeInTheDocument();
@@ -98,16 +111,19 @@ test('OPEX selects a kind beneath its category and saves a refund as a separate 
 
 test('office payroll retains the chosen department when switching advance to salary and saves it', () => {
   render(<SpendingModule userId="payroll-owner" role="admin" />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   const departments = screen.getByRole('group', { name: 'Отдел выплаты' });
   expect(within(departments).getAllByRole('button')).toHaveLength(5);
   fireEvent.click(within(departments).getByRole('button', { name: 'Сервис' }));
   const picker = screen.getByRole('dialog', { name: 'Сотрудники и суммы' });
   fireEvent.change(within(picker).getByLabelText('Сумма Тестовый сотрудник'), { target: { value: '25000' } });
   fireEvent.click(within(picker).getByRole('button', { name: 'Готово' }));
-  fireEvent.click(within(screen.getByRole('group', { name: 'Вид расхода' })).getByRole('button', { name: 'ЗП' }));
-  expect(within(departments).getByRole('button', { name: 'Сервис' })).toHaveAttribute('aria-pressed', 'true');
-  const periodChecks = screen.getAllByRole('checkbox');
+  fireEvent.click(within(screen.getByRole('group', { name: 'Вид расхода' })).getByRole('button', { name: 'Зарплата' }));
+  expect(screen.getByRole('button', { name: 'Выбрать: Отдел' })).toHaveTextContent('Отдел клиентского сервиса');
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  const periodChecks = screen.getAllByRole('button', { name: /^\d{4}-\d{2}$/ });
   fireEvent.click(periodChecks[0]);
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   expect(JSON.parse(localStorage.getItem('outway-spending-v1:payroll-owner') || '[]')[0]).toMatchObject({ departmentKey: 'service', subcategory: 'Зарплата офиса', amount: 25000 });
@@ -116,12 +132,14 @@ test('office payroll retains the chosen department when switching advance to sal
 
 test('rent stores an amount against selected months without a recipient field', () => {
   render(<SpendingModule userId="rent-owner" role="admin" />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   fireEvent.click(screen.getByRole('button', { name: 'Офис' }));
   expect(screen.queryByLabelText('Получатель')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('За что')).not.toBeInTheDocument();
-  fireEvent.click(screen.getAllByRole('checkbox')[0]);
-  fireEvent.click(screen.getAllByRole('checkbox')[1]);
+  fireEvent.click(screen.getAllByRole('button', { name: /^\d{4}-\d{2}$/ })[0]);
+  fireEvent.click(screen.getAllByRole('button', { name: /^\d{4}-\d{2}$/ })[1]);
   fireEvent.change(screen.getByLabelText('Сумма, сом'), { target: { value: '1000' } });
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   const rows = JSON.parse(localStorage.getItem('outway-spending-v1:rent-owner') || '[]');
@@ -133,13 +151,16 @@ test('rent stores an amount against selected months without a recipient field', 
 
 test('taxes use departments, employee selection and monthly periods', () => {
   render(<SpendingModule userId="tax-owner" role="admin" />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
-  fireEvent.click(screen.getByRole('button', { name: 'Налоги' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Налоги и взносы' }));
   fireEvent.click(within(screen.getByRole('group', { name: 'Отдел выплаты' })).getByRole('button', { name: 'Сервис' }));
   const picker = screen.getByRole('dialog', { name: 'Сотрудники и суммы' });
   fireEvent.change(within(picker).getByLabelText('Сумма Тестовый сотрудник'), { target: { value: '1500' } });
   fireEvent.click(within(picker).getByRole('button', { name: 'Готово' }));
-  fireEvent.click(screen.getAllByRole('checkbox')[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  fireEvent.click(screen.getAllByRole('button', { name: /^\d{4}-\d{2}$/ })[0]);
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   expect(JSON.parse(localStorage.getItem('outway-spending-v1:tax-owner') || '[]')[0]).toMatchObject({ subcategory: 'Социальный фонд', employeeId: 'staff1', amount: 1500 });
 });
@@ -147,6 +168,7 @@ test('taxes use departments, employee selection and monthly periods', () => {
 test('revenue tax saves selected months without schools or recipient', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: /^Revenue Tax / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getAllByText('Налоги')).toHaveLength(2);
   expect(screen.queryByText('К какой школе относится расход')).not.toBeInTheDocument();
   expect(screen.queryByLabelText('Получатель')).not.toBeInTheDocument();
@@ -154,20 +176,22 @@ test('revenue tax saves selected months without schools or recipient', () => {
   fireEvent.change(screen.getByLabelText('Сумма налога, сом'), { target: { value: '3500' } });
   fireEvent.submit(screen.getByRole('form', { name: 'Новый расход Revenue Tax' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Выберите налоговый период');
-  const months = screen.getAllByRole('checkbox');
+  const months = screen.getAllByRole('button', { name: /^\d{4}-\d{2}$/ });
   const selected = months.slice(0, 2).map(month => month.getAttribute('aria-label'));
   fireEvent.click(months[0]);
   fireEvent.click(months[1]);
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   expect(JSON.parse(localStorage.getItem('outway-spending-v1:owner')!)[0]).toMatchObject({ category: 'Revenue Tax', taxPeriods: selected, recipient: '', amount: 3500 });
   expect(screen.queryByRole('table', { name: 'Расходы по школам' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
   fireEvent.click(screen.getByRole('button', { name: 'Редактировать Налог с выручки' }));
-  selected.forEach(month => expect(screen.getByRole('checkbox', { name: month! })).toBeChecked());
+  selected.forEach(month => expect(screen.getByRole('button', { name: month! })).toHaveAttribute('aria-pressed', 'true'));
 });
 
 test.each(['Доп. Выезды', 'Logistics'])('%s uses the COGS picker and route with quantity instead of periods', category => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${category} `) }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.queryByText('Периоды выплаты')).not.toBeInTheDocument();
   expect(screen.queryByRole('group', { name: 'Подкатегория' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'TIS' }));
@@ -183,10 +207,10 @@ test.each(['Доп. Выезды', 'Logistics'])('%s uses the COGS picker and ro
 
 test('opens all records from the form header and returns with one click', () => {
   render(<SpendingModule userId="owner" role="admin" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
   expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
   expect(screen.queryByRole('form', { name: 'Новая выплата COGS' })).not.toBeInTheDocument();
-  expect(screen.queryByRole('group', { name: 'Вид расходов' })).not.toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Вид расходов' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getByRole('form', { name: 'Новая выплата COGS' })).toBeInTheDocument();
 });
@@ -270,17 +294,94 @@ test('all-records buttons stay inside the chosen category and only the All tile 
     {...base,id:'personal',category:'Личное',subcategory:'Прочее',description:'Личный расход'},
   ]));
   render(<SpendingModule userId="scope" role="admin" periodKey="ALL"/>);
-  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  fireEvent.click(screen.getByRole('button',{name:'Таблица расходов'}));
   expect(screen.getByText('Выплата COGS')).toBeInTheDocument();
   expect(screen.queryByText('Аренда OPEX')).not.toBeInTheDocument();
   expect(screen.queryByText('Личный расход')).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:/^COGS /})).toHaveAttribute('aria-pressed','true');
   fireEvent.click(screen.getByRole('button',{name:/^OPEX /}));
-  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  fireEvent.click(screen.getByRole('button',{name:'Таблица расходов'}));
   expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
   expect(screen.queryByText('Выплата COGS')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
   expect(screen.getByText('Выплата COGS')).toBeInTheDocument();
   expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
   expect(screen.getByText('Личный расход')).toBeInTheDocument();
+});
+
+test.each(['OPEX', 'CAPEX', 'Revenue Tax', 'Личное'])('%s supports tiles and category records', category => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${category} `) }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Плиточный вид' }));
+  expect(screen.getByRole('group', { name: 'Расходы по статьям' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
+  expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: 'Расходы по статьям' })).not.toBeInTheDocument();
+});
+
+
+test('only the current expense view is highlighted', () => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: /^COGS / }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  const dialog = screen.getByRole('dialog', { name: 'Новый расход' });
+  expect(within(dialog).getAllByRole('button', { name: 'Закрыть окно расхода' })).toHaveLength(1);
+  expect(within(dialog).queryByRole('button', { name: 'Карточки школ' })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  expect(screen.getByRole('button', { name: 'Карточки школ' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.getByRole('button', { name: 'Вернуться к новому расходу' })).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('opens tiles by default and on category selection', () => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
+  expect(screen.queryByRole('form')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
+  fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  expect(screen.getByRole('group', { name: 'Расходы по статьям' })).toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: 'Записи расходов' })).not.toBeInTheDocument();
+});
+
+test('new expense opens inline and preserves the records view on close', () => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  expect(screen.getByRole('dialog', { name: 'Новый расход' })).toHaveAttribute('aria-modal', 'false');
+  expect(screen.getByRole('dialog', { name: 'Новый расход' }).closest('.spending-workspace')).not.toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
+});
+
+test('school selection advances directly to transfer selection', () => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: Школа' }));
+  expect(screen.getByRole('dialog', { name: 'Выбор параметров выплаты' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'TIS' }));
+  expect(screen.getByRole('dialog', { name: 'Выбор параметров выплаты' })).toHaveAttribute('data-panel', 'transfer');
+  expect(screen.getByRole('button', { name: 'Выбрать: Школа' })).toHaveTextContent('TIS');
+});
+
+test('payment type stays in summary and all four quarters share one panel', () => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  expect(screen.getByRole('button', { name: 'Аванс' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  ['1-й квартал','2-й квартал','3-й квартал','4-й квартал'].forEach(label => expect(screen.getByText(label)).toBeInTheDocument());
+  fireEvent.keyDown(document, { key: 'Escape' });
+  expect(screen.queryByRole('dialog', { name: 'Выбор параметров выплаты' })).not.toBeInTheDocument();
+  expect(screen.getByRole('dialog', { name: 'Новый расход' })).toBeInTheDocument();
+});
+
+test('sidebar changes the category while keeping a new expense open', () => {
+  render(<SpendingModule userId="owner" role="admin" />);
+  fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
+  fireEvent.click(screen.getByRole('button', { name: /^CAPEX / }));
+  expect(screen.getByRole('dialog', { name: 'Новый расход' })).toBeInTheDocument();
+  expect(screen.getByRole('form', { name: 'Новый расход CAPEX' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^Личное / }));
+  expect(screen.getByRole('form', { name: 'Новый расход Личное' })).toBeInTheDocument();
 });

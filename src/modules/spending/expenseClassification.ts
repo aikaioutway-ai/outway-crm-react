@@ -16,5 +16,5 @@ export function normalizeExpenseClassification<T extends { category: string; sub
   return { ...row, category, subcategory, operationType: category === 'OPEX' && row.subcategory === 'Возврат родителю' ? 'customer_refund' : 'expense' };
 }
 
-export const OPEX_GROUP_LABELS: Record<string, string> = { Налоги: 'Налоги и взносы' };
-export const OPEX_KIND_LABELS: Record<string, string> = { 'Авансы сотрудникам': 'Аванс', 'Зарплата офиса': 'ЗП', 'Налоги с зарплаты': 'Налоги', 'Обязательное страхование сотрудников': 'Обязательное страхование', 'Подарки клиентам': 'Подарки', 'Возврат родителю': 'Возврат', 'Такси вместо водителя': 'Такси', 'Возмещение такси родителю': 'Возмещение такси' };
+export const OPEX_GROUP_LABELS: Record<string, string> = { ЗП: 'Оплата труда', Налоги: 'Налоги и взносы' };
+export const OPEX_KIND_LABELS: Record<string, string> = { 'Авансы сотрудникам': 'Аванс', 'Зарплата офиса': 'Зарплата', 'Налоги с зарплаты': 'Налоги', 'Обязательное страхование сотрудников': 'Обязательное страхование', 'Подарки клиентам': 'Подарки', 'Возврат родителю': 'Возврат', 'Такси вместо водителя': 'Такси', 'Возмещение такси родителю': 'Возмещение такси' };
