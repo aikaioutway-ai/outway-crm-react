@@ -715,13 +715,6 @@
 .spending-module.spending-split-view .spending-school-expenses > button { position: relative; }
 .spending-trip-badge { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; background: #fff1e4; color: #b4621d; font-size: 11px; font-weight: 700; line-height: 16px; font-variant-numeric: tabular-nums; }
 
-/* Комментарий в таблице: метки «школа · трансфер · получатель», затем текст. */
-.spending-comment { display: flex; align-items: center; gap: 4px; flex-wrap: nowrap; min-width: 0; max-width: 100%; overflow: hidden; white-space: nowrap; }
-.spending-comment-tag { display: inline-flex; align-items: center; padding: 1px 7px; border-radius: 6px; background: #eef4f3; color: #2d6667; font-size: 11px; font-weight: 600; line-height: 18px; white-space: nowrap; }
-.spending-comment-text { color: var(--text, #22364a); overflow: hidden; text-overflow: ellipsis; min-width: 0; margin-left: 2px; }
-.spending-comment-tag { flex-shrink: 0; }
-.spending-comment-preview { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; font-weight: 400; }
-.spending-comment-preview small { color: #8796a5; font-size: 10px; }
 
 /* Окно семьи при возврате: сводка, вкладки истории, переход в карточку. */
 .spending-module .compensation-family-finance { margin-top: 12px; padding: 14px; border: 1px solid #e3e9ee; border-radius: 12px; background: #fafcfc; display: grid; gap: 10px; }
@@ -739,6 +732,5 @@
 .compensation-family-tabs button span { margin-left: 4px; color: #9aa7b4; font-weight: 500; }
 .compensation-family-pager { justify-content: flex-end; gap: 8px; }
 @media (max-width: 900px) { .compensation-family-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-.spending-module .expense-composer-fields > .compensation-family-finance { grid-column: 1 / -1; }
-.spending-module .payment-composer-compact .payment-requisites > .spending-comment-field { grid-column: 1 / -1; display: grid; gap: 6px; }
-.spending-module .payment-requisites > .spending-comment-field textarea { width: 100%; }
+/* В правой панели «Получатель» финансы семьи — по две плитки в ряд. */
+.spending-module .expense-selection-panel .compensation-family-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

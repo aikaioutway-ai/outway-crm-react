@@ -55,13 +55,6 @@ export default function SpendingRecordsTable({rows,disabled,onEdit,onDelete,onSa
   const total = rows.reduce((sum, row) => sum + row.amount, 0);
   const tens = rows.length % 100, ones = rows.length % 10;
   const recordsWord = tens >= 11 && tens <= 14 ? 'записей' : ones === 1 ? 'запись' : ones >= 2 && ones <= 4 ? 'записи' : 'записей';
-  // Перед ручным комментарием — школа, трансфер и получатель: видно, кому и откуда выплата.
-  const recipientOf = (row: SpendingEntry) => row.recipient?.trim() || row.childName || (row.driverId || row.employeeId ? row.description.split(' — ')[1]?.trim() : '') || '';
-  const commentTags = (row: SpendingEntry) => [
-    row.schoolKey ? SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label || row.schoolKey : '',
-    transferOf(row) ? `№${transferOf(row)}` : '',
-    recipientOf(row),
-  ].filter(Boolean);
   const cogsColumns: ColumnDef<SpendingEntry>[] = cogs ? [
     {key:'schoolKey',label:'Школа',type:'text',width:100,getValue:schoolLabel,render:(_value,row)=>schoolLabel(row)},
     {key:'transferId',label:'Трансфер',type:'text',width:120,getValue:transferLabel,render:(_value,row)=>transferLabel(row)},
@@ -75,7 +68,7 @@ export default function SpendingRecordsTable({rows,disabled,onEdit,onDelete,onSa
     {key:'amount',label:'Сумма',type:'currency',width:130,editable:true,render:value=><strong className="finance-amount">{Number(value).toLocaleString('ru-RU',{maximumFractionDigits:2})}</strong>},
     {key:'date',label:'Дата',type:'date',width:130,editable:true,render:value=>String(value).split('-').reverse().join('.')},
     {key:'paymentOrderNumber',label:'№ платёжного поручения',type:'text',width:170,editable:true},
-    {key:'comment',label:'Комментарий',type:'text',width:340,editable:true,render:(_value,row)=>{const tags=commentTags(row);return <span className="spending-comment" title={[...tags,row.comment].filter(Boolean).join(' · ')}>{tags.map(tag=><span key={tag} className="spending-comment-tag">{tag}</span>)}{row.comment && <span className="spending-comment-text">{row.comment}</span>}</span>;}},
+    {key:'comment',label:'Комментарий',type:'text',width:280,editable:true},
     {key:'recipient',label:'Получатель',type:'text',width:180,editable:true,visible:false},
     {key:'method',label:'Оплата',type:'select',width:130,editable:true,visible:false,editOptions:[{value:'Наличные',label:'Наличные'},{value:'Безналичные',label:'Безналичные'}]},
     {key:'unitPrice',label:'Цена',type:'currency',width:120,editable:true,visible:false},

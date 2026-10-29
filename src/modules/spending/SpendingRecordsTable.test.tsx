@@ -26,17 +26,15 @@ test('school records show school and transfer number', async () => {
   render(<SpendingRecordsTable showSchoolDetails rows={[{...row, schoolKey:'TIS', transferNumber:11}]} disabled={false} onEdit={jest.fn()} onDelete={jest.fn()} onSave={jest.fn()} />);
   expect(await screen.findByText('Школа')).toBeInTheDocument();
   expect(screen.getByText('№ трансфера')).toBeInTheDocument();
-  expect(screen.getAllByText('TIS')).toHaveLength(2);
+  expect(screen.getByText('TIS')).toBeInTheDocument();
   expect(screen.getByText('11')).toBeInTheDocument();
-  // Комментарий начинается с меток школы и трансфера.
-  expect(document.querySelector('.spending-comment')).toHaveTextContent(/^TIS№11/);
 });
 
 test('COGS records show school and transfer first and hide the repeated category', async () => {
   const cogs: SpendingEntry = { id: 'c1', category: 'COGS', subcategory: 'Авансы водителям', amount: 10000, date: '2026-10-15', description: 'Аванс — Алым', recipient: 'Алым', method: 'Безналичные', schoolKey: 'NOVA', transferId: 'transfer-8', driverId: 'driver' };
   const reserve: SpendingEntry = { ...cogs, id: 'c2', transferId: undefined };
   render(<SpendingRecordsTable category="COGS" transferNumbers={{ 'transfer-8': 8 }} rows={[cogs, reserve]} disabled={false} onEdit={jest.fn()} onDelete={jest.fn()} onSave={jest.fn()} />);
-  expect(await screen.findAllByText('№8')).toHaveLength(2);
+  expect(await screen.findByText('№8')).toBeInTheDocument();
   expect(screen.getByText('Резерв')).toBeInTheDocument();
   const headers = screen.getAllByRole('columnheader').map(header => header.textContent?.trim() || '');
   expect(headers.findIndex(text => text.startsWith('Школа'))).toBeLessThan(headers.findIndex(text => text.startsWith('Сумма')));
@@ -58,7 +56,7 @@ test('heading shows the record count with the total and the category column only
 test('COGS records are ordered by school, then transfer, reserve last', async () => {
   const base: SpendingEntry = { id: 'x', category: 'COGS', subcategory: 'Зарплата водителей', amount: 100, date: '2026-10-20', description: 'ЗП', recipient: 'Водитель', method: 'Безналичные', schoolKey: 'GEN4', driverId: 'd' };
   render(<SpendingRecordsTable category="COGS" transferNumbers={{ t3: 3, t1: 1 }} rows={[{ ...base, id: 'r', transferId: undefined }, { ...base, id: 'three', transferId: 't3' }, { ...base, id: 'one', transferId: 't1' }]} disabled={false} onEdit={jest.fn()} onDelete={jest.fn()} onSave={jest.fn()} />);
-  await screen.findAllByText('№1');
+  await screen.findByText('№1');
   const order = Array.from(document.querySelectorAll('tbody tr')).map(tr => tr.textContent || '');
   expect(order[0]).toContain('№1');
   expect(order[1]).toContain('№3');

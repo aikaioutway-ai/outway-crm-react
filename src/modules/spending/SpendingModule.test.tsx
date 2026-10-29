@@ -11,6 +11,12 @@ jest.mock('./CompensationChildSearch', () => ({ __esModule: true, default: ({ on
 
 beforeEach(() => { localStorage.clear(); localStorage.setItem('dt_cols:cashier_spending_records_v1', 'null'); ['cashier_spending_cogs_records_v1','cashier_spending_cogs_school_records_v1','cashier_spending_school_records_v1'].forEach(key => localStorage.setItem(`dt_cols:${key}`, 'null')); Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => 'expense-test' }); });
 
+// Плиточный вид открывается кнопкой «К сводке» из таблицы или закрытием окна расхода.
+const toTiles = () => {
+  if (screen.queryByRole('button', { name: 'Закрыть окно расхода' })) fireEvent.click(screen.getAllByRole('button', { name: 'Закрыть окно расхода' })[0]);
+  if (screen.queryByRole('button', { name: 'К сводке' })) fireEvent.click(screen.getByRole('button', { name: 'К сводке' }));
+};
+
 test('saves an independent expense, reloads it, and keeps personal totals separate', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: /^Личное / }));
@@ -24,7 +30,7 @@ test('saves an independent expense, reloads it, and keeps personal totals separa
   expect(screen.getByText('Покупка продуктов')).toBeInTheDocument();
   cleanup();
   render(<SpendingModule userId="owner" role="admin" />);
-  fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  toTiles();
   fireEvent.click(screen.getByRole('button', { name: /^Все Все расходы за период/ }));
   expect(screen.getByText('Покупка продуктов')).toBeInTheDocument();
   expect(screen.getByText('ПП-42')).toBeInTheDocument();
@@ -55,12 +61,12 @@ test('creation replaces school overview and follows the selected category', () =
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.queryByRole('button', { name: /Добавить расход/ })).not.toBeInTheDocument();
   if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  toTiles();
   expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
   expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
   if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  toTiles();
   expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
@@ -316,7 +322,7 @@ test.each(['OPEX', 'CAPEX', 'Revenue Tax', 'Личное'])('%s supports tiles a
   fireEvent.click(screen.getByRole('button', { name: new RegExp(`^${category} `) }));
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
-  fireEvent.click(screen.getByRole('button', { name: 'Плиточный вид' }));
+  toTiles();
   expect(screen.getByRole('group', { name: 'Расходы по статьям' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
   expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
@@ -332,7 +338,8 @@ test('only the current expense view is highlighted', () => {
   expect(within(dialog).getAllByRole('button', { name: 'Закрыть окно расхода' })).toHaveLength(1);
   expect(within(dialog).queryByRole('button', { name: 'Карточки школ' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
-  expect(screen.getByRole('button', { name: 'Карточки школ' })).toHaveAttribute('aria-pressed', 'true');
+  expect(screen.queryByRole('button', { name: 'Карточки школ' })).not.toBeInTheDocument();
+  expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Вернуться к новому расходу' })).toHaveAttribute('aria-pressed', 'false');
 });
 
@@ -436,6 +443,6 @@ test('extra trip school tiles show how many trips the school had', () => {
   if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   fireEvent.click(screen.getByRole('button', { name: /^Доп\. Выезды / }));
   if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
-  if (screen.queryByRole('region', { name: 'Записи расходов' })) fireEvent.click(screen.getByRole('button', { name: 'Карточки школ' }));
+  if (screen.queryByRole('region', { name: 'Записи расходов' })) toTiles();
   expect(screen.getByText('3 выезда')).toBeInTheDocument();
 });

@@ -1,6 +1,6 @@
 import { OPEX_GROUPS, OPEX_GROUP_LABELS, OPEX_SUBCATEGORIES, CAPEX_SUBCATEGORIES, normalizeExpenseClassification } from './expenseClassification';
 import React, { useEffect, useRef, useState } from 'react';
-import { School, Layers, LayoutGrid, Table2, WalletCards, Plus, X, ArrowDownWideNarrow, ArrowUpNarrowWide, Bus } from 'lucide-react';
+import { School, Layers, Table2, WalletCards, Plus, X, ArrowDownWideNarrow, ArrowUpNarrowWide, Bus } from 'lucide-react';
 import { UserRole } from '../../types';
 import './SpendingModule.css';
 import ExpenseComposer from './ExpenseComposer';
@@ -123,7 +123,6 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
     return () => observer.disconnect();
   }, [draft?.category, draft?.id]);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [schoolView, setSchoolView] = useState<'cards' | 'table'>('cards');
   const [amountSort, setAmountSort] = useState<'default' | 'asc' | 'desc'>('default');
   const [schoolFilter, setSchoolFilter] = useState<string | null>(null);
   useEffect(() => { if (columnsOpen) { setAllRecords(true); setSchoolFilter(null); setRecordsScrollRequest(value=>value+1); } }, [columnsOpen]);
@@ -193,11 +192,9 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   }, [draft?.category, draft?.id, !!draft, expenseScrollRequest]);
   const driverForm = draft?.category === 'COGS' || !!draft && ['Доп. Выезды','Logistics'].includes(draft.category) && draft.subcategory === 'Оплата водителю';
   const overviewVisible = !allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch;
-  const showSchoolView = (view: 'cards' | 'table') => { if (view === 'table') { openAllRecords(); return; } setSchoolView(view); setDraft(null); setAllRecords(false); setSchoolFilter(null); scrollToWorkspace(); };
   // В самой таблице кнопка «Таблица» не нужна: обратно ведёт «К сводке».
   const viewActions = (inTable: boolean) => <div className="spending-actions" role="group" aria-label="Вид расходов">
-    <button type="button" className="overview-icon-button" aria-label={category === 'COGS' ? 'Карточки школ' : 'Плиточный вид'} title="Плиточный вид" aria-pressed={!draft && overviewVisible && schoolView === 'cards'} onClick={() => showSchoolView('cards')}><LayoutGrid size={18} /></button>
-    {!inTable && <button type="button" className="overview-icon-button" aria-label="Таблица расходов" title="Таблица расходов" aria-pressed={!draft && (allRecords || !!schoolFilter)} onClick={() => showSchoolView('table')}><Table2 size={18} /></button>}
+    {!inTable && <button type="button" className="overview-icon-button" aria-label="Таблица расходов" title="Таблица расходов" aria-pressed={!draft && (allRecords || !!schoolFilter)} onClick={openAllRecords}><Table2 size={18} /></button>}
     <button type="button" className="overview-icon-button spending-new-expense-button" aria-label="Вернуться к новому расходу" title="Окно расходов" aria-pressed={!!draft} onClick={openNewExpense}><WalletCards size={17} /><Plus className="spending-new-expense-plus" size={10} strokeWidth={3} aria-hidden="true" /></button>
 
   </div>;
@@ -205,7 +202,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   return <section className={`spending-module spending-split-view${embedded ? ' is-embedded' : ''}${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
     {!embedded && <header className="spending-header"><div><span className="spending-eyebrow">УПРАВЛЕНИЕ РАСХОДАМИ</span><h1>Расходы</h1></div><div className="spending-finance-periods"><ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} /></div></header>}
     {error && <p role="alert" className="spending-error">{error}{loadFailed && <button type="button" onClick={() => setReloadKey(value => value + 1)}>Повторить загрузку</button>}</p>}{busy && <p role="status">Обработка расходов…</p>}
-    <div className="spending-split-layout"><div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { if (draft && !draft.id) { changeDraftCategory(key, draft); setExpenseScrollRequest(value => value + 1); } else if (allRecords) { setCategory(key); setDraft(null); setSchoolFilter(null); setRecordsScrollRequest(value => value + 1); } else { setCategory(key); setSchoolFilter(null); setSchoolView('cards'); setDraft(null); scrollToWorkspace(); } }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={openEveryCategory}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
+    <div className="spending-split-layout"><div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { if (draft && !draft.id) { changeDraftCategory(key, draft); setExpenseScrollRequest(value => value + 1); } else if (allRecords) { setCategory(key); setDraft(null); setSchoolFilter(null); setRecordsScrollRequest(value => value + 1); } else { setCategory(key); setSchoolFilter(null); setDraft(null); scrollToWorkspace(); } }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={openEveryCategory}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
     <div className="spending-workspace" ref={workspace}>
 
 
