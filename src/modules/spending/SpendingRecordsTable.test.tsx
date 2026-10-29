@@ -21,3 +21,11 @@ test('price and quantity edits recalculate the amount and invalid numbers cannot
   expect(editSpendingCell(row,'amount','broken')).toBeNull();
   expect(editSpendingCell(row,'quantity','0')).toBeNull();
 });
+
+test('school records show school and transfer number', async () => {
+  render(<SpendingRecordsTable showSchoolDetails rows={[{...row, schoolKey:'TIS', transferNumber:11}]} disabled={false} onEdit={jest.fn()} onDelete={jest.fn()} onSave={jest.fn()} />);
+  expect(await screen.findByText('Школа')).toBeInTheDocument();
+  expect(screen.getByText('№ трансфера')).toBeInTheDocument();
+  expect(screen.getByText('TIS')).toBeInTheDocument();
+  expect(screen.getByText('11')).toBeInTheDocument();
+});

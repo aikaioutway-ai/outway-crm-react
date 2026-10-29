@@ -416,3 +416,284 @@
   .spending-categories .spending-total-tile { grid-column: auto; grid-row: auto; }
   .spending-categories .spending-total-tile.is-expanded { grid-column: 1 / -1; grid-row: auto; }
 }
+
+/* School expense cards share the payment form's school logos. */
+.spending-school-overview { flex: 1; min-height: 0; overflow-y: auto; padding: 22px; }
+.spending-module .spending-school-expenses { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 16px; }
+.spending-module .spending-school-expenses > button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-width: 0; min-height: 154px; padding: 18px 10px; border: 1px solid #dce5eb; border-radius: 12px; background: #fff; color: var(--text-1, #192b40); cursor: pointer; }
+.spending-module .spending-school-expenses > button:hover { border-color: #258b8c; background: #f0f8f7; }
+.spending-module .spending-school-expenses > button:focus-visible { outline: 2px solid #258b8c; outline-offset: 3px; }
+.spending-school-expenses .spending-school-logo { display: grid; place-items: center; width: 48px; height: 48px; color: #237c7d; }
+.spending-school-expenses .spending-school-logo img { width: 100%; height: 100%; object-fit: contain; }
+.spending-school-expenses .spending-school-name { font-size: 13px; font-weight: 500; text-align: center; }
+.spending-school-expenses strong { font-size: 14px; font-variant-numeric: tabular-nums; text-align: center; }
+.spending-school-expenses-total { display: flex; justify-content: space-between; gap: 16px; margin-top: 22px; padding-top: 18px; border-top: 1px solid #dce5eb; font-size: 14px; }
+@media (max-width: 480px) { .spending-school-overview { padding: 14px; } .spending-module .spending-school-expenses { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; } }
+
+.spending-module .spending-school-expenses { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+.spending-overview-tools { display: flex; align-items: center; gap: 16px; }
+.spending-actions .overview-icon-button[aria-pressed="true"] { background: #e8f3f2; color: #237c7d; border-color: #258b8c; }
+@media (max-width: 1000px) { .spending-module .spending-school-expenses { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .spending-module .spending-school-expenses { grid-template-columns: repeat(2, minmax(0, 1fr)); } .spending-overview-tools { gap: 8px; flex-wrap: wrap; justify-content: flex-end; } }
+
+.spending-module .spending-overview-tools { display: flex; align-items: center; gap: 10px; }
+.spending-module .spending-overview-tools .spending-actions { display: flex; align-items: center; gap: 10px; }
+.spending-module .spending-overview-tools .overview-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 36px; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 1px solid #dce5eb; border-radius: 8px; background: #fff; color: #526174; cursor: pointer; }
+.spending-module .spending-overview-tools .overview-icon-button:hover { background: #f0f8f7; border-color: #258b8c; }
+.spending-module .spending-overview-tools .overview-icon-button:focus-visible { outline: 2px solid #258b8c; outline-offset: 2px; }
+.spending-module .spending-overview-tools .overview-icon-button[aria-pressed="true"] { background: #e8f3f2; color: #237c7d; border-color: #258b8c; }
+
+.spending-module .payment-composer-head .spending-actions { display: flex; align-items: center; gap: 10px; }
+.spending-module .payment-composer-head .spending-actions .overview-icon-button { display: inline-flex; align-items: center; justify-content: center; width: 36px; height: 36px; min-height: 36px; padding: 0; border: 1px solid #dce5eb; border-radius: 8px; background: #fff; color: #526174; cursor: pointer; }
+.spending-module .payment-composer-head .spending-actions .overview-icon-button[aria-pressed="true"] { background: #e8f3f2; color: #237c7d; border-color: #258b8c; }
+
+.spending-expense-overlay { position: fixed; inset: 0; z-index: 1000; background: rgb(17 34 51 / 35%); display: flex; align-items: center; justify-content: center; padding: 28px; overflow-y: auto; }
+.spending-expense-dialog { position: relative; width: min(1320px, 100%); max-height: calc(100dvh - 56px); overflow-y: auto; border-radius: 16px; background: #fff; box-shadow: 0 24px 80px rgb(17 34 51 / 22%); outline: none; }
+.spending-expense-dialog .payment-composer { margin: 0; border: 0; }
+@media (max-width: 650px) { .spending-expense-overlay { padding: 10px; } .spending-expense-dialog { max-height: calc(100dvh - 20px); } }
+
+.spending-module .spending-actions > .overview-icon-button.spending-new-expense-button { position: relative; background: #237c7d; border-color: #237c7d; color: #fff; }
+.spending-module .spending-actions > .overview-icon-button.spending-new-expense-button:hover { background: #196667; border-color: #196667; }
+.spending-module .spending-actions .spending-new-expense-button > .spending-new-expense-plus { position: absolute; top: 3px; right: 3px; width: 11px; height: 11px; padding: 1px; border-radius: 50%; background: #237c7d; color: #fff; }
+
+.spending-module .spending-expense-dialog .payment-composer-head { padding: 14px 18px; align-items: center; }
+.spending-expense-dialog .payment-composer-head .spending-actions { flex-shrink: 0; gap: 10px; }
+/* A single expense window with contextual selection drawers. */
+.spending-expense-dialog:has(.payment-composer-compact) { width: min(650px, 100%); }
+.spending-expense-dialog .spending-cogs-editor { margin: 0; padding: 0; border: 0; border-radius: 0; box-shadow: none; background: transparent; }
+.spending-expense-dialog .payment-composer-compact { border: 0 !important; box-shadow: none !important; border-radius: 0 !important; }
+.spending-module .payment-composer-compact .payment-composer-body { display: block; }
+.spending-module .payment-composer-compact .payment-composer-details { width: 100%; border: 0; padding: 20px 24px; background: #fff; }
+.spending-module .payment-composer-compact .payment-requisites { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.spending-module .payment-composer-compact .payment-requisites > h3, .spending-module .payment-composer-compact .payment-requisites > label:last-child { grid-column: 1 / -1; }
+.spending-module .expense-summary-row.is-interactive { padding: 10px; border: 1px solid #e2e9ed; border-radius: 10px; cursor: pointer; align-items: center; }
+.spending-module .expense-summary-row.is-interactive:hover { background: #eff8f6; border-color: #237c7d; }
+.spending-module .expense-summary-row.is-interactive:focus-visible { outline: 2px solid #237c7d; outline-offset: 2px; }
+.spending-module .payment-composer-compact .expense-selection-panel { display: none; }
+.spending-module .payment-composer-compact .expense-selection-panel.is-open { display: block; position: fixed; z-index: 1100; top: 20px; bottom: 20px; right: 20px; width: min(680px, calc(100vw - 40px)); padding: 22px; overflow-y: auto; background: #fff; border: 1px solid #dce5eb; border-radius: 14px; box-shadow: 0 12px 60px rgb(17 34 51 / 25%); animation: expense-drawer-in .2s ease-out; }
+.expense-selection-heading { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+.expense-selection-heading button { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid #dce5eb; background: white; border-radius: 8px; cursor: pointer; }
+.spending-module .expense-selection-panel > .payment-section { display: none; }
+.spending-module .expense-selection-panel[data-panel="school"] > .payment-section:first-of-type,
+.spending-module .expense-selection-panel[data-panel="transfer"] > .payment-section:first-of-type,
+.spending-module .expense-selection-panel[data-panel="period"] > .payment-period-section,
+.spending-module .expense-selection-panel[data-panel="route"] > .extra-trip-route-row { display: block; }
+.expense-selection-panel[data-panel="school"] .spending-transfer-strip, .expense-selection-panel[data-panel="school"] .payment-field-label,
+.expense-selection-panel[data-panel="transfer"] .spending-school-strip { display: none; }
+.spending-module .expense-selection-panel .spending-school-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.spending-module .expense-selection-done { margin-top: 20px; width: 100%; }
+.spending-module .payment-composer-compact .payment-composer-footer { flex-wrap: wrap; gap: 12px; padding: 16px 24px; }
+.expense-recipient-drawer .payment-driver-modal-overlay { justify-content: flex-end; }
+@keyframes expense-drawer-in { from { opacity: 0; transform: translateX(32px); } to { opacity: 1; transform: translateX(0); } }
+@media (prefers-reduced-motion: reduce) { .spending-module .expense-selection-panel.is-open { animation: none; } }
+@media (max-width: 650px) { .spending-module .payment-composer-compact .payment-requisites { grid-template-columns: 1fr; } }
+
+.spending-finance-picker.expense-recipient-drawer .payment-picker-overlay { justify-content: flex-end; padding: 20px; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker { width: min(720px, 100%); height: calc(100dvh - 40px); max-height: calc(100dvh - 40px); margin: 0; animation: expense-drawer-in .2s ease-out; }
+/* Keep contextual drawers attached to the expense window's frame. */
+.spending-expense-dialog:has(.payment-composer-compact) { overflow: visible; }
+.spending-module .payment-composer-compact .expense-selection-panel.is-open { position: absolute; top: 0; bottom: 0; right: auto; left: 100%; width: min(560px, calc((100vw - 650px) / 2 - 28px)); min-width: 300px; max-height: 100%; border-radius: 0 14px 14px 0; box-sizing: border-box; }
+.spending-expense-dialog:has(.has-selection-panel) { border-radius: 16px 0 0 16px; }
+@media (max-width: 1250px) {
+  .spending-module .payment-composer-compact .expense-selection-panel.is-open { left: auto; right: 0; width: min(560px, 100%); min-width: 0; border-radius: 14px; }
+}
+.spending-finance-picker.expense-recipient-drawer .payment-picker-overlay { position: fixed; inset: auto; top: var(--expense-frame-top); left: var(--expense-frame-right); width: max(300px, calc(100vw - var(--expense-frame-right) - 28px)); height: var(--expense-frame-height); padding: 0; background: transparent; align-items: stretch; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker { width: 100%; height: 100%; max-height: 100%; border-radius: 0 14px 14px 0; }
+@media (max-width: 1250px) { .spending-finance-picker.expense-recipient-drawer .payment-picker-overlay { left: auto; right: max(10px, calc((100vw - 650px) / 2)); width: min(560px, calc(100vw - 20px)); } }
+.spending-expense-dialog .payment-composer-compact { border-radius: 16px !important; }
+.spending-expense-dialog:has(.has-selection-panel) .payment-composer-compact { border-radius: 16px 0 0 16px !important; }
+/* Restore the original wide expense window. */
+.spending-expense-dialog:has(.payment-composer-compact) { width: min(1320px, 100%); }
+.spending-module .payment-composer-compact .expense-selection-panel.is-open { left: auto; right: 0; width: min(560px, 100%); min-width: 0; border-radius: 0 14px 14px 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-overlay { left: auto; right: max(28px, calc((100vw - 1320px) / 2)); width: min(560px, calc(100vw - 56px)); }
+@media (max-width: 650px) { .spending-finance-picker.expense-recipient-drawer .payment-picker-overlay { right: 10px; width: calc(100vw - 20px); } }
+.spending-expense-dialog:has(.payment-composer-compact) { border-radius: 16px; }
+.spending-expense-dialog:has(.has-selection-panel) .payment-composer-compact { border-radius: 16px !important; }
+.spending-module .payment-composer-compact .expense-selection-panel.is-open { border-radius: 0 16px 16px 0; }
+.spending-module .payment-composer-compact .payment-composer-details > .payment-type-switch { display: flex; width: fit-content; margin: 14px 0; }
+.spending-module .expense-summary-icon { width: 42px; height: 42px; }
+.spending-module .expense-summary-icon svg { width: 24px; height: 24px; }
+.spending-module .expense-summary-row { grid-template-columns: 42px minmax(0,1fr); }
+.spending-module .expense-selection-panel .spending-school-logo { width: 56px; height: 56px; }
+.spending-module .expense-selection-panel .spending-school-logo img { width: 100%; height: 100%; object-fit: contain; }
+.spending-module .expense-selection-panel .spending-school-strip > button { min-height: 100px; font-size: 13px; }
+.expense-quarter-divider { grid-column: 1 / -1; margin: 16px 0 0; padding-top: 14px; border-top: 1px solid #dce5eb; font-size: 13px; }
+.spending-module .expense-selection-panel .payment-period-month-grid { grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; }
+.spending-module .expense-selection-panel .cogs-period-cards legend { min-height: 42px; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-overlay { z-index: 1200; display: flex; }
+.spending-expense-dialog:has(.payment-composer-compact) { overflow: hidden; }
+.spending-module .payment-composer-compact .payment-composer-details { max-height: calc(100dvh - 220px); overflow-y: auto; }
+.spending-module .payment-composer-compact .expense-selection-panel .spending-transfer-strip { overflow-x: auto; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards { display: grid; grid-template-columns: 1fr; gap: 8px; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) { grid-template-columns: 18px minmax(0,1fr) 110px 36px; height: auto; min-height: 84px; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-row .payment-driver-choice { min-width: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-tools { display: flex; flex-direction: column; align-items: stretch; }
+.spending-finance-picker.expense-recipient-drawer .payment-common-amount { display: flex; flex-wrap: wrap; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-rows { min-height: 0; flex: 1; max-height: none; overflow-x: hidden; }
+.spending-expense-dialog:has(.payment-composer-compact) { overflow: visible; }
+.spending-expense-dialog .payment-composer-compact > .payment-composer-head { border-radius: 16px 16px 0 0; }
+.spending-expense-dialog .payment-composer-compact > .payment-composer-footer { border-radius: 0 0 16px 16px; }
+.spending-module .expense-selection-panel.is-open { overscroll-behavior: contain; }
+/* Give school logos their full height and use the available drawer space. */
+.spending-module .payment-composer-compact .expense-selection-panel[data-panel="school"] .spending-school-strip { gap: 24px 16px; }
+.spending-module .payment-composer-compact .expense-selection-panel[data-panel="school"] .spending-school-strip > button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; height: auto; min-height: 132px; padding: 12px 6px; overflow: visible; }
+.spending-module .payment-composer-compact .expense-selection-panel .spending-school-logo { display: grid; place-items: center; flex: 0 0 64px; width: 64px; height: 64px; min-height: 64px; overflow: hidden; border-radius: 12px; }
+.spending-module .payment-composer-compact .expense-selection-panel .spending-school-logo img { display: block; width: 100%; height: 100%; max-height: none; object-fit: contain; }
+.spending-module .payment-composer-compact .expense-selection-done { display: flex; justify-content: center; align-items: center; min-height: 42px; background: #237c7d; border: 1px solid #237c7d; color: #fff; font-weight: 600; border-radius: 8px; }
+.spending-module .payment-composer-compact .expense-selection-done:hover { background: #196667; border-color: #196667; }
+.spending-module .payment-composer-compact .expense-selection-panel { scrollbar-width: none; }
+.spending-module .payment-composer-compact .expense-selection-panel::-webkit-scrollbar { display: none; }
+.spending-module .expense-summary-school-logo { display: block; width: 100%; height: 100%; object-fit: contain; border-radius: 8px; background: #fff; }
+.spending-module .payment-composer-compact .expense-selection-panel.is-open { display: flex; flex-direction: column; overflow: hidden; }
+.spending-module .expense-selection-panel > .expense-selection-heading { flex-shrink: 0; }
+.spending-module .expense-selection-panel > .payment-section { flex: 1; min-height: 0; overflow-y: auto; scrollbar-width: none; margin-bottom: 16px; }
+.spending-module .expense-selection-panel > .payment-section::-webkit-scrollbar { display: none; }
+.spending-module .payment-composer-compact .expense-selection-done { flex-shrink: 0; margin-top: auto; margin-bottom: 0; }
+.spending-module .payment-composer-compact .expense-selection-panel[data-panel="transfer"] .spending-transfer-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; width: 100%; overflow: visible; padding: 8px 0; }
+.spending-module .payment-composer-compact .expense-selection-panel[data-panel="transfer"] .ow-transfer-cell { width: 100%; min-width: 0; height: 82px; min-height: 82px; margin: 0; border-radius: 10px; }
+.spending-module .payment-composer-compact .expense-selection-panel[data-panel="transfer"] .ow-transfer-cell-count { min-height: 28px; font-size: 14px; }
+.spending-module .payment-composer-compact .expense-selection-panel[data-panel="transfer"] .ow-transfer-cell-label { font-size: 16px; line-height: 32px; }
+@media (max-width: 480px) { .spending-module .payment-composer-compact .expense-selection-panel[data-panel="transfer"] .spending-transfer-strip { gap: 8px; } }
+/* The driver drawer joins the main window along a straight left edge. */
+.spending-finance-picker.expense-recipient-drawer .expense-modal.payment-picker { border-radius: 0 16px 16px 0; overflow: hidden; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker > .expense-modal-head { border-top-left-radius: 0; }
+.spending-module .expense-summary-transfer-tile { display: grid; place-items: center; width: 42px; height: 42px; box-sizing: border-box; border: 1px solid #8bc3c1; border-radius: 8px; background: #eef8f6; color: #237c7d; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row > input[type="checkbox"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) { grid-template-columns: minmax(0,1fr) 110px 36px; cursor: pointer; user-select: none; touch-action: pan-y; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row.selected { border-color: #237c7d; background: #eaf5f2; }
+.spending-finance-picker.expense-recipient-drawer .payment-transfer-row:focus-visible { outline: 2px solid #237c7d; outline-offset: 2px; }
+.expense-recipient-count { display: inline-grid; place-items: center; min-width: 24px; height: 24px; margin-right: 8px; border-radius: 6px; background: #e5f3ef; color: #237c7d; font-weight: 600; }
+/* Explicit positions after removing the checkbox column. */
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) > .payment-driver-choice { grid-column: 1; grid-row: 1; width: auto; justify-self: stretch; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) > .payment-picker-amounts { grid-column: 2; grid-row: 1; width: 110px; min-width: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) > .expense-cancel { grid-column: 3; grid-row: 1; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) .payment-picker-amounts input { width: 100%; min-width: 0; box-sizing: border-box; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row:not(.is-choosing) { grid-template-columns: minmax(0,1fr) 110px; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row > .expense-cancel[hidden] { display: none; }
+.spending-finance-picker.expense-recipient-drawer .payment-common-amount { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.spending-finance-picker.expense-recipient-drawer .payment-common-amount > input { grid-column: 1 / -1; width: 100%; min-width: 0; box-sizing: border-box; }
+.spending-finance-picker.expense-recipient-drawer .payment-common-amount > button { display: inline-flex; justify-content: center; align-items: center; gap: 6px; min-width: 0; padding: 8px; }
+.spending-module .payment-composer .cogs-period-cards .spending-period-button { display: flex; align-items: center; width: 100%; min-height: 58px; margin-top: 6px; padding: 10px 12px; text-align: left; border: 1px solid #dce5eb; border-radius: 8px; background: #fff; color: #192b40; cursor: pointer; }
+.spending-period-button > span { display: grid; gap: 5px; font-size: 13px; }
+.spending-period-button small { font-size: 10px; color: #627586; }
+.spending-module .payment-composer .cogs-period-cards .spending-period-button[aria-pressed="true"] { background: #eaf5f2; border-color: #237c7d; color: #196667; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards { min-width: 0; width: 100%; box-sizing: border-box; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row.is-choosing { display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap: 12px; width: 100%; min-width: 0; box-sizing: border-box; height: auto; padding: 14px; }
+.spending-finance-picker.expense-recipient-drawer .payment-transfer-row.is-choosing > .payment-picker-amount { grid-column: auto; grid-row: auto; min-width: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-transfer-row.is-choosing > .payment-driver-choice { grid-column: 1 / -1; grid-row: auto; min-width: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-transfer-row.is-choosing > .payment-picker-amounts { grid-column: 1; grid-row: auto; min-width: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-transfer-row.is-choosing > .expense-cancel { grid-column: 2; grid-row: auto; justify-self: end; margin: 0; align-self: end; }
+.spending-finance-picker.expense-recipient-drawer .payment-transfer-row.is-choosing select, .spending-finance-picker.expense-recipient-drawer .payment-transfer-row.is-choosing input { width: 100%; min-width: 0; box-sizing: border-box; }
+.spending-module .payment-composer-compact .payment-requisites { grid-template-columns: repeat(3, minmax(0,1fr)); align-items: start; }
+.spending-module .payment-composer-compact .payment-requisites > label { min-width: 0; }
+.spending-module .payment-composer-compact .payment-requisites > label > input, .spending-module .payment-composer-compact .payment-requisites > label > select { height: 40px; min-height: 40px; width: 100%; box-sizing: border-box; }
+@media (max-width: 650px) { .spending-module .payment-composer-compact .payment-requisites { grid-template-columns: 1fr; } }
+/* Expanded recipient editor reserves space instead of overlapping later rows. */
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards { grid-auto-rows: auto; align-content: start; align-items: start; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .payment-transfer-row.is-choosing { height: auto !important; min-height: 250px; grid-template-rows: auto auto auto; overflow: visible; margin: 0 0 8px; align-items: start; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .is-choosing > .payment-picker-amount { position: static; align-self: start; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .is-choosing > .payment-driver-choice { position: static; grid-column: 1 / -1; grid-row: 2; width: 100%; margin: 0; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .is-choosing > .payment-picker-amounts { position: static; grid-column: 1; grid-row: 3; width: 100%; }
+.spending-finance-picker.expense-recipient-drawer .payment-picker-cards .is-choosing > .expense-cancel { position: static; grid-column: 2; grid-row: 3; }
+.spending-module .expense-category-type-row { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin: 14px 0 20px; }
+.spending-module .expense-category-type-row > :first-child { flex: 0 1 auto; min-width: 0; margin: 0; }
+.spending-module .expense-category-type-row .payment-type-switch { flex: 0 0 auto; margin: 0; }
+.spending-module .expense-general-selection[data-selection="Категория"] > .expense-selection-category,
+.spending-module .expense-general-selection[data-selection="Подкатегория"] > .expense-selection-category,
+.spending-module .expense-general-selection[data-selection="Вид расхода"] > .expense-selection-category,
+.spending-module .expense-general-selection[data-selection="Школа"] > .expense-selection-school,
+.spending-module .expense-general-selection[data-selection="Отдел"] > .expense-selection-payroll,
+.spending-module .expense-general-selection[data-selection="Получатель"] > .expense-selection-payroll,
+.spending-module .expense-general-selection[data-selection="За период"] > .expense-selection-payroll,
+.spending-module .expense-general-selection[data-selection="За период"] > .expense-selection-months { display: block; }
+.spending-module .expense-general-selection .spending-school-strip { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.spending-module .payment-composer-compact .payment-composer-details > .expense-composer-fields { margin: 18px 0; }
+.spending-module .expense-general-selection[data-selection="Маршрут и сумма"] > .expense-selection-trip { display: block; }
+.spending-module .payment-composer-compact .capex-inline-categories { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 14px; margin: 20px 0; }
+.spending-module .capex-inline-categories > button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; min-height: 110px; padding: 14px; border: 1px solid #dce5eb; border-radius: 10px; background: #fff; cursor: pointer; }
+.spending-module .capex-inline-categories > button[aria-pressed="true"] { border-color: #237c7d; background: #eaf5f2; color: #196667; }
+@media (max-width: 650px) { .spending-module .payment-composer-compact .capex-inline-categories { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+.spending-module .payment-composer-compact .capex-inline-categories > button { height: auto; min-height: 148px; gap: 14px; padding: 22px 14px; }
+.spending-module .payment-composer-compact .capex-inline-categories .spending-school-logo { display: grid; place-items: center; width: 64px; height: 64px; min-height: 64px; flex: 0 0 64px; border-radius: 14px; }
+.spending-module .payment-composer-compact .capex-inline-categories .spending-school-logo svg { width: 38px; height: 38px; }
+.spending-module .expense-summary-list:empty { display: none; }
+.spending-module .payment-composer-compact .personal-inline-categories { grid-template-columns: repeat(6,minmax(0,1fr)); }
+@media (max-width: 1000px) { .spending-module .payment-composer-compact .personal-inline-categories { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+@media (max-width: 650px) { .spending-module .payment-composer-compact .personal-inline-categories { grid-template-columns: repeat(2,minmax(0,1fr)); } }
+/* Stable frame across expense categories. */
+.spending-expense-dialog:has(.payment-composer-compact) { height: min(920px, calc(100dvh - 56px)); }
+.spending-expense-dialog .spending-cogs-editor { height: 100%; }
+.spending-expense-dialog .payment-composer-compact { height: 100%; display: flex; flex-direction: column; }
+.spending-module .payment-composer-compact > .payment-composer-head, .spending-module .payment-composer-compact > .payment-composer-footer { flex-shrink: 0; }
+.spending-module .payment-composer-compact .payment-composer-body { flex: 1; min-height: 0; overflow: hidden; }
+.spending-module .payment-composer-compact .payment-composer-details { height: 100%; max-height: none; box-sizing: border-box; }
+.spending-module .payment-composer-compact .expense-summary-row dd input { width: 100%; min-width: 0; box-sizing: border-box; }
+.spending-module .payment-composer-compact .personal-inline-categories { grid-template-columns: repeat(8,minmax(0,1fr)); gap: 8px; margin: 12px 0; }
+.spending-module .payment-composer-compact .personal-inline-categories > button { min-height: 80px; padding: 8px 4px; gap: 6px; font-size: 11px; }
+.spending-module .payment-composer-compact .personal-inline-categories .spending-school-logo { width: 36px; height: 36px; min-height: 36px; flex-basis: 36px; border-radius: 9px; }
+.spending-module .payment-composer-compact .personal-inline-categories .spending-school-logo svg { width: 24px; height: 24px; }
+@media (max-width: 850px) { .spending-module .payment-composer-compact .personal-inline-categories { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+@media (max-width: 650px) { .spending-expense-dialog:has(.payment-composer-compact) { height: calc(100dvh - 20px); } }
+.spending-module .payment-composer-compact .payment-composer-body { overflow: visible; }
+.spending-module.office-recipient-drawer { position: fixed; inset: auto; top: var(--office-top); right: max(28px,calc((100vw - 1320px) / 2)); width: min(560px,calc(100vw - 56px)); height: var(--office-height); padding: 0; z-index: 1200; background: transparent; backdrop-filter: none; display: flex; }
+.office-recipient-drawer .payment-driver-modal { display: flex; flex-direction: column; width: 100%; max-height: 100%; height: 100%; border-radius: 0 16px 16px 0; }
+.office-recipient-drawer .office-payroll-body { flex: 1; min-height: 0; overflow-y: auto; }
+.spending-module.office-recipient-drawer .office-payroll-cards { grid-template-columns: 1fr; }
+.spending-module.office-recipient-drawer .office-payroll-cards .payment-driver-card { display: grid; grid-template-columns: minmax(0,1fr) 110px; min-height: 80px; cursor: pointer; user-select: none; }
+.office-recipient-identity { display: flex; align-items: center; min-width: 0; }
+.office-recipient-identity > span { display: grid; gap: 5px; min-width: 0; }
+.spending-module.office-recipient-drawer .office-recipient-identity input[type="checkbox"] { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.office-recipient-drawer .payment-driver-card.is-selected { border-color: #237c7d; background: #eaf5f2; }
+.office-recipient-drawer .spending-batch-amount { display: flex; flex-wrap: wrap; gap: 8px; }
+.office-recipient-drawer .spending-batch-amount > label { width: 100%; }
+.office-recipient-drawer .payment-driver-modal > footer { flex-shrink: 0; }
+.office-recipient-drawer .payment-driver-modal > footer .spending-primary { background: #237c7d; border-color: #237c7d; color: #fff; }
+/* Each hierarchical step shows only its own choices. */
+.expense-general-selection[data-selection="Категория"] .expense-kind-picker { display: none; }
+.expense-general-selection[data-selection="Вид расхода"] .expense-selection-category > h3,
+.expense-general-selection[data-selection="Вид расхода"] .expense-selection-category > .expense-group-strip { display: none; }
+.spending-module .expense-general-selection[data-selection="Получатель"] > .expense-selection-category { display: block; }
+.expense-general-selection[data-selection="Получатель"] .expense-selection-category > h3,
+.expense-general-selection[data-selection="Получатель"] .expense-selection-category > .expense-group-strip,
+.expense-general-selection[data-selection="Получатель"] .expense-kind-picker > h3,
+.expense-general-selection[data-selection="Получатель"] .expense-kind-strip { display: none; }
+/* Categories stay visible beside the current expense workspace. */
+.spending-module.spending-split-view { display: flex; flex-direction: column; overflow: hidden; min-height: 0; }
+.spending-split-view.is-embedded { height: calc(100dvh - 142px); }
+.spending-split-layout { display: grid; grid-template-columns: 228px minmax(0,1fr); gap: 18px; flex: 1; min-height: 0; }
+.spending-module.spending-split-view .spending-categories { display: flex; flex-direction: column; gap: 8px; margin: 0; min-height: 0; overflow-y: auto; }
+.spending-module.spending-split-view .spending-categories > button { flex: 0 0 auto; display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 5px 8px; padding: 12px 14px; border-radius: 10px; min-height: 80px; align-content: center; }
+.spending-split-view .spending-category-name { grid-column: 1 / -1; font-size: 13px; }
+.spending-split-view .spending-category-description { display: none; }
+.spending-module.spending-split-view .spending-categories strong { font-size: 16px; margin: 0; white-space: nowrap; }
+.spending-split-view .spending-categories small { font-size: 10px; align-self: end; text-align: right; }
+.spending-split-view .spending-categories .spending-total-tile { margin-top: auto; }
+.spending-split-view .spending-workspace { min-width: 0; min-height: 0; overflow: auto; margin: 0; }
+.spending-split-view .spending-workspace .spending-register-schools { height: 100%; min-height: 0; border-radius: 14px; }
+.spending-split-view .spending-school-overview { padding: 18px; }
+.spending-module.spending-split-view .spending-school-expenses { grid-template-columns: repeat(6,minmax(0,1fr)); gap: 12px; }
+.spending-module.spending-split-view .spending-school-expenses > button { min-height: 134px; padding: 14px 8px; }
+.spending-split-view .spending-school-expenses strong { font-size: 12px; }
+.spending-split-view .spending-register-heading { padding: 18px; }
+.spending-split-view .spending-return-to-form { display: none; }
+@media (max-width: 1100px) { .spending-split-layout { grid-template-columns: 200px minmax(0,1fr); gap: 12px; } .spending-module.spending-split-view .spending-school-expenses { grid-template-columns: repeat(4,minmax(0,1fr)); } }
+@media (max-width: 760px) {
+  .spending-module.spending-split-view { overflow: auto; }
+  .spending-split-view.is-embedded { height: auto; min-height: 100%; }
+  .spending-split-layout { display: flex; flex-direction: column; }
+  .spending-module.spending-split-view .spending-categories { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); overflow: visible; }
+  .spending-module.spending-split-view .spending-categories > button { display: flex; align-items: flex-start; }
+  .spending-split-view .spending-categories .spending-total-tile { margin-top: 0; }
+  .spending-split-view .spending-workspace { overflow: visible; }
+  .spending-split-view .spending-workspace .spending-register-schools { height: auto; }
+  .spending-module.spending-split-view .spending-school-expenses { grid-template-columns: repeat(3,minmax(0,1fr)); }
+}
+.spending-split-view .spending-categories small { grid-column: 1 / -1; text-align: left; }
+.spending-module.spending-split-view .spending-categories > button { row-gap: 3px; }
+/* Expense creation lives below the overview in the right scrolling workspace. */
+.spending-split-view .spending-workspace { scroll-behavior: smooth; }
+.spending-inline-expense { position: relative; margin-top: 18px; padding-bottom: 2px; }
+.spending-inline-expense .spending-expense-dialog:has(.payment-composer-compact) { width: 100%; height: min(920px, calc(100dvh - 170px)); max-height: none; box-shadow: none; border: 1px solid #dce5eb; border-radius: 14px; }
+.spending-inline-expense .spending-expense-dialog { position: relative; }
+.spending-split-view .spending-workspace:has(.spending-inline-expense) .spending-register-schools { height: calc(100dvh - 190px); }
+@media (prefers-reduced-motion: reduce) { .spending-split-view .spending-workspace { scroll-behavior: auto; } }
