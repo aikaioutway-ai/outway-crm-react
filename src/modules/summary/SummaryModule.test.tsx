@@ -82,6 +82,14 @@ test('tab 2.0 counts only minivan and sedan cars, passengers, revenue and tax, w
   expect(screen.queryByText('Ребёнок f')).not.toBeInTheDocument();
   fireEvent.click(screen.getByText('Ребёнок c'));
   expect(onOpenChild).toHaveBeenCalledWith('fam-c', 'c');
+  // Полоса трансферов: только минивэн №2 и седан №3; клик по №3 оставляет в таблице его детей.
+  expect(screen.queryByTitle(/^Трансфер 1 ·/)).not.toBeInTheDocument();
+  expect(screen.getByTitle('Трансфер 2 · 2 детей')).toBeInTheDocument();
+  fireEvent.click(screen.getByTitle('Трансфер 3 · 1 детей'));
+  expect(await screen.findByText('Ребёнок e')).toBeInTheDocument();
+  expect(screen.queryByText('Ребёнок c')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTitle(/^Все трансферы/));
+  expect(await screen.findByText('Ребёнок c')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /Все школы/ }));
   expect(screen.queryByText('Оплата водителю')).not.toBeInTheDocument();
 });

@@ -43,7 +43,7 @@ export default function TransferBarPages({ scopeKey, selectedKey = '', counts, c
   };
   return <>
     {pageCount > 1 && arrow(-1)}
-    {cells.slice(start, start + TRANSFERS_PER_PAGE)}
+    {cells.slice(start, Math.min(start + TRANSFERS_PER_PAGE, counts.length))}
     {pageCount > 1 && arrow(1)}
     {cells.slice(counts.length)}
   </>;

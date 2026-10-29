@@ -76,6 +76,7 @@ export interface ForecastChildRow {
   childName: string;
   parentName: string;
   transferNumber: string;
+  vehicleType: string;
   charged: number;
   tax: number;
 }
@@ -103,6 +104,7 @@ export function schoolChildren(rows: FamilyListRow[], schoolKey: string, charged
         childName: row.childName,
         parentName: row.parentName,
         transferNumber: row.transferNumber ?? '',
+        vehicleType: row.vehicleType,
         charged: amount,
         tax: Math.round(amount * REVENUE_TAX_RATE),
       };
