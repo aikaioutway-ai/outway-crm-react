@@ -12,6 +12,8 @@ import { KPI_COLORS } from '../families/ManagerOverview';
 import { transferStats } from '../families/LogisticsOverview';
 import { useTestTransfers } from '../families/testTransfers';
 import { useLogisticsTable } from '../../hooks/useCrmQueries';
+import { LIGHT_VEHICLE_TYPES } from '../families/familiesRowHelpers';
+import type { VehicleType } from '../../types';
 import { computeSummaryRows, sumSummaryRows, SummarySchoolRow, WORKING_DAYS_OPTIONS, workingDaysFor } from './summaryForecast';
 
 const MONTH_PERIODS = ALL_PERIODS.filter(period => period.key !== 'deposit');
@@ -22,7 +24,8 @@ type ForecastTab = typeof FORECAST_TABS[number][0];
 
 interface Props {
   sessionToken?: string;
-  onSelectSchool: (schoolKey: string, periodKey: string) => void;
+  /** vehicleTypes — открыть школу только с этими типами машин (вкладка 2.0). */
+  onSelectSchool: (schoolKey: string, periodKey: string, vehicleTypes?: readonly VehicleType[]) => void;
 }
 
 export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
@@ -173,7 +176,7 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
           sortKey={isV2 ? 'school' : sortState.key}
           ascending={isV2 || sortState.dir === 'asc'}
           onSort={key => { if (!isV2 && (key === 'school' || key in totals)) handleSort(key as SortKey); }}
-          onSelect={key => onSelectSchool(key, period.key)}
+          onSelect={key => isV2 ? onSelectSchool(key, period.key, LIGHT_VEHICLE_TYPES) : onSelectSchool(key, period.key)}
         />
       )}
 

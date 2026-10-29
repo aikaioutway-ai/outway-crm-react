@@ -71,3 +71,13 @@ describe('transferIdentityKey', () => {
     });
   });
 });
+
+describe('vehicle type filter', () => {
+  it('passes everything without a filter and only listed types with it', () => {
+    const { matchesVehicleTypes, LIGHT_VEHICLE_TYPES } = jest.requireActual('./familiesRowHelpers');
+    expect(matchesVehicleTypes({ vehicleType: 'microbus' })).toBe(true);
+    expect(matchesVehicleTypes({ vehicleType: 'microbus' }, LIGHT_VEHICLE_TYPES)).toBe(false);
+    expect(matchesVehicleTypes({ vehicleType: 'minivan' }, LIGHT_VEHICLE_TYPES)).toBe(true);
+    expect(matchesVehicleTypes({ vehicleType: 'sedan' }, LIGHT_VEHICLE_TYPES)).toBe(true);
+  });
+});

@@ -2,6 +2,15 @@ import { formatClassName, formatName, formatPhone } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, VT_LABEL } from './constants';
 import { PaymentTableRow, V2DriverDocumentInput } from '../../services/crmV2Service';
 import type { ChildRow } from './FamiliesPage';
+import type { VehicleType } from '../../types';
+
+/** «Сводка 2.0» считает только легковые трансферы: минивэны и седаны. */
+export const LIGHT_VEHICLE_TYPES: readonly VehicleType[] = ['minivan', 'sedan'];
+
+/** Фильтр по типу машины трансфера. Пустой список — без фильтра. */
+export function matchesVehicleTypes(row: { vehicleType?: string | null }, vehicleTypes?: readonly string[]): boolean {
+  return !vehicleTypes?.length || vehicleTypes.includes(row.vehicleType ?? '');
+}
 
 export function normalizeRows(rows: ChildRow[]): ChildRow[] {
   return rows.map(row => ({

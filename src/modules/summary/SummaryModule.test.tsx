@@ -15,9 +15,10 @@ jest.mock('../../services/summaryService', () => ({
   setSummaryWorkingDays: jest.fn(),
 }));
 
+const onSelectSchool = jest.fn();
 function show() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><SummaryModule onSelectSchool={jest.fn()} /></QueryClientProvider>);
+  return render(<QueryClientProvider client={client}><SummaryModule onSelectSchool={onSelectSchool} /></QueryClientProvider>);
 }
 
 beforeEach(() => {
@@ -61,4 +62,14 @@ test('tab 2.0 counts only minivan and sedan cars and passengers, without Days an
   expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2);
   expect(screen.queryByText(/120\s?000/)).not.toBeInTheDocument();
   expect(screen.getByText(/Revenue, COGS, налог и Gross Profit появятся/)).toBeInTheDocument();
+  // Клик по школе во 2.0 открывает её только с минивэнами и седанами.
+  fireEvent.click(screen.getByText('Тестовая школа'));
+  expect(onSelectSchool).toHaveBeenCalledWith('TEST', expect.any(String), ['minivan', 'sedan']);
+});
+
+test('school click in 1.0 opens the school without a vehicle filter', async () => {
+  (fetchSummaryForecast as jest.Mock).mockResolvedValue([{ branchId: '1', branchCode: 'TEST', branchName: 'Тестовая школа', revenue: 120000, microbusCount: 2 }]);
+  show();
+  fireEvent.click(await screen.findByText('Тестовая школа'));
+  expect(onSelectSchool).toHaveBeenCalledWith('TEST', expect.any(String));
 });

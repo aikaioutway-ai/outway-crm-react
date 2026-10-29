@@ -47,3 +47,17 @@ test('payment badge counts debtor families instead of unboarded children', () =>
   expect(screen.getAllByTitle(/Должников: 1$/)).toHaveLength(1);
   expect(screen.queryByTitle(/Посадка не подтверждена/)).not.toBeInTheDocument();
 });
+
+test('vehicle filter keeps only minivan and sedan transfers and their children', () => {
+  (useFamiliesTable as jest.Mock).mockReturnValue({ data: [
+    { familyId: 'a', branchFilter: 'AES', transferNumber: '1', status: 'boarded', debtAmount: 0, vehicleType: 'microbus' },
+    { familyId: 'b', branchFilter: 'AES', transferNumber: '2', status: 'boarded', debtAmount: 0, vehicleType: 'minivan' },
+    { familyId: 'c', branchFilter: 'AES', transferNumber: '3', status: 'boarded', debtAmount: 0, vehicleType: 'sedan' },
+  ] });
+  render(<SchoolTransferDashboard schoolKey="AES" mode="charges" vehicleTypes={['minivan', 'sedan']} />);
+  const names = screen.getAllByRole('button').map(button => button.textContent);
+  expect(names).not.toContain('1');
+  expect(names).toEqual(expect.arrayContaining(['2', '3']));
+  // «Все» — только дети минивэнов и седанов.
+  expect(screen.getAllByTitle(/^2 детей/).length).toBeGreaterThan(0);
+});
