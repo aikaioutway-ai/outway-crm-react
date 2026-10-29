@@ -704,3 +704,9 @@
   .spending-module.spending-split-view .spending-categories > button { min-height: 0; padding: 8px 12px; gap: 2px 8px; }
   .spending-module.spending-split-view .spending-categories strong { font-size: 15px; }
 }
+
+/* Сумма редактируемой записи, пока её не получил выбранный получатель: бледно, чтобы было видно, что она ещё не распределена. */
+.spending-module .payment-carried, .spending-module .payment-footer-total strong.payment-carried { color: #9aa7b4; font-weight: 600; }
+.spending-module .payment-carried small { color: #b3bec8; }
+.spending-module .payment-carried-amount { color: #8796a5; font-size: 11px; margin: 2px 0 0; }
+.payment-picker-footer strong.payment-carried, .office-payroll-overlay b.payment-carried { color: #9aa7b4; }

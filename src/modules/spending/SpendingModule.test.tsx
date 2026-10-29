@@ -403,3 +403,22 @@ test('switching category keeps the table view and shows that category records', 
   expect(screen.getByText('Аренда офиса')).toBeInTheDocument();
   expect(screen.queryByText('Аванс водителю')).not.toBeInTheDocument();
 });
+
+test('editing a record without an employee in office payroll keeps its amount for the chosen employee', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  localStorage.setItem('outway-spending-v1:carry-owner', JSON.stringify([
+    { id: 'moved', category: 'OPEX', subcategory: 'Авансы сотрудникам', date: today, amount: 10000, description: 'Аванс', recipient: '', method: 'Наличные', comment: 'перенос' },
+  ]));
+  render(<SpendingModule userId="carry-owner" role="admin" />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Редактировать Аванс' }));
+  expect(document.querySelector('.payment-footer-total .payment-carried')).toHaveTextContent(/^10.000/);
+  fireEvent.click(within(screen.getByRole('group', { name: 'Отдел выплаты' })).getByRole('button', { name: 'Сервис' }));
+  const picker = screen.getByRole('dialog', { name: 'Сотрудники и суммы' });
+  expect(within(picker).getByLabelText('Сумма Тестовый сотрудник')).toHaveAttribute('placeholder', expect.stringMatching(/^10.000$/));
+  fireEvent.click(within(picker).getByRole('checkbox'));
+  expect(within(picker).getByLabelText('Сумма Тестовый сотрудник')).toHaveValue(10000);
+});

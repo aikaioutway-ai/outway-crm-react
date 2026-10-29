@@ -66,8 +66,10 @@ test('finds and pays a driver without selecting school or transfer first', () =>
 test('editing a record without a driver keeps its amount for the chosen driver', () => {
   const save = jest.fn((_entries: SpendingEntry[]) => true);
   render(<CogsPaymentForm entry={{ id: 'finance:v2_expenses:x', category: 'COGS', subcategory: 'Авансы водителям', date: '2026-10-15', amount: 10000, description: 'Аванс Водителям', recipient: '', method: 'Безналичные', comment: 'Аванс школа Нова 8 трансфер Алым' }} disabled={false} onCancel={() => undefined} onSave={save} />);
-  expect(screen.getByText(/Сумма записи: 10.000 сом/)).toBeInTheDocument();
+  expect(screen.getByText('Сумма записи — подставится выбранному водителю')).toBeInTheDocument();
+  expect(document.querySelector('.payment-footer-total .payment-carried')).toHaveTextContent(/^10.000/);
   fireEvent.click(screen.getByRole('button', { name: 'Выбрать водителей' }));
+  expect(screen.getByLabelText('Сумма для всех выбранных')).toHaveAttribute('placeholder', expect.stringMatching(/^10.000 — сумма записи$/));
   fireEvent.click(screen.getByLabelText('Водитель Б'));
   expect(screen.getByLabelText('Сумма для Водитель Б')).toHaveValue(10000);
   fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
