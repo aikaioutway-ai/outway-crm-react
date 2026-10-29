@@ -31,3 +31,9 @@ test('pages through history without losing older payments', async () => {
   expect(screen.getByText('01.10.2026')).toBeInTheDocument();
   expect(screen.getByRole('button', { name: 'Следующие платежи' })).toBeDisabled();
 });
+
+test('a parent refund shows how much leaves the family balance', async () => {
+  fetchSnapshot.mockResolvedValue({ mainBalance: 5000, payments: [] } as unknown as Awaited<ReturnType<typeof fetchFinanceSnapshot>>);
+  render(<CompensationFamilyFinance familyId="family4" walletChange={2000} />);
+  expect(await screen.findByText(/спишется/)).toHaveTextContent('спишется 2 000 сом. Баланс станет 3 000 сом.');
+});

@@ -8,6 +8,7 @@ import ExpenseComposer from './ExpenseComposer';
 import SpendingRecordsTable from './SpendingRecordsTable';
 import { fetchSpendingEntries, saveSpendingEntries, deleteSpendingEntry } from '../../services/spendingService';
 import { queryClient } from '../../services/queryClient';
+import { invalidateFinanceCache } from '../../services/financeService';
 import CogsPaymentForm from './CogsPaymentForm';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
 import { SCHOOL_TABS, isSchoolVisible, CASHIER_PERIODS, currentCashierPeriodKey } from '../families/constants';
@@ -22,7 +23,7 @@ export const SPENDING_CATEGORIES = {
   Logistics: ['Оплата водителю', 'ГСМ', 'Транспорт и такси', 'Возврат', 'Прочее'],
 };
 type Category = keyof typeof SPENDING_CATEGORIES;
-export type SpendingEntry = { sourceRef?: string; classificationChanged?: boolean; originalCategory?: string; originalSubcategory?: string; id: string; category: Category; subcategory: string; date: string; amount: number; description: string; recipient: string; method: string; schoolKey?: string; taxPeriodKey?: string; taxPeriods?: string[]; unitPrice?: number; quantity?: number; transferId?: string; driverId?: string; salaryPeriodKey?: string; paymentOrderNumber?: string; comment?: string; paymentOnly?: boolean; recipientKey?: string; transferNumber?: number; operationType?: string; departmentKey?: string; employeeId?: string; familyId?: string; childName?: string };
+export type SpendingEntry = { refundId?: string; sourceRef?: string; classificationChanged?: boolean; originalCategory?: string; originalSubcategory?: string; id: string; category: Category; subcategory: string; date: string; amount: number; description: string; recipient: string; method: string; schoolKey?: string; taxPeriodKey?: string; taxPeriods?: string[]; unitPrice?: number; quantity?: number; transferId?: string; driverId?: string; salaryPeriodKey?: string; paymentOrderNumber?: string; comment?: string; paymentOnly?: boolean; recipientKey?: string; transferNumber?: number; operationType?: string; departmentKey?: string; employeeId?: string; familyId?: string; childName?: string };
 type Entry = SpendingEntry;
 const descriptions: Record<Category, string> = {
   COGS: 'Авансы и зарплата водителям', 'Revenue Tax': 'Налог с выручки', OPEX: 'Офис и операционные расходы',
@@ -145,6 +146,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
         setError('');
         void queryClient.invalidateQueries({ queryKey: ['driverPayments'] });
         void queryClient.invalidateQueries({ queryKey: ['employeePaymentHistory'] });
+        if ([...changed, ...removed].some(row => row.familyId)) invalidateFinanceCache();
         window.dispatchEvent(new Event('outway-spending-updated'));
         onSaved();
       })().catch(reason => { setError(reason instanceof Error ? reason.message : 'Не удалось сохранить расход'); onFailed(); })

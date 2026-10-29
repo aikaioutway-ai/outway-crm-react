@@ -4,7 +4,8 @@ import type { FamilyPayment } from '../../types';
 import { money } from '../../utils/pricing';
 
 type Summary = { familyId: string; balance: number; payments: FamilyPayment[] };
-export default function CompensationFamilyFinance({ familyId }: { familyId: string }) {
+// walletChange — сколько спишется с баланса семьи при сохранении (для возврата родителю).
+export default function CompensationFamilyFinance({ familyId, walletChange }: { familyId: string; walletChange?: number }) {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [page, setPage] = useState(0);
   const [error, setError] = useState('');
@@ -20,5 +21,5 @@ export default function CompensationFamilyFinance({ familyId }: { familyId: stri
   }, [familyId]);
   if (error) return <p role="alert">{error}</p>;
   if (!summary || summary.familyId !== familyId) return <p role="status">Загрузка баланса и платежей…</p>;
-  return <div className="compensation-family-finance"><p>Баланс семьи: <strong>{money(summary.balance)} сом</strong></p><h3>История платежей</h3>{summary.payments.length ? <div className="spending-table-wrap"><table aria-label="История платежей семьи"><thead><tr><th>Дата</th><th>Сумма</th><th>Статус</th></tr></thead><tbody>{summary.payments.slice(page * 3, page * 3 + 3).map(payment => <tr key={payment.id}><td>{payment.paymentDate?.slice(0, 10).split('-').reverse().join('.') || '—'}</td><td>{money(payment.amount)} сом</td><td>{payment.status}</td></tr>)}</tbody></table>{summary.payments.length > 3 && <div className="spending-actions"><button type="button" aria-label="Предыдущие платежи" disabled={page === 0} onClick={() => setPage(current => current - 1)}>←</button><span>{page + 1} / {Math.ceil(summary.payments.length / 3)}</span><button type="button" aria-label="Следующие платежи" disabled={(page + 1) * 3 >= summary.payments.length} onClick={() => setPage(current => current + 1)}>→</button></div>}</div> : <p>Платежей пока нет</p>}</div>;
+  return <div className="compensation-family-finance"><p>Баланс семьи: <strong>{money(summary.balance)} сом</strong></p>{walletChange !== undefined && <p className="compensation-wallet-change">{walletChange ? <>После сохранения с баланса семьи {walletChange > 0 ? 'спишется' : 'вернётся'} <strong>{money(Math.abs(walletChange))} сом</strong>. Баланс станет <strong>{money(summary.balance - walletChange)} сом</strong>.</> : 'Сумма возврата уже списана с баланса семьи.'}</p>}<h3>История платежей</h3>{summary.payments.length ? <div className="spending-table-wrap"><table aria-label="История платежей семьи"><thead><tr><th>Дата</th><th>Сумма</th><th>Статус</th></tr></thead><tbody>{summary.payments.slice(page * 3, page * 3 + 3).map(payment => <tr key={payment.id}><td>{payment.paymentDate?.slice(0, 10).split('-').reverse().join('.') || '—'}</td><td>{money(payment.amount)} сом</td><td>{payment.status}</td></tr>)}</tbody></table>{summary.payments.length > 3 && <div className="spending-actions"><button type="button" aria-label="Предыдущие платежи" disabled={page === 0} onClick={() => setPage(current => current - 1)}>←</button><span>{page + 1} / {Math.ceil(summary.payments.length / 3)}</span><button type="button" aria-label="Следующие платежи" disabled={(page + 1) * 3 >= summary.payments.length} onClick={() => setPage(current => current + 1)}>→</button></div>}</div> : <p>Платежей пока нет</p>}</div>;
 }

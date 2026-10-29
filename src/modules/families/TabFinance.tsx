@@ -77,10 +77,13 @@ export default function TabFinance({
   onReceiptDetailsSaved,
 }: Props) {
   const clientExpenses = useClientExpenses(family.id);
-  const expenseRows = [
-    ...refunds.map(refund => ({ key: `refund:${refund.id}`, date: refund.requestedAt || '', refund, expense: null })),
-    ...clientExpenses.rows.map(expense => ({ key: `expense:${expense.id}`, date: expense.date, refund: null, expense })),
-  ].sort((a, b) => b.date.localeCompare(a.date));
+  // Платежи, возвраты и расходы на клиента — одна лента по дате, новые сверху.
+  const moneyRows = [
+    ...payments.map(payment => ({ key: `payment:${payment.id}`, date: payment.createdAt || payment.paymentDate || '', payment, refund: null, expense: null })),
+    ...refunds.map(refund => ({ key: `refund:${refund.id}`, date: refund.requestedAt || '', payment: null, refund, expense: null })),
+    // Возврат из «Расходов» уже показан строкой возврата — его расход не дублируем.
+    ...clientExpenses.rows.filter(expense => !expense.refundId || !refunds.some(refund => refund.id === expense.refundId)).map(expense => ({ key: `expense:${expense.id}`, date: expense.date, payment: null, refund: null, expense })),
+  ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
   const [addingPeriod, setAddingPeriod] = useState(false);
   const [creatingPeriod, setCreatingPeriod] = useState(false);
   const [newPeriodKey, setNewPeriodKey] = useState('9');
@@ -114,9 +117,6 @@ export default function TabFinance({
   const existingPeriodKeys = new Set(charges.map(c => periodGroupKey(c.periodMonth, c.year, c.chargeType)));
   const availablePeriods = ALL_PERIODS.filter(p => !existingPeriodKeys.has(periodGroupKey(p.month, p.year, p.key)));
   const periodRows = useMemo(() => buildPeriodRows(charges, payments, paymentItems), [charges, payments, paymentItems]);
-  const sortedPayments = useMemo(() => [...payments].sort((a, b) => (
-    new Date(b.createdAt || b.paymentDate || 0).getTime() - new Date(a.createdAt || a.paymentDate || 0).getTime()
-  )), [payments]);
 
   if (loading) return <Spinner />;
 
@@ -232,32 +232,28 @@ export default function TabFinance({
           )}
           </div>
           <div className="family-money-payment-list">
-          <Section title={`Платежи (${payments.length})`}>
+          <Section title={`Платежи и возвраты (${moneyRows.length})`}>
+            {clientExpenses.error && <p role="alert">{clientExpenses.error}</p>}
             <div style={paymentsListStyle}>
-              {sortedPayments.length === 0 ? <Empty text="Платежей нет" /> : sortedPayments.map(payment => (
+              {moneyRows.length === 0 ? <Empty text="Платежей и возвратов нет" /> : moneyRows.map(row => row.payment ? (
                 <PaymentRow
-                  key={payment.id}
-                  onOpenReceipt={()=>setPreview({url:payment.receiptUrl!,name:'Чек платежа',pdf:isPdfReceipt(payment.receiptUrl!),paymentId:payment.id})}
-                  payment={payment}
-                  items={paymentItems.filter(i => i.paymentId === payment.id)}
-                  canConfirm={canConfirmPayment && payment.status === 'На проверке'}
-                  confirming={confirmingPaymentId === payment.id}
-                  onConfirm={(actualPaymentDate) => confirmPayment(payment, actualPaymentDate)}
-                  onSave={updates => onSavePayment(payment, updates)}
-                  onDelete={() => onDeletePayment(payment)}
-                  onUnconfirm={onUnconfirmPayment && payment.status === 'Подтверждено' ? () => onUnconfirmPayment(payment) : undefined}
+                  key={row.key}
+                  onOpenReceipt={()=>setPreview({url:row.payment!.receiptUrl!,name:'Чек платежа',pdf:isPdfReceipt(row.payment!.receiptUrl!),paymentId:row.payment!.id})}
+                  payment={row.payment}
+                  items={paymentItems.filter(i => i.paymentId === row.payment!.id)}
+                  canConfirm={canConfirmPayment && row.payment.status === 'На проверке'}
+                  confirming={confirmingPaymentId === row.payment.id}
+                  onConfirm={(actualPaymentDate) => confirmPayment(row.payment!, actualPaymentDate)}
+                  onSave={updates => onSavePayment(row.payment!, updates)}
+                  onDelete={() => onDeletePayment(row.payment!)}
+                  onUnconfirm={onUnconfirmPayment && row.payment.status === 'Подтверждено' ? () => onUnconfirmPayment(row.payment!) : undefined}
                   canDelete={!readOnly && (isAdmin || isCashier)}
                   isAdmin={!readOnly && isAdmin}
                 />
-              ))}
+              ) : row.refund ? <RefundRow key={row.key} refund={row.refund} canConfirm={canConfirmRefund && row.refund.status === 'На проверке'} confirming={confirmingRefundId === row.refund.id} onConfirm={paymentMethod => confirmRefund(row.refund!, paymentMethod)} onReject={() => rejectRefund(row.refund!)} />
+              : row.expense ? <div key={row.key} className="client-expense-row"><div><span className="client-expense-kind">{row.expense.subcategory === 'Возврат родителю' ? 'Возврат' : row.expense.subcategory}</span><span>{formatShortDate(row.expense.date)} · {row.expense.childName || row.expense.recipient}</span>{row.expense.comment && <span>{row.expense.comment}</span>}</div><strong className="money-out">−{money(row.expense.amount)}</strong></div> : null)}
             </div>
           </Section>
-          </div>
-          <div className="family-money-refund-list">
-            <Section title={`Расходы на клиента (${expenseRows.length})`}>
-              {clientExpenses.error && <p role="alert">{clientExpenses.error}</p>}
-              {expenseRows.length === 0 && !clientExpenses.error ? <Empty text="Расходов на клиента пока нет" /> : expenseRows.map(row => row.refund ? <div key={row.key}><div className="client-expense-kind">Возврат</div><RefundRow refund={row.refund} canConfirm={canConfirmRefund && row.refund.status === 'На проверке'} confirming={confirmingRefundId === row.refund.id} onConfirm={paymentMethod => confirmRefund(row.refund!, paymentMethod)} onReject={() => rejectRefund(row.refund!)} /></div> : row.expense ? <div key={row.key} className="client-expense-row"><div><strong>{row.expense.subcategory}</strong><span>{formatShortDate(row.expense.date)} · {row.expense.childName || row.expense.recipient}</span>{row.expense.comment && <span>{row.expense.comment}</span>}</div><strong>{money(row.expense.amount)}</strong></div> : null)}
-            </Section>
           </div>
         </div>}
 
@@ -517,7 +513,7 @@ function RefundRow({ refund, canConfirm, confirming, onConfirm, onReject }: {
     <div style={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 8, padding: '9px 12px', marginBottom: 7 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--text)' }}>{money(refund.amount)}</div>
+          <div className="client-expense-kind">Возврат</div><div className="money-out" style={{ fontSize: 13, fontWeight: 600 }}>−{money(refund.amount)}</div>
           <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 1 }}>
             {refund.requestedAt ? new Date(refund.requestedAt).toLocaleDateString('ru-RU') : 'без даты'}
             {refund.requestedBy && <> · {refund.requestedBy}</>}

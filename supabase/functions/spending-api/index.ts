@@ -33,6 +33,9 @@ async function verifySession(token: string): Promise<{ sub: string; role: string
 }
 
 const CATEGORIES = new Set(['COGS','Revenue Tax','OPEX','CAPEX','Доп. Выезды','Logistics','Личное']);
+// Возврат родителю списывает деньги с баланса семьи, поэтому сохраняется функцией базы целиком.
+const isFamilyRefund = (row: Record<string, unknown> | undefined) => row?.category === 'OPEX' && row?.subcategory === 'Возврат родителю';
+const refundFailure = (error: { message?: string } | null) => error?.message?.startsWith('REFUND: ') ? response({ok:false,error:error.message.slice(8)},400) : null;
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   if (req.method !== 'POST') return response({ ok: false, error: 'Method not allowed' }, 405);
@@ -43,7 +46,7 @@ Deno.serve(async req => {
     const body = await req.json();
     const driverRead = body.action === 'payments' && typeof body.driverId === 'string' && /^[0-9a-f-]{36}$/i.test(body.driverId) && !body.employeeId;
     const familyRead = body.action === 'list' && typeof body.familyId === 'string' && /^[0-9a-f-]{36}$/i.test(body.familyId);
-    const { data: actor, error: actorError } = await db.from('v2_employees').select('role,status').eq('id',session.sub).maybeSingle();
+    const { data: actor, error: actorError } = await db.from('v2_employees').select('role,status,full_name').eq('id',session.sub).maybeSingle();
     if (actorError) throw actorError;
     if (!actor || actor.status !== 'active' || !(ALLOWED_ROLES.has(actor.role) || familyRead && ['manager','director'].includes(actor.role) || driverRead && ['director','logist','senior_logist','b2b_logist'].includes(actor.role))) return response({ok:false,error:'Нет доступа к расходам'},403);
     const personal = PERSONAL_DETAILS_ROLES.has(actor.role);
@@ -85,7 +88,18 @@ Deno.serve(async req => {
       const byId = new Map(previous?.map(row=>[row.id,row]) ?? []);
       if (body.action === 'save' && rows.some(row=>String(row.id).startsWith('finance:') && !byId.has(row.id))) return response({ok:false,error:'Исходная копия не найдена'},400);
       if (body.action === 'save' && previous?.some(row=>row.deleted_at)) return response({ok:false,error:'Расход уже удалён. Обновите страницу.'},409);
-      const writes = rows.map(row=>{
+      const linkedRefund = (id: unknown) => Boolean(byId.get(String(id))?.payload?.refundId);
+      const refundRows = body.action === 'save' ? rows.filter(row => linkedRefund(row.id) || (!byId.has(String(row.id)) && isFamilyRefund(row))) : [];
+      if (body.action === 'save' && rows.some(row => byId.has(String(row.id)) && !linkedRefund(row.id) && isFamilyRefund(row) && !isFamilyRefund(byId.get(String(row.id))?.payload))) return response({ok:false,error:'Чтобы оформить возврат родителю, создайте новый расход'},400);
+      if (refundRows.some(row => typeof row.familyId !== 'string' || !row.familyId)) return response({ok:false,error:'Выберите ребёнка для возврата'},400);
+      for (const row of refundRows) {
+        const {sourceRef, originalCategory, originalSubcategory, refundId, classificationChanged, ...fields} = row;
+        const {error} = await db.rpc('v2_spending_refund_save',{p_entry:fields,p_actor_name:actor.full_name || session.sub});
+        if (error) { const failure = refundFailure(error); if (failure) return failure; throw error; }
+      }
+      const plainRows = rows.filter(row => !refundRows.includes(row));
+      if (!plainRows.length) return response({ok:true});
+      const writes = plainRows.map(row=>{
         const old = byId.get(row.id)?.payload;
         const {sourceRef, originalCategory, originalSubcategory, ...fields} = row;
         return {id:row.id,payload:{...fields,...(old?.sourceRef ? {sourceRef:old.sourceRef,originalCategory:old.originalCategory,originalSubcategory:old.originalSubcategory}: {})},expense_date:row.date,amount:row.amount,...(!old ? {created_by:session.sub}: {})};
@@ -95,9 +109,14 @@ Deno.serve(async req => {
       return response({ok:true});
     }
     if (body.action === 'delete') {
-      const {data: row,error: readError} = await db.from('v2_spending_entries').select('category').eq('id',String(body.id)).maybeSingle();
+      const {data: row,error: readError} = await db.from('v2_spending_entries').select('category,payload').eq('id',String(body.id)).maybeSingle();
       if (readError) throw readError;
       if (!row || (!personal && row.category==='Личное')) return response({ok:false,error:'Расход недоступен'},403);
+      if (row.payload?.refundId) {
+        const {error} = await db.rpc('v2_spending_refund_delete',{p_entry_id:String(body.id),p_actor_name:actor.full_name || session.sub});
+        if (error) { const failure = refundFailure(error); if (failure) return failure; throw error; }
+        return response({ok:true});
+      }
       const {error} = await db.from('v2_spending_entries').update({deleted_at:new Date().toISOString()}).eq('id',String(body.id));
       if (error) throw error;
       return response({ok:true});

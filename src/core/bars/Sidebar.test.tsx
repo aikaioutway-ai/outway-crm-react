@@ -6,7 +6,7 @@ test('cashier can open expenses while personal details stay handled separately',
   expect(canAccessSection('cashier', 'families', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'expenses', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'b2b', 'cashier')).toBe(true);
-  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'expenses', 'b2b', 'tasks']);
+  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'expenses', 'spending', 'b2b', 'tasks']);
 });
 
 test('cashier sees Manager in the Sidebar and can open it', () => {
@@ -39,9 +39,11 @@ test('Schools 2.0 is shown only in the expanded Sidebar', () => {
   expect(getAllowedSections('logist', 'logist')).not.toContain('schools2');
 });
 
-test('spending is available only to the owner account', () => {
+test('spending is available to the same roles as finance', () => {
   expect(getAllowedSections('admin', 'emp-admin')).toContain('spending');
-  expect(getAllowedSections('admin', 'other-admin')).not.toContain('spending');
-  expect(getAllowedSections('gen_director', 'director')).not.toContain('spending');
-  expect(getAllowedSections('cashier', 'cashier')).not.toContain('spending');
+  expect(getAllowedSections('admin', 'other-admin')).toContain('spending');
+  expect(getAllowedSections('gen_director', 'director')).toContain('spending');
+  expect(getAllowedSections('cashier', 'cashier')).toContain('spending');
+  expect(getAllowedSections('director', 'director')).not.toContain('spending');
+  expect(getAllowedSections('manager', 'manager')).not.toContain('spending');
 });
