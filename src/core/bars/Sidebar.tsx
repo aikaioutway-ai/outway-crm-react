@@ -28,7 +28,6 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
   { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
-  { key: 'spending', label: 'Расходы', icon: <Wallet size={18} /> },
   { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },

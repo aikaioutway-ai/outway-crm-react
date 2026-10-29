@@ -1,3 +1,4 @@
+import { setCrmActor } from '../../services/crmActor';
 import React from 'react';
 import { fireEvent, render, screen } from '@testing-library/react';
 import TabFinance from './TabFinance';
@@ -21,7 +22,7 @@ const props: React.ComponentProps<typeof TabFinance> = {
   onDeletePayment: jest.fn(), onCreateRefund: jest.fn(), onConfirmRefund: jest.fn(), onRejectRefund: jest.fn(),
 };
 
-test('keeps charges separate and combines payment and refund forms', () => {
+test('keeps charges separate and shows receipts without a new refund form', () => {
   const { rerender } = render(<TabFinance {...props} mode="charges" />);
   expect(screen.getByText('Начисления по периодам')).toBeInTheDocument();
   expect(screen.queryByText('Новый платёж')).not.toBeInTheDocument();
@@ -31,10 +32,14 @@ test('keeps charges separate and combines payment and refund forms', () => {
   expect(screen.getByText('Новый платёж')).toBeInTheDocument();
   expect(screen.getByText('Прикрепить чек')).toBeInTheDocument();
   expect(screen.queryByText('Начисления по периодам')).not.toBeInTheDocument();
-  expect(screen.getByPlaceholderText('Сумма возврата')).toBeInTheDocument();
+  expect(screen.queryByPlaceholderText('Сумма возврата')).not.toBeInTheDocument();
+  expect(screen.getByText('Платежи (0)')).toBeInTheDocument();
+  expect(screen.queryByText('Чеки (0)')).not.toBeInTheDocument();
 
   rerender(<TabFinance {...props} mode="refunds" />);
-  expect(screen.getByPlaceholderText('Сумма возврата')).toBeInTheDocument();
+  expect(screen.queryByPlaceholderText('Сумма возврата')).not.toBeInTheDocument();
+  expect(screen.getByText('Платежи (0)')).toBeInTheDocument();
+  expect(screen.queryByText('Чеки (0)')).not.toBeInTheDocument();
   expect(screen.getByText('Новый платёж')).toBeInTheDocument();
   expect(screen.queryByText('Начисления по периодам')).not.toBeInTheDocument();
 });
@@ -62,4 +67,19 @@ test('duplicate message identifies the original family and keeps the entered pay
  expect(await screen.findByRole('alert')).toHaveTextContent('FAM-000249');
  expect(amount).toHaveValue(6800);
  expect(screen.queryByText('Платёж отправлен кассиру на проверку')).not.toBeInTheDocument();
+});
+
+test('combines refunds and saved client expenses and excludes other families', () => {
+  setCrmActor('owner');
+  localStorage.setItem('outway-spending-v1:owner', JSON.stringify([
+    { id: 'e1', familyId: 'family1', category: 'OPEX', subcategory: 'Возмещение такси родителю', amount: 500, date: '2026-10-29', childName: 'Ребёнок' },
+    { id: 'e2', familyId: 'other', category: 'OPEX', subcategory: 'Чужой расход', amount: 100, date: '2026-10-29' },
+  ]));
+  try {
+    render(<TabFinance {...props} mode="payments" family={{ ...props.family, id: 'family1' }} refunds={[{ id: 'r1', familyId: 'family1', amount: 200, status: 'Подтверждено', requestedAt: '2026-10-28' } as React.ComponentProps<typeof TabFinance>['refunds'][number]]} />);
+    expect(screen.getByText('Расходы на клиента (2)')).toBeInTheDocument();
+    expect(screen.getByText('Возмещение такси родителю')).toBeInTheDocument();
+    expect(screen.getByText('Возврат')).toBeInTheDocument();
+    expect(screen.queryByText('Чужой расход')).not.toBeInTheDocument();
+  } finally { setCrmActor(null); localStorage.removeItem('outway-spending-v1:owner'); }
 });

@@ -1,3 +1,4 @@
+import { useClientExpenses } from '../spending/useClientExpenses';
 import FilterableTable from '../../core/tables/FilterableTable';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Loader, Paperclip, Pencil, Plus, Save, Trash2, X } from 'lucide-react';
@@ -59,7 +60,7 @@ export default function TabFinance({
   children: _children,
   isAdmin,
   isCashier,
-  isManager,
+  isManager: _isManager,
   userRole: _userRole,
   onSaveCharge: _onSaveCharge,
   onDeleteCharge: _onDeleteCharge,
@@ -69,12 +70,17 @@ export default function TabFinance({
   onUnconfirmPayment,
   onSavePayment,
   onDeletePayment,
-  onCreateRefund,
+  onCreateRefund: _onCreateRefund,
   onConfirmRefund,
   onRejectRefund,
   readOnly = false,
   onReceiptDetailsSaved,
 }: Props) {
+  const clientExpenses = useClientExpenses(family.id);
+  const expenseRows = [
+    ...refunds.map(refund => ({ key: `refund:${refund.id}`, date: refund.requestedAt || '', refund, expense: null })),
+    ...clientExpenses.rows.map(expense => ({ key: `expense:${expense.id}`, date: expense.date, refund: null, expense })),
+  ].sort((a, b) => b.date.localeCompare(a.date));
   const [addingPeriod, setAddingPeriod] = useState(false);
   const [creatingPeriod, setCreatingPeriod] = useState(false);
   const [newPeriodKey, setNewPeriodKey] = useState('9');
@@ -96,9 +102,6 @@ export default function TabFinance({
   const [confirmingPaymentId, setConfirmingPaymentId] = useState<string | null>(null);
   const [msg, setMsg] = useState('');
 
-  const [refundAmount, setRefundAmount] = useState('');
-  const [refundComment, setRefundComment] = useState('');
-  const [savingRefund, setSavingRefund] = useState(false);
   const [confirmingRefundId, setConfirmingRefundId] = useState<string | null>(null);
 
   const totalDebt = charges.reduce((s, c) => s + c.debtAmount, 0);
@@ -106,7 +109,6 @@ export default function TabFinance({
   const canConfirmPayment = !readOnly && (isCashier || isAdmin);
   // A cashier may create a refund without enabling the general family editor.
   // `readOnly` protects non-financial family fields and must not hide this form.
-  const canCreateRefund = canCreateFamilyRefund(isManager, isAdmin, isCashier);
   const canConfirmRefund = !readOnly && (isCashier || isAdmin);
 
   const existingPeriodKeys = new Set(charges.map(c => periodGroupKey(c.periodMonth, c.year, c.chargeType)));
@@ -158,22 +160,6 @@ export default function TabFinance({
     setConfirmingPaymentId(null);
     setMsg(ok ? 'Платёж подтверждён и распределён' : 'Не удалось подтвердить платёж');
     setTimeout(() => setMsg(''), 2500);
-  }
-
-  async function submitRefund() {
-    const amount = Number(refundAmount);
-    if (!amount || amount <= 0) return;
-    setSavingRefund(true);
-    const ok = await onCreateRefund(amount, refundComment);
-    setSavingRefund(false);
-    if (ok) {
-      setMsg('Возврат отправлен кассиру на проверку');
-      setRefundAmount('');
-      setRefundComment('');
-      setTimeout(() => setMsg(''), 2500);
-    } else {
-      setMsg('Не удалось оформить возврат');
-    }
   }
 
   async function confirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string) {
@@ -245,21 +231,6 @@ export default function TabFinance({
             </Section>
           )}
           </div>
-          <div className="family-money-form family-money-refund-form">
-            <Section title="Новый возврат">
-              <div style={paymentPanelStyle}>
-              {canCreateRefund && (
-                <div className="finance-refund-form" style={{ ...newPaymentGridStyle, marginBottom: refunds.length > 0 ? 10 : 0 }}>
-                  <input type="number" value={refundAmount} onChange={e => setRefundAmount(e.target.value)} placeholder="Сумма возврата" style={inputStyle} />
-                  <input value={refundComment} onChange={e => setRefundComment(e.target.value)} placeholder="Комментарий" className="finance-refund-comment" style={inputStyle} />
-                  <button onClick={submitRefund} disabled={savingRefund || !refundAmount} style={submitPaymentBtnStyle(savingRefund || !refundAmount)}>
-                    {savingRefund ? 'Сохраняем...' : 'Оформить возврат →'}
-                  </button>
-                </div>
-              )}
-              </div>
-            </Section>
-          </div>
           <div className="family-money-payment-list">
           <Section title={`Платежи (${payments.length})`}>
             <div style={paymentsListStyle}>
@@ -283,20 +254,9 @@ export default function TabFinance({
           </Section>
           </div>
           <div className="family-money-refund-list">
-            <Section title={`Возвраты (${refunds.length})`}>
-
-              {refunds.length === 0 ? (
-                <Empty text="Возвратов нет" />
-              ) : refunds.map(refund => (
-                <RefundRow
-                  key={refund.id}
-                  refund={refund}
-                  canConfirm={canConfirmRefund && refund.status === 'На проверке'}
-                  confirming={confirmingRefundId === refund.id}
-                  onConfirm={paymentMethod => confirmRefund(refund, paymentMethod)}
-                  onReject={() => rejectRefund(refund)}
-                />
-              ))}
+            <Section title={`Расходы на клиента (${expenseRows.length})`}>
+              {clientExpenses.error && <p role="alert">{clientExpenses.error}</p>}
+              {expenseRows.length === 0 && !clientExpenses.error ? <Empty text="Расходов на клиента пока нет" /> : expenseRows.map(row => row.refund ? <div key={row.key}><div className="client-expense-kind">Возврат</div><RefundRow refund={row.refund} canConfirm={canConfirmRefund && row.refund.status === 'На проверке'} confirming={confirmingRefundId === row.refund.id} onConfirm={paymentMethod => confirmRefund(row.refund!, paymentMethod)} onReject={() => rejectRefund(row.refund!)} /></div> : row.expense ? <div key={row.key} className="client-expense-row"><div><strong>{row.expense.subcategory}</strong><span>{formatShortDate(row.expense.date)} · {row.expense.childName || row.expense.recipient}</span>{row.expense.comment && <span>{row.expense.comment}</span>}</div><strong>{money(row.expense.amount)}</strong></div> : null)}
             </Section>
           </div>
         </div>}

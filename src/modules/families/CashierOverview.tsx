@@ -20,6 +20,7 @@ type SortKey = 'school' | 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 
 interface CashierOverviewProps {
   view: CashierView;
   onViewChange: (view: CashierView) => void;
+  onSpending?: () => void;
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
@@ -209,7 +210,7 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
   );
 }
 
-export default function CashierOverview({ view, onViewChange, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
+export default function CashierOverview({ view, onViewChange, onSpending, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
   const { data: refundRows = [] } = useRefundsTable();
   const searchablePayments = useMemo(
@@ -303,7 +304,7 @@ export default function CashierOverview({ view, onViewChange, periodKey, onPerio
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel className="dashboard-control-row cashier-control-row overview-control-row">
-          <CashierViewTabs value={view} onChange={onViewChange} />
+          <CashierViewTabs value={view} onChange={onViewChange} onSpending={onSpending} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
               periodKey={periodKey}

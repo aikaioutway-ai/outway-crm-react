@@ -138,3 +138,233 @@
 /* Keep the full composer visible; only the page scrolls when needed. */
 .spending-module .spending-workspace .payment-composer-inline { height: auto; min-height: var(--expense-composer-height); max-height: none; }
 .spending-module .spending-workspace .payment-composer-inline > .payment-composer-body { flex: 1 0 auto; min-height: 0; overflow: visible; }
+
+.spending-module .payment-composer .capex-category-strip {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  align-items: stretch;
+}
+.spending-module .payment-composer .capex-category-strip > button {
+  justify-content: flex-start;
+  padding: 12px 8px;
+  gap: 9px;
+}
+.spending-module .capex-category-strip .spending-school-logo {
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
+}
+.spending-module .capex-category-strip .spending-school-logo svg {
+  width: 23px;
+  height: 23px;
+  stroke-width: 2;
+}
+.spending-module .capex-category-strip > button > span:last-child {
+  width: 100%;
+  text-align: center;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 650px) {
+  .spending-module .payment-composer .capex-category-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.spending-module .payment-composer .extra-trip-route-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(90px, 140px);
+  gap: 12px;
+  align-items: start;
+}
+.spending-module .payment-composer .extra-trip-route-row > label {
+  grid-column: auto;
+  margin-top: 0;
+  min-width: 0;
+}
+
+.compensation-selected-child { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; margin-top: 16px; padding: 12px; border: 1px solid #dce5e8; border-radius: 10px; }
+.compensation-selected-child > span, .compensation-selected-child > small { color: #526174; font-size: 12px; }
+.spending-module .compensation-selected-child > button { color: #196667; min-height: 44px; font-weight: 600; }
+
+/* Keep expense forms compact and stable when changing categories. */
+.spending-module .spending-workspace { --expense-composer-height: min(740px, 88dvh); }
+.spending-module .spending-workspace .payment-composer-inline {
+  height: var(--expense-composer-height);
+  min-height: var(--expense-composer-height);
+  max-height: var(--expense-composer-height);
+}
+.spending-module .spending-workspace .payment-composer-inline > .payment-composer-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.spending-module .payment-composer-inline .payment-composer-head { padding: 16px 20px; }
+.spending-module .payment-composer-inline .payment-composer-main,
+.spending-module .payment-composer-inline .payment-composer-details { padding: 16px 18px; }
+.spending-module .payment-composer-inline .office-payroll-main { justify-content: flex-start; gap: 18px; }
+.spending-module .compensation-selected-child .compensation-clear-child {
+  display: grid;
+  place-items: center;
+  margin-left: auto;
+  width: 36px;
+  min-height: 36px;
+  padding: 0;
+  flex-shrink: 0;
+}
+.compensation-family-finance { margin-top: 12px; }
+.compensation-family-finance .spending-table-wrap { max-height: 220px; overflow: auto; }
+.compensation-family-finance table th:first-child,
+.compensation-family-finance table td:first-child { min-width: 106px; white-space: nowrap; }
+
+/* Fit the shared frame without an inner scrollbar. */
+.spending-module .spending-workspace .payment-composer-inline > .payment-composer-body {
+  overflow: visible;
+}
+.spending-module .payment-composer-inline .payment-composer-main,
+.spending-module .payment-composer-inline .payment-composer-details { padding: 12px 16px; }
+.spending-module .payment-composer-inline .payment-composer-main { gap: 0; }
+.spending-module .payment-composer-inline .payment-section + .payment-section { margin-top: 12px; }
+.spending-module .payment-composer-inline .payment-section h3 { margin-bottom: 8px; }
+.spending-module .payment-composer-inline .expense-group-strip,
+.spending-module .payment-composer-inline .expense-kind-strip { margin-top: 8px; }
+.spending-module .payment-composer-inline .expense-kind-picker { margin-top: 12px; padding-top: 12px; }
+.spending-module .payment-composer-inline .spending-school-strip > button {
+  min-height: 64px;
+  padding: 5px 2px;
+  gap: 5px;
+}
+.spending-module .payment-composer-inline .spending-school-logo {
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  border-radius: 10px;
+}
+.spending-module .payment-composer-inline .spending-school-logo svg { width: 21px; height: 21px; }
+.spending-module .payment-composer-inline .payment-composer-details > .payment-requisites { padding-top: 12px; }
+.spending-module .payment-composer-inline .payment-requisites label { margin-top: 8px; }
+.spending-module .payment-composer-inline .payment-requisites textarea { height: 54px; min-height: 54px; }
+.spending-module .payment-composer-inline .payment-composer-footer { padding: 12px 20px; }
+.spending-module .payment-composer-inline .compensation-selected-child { margin-top: 10px; padding: 6px 10px; gap: 8px; }
+.spending-module .payment-composer-inline .compensation-selected-child > button { min-height: 34px; }
+.spending-module .payment-composer-inline .compensation-family-finance { margin-top: 8px; }
+.spending-module .payment-composer-inline .compensation-family-finance .spending-table-wrap { max-height: none; overflow: visible; }
+.spending-module .payment-composer-inline .compensation-family-finance th,
+.spending-module .payment-composer-inline .compensation-family-finance td { padding: 6px 10px; }
+@media (max-width: 850px), (max-height: 760px) {
+  .spending-module .spending-workspace .payment-composer-inline { height: auto; min-height: var(--expense-composer-height); max-height: none; }
+}
+
+/* Extra height keeps the payment comment fully visible. */
+.spending-module .spending-workspace { --expense-composer-height: calc(min(740px, 88dvh) + 4cm); }
+
+/* Keep requisites close to the summary instead of pushing them down. */
+.spending-module .payment-composer-inline .payment-composer-details > .expense-summary-list { margin-bottom: 10px; }
+.spending-module .payment-composer-inline .payment-composer-details > .payment-requisites {
+  margin-top: 10px;
+  padding-top: 10px;
+}
+
+/* Larger calendar cards for half-month driver payments. */
+.spending-module .payment-composer .cogs-period-cards { gap: 12px; margin-top: 14px !important; }
+.spending-module .payment-composer .cogs-period-cards fieldset {
+  padding: 10px;
+  border: 1px solid #dce5e8;
+  border-radius: 12px;
+  background: #f8fafb;
+}
+.spending-module .payment-composer .cogs-period-cards legend {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: capitalize;
+  color: #294555;
+}
+.spending-module .payment-composer .cogs-period-cards .spending-check {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  border: 1px solid #e0e7eb;
+  border-radius: 9px;
+  background: #fff;
+  cursor: pointer;
+  font-size: 14px;
+}
+.spending-module .cogs-period-cards .spending-check > span { display: grid; gap: 3px; }
+.spending-module .cogs-period-cards .spending-check small { font-size: 10px; color: #627586; font-weight: 400; }
+.spending-module .cogs-period-cards .spending-check input { width: 17px; height: 17px; min-height: 17px; margin: 0; accent-color: #237c7d; }
+.spending-module .cogs-period-cards .cogs-period-check { margin-left: auto; color: #237c7d; visibility: hidden; }
+.spending-module .payment-composer .cogs-period-cards .spending-check:has(input:checked) { background: #eaf5f2; border-color: #237c7d; color: #196667; }
+.spending-module .cogs-period-cards .spending-check:has(input:checked) .cogs-period-check { visibility: visible; }
+.spending-module .cogs-period-cards .spending-check:focus-within { outline: 2px solid #237c7d; outline-offset: 2px; }
+
+.spending-module .spending-return-to-form {
+  position: fixed;
+  right: 14px;
+  top: 50%;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-height: 44px;
+  padding: 10px;
+  border: 1px solid #e0e7eb;
+  border-radius: 10px;
+  background: #ffffffed;
+  color: #627586;
+  box-shadow: 0 2px 8px #14202e12;
+  cursor: pointer;
+}
+.spending-return-to-form > span { display: grid; gap: 5px; }
+.spending-return-to-form i { display: block; width: 18px; height: 2px; border-radius: 2px; background: currentColor; }
+.spending-return-to-form i:last-child { width: 12px; }
+.spending-module .spending-return-to-form:hover { color: #196667; background: #eaf5f2; }
+.spending-module .spending-return-to-form:focus-visible { outline: 2px solid #237c7d; outline-offset: 3px; }
+
+.spending-module .spending-categories { scroll-margin-top: 16px; }
+
+.spending-module .payment-composer .personal-category-strip { grid-template-columns: repeat(4, minmax(0,1fr)); gap: 16px; }
+.spending-module .payment-composer .personal-category-strip > button { justify-content: flex-start; min-width: 0; }
+.spending-module .personal-category-strip > button > span:last-child { white-space: normal; text-align: center; line-height: 1.35; }
+@media (max-width: 1000px) { .spending-module .payment-composer .personal-category-strip { grid-template-columns: repeat(4, minmax(0,1fr)); } }
+@media (max-width: 480px) { .spending-module .payment-composer .personal-category-strip { grid-template-columns: repeat(3, minmax(0,1fr)); } }
+
+.spending-module .spending-view-switch { display: inline-flex; margin-bottom: 14px; gap: 4px; }
+.spending-view-switch .ow-seg-btn { min-height: 38px; }
+.spending-view-switch .ow-seg-btn[aria-pressed=true] { background: #fff; color: #196667; box-shadow: 0 1px 4px #14202e14; }
+.spending-module table[aria-label="Записи расходов"] tbody tr:nth-child(even) { background: #f8fafb; }
+
+/* Match the records button in composer and register headers. */
+.spending-module .payment-composer-head .spending-actions > .overview-icon-button,
+.spending-module .spending-register-heading .spending-actions > .overview-icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 36px;
+  width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-2);
+}
+.spending-module .spending-actions > .overview-icon-button > svg {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
+}
+.spending-module .spending-actions > .overview-icon-button:hover {
+  background: var(--surface-2);
+  color: var(--accent);
+}
+
+.spending-module .spending-register { scroll-margin-top: 16px; }

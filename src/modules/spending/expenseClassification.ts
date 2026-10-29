@@ -9,10 +9,11 @@ export const OPEX_GROUPS = {
   'Прочее': ['Подбор и обучение сотрудников', 'Административный транспорт', 'Прочие операционные расходы'],
 };
 export const OPEX_SUBCATEGORIES = Object.values(OPEX_GROUPS).flat();
-export const CAPEX_SUBCATEGORIES = ['Мебель', 'Компьютеры', 'Техника', 'Оборудование длительного использования'];
+export const CAPEX_SUBCATEGORIES = ['Мебель', 'Компьютеры', 'Техника', 'ТМЗ'];
 export function normalizeExpenseClassification<T extends { category: string; subcategory: string }>(row: T): T & { operationType: 'expense' | 'customer_refund' } {
   const category = row.category === 'CAPEX' && OPEX_GROUPS.Маркетинг.includes(row.subcategory) ? 'OPEX' : row.category;
-  return { ...row, category, operationType: category === 'OPEX' && row.subcategory === 'Возврат родителю' ? 'customer_refund' : 'expense' };
+  const subcategory = category === 'CAPEX' && row.subcategory === 'Оборудование длительного использования' ? 'ТМЗ' : row.subcategory;
+  return { ...row, category, subcategory, operationType: category === 'OPEX' && row.subcategory === 'Возврат родителю' ? 'customer_refund' : 'expense' };
 }
 
 export const OPEX_GROUP_LABELS: Record<string, string> = { Налоги: 'Налоги и взносы' };

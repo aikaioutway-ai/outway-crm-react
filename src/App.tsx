@@ -146,6 +146,9 @@ export default function App() {
   const [cashierTransferFilter, setCashierTransferFilter] = useState('');
   const [cashierOpenFamilySearch, setCashierOpenFamilySearch] = useState('');
   const [cashierView, setCashierView] = useState<'pending' | 'confirmed' | 'refunds'>('pending');
+  const [spendingSearch, setSpendingSearch] = useState('');
+  const [cashierWorkspace, setCashierWorkspace] = useState<'payments' | 'spending'>('payments');
+  useEffect(() => { if (section === 'spending') { setSection('cashier'); setCashierWorkspace('spending'); } }, [section]);
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
@@ -351,7 +354,7 @@ export default function App() {
   const extraTabs = (_hasFamiliesPage: boolean) => currentUser ? (
     <div className="ow-user">
       {isManagerSection && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
-      {section === 'cashier' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
+      {section === 'cashier' && cashierWorkspace === 'payments' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
       {section === 'logistics' && logisticsSchoolKey && <AllRecordsButton onClick={()=>handleLogisticsSelectSchool('ALL')}/>}
       {section === 'drivers' && driversSchoolKey && <AllRecordsButton onClick={()=>{setDriversSchoolKey('ALL');setDriversTransferFilter('');}}/>}
       <div className="ow-user-meta">
@@ -451,20 +454,23 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
-                {sectionLabel('Кассир')}
-                {cashierSchoolKey && (
+                {sectionLabel('Кассир')}<span style={{ color: 'var(--text-2)', fontSize: 14, marginLeft: 8 }}>{cashierWorkspace === 'spending' ? 'Расходы' : cashierView === 'pending' ? 'На проверке' : cashierView === 'confirmed' ? 'Подтверждённые' : 'Возвраты'}</span>
+
+                {cashierWorkspace === 'payments' && cashierSchoolKey && (
                   <>
                     <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
                       <ChevronLeft size={16} aria-hidden="true" />Все школы
                     </button>
-                    <CashierViewTabs compact value={cashierView} onChange={setCashierView} />
+                    <CashierViewTabs compact value={cashierView} onChange={setCashierView} onSpending={canAccessSpending(currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
                   </>
                 )}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
-            {cashierSchoolKey ? (
+            {cashierWorkspace === 'spending' && canAccessSpending(currentUser?.id) ? (
+              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
+            ) : cashierSchoolKey ? (
               <>
               {cashierView === 'refunds' ? (
                 <DashboardTopPanel>
@@ -531,6 +537,7 @@ export default function App() {
               </>
             ) : (
               <CashierOverview
+                onSpending={canAccessSpending(currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
                 view={cashierView}
                 onViewChange={setCashierView}
                 periodKey={cashierPeriodKey}
