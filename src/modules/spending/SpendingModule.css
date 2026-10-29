@@ -266,8 +266,23 @@
   .spending-module .spending-workspace .payment-composer-inline { height: auto; min-height: var(--expense-composer-height); max-height: none; }
 }
 
-/* Extra height keeps the payment comment fully visible. */
-.spending-module .spending-workspace { --expense-composer-height: calc(min(740px, 88dvh) + 4cm); }
+/* Fit every expense form below the cashier toolbar, keeping actions visible. */
+.spending-module .spending-workspace { --expense-composer-height: min(740px, calc(100dvh - 180px)); }
+.spending-module .spending-workspace .payment-composer-inline {
+  height: auto;
+  min-height: 0;
+  max-height: var(--expense-composer-height);
+}
+.spending-module .spending-workspace .payment-composer-inline > .payment-composer-body {
+  overflow: auto;
+}
+.spending-module .payment-composer-inline .payment-composer-main > .payment-period-section {
+  margin-top: 12px;
+  padding-top: 0;
+}
+.spending-module .payment-composer-inline .payment-section-heading { margin-bottom: 10px; }
+.spending-module .payment-composer-inline .payment-driver-launch { padding: 10px 12px; gap: 12px; }
+.spending-module .payment-composer-inline .payment-field-label { margin: 10px 0 6px !important; }
 
 /* Keep requisites close to the summary instead of pushing them down. */
 .spending-module .payment-composer-inline .payment-composer-details > .expense-summary-list { margin-bottom: 10px; }
@@ -277,9 +292,9 @@
 }
 
 /* Larger calendar cards for half-month driver payments. */
-.spending-module .payment-composer .cogs-period-cards { gap: 12px; margin-top: 14px !important; }
+.spending-module .payment-composer .cogs-period-cards { gap: 8px; margin-top: 10px !important; }
 .spending-module .payment-composer .cogs-period-cards fieldset {
-  padding: 10px;
+  padding: 8px;
   border: 1px solid #dce5e8;
   border-radius: 12px;
   background: #f8fafb;
@@ -298,9 +313,9 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  min-height: 54px;
-  padding: 8px 10px;
-  margin-top: 8px;
+  min-height: 44px;
+  padding: 6px 8px;
+  margin-top: 6px;
   border: 1px solid #e0e7eb;
   border-radius: 9px;
   background: #fff;
