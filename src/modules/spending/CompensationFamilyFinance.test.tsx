@@ -37,3 +37,17 @@ test('a parent refund shows how much leaves the family balance', async () => {
   render(<CompensationFamilyFinance familyId="family4" walletChange={2000} />);
   expect(await screen.findByText(/спишется/)).toHaveTextContent('спишется 2 000 сом. Баланс станет 3 000 сом.');
 });
+
+test('the refund window shows debt, charges and past refunds and can open the family card', async () => {
+  fetchSnapshot.mockResolvedValue({ mainBalance: -1000, payments: [{ id: 'p', amount: 6500, paymentDate: '2026-09-30', status: 'Подтверждено' }], charges: [{ id: 'c', childName: 'Айсулу', periodMonth: 10, year: 2026, amount: 10500, paidAmount: 6500, debtAmount: 4000 }], refunds: [{ id: 'r', amount: 2527, requestedAt: '2026-10-26', status: 'Подтверждено' }] } as unknown as Awaited<ReturnType<typeof fetchFinanceSnapshot>>);
+  const open = jest.fn();
+  render(<CompensationFamilyFinance familyId="family5" onOpenFamily={open} />);
+  expect(await screen.findByText('Долг')).toBeInTheDocument();
+  expect(screen.getByText('4 000 сом', { selector: 'dd' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('tab', { name: /Начисления/ }));
+  expect(screen.getByRole('table', { name: 'Начисления семьи' })).toHaveTextContent('10.2026');
+  fireEvent.click(screen.getByRole('tab', { name: /Возвраты/ }));
+  expect(screen.getByRole('table', { name: 'Возвраты семьи' })).toHaveTextContent('−2 527 сом');
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть карточку семьи' }));
+  expect(open).toHaveBeenCalled();
+});

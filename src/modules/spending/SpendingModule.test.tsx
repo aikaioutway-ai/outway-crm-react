@@ -301,8 +301,8 @@ test('all-records buttons stay inside the chosen category and only the All tile 
   expect(screen.queryByText('Аренда OPEX')).not.toBeInTheDocument();
   expect(screen.queryByText('Личный расход')).not.toBeInTheDocument();
   expect(screen.getByRole('button',{name:/^COGS /})).toHaveAttribute('aria-pressed','true');
+  expect(screen.queryByRole('button',{name:'Таблица расходов'})).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:/^OPEX /}));
-  fireEvent.click(screen.getByRole('button',{name:'Таблица расходов'}));
   expect(screen.getByText('Аренда OPEX')).toBeInTheDocument();
   expect(screen.queryByText('Комментарий COGS')).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
