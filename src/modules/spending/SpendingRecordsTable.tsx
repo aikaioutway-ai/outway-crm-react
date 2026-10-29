@@ -1,7 +1,6 @@
 import React from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import DataTable, { ColumnDef } from '../../core/tables/DataTable';
-import { EXPENSE_CATEGORIES, ExpenseCategory } from '../costs/expenseTypes';
 import { SCHOOL_TABS } from '../families/constants';
 import { SPENDING_CATEGORIES, SpendingEntry } from './SpendingModule';
 import '../costs/ExpensesModule.css';
@@ -45,7 +44,7 @@ export function editSpendingCell(row: SpendingEntry, key: string, value: unknown
 export default function SpendingRecordsTable({rows,disabled,onEdit,onDelete,onSave,columnsOpen,onColumnsOpenChange,title='Все расходы',toolbarActions,onBack}: Props) {
   const columns: ColumnDef<SpendingEntry>[] = [
     {key:'description',label:'Наименование расхода',type:'text',width:230,editable:true},
-    {key:'category',label:'Категория',type:'select',width:150,editable:false,editOptions:Object.keys(SPENDING_CATEGORIES).map(value=>({value,label:value})),getValue:row=>row.originalCategory && !row.classificationChanged ? EXPENSE_CATEGORIES[row.originalCategory as ExpenseCategory]?.label || row.category : row.category},
+    {key:'category',label:'Категория',type:'select',width:150,editable:false,editOptions:Object.keys(SPENDING_CATEGORIES).map(value=>({value,label:value})),getValue:row=>row.category},
     {key:'subcategory',label:'Подкатегория',type:'select',width:180,editable:false,getValue:row=>row.classificationChanged ? row.subcategory : row.originalSubcategory || row.subcategory,editOptions:Array.from(new Set(Object.values(SPENDING_CATEGORIES).flat())).map(value=>({value,label:value}))},
     {key:'amount',label:'Сумма',type:'currency',width:130,editable:true,render:value=><strong className="finance-amount">{Number(value).toLocaleString('ru-RU',{maximumFractionDigits:2})}</strong>},
     {key:'date',label:'Дата',type:'date',width:130,editable:true,render:value=>String(value).split('-').reverse().join('.')},
