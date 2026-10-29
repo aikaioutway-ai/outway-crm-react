@@ -1199,6 +1199,13 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     childPeriodStats.forEach(stat => { if (stat.childId) map.set(stat.childId, stat); });
     return map;
   }, [childPeriodStats]);
+  // «Долг» в «Начислениях» — весь долг ребёнка за все периоды (тот же кеш 'ALL').
+  const accrualDebtQuery = usePeriodChargeStats('ALL', { enabled: accrualsView });
+  const accrualDebtByChild = useMemo(() => {
+    const map = new Map<string, number>();
+    (accrualDebtQuery.data ?? EMPTY_PERIOD_STATS).forEach(stat => { if (stat.childId) map.set(stat.childId, stat.debt); });
+    return map;
+  }, [accrualDebtQuery.data]);
   const rowDebt = (row: ChildRow) => periodStatsByChild.get(row.rowId)?.debt ?? (chargesPeriodKey === 'ALL' ? childDebtAmount(row) : 0);
 
   const accrualPeriod = ALL_PERIODS.find(p => p.key === chargesPeriodKey && p.key !== 'deposit')
@@ -2698,6 +2705,16 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         amountColumn('deposit', 'Депозит'),
         amountColumn('previous', monthLabel(previousAccrualMonth), canEditAccruals && ACADEMIC_MONTHS.has(previousAccrualMonth)),
         amountColumn('current', monthLabel(accrualPeriod.month)),
+        {
+          // Весь непогашенный долг ребёнка (все месяцы и депозит), как «Долг» в «Оплатах».
+          key: 'childDebtAmount', label: 'Долг', type: 'currency', width: 130, visible: true,
+          getValue: row => accrualDebtByChild.get(row.rowId) ?? 0,
+          render: (_value, row) => {
+            if (accrualDebtQuery.isPending) return '…';
+            const debt = accrualDebtByChild.get(row.rowId) ?? 0;
+            return <span style={{ color: debt > 0 ? '#C62828' : undefined, fontWeight: debt > 0 ? 700 : undefined }}>{money(debt)}</span>;
+          },
+        },
         { ...COLUMNS.find(column => column.key === 'transferNumber')!, visible: true },
       ];
     }
@@ -2753,7 +2770,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByChild]);
+  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByChild, accrualDebtByChild, accrualDebtQuery.isPending]);
 
   // Точки оплат прямо в ячейке ребёнка: депозит, затем месяцы сезона.
   // При редактировании ФИО вместо ячейки показывается поле ввода, и точки скрываются.
