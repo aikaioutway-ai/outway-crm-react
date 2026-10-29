@@ -17,7 +17,7 @@ import { applyChildPricingPatch, canManageDiscounts, changedChildPatch, getPrice
 import { PERIOD_LABEL, isSchoolVisible } from './constants';
 import { formatName, formatPhone, whatsAppLink } from '../../utils/format';
 import { formatPhoneDisplay } from './familiesRowHelpers';
-import { addV2Audit, createV2Child, fetchChildPaymentDots, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
+import { addV2Audit, createV2Child, fetchChildPaymentDots, fetchFamilyHistory, fetchV2Branches, fetchV2Children, updateV2Child, updateV2ChildRoute, updateV2Family, V2BranchOption } from '../../services/crmV2Service';
 import {
   confirmFamilyPayment, unconfirmFamilyPayment, createChargesForPeriod, createFamilyPayment,
   deleteFamilyPayment, deleteCharge, fetchFinanceSnapshot,
@@ -36,6 +36,7 @@ import { loadYandexMaps } from '../../utils/yandexMaps';
 interface AuditEntry {
   id: string; familyId: string; userName: string;
   action: string; field: string; oldValue: string; newValue: string; createdAt: string;
+  subject?: string; comment?: string;
 }
 interface Props {
   initialChildId?: string;
@@ -197,25 +198,11 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
   }
   async function loadAudit() {
     try {
-      const { supabase } = await import('../../services/supabase');
       const requestedFamilyId = family.id;
-      const data: any[] = [];
-      for (let offset = 0; ; offset += 500) {
-        const result = await supabase.from('v2_audit_log').select('*').eq('entity_id', requestedFamilyId)
-          .order('created_at', { ascending: false }).order('id', { ascending: false }).range(offset, offset + 499);
-        if (result.error) throw result.error;
-        data.push(...(result.data ?? []));
-        if ((result.data?.length ?? 0) < 500) break;
-      }
+      // Вся история семьи одной лентой: сама семья, её дети и их начисления.
+      const entries = await fetchFamilyHistory(requestedFamilyId);
       if (activeFamilyIdRef.current !== requestedFamilyId) return;
-      if (data) {
-        setAudit(data.map((r: any) => ({
-          id: String(r.id), familyId: String(r.entity_id),
-          userName: r.actor_name ?? 'Система', action: r.action ?? '',
-          field: r.entity_type ?? '', oldValue: JSON.stringify(r.old_value ?? ''),
-          newValue: JSON.stringify(r.new_value ?? ''), createdAt: r.created_at ?? '',
-        })));
-      }
+      setAudit(entries.map(entry => ({ ...entry, familyId: requestedFamilyId })));
       setAuditLoaded(true);
     } catch { setAuditLoaded(true); }
   }
@@ -229,7 +216,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       setSavedFamily(updated);
       setSaveMsg('Сохранено');
       setTimeout(() => setSaveMsg(''), 2000);
-      await addAudit('Редактирование', 'family', JSON.stringify(family), JSON.stringify(updated));
       await loadAudit();
       onUpdated?.();
       return true;
@@ -408,7 +394,6 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
 
       const nextChildren = await loadChildren();
       if (financeLoaded) await loadFinance(nextChildren);
-      await addAudit('Сохранение карточки', 'family', 'Черновик', 'Изменения сохранены');
       await loadAudit();
       setEditing(false);
       setSaveMsg('Сохранено');
@@ -601,7 +586,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
         ? await fetchV2Children(family)
         : children.map(item => item.id === child.id ? nextChild : item);
       setChildren(savedChildren);
-      await addAudit('Редактирование ребёнка', 'child', JSON.stringify(child), JSON.stringify(nextChild));
+      // Что именно изменилось («было → стало», кто) база записывает сама.
       await loadFinance(savedChildren);
       onUpdated?.();
       return true;

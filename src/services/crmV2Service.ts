@@ -2326,17 +2326,31 @@ export async function updateV2ChildBoardingDate(input: { childId: string; family
   const value = `${input.date}T00:00:00+06:00`;
   const { error } = await supabase.from('v2_children').update({ transfer_assigned_at: value }).eq('id', input.childId);
   if (error) throw new Error(error.message);
-  await addV2Audit({
-    actorName: input.actorName,
-    action: 'Изменение даты посадки',
-    entityType: 'child',
-    entityId: input.familyId,
-    oldValue: input.previous ? input.previous.slice(0, 10) : '—',
-    newValue: input.date,
-    comment: input.childName,
-  });
+  // «Дата посадки: было → стало» и автора записывает база (get_family_history).
   invalidateFamiliesCache();
   return value;
+}
+
+export interface FamilyHistoryEntry {
+  id: string; userName: string; action: string; field: string;
+  oldValue: string; newValue: string; createdAt: string; subject?: string; comment?: string;
+}
+
+/** История карточки: записи семьи, её детей и начислений одной лентой (RPC get_family_history). */
+export async function fetchFamilyHistory(familyId: string): Promise<FamilyHistoryEntry[]> {
+  const { data, error } = await supabase.rpc('get_family_history', { p_family_id: familyId });
+  if (error) throw new Error(error.message);
+  return (data ?? []).map((row: any) => ({
+    id: String(row.id),
+    userName: row.actor_name ?? 'Система',
+    action: row.action ?? '',
+    field: row.entity_type ?? '',
+    oldValue: JSON.stringify(row.old_value ?? ''),
+    newValue: JSON.stringify(row.new_value ?? ''),
+    createdAt: row.created_at ?? '',
+    subject: row.subject ?? undefined,
+    comment: row.comment ?? undefined,
+  }));
 }
 
 export async function addV2Audit(params: {

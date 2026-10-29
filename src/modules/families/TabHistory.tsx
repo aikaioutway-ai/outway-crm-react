@@ -4,6 +4,8 @@ import React, { useState } from 'react';
 interface AuditEntry {
   id: string; userName: string; action: string;
   field: string; oldValue: string; newValue: string; createdAt: string;
+  /** Ребёнок (и период начисления), к которому относится запись. */
+  subject?: string; comment?: string;
 }
 
 const ACTION_LABEL: Record<string, string> = {
@@ -29,6 +31,19 @@ const ACTION_LABEL: Record<string, string> = {
   remove_child:           'Удалён ребёнок',
   child_status_change:    'Смена статуса ребёнка',
   transfer_x:             'Отправлен в трансфер Х',
+  field_change:           'Изменены данные',
+  family_delete:          'Удалена семья',
+  child_delete:           'Удалён ребёнок',
+  // Начисления и скидки (записи из базы)
+  manual_charge:          'Поставлено начисление',
+  adjust_charge:          'Изменено начисление',
+  charge_on_boarding:     'Начисление при посадке',
+  set_discount_choice:    'Изменена скидка',
+  set_discount:           'Изменена скидка',
+  set_fixed_price:        'Фиксированная цена',
+  transfer_reprice:       'Пересадка / цена трансфера',
+  payment_reallocation:   'Перенос оплаты',
+  'Изменение даты посадки': 'Изменена дата посадки',
   // Финансы
   payment_submit:         'Внесён платёж',
   payment_confirm:        'Платёж подтверждён',
@@ -53,6 +68,16 @@ const ACTION_LABEL: Record<string, string> = {
 };
 
 const FIELD_LABEL: Record<string, string> = {
+  // Поля ребёнка и семьи из автоматической записи базы
+  class_name: 'Класс', self_exit_allowed: 'Сам выходит', branch_id: 'Филиал',
+  distance_km: 'Расстояние, км', requested_vehicle_type: 'Тип ТС (заявка)',
+  base_price: 'Тариф', final_price: 'Стоимость', fixed_price: 'Фикс. цена',
+  discount_override_percent: 'Скидка, %', manual_discount_percent: 'Скидка, %', manual_discount_amount: 'Скидка, сом',
+  discount_valid_from: 'Скидка с', discount_valid_to: 'Скидка до', discount_reason: 'Причина скидки',
+  transfer_id: 'Трансфер', stop_order: 'Остановка', transfer_assigned_at: 'Дата посадки',
+  second_phone_telegram: 'Telegram (доп.)', contact_name: 'Доп. контакт',
+  contact_phone: 'Телефон доп. контакта', contact_phone_telegram: 'Telegram (доп. контакт)',
+  contactName: 'Доп. контакт', contactPhone: 'Телефон доп. контакта',
   family_payment: 'Платёж', family_refund: 'Возврат',
   child_route: 'Маршрут ребёнка', charge_discount: 'Скидка на начисление',
   fullAddress: 'Адрес', parentName: 'Имя родителя', secondPhone: 'Доп. телефон',
@@ -187,15 +212,79 @@ function routeChangeDetails(entry: AuditEntry): string {
   return Array.from(transitions).slice(0, 2).join('; ') || 'Прежние и новые значения не сохранены';
 }
 
+const MONEY_FIELDS = new Set(['base_price', 'final_price', 'fixed_price', 'manual_discount_amount', 'finalPrice', 'basePrice', 'amount', 'price']);
+const TRANSFER_FIELDS = new Set(['transfer_id', 'transfer_number', 'transferNumber']);
+const MONTH_NAMES = ['январь', 'февраль', 'март', 'апрель', 'май', 'июнь', 'июль', 'август', 'сентябрь', 'октябрь', 'ноябрь', 'декабрь'];
+
+/** Значение поля так, как его привыкли видеть в CRM: суммы, «№ 4», даты, проценты. */
+function formatFieldValue(key: string, raw: unknown): string {
+  if (raw == null || raw === '' || raw === '-') return '—';
+  if (typeof raw === 'object') return '';
+  if (typeof raw === 'boolean') return raw ? 'Да' : 'Нет';
+  const text = String(raw);
+  if (TRANSFER_FIELDS.has(key)) return `№ ${text}`;
+  if (MONEY_FIELDS.has(key) && Number.isFinite(Number(text))) return Number(text).toLocaleString('ru-RU');
+  if (/percent/.test(key) && Number.isFinite(Number(text))) return `${Number(text)}%`;
+  const date = /^(\d{4})-(\d{2})-(\d{2})$/.exec(text);
+  if (date) return `${date[3]}.${date[2]}.${date[1]}`;
+  if (/^\d{2}:\d{2}:\d{2}$/.test(text)) return text.slice(0, 5);
+  if (VALUE_LABEL[text]) return VALUE_LABEL[text];
+  return text.length > 140 ? `${text.slice(0, 140)}…` : text;
+}
+
+function asObject(raw: string): Record<string, unknown> {
+  const value = parseValue(raw);
+  return value && typeof value === 'object' ? value as Record<string, unknown> : {};
+}
+
+function periodName(month: unknown, type?: unknown): string {
+  if (type === 'deposit' || Number(month) === 0) return 'Депозит';
+  return MONTH_NAMES[Number(month) - 1] ? MONTH_NAMES[Number(month) - 1][0].toUpperCase() + MONTH_NAMES[Number(month) - 1].slice(1) : 'Месяц';
+}
+
+/** Записи начислений, скидок и пересадок, которые база пишет своим форматом. */
+function specialDetails(entry: AuditEntry): string | null {
+  const before = asObject(entry.oldValue);
+  const after = asObject(entry.newValue);
+  switch (entry.action) {
+    case 'manual_charge':
+      return `${periodName(after.month, after.type)}: ${formatFieldValue('amount', after.amount)}`;
+    case 'adjust_charge':
+      return [`Сумма: ${formatFieldValue('amount', before.amount)} → ${formatFieldValue('amount', after.amount)}`, entry.comment].filter(Boolean).join(' · ');
+    case 'charge_on_boarding':
+      return `${periodName(after.month)}: ${formatFieldValue('price', after.price)}`;
+    case 'set_discount_choice':
+      return `Скидка: ${formatFieldValue('percent', before.percent ?? 0)} → ${after.percent == null ? 'автоматически' : formatFieldValue('percent', after.percent)}`;
+    case 'set_discount':
+      return `Скидка: ${formatFieldValue('percent', before.percent ?? 0)} → ${formatFieldValue('percent', after.percent ?? 0)}${Number(after.amount) ? `, ${formatFieldValue('amount', after.amount)} сом` : ''}`;
+    case 'set_fixed_price':
+      return `Фикс. цена: ${formatFieldValue('fixed_price', before.fixed_price)} → ${formatFieldValue('fixed_price', after.fixed_price)}`;
+    case 'transfer_reprice': {
+      const match = /#(\d+):\s*(\w+)\s*->\s*(\w+)/.exec(entry.comment ?? '');
+      if (!match) return entry.comment ?? '';
+      const vehicle = match[2] !== match[3] ? `; Тип ТС: ${formatFieldValue('vehicle_type', match[2])} → ${formatFieldValue('vehicle_type', match[3])}` : '';
+      return `Трансфер № ${match[1]}${vehicle}`;
+    }
+    case 'payment_reallocation':
+    case 'family_delete':
+      return entry.comment ?? '';
+    default:
+      return null;
+  }
+}
+
 function transferXDetails(entry: AuditEntry): string {
   const before = parseValue(entry.oldValue);
   const old = before && typeof before === 'object' ? before as Record<string, unknown> : {};
-  const parts = [old.child_name ? String(old.child_name) : '', old.transfer_number ? `был № ${old.transfer_number}` : ''];
+  const parts = [old.child_name && !entry.subject ? String(old.child_name) : '', old.transfer_number ? `был № ${old.transfer_number}` : ''];
   return parts.filter(Boolean).join(' · ');
 }
 
 function describeChange(entry: AuditEntry): string {
   if (entry.action === 'transfer_x') return transferXDetails(entry);
+  const special = specialDetails(entry);
+  if (special !== null) return special;
+  if (entry.action === 'create_child') return '';
   const concise = conciseAction(entry);
   if (concise === 'Изменён трансфер') return routeChangeDetails(entry);
   if (concise) return '';
@@ -204,10 +293,10 @@ function describeChange(entry: AuditEntry): string {
   if (oldValue && newValue && typeof oldValue === 'object' && typeof newValue === 'object') {
     const before = oldValue as Record<string, unknown>;
     const after = newValue as Record<string, unknown>;
+    // Все изменённые поля «было → стало»; комментарий — только из автоматической записи базы.
     return Object.keys(after)
-      .filter(key => FIELD_LABEL[key] && key !== 'comment' && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
-      .slice(0, 2)
-      .map(key => `${FIELD_LABEL[key]}: ${humanizeValue(before[key])} → ${humanizeValue(after[key])}`)
+      .filter(key => FIELD_LABEL[key] && (key !== 'comment' || entry.action === 'field_change') && JSON.stringify(before[key]) !== JSON.stringify(after[key]))
+      .map(key => `${FIELD_LABEL[key]}: ${formatFieldValue(key, before[key])} → ${formatFieldValue(key, after[key])}`)
       .join('; ');
   }
   const oldText = humanizeValue(oldValue);
@@ -218,6 +307,8 @@ function describeChange(entry: AuditEntry): string {
 
 function actionLabel(entry: AuditEntry): string {
   if (entry.action === 'transfer_x') return ACTION_LABEL.transfer_x;
+  if (entry.action === 'field_change') return entry.field === 'family' ? 'Изменены данные семьи' : 'Изменены данные ребёнка';
+  if (ACTION_LABEL[entry.action] && specialDetails(entry) !== null) return ACTION_LABEL[entry.action];
   const concise = conciseAction(entry);
   if (concise) return concise;
   if (ACTION_LABEL[entry.action]) return ACTION_LABEL[entry.action];
@@ -229,6 +320,17 @@ function actionLabel(entry: AuditEntry): string {
   return `${subject}: изменение`;
 }
 
+/** Ребёнок записи: из базы, а у старых правок карточки — из сохранённых данных ребёнка. */
+function subjectOf(entry: AuditEntry): string {
+  if (entry.subject) return entry.subject;
+  if (entry.action !== 'Редактирование ребёнка') return '';
+  const name = asObject(entry.newValue).childName ?? asObject(entry.oldValue).childName;
+  return typeof name === 'string' ? name : '';
+}
+
+// Служебные записи без смысла для сотрудника.
+const HIDDEN_ACTIONS = new Set(['Сохранение карточки', 'family_comment_simplified', 'confirm_payment', 'unconfirm_payment']);
+
 function formatAuditDate(raw: string): string {
   const date = new Date(raw);
   if (Number.isNaN(date.getTime())) return '—';
@@ -237,7 +339,7 @@ function formatAuditDate(raw: string): string {
 
 export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
   const [deletedOnly, setDeletedOnly] = useState(false);
-  const visibleAudit = (deletedOnly ? audit.filter(entry => entry.action === 'payment_delete') : [...audit])
+  const visibleAudit = (deletedOnly ? audit.filter(entry => entry.action === 'payment_delete') : audit.filter(entry => !HIDDEN_ACTIONS.has(entry.action)))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   if (audit.length === 0) return <p style={{ color: '#718096', padding: 20 }}>История изменений пуста</p>;
 
@@ -264,6 +366,7 @@ export default function TabHistory({ audit }: { audit: AuditEntry[] }) {
                   <td>{!entry.userName || /^FAM-|^SYS-|^[0-9a-f]{8}-/i.test(entry.userName) ? 'Система' : entry.userName}</td>
                   <td>
                     <div style={{ fontWeight: 600 }}>{actionLabel(entry)}</div>
+                    {subjectOf(entry) && <div className="family-history-details">Ребёнок: {subjectOf(entry)}</div>}
                     {!deletedPayment && description && <div className="family-history-details">{description}</div>}
                     {deletedPayment && <details className="family-history-details">
                       <summary>Данные удалённого платежа · {String(deletedPayment.amount ?? '')}</summary>

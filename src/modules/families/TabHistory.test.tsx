@@ -44,3 +44,28 @@ test('shows route and vehicle before and after, including legacy logistics notes
   expect(screen.getByText('Тип ТС: Микроавтобус → Минивэн')).toBeInTheDocument();
   expect(screen.queryByText(/стоимость 6500/)).not.toBeInTheDocument();
 });
+
+test('database field changes show who, which child and every field before → after', () => {
+  render(<TabHistory audit={[
+    { id: 'f', action: 'field_change', field: 'child', userName: 'Зульфия', createdAt: '2026-10-29T10:00:00Z', subject: 'Иванов Иван',
+      oldValue: JSON.stringify({ address: 'ул. Жумабека 233', transfer_id: '2', final_price: 6000, transfer_assigned_at: '2026-10-12' }),
+      newValue: JSON.stringify({ address: 'ул. Ахунбаева 12', transfer_id: '4', final_price: 6500, transfer_assigned_at: '2026-10-20' }) },
+    { id: 's', action: 'Сохранение карточки', field: 'family', userName: 'Зульфия', createdAt: '2026-10-29T10:00:01Z', oldValue: '"Черновик"', newValue: '"Изменения сохранены"' },
+  ]} />);
+  expect(screen.getByText('Изменены данные ребёнка')).toBeInTheDocument();
+  expect(screen.getByText('Ребёнок: Иванов Иван')).toBeInTheDocument();
+  expect(screen.getByText('Адрес: ул. Жумабека 233 → ул. Ахунбаева 12; Трансфер: № 2 → № 4; Стоимость: 6 000 → 6 500; Дата посадки: 12.10.2026 → 20.10.2026')).toBeInTheDocument();
+  expect(screen.queryByText(/Черновик/)).not.toBeInTheDocument();
+});
+
+test('charges and discounts written by the database are readable', () => {
+  render(<TabHistory audit={[
+    { id: 'm', action: 'manual_charge', field: 'child', userName: 'Кайрат', createdAt: '2026-10-29T09:00:00Z', subject: 'Лазарева Аяна', oldValue: '""', newValue: JSON.stringify({ type: 'monthly', month: 10, year: 2026, amount: 6460 }) },
+    { id: 'a', action: 'adjust_charge', field: 'charge', userName: 'Зульфия', createdAt: '2026-10-29T08:00:00Z', comment: 'Начисление убрано вручную', oldValue: JSON.stringify({ amount: 6175 }), newValue: JSON.stringify({ amount: 0 }) },
+    { id: 'd', action: 'set_discount_choice', field: 'child', userName: 'Кайрат', createdAt: '2026-10-29T07:00:00Z', oldValue: JSON.stringify({ percent: 50 }), newValue: JSON.stringify({ percent: 0 }) },
+  ]} />);
+  expect(screen.getByText('Поставлено начисление')).toBeInTheDocument();
+  expect(screen.getByText('Октябрь: 6 460')).toBeInTheDocument();
+  expect(screen.getByText('Сумма: 6 175 → 0 · Начисление убрано вручную')).toBeInTheDocument();
+  expect(screen.getByText('Скидка: 50% → 0%')).toBeInTheDocument();
+});
