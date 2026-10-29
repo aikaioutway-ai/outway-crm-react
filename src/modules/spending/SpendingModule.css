@@ -400,3 +400,7 @@
 .spending-module table[aria-label="Записи расходов"] { min-width: 1500px; }
 .spending-module table[aria-label="Записи расходов"] td:nth-child(5),
 .spending-module table[aria-label="Записи расходов"] td:nth-child(8) { white-space: nowrap; }
+
+.spending-header-total { margin-left: 20px; color: var(--text-2); font-size: 12px; display: inline-flex; align-items: baseline; flex-wrap: wrap; gap: 6px; }
+.spending-header-total strong { font-weight: 600; font-variant-numeric: tabular-nums; }
+@media (max-width: 650px) { .spending-header-total { margin-left: 8px; } }

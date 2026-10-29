@@ -208,3 +208,19 @@ test('loads copied finance records and keeps the original classification visible
   expect(await screen.findByRole('alert')).toHaveTextContent('Сбой сохранения');
   expect(screen.getByRole('form',{name:'Копия расхода из Финансов'})).toBeInTheDocument();
 });
+
+test('header total follows the period and access rights, independently of category and search', () => {
+  const base = {subcategory:'Прочее',description:'Расход',recipient:'',method:'Безналичные'};
+  localStorage.setItem('outway-spending-v1:totals',JSON.stringify([
+    {...base,id:'oct',category:'Logistics',date:'2026-10-01',amount:100},
+    {...base,id:'sep',category:'Logistics',date:'2026-09-01',amount:50},
+    {...base,id:'personal',category:'Личное',date:'2026-10-01',amount:500},
+  ]));
+  const onTotalChange=jest.fn();
+  const view=render(<SpendingModule userId="totals" role="admin" periodKey="10" onTotalChange={onTotalChange} />);
+  expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'10',total:600});
+  view.rerender(<SpendingModule userId="totals" role="admin" periodKey="ALL" searchQuery="Нет совпадений" onTotalChange={onTotalChange} />);
+  expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'ALL',total:650});
+  view.rerender(<SpendingModule userId="totals" role="cashier" periodKey="ALL" onTotalChange={onTotalChange} />);
+  expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'ALL',total:150});
+});

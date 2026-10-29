@@ -38,7 +38,7 @@ function readEntries(key: string): Entry[] {
   return raw;
 }
 
-export default function SpendingModule({ userId, role, sessionToken, onOpenClient, periodKey: controlledPeriodKey, onPeriodKeyChange, embedded = false, searchQuery = '' }: { searchQuery?: string; periodKey?: string; onPeriodKeyChange?: (key: string) => void; embedded?: boolean; userId: string; role: UserRole; sessionToken?: string; onOpenClient?: (familyId: string) => Promise<void> }) {
+export default function SpendingModule({ userId, role, sessionToken, onOpenClient, periodKey: controlledPeriodKey, onPeriodKeyChange, embedded = false, searchQuery = '', onTotalChange }: { onTotalChange?: (summary: { userId: string; periodKey: string; total: number | null }) => void; searchQuery?: string; periodKey?: string; onPeriodKeyChange?: (key: string) => void; embedded?: boolean; userId: string; role: UserRole; sessionToken?: string; onOpenClient?: (familyId: string) => Promise<void> }) {
   const workspace = useRef<HTMLDivElement>(null);
   const categoryBar = useRef<HTMLDivElement>(null);
   const scrollToCategories = () => categoryBar.current?.scrollIntoView?.({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
@@ -124,6 +124,10 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   const personalAllowed = role === 'admin' || role === 'gen_director';
   const categories: Category[] = ['COGS', 'Revenue Tax', 'OPEX', 'CAPEX', 'Доп. Выезды', 'Logistics', ...(personalAllowed ? ['Личное' as const] : [])];
   const periodRows = rows.filter(row => (personalAllowed || row.category !== 'Личное') && CASHIER_PERIODS.filter(period => periodKey === 'ALL' || period.key === periodKey).some(period => row.date.startsWith(`${period.year}-${String(period.month).padStart(2,'0')}`)));
+  const periodTotal = periodRows.reduce((sum, row) => sum + row.amount, 0);
+  useEffect(() => {
+    onTotalChange?.({ userId, periodKey, total: busy || loadFailed || !!initial.error ? null : periodTotal });
+  }, [onTotalChange, userId, periodKey, busy, loadFailed, initial.error, periodTotal]);
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase('ru-RU');
   const visible = periodRows.filter(row => (!normalizedSearch || [row.description, row.recipient, row.childName, row.category, row.subcategory, row.schoolKey, row.paymentOrderNumber, row.comment, String(row.amount)].filter(Boolean).join(' ').toLocaleLowerCase('ru-RU').includes(normalizedSearch)) && (allRecords || !schoolFilter || (schoolFilter.startsWith('opex:') ? OPEX_GROUPS[schoolFilter.slice(5) as keyof typeof OPEX_GROUPS]?.includes(row.subcategory) : (row.schoolKey || 'unassigned') === schoolFilter)) && (allRecords || category === 'ALL' || row.category === category)).sort((a,b) => b.date.localeCompare(a.date));
   const persist = (next: Entry[], onSaved: () => void = () => {}) => {
