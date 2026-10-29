@@ -1,3 +1,4 @@
+jest.mock('../../services/spendingService',()=>({fetchSpendingPayments:jest.fn().mockResolvedValue([])}));
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DriverPaymentsPanel from './DriverPaymentsPanel';

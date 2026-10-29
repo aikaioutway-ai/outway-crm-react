@@ -30,3 +30,12 @@ export async function saveSpendingEntries(token: string, rows: SpendingEntry[], 
 export async function deleteSpendingEntry(token: string, id: string): Promise<void> {
   await request(token, { action: 'delete', id });
 }
+
+export async function fetchSpendingPayments(token: string, recipient: { driverId: string } | { employeeId: string }): Promise<SpendingEntry[]> {
+  const result: SpendingEntry[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { rows } = await request(token, { action: 'payments', ...recipient, offset });
+    result.push(...rows.filter((row: SpendingEntry) => !row.sourceRef));
+    if (rows.length < 500) return result;
+  }
+}

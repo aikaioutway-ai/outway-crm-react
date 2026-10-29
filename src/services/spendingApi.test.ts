@@ -12,10 +12,11 @@ const token = (role = 'cashier') => {
 function setup(role = 'cashier', previous: object[] = [], status = 'active') {
   let handler: (req: unknown) => Promise<{status:number;body:Record<string,unknown>}>;
   const upsert = jest.fn(async (_rows: Array<{payload: Record<string, unknown>}>, _options?: unknown) => ({error:null}));
+  const calls: Array<{method:string;args:unknown[]}> = [];
   const db = {from:(table:string) => {
     const result = {data:table === 'v2_employees' ? {role,status} : previous,error:null};
     const query: Record<string,unknown> = {then:(resolve:(value:unknown)=>void)=>Promise.resolve(result).then(resolve)};
-    for (const method of ['select','eq','is','order','range','neq','gte','lte','in']) query[method]=()=>query;
+    for (const method of ['select','eq','is','order','range','neq','gte','lte','in']) query[method]=(...args:unknown[])=>{ calls.push({method,args}); return query; };
     query.maybeSingle=async()=>result;
     query.upsert=upsert;
     return query;
@@ -26,7 +27,7 @@ function setup(role = 'cashier', previous: object[] = [], status = 'active') {
     createClient:()=>db,crypto:webcrypto,TextEncoder,TextDecoder,atob:(value:string)=>Buffer.from(value,'base64').toString('binary'),
     Response:{json:(body:Record<string,unknown>,options:{status?:number})=>({body,status:options.status ?? 200})},
   });
-  return {upsert,request:(body:unknown,signedToken=token(role))=>handler({method:'POST',headers:{get:()=>signedToken},json:async()=>body})};
+  return {upsert,calls,request:(body:unknown,signedToken=token(role))=>handler({method:'POST',headers:{get:()=>signedToken},json:async()=>body})};
 }
 const entry = {id:'expense',category:'OPEX',subcategory:'Аренда',date:'2026-10-01',amount:100,description:'Аренда',recipient:'',method:'Безналичные'};
 test('rejects invalid session signatures', async () => {
@@ -54,4 +55,23 @@ test('saving a copy preserves its provenance and never writes the source', async
   const api=setup('admin',[{id:'expense',category:'OPEX',payload:old}]);
   expect((await api.request({action:'save',rows:[{...entry,sourceRef:'forged',originalCategory:'personal'}]})).status).toBe(200);
   expect(api.upsert.mock.calls[0][0][0].payload).toMatchObject({sourceRef:old.sourceRef,originalCategory:'office'});
+});
+
+test('driver-scoped history is available to logistics without access to employee payments or all expenses', async () => {
+  const api = setup('logist');
+  const driverId='11111111-1111-1111-1111-111111111111';
+  expect((await api.request({action:'payments',driverId})).status).toBe(200);
+  expect(api.calls).toContainEqual({method:'eq',args:['payload->>driverId',driverId]});
+  expect(api.calls).toContainEqual({method:'is',args:['source_table',null]});
+  expect(api.calls).toContainEqual({method:'is',args:['deleted_at',null]});
+  expect((await api.request({action:'payments',employeeId:'employee'})).status).toBe(403);
+  expect((await api.request({action:'list'})).status).toBe(403);
+  expect((await api.request({action:'save',rows:[entry]})).status).toBe(403);
+});
+test('employee history includes only salary and advances for the selected employee', async () => {
+  const api=setup('cashier');
+  expect((await api.request({action:'payments',employeeId:'employee'})).status).toBe(200);
+  expect(api.calls).toContainEqual({method:'eq',args:['payload->>employeeId','employee']});
+  expect(api.calls).toContainEqual({method:'in',args:['category',['OPEX']]});
+  expect(api.calls).toContainEqual({method:'in',args:['payload->>subcategory',['Авансы сотрудникам','Зарплата офиса']]});
 });

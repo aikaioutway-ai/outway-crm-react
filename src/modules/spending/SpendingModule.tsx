@@ -7,6 +7,7 @@ import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import ExpenseComposer from './ExpenseComposer';
 import ImportedExpenseForm from './ImportedExpenseForm';
 import { fetchSpendingEntries, saveSpendingEntries, deleteSpendingEntry } from '../../services/spendingService';
+import { queryClient } from '../../services/queryClient';
 import { EXPENSE_CATEGORIES, ExpenseCategory } from '../costs/expenseTypes';
 import CogsPaymentForm from './CogsPaymentForm';
 import ManagerPeriodBar from '../families/ManagerPeriodBar';
@@ -141,6 +142,8 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
         for (const row of removed) await deleteSpendingEntry(sessionToken, row.id);
         setRows(await fetchSpendingEntries(sessionToken));
         setError('');
+        void queryClient.invalidateQueries({ queryKey: ['driverPayments'] });
+        void queryClient.invalidateQueries({ queryKey: ['employeePaymentHistory'] });
         window.dispatchEvent(new Event('outway-spending-updated'));
         onSaved();
       })().catch(reason => setError(reason instanceof Error ? reason.message : 'Не удалось сохранить расход'))

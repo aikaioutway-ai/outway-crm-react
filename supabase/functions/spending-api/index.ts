@@ -41,11 +41,26 @@ Deno.serve(async req => {
     if (!session) return response({ ok: false, error: 'Сессия недействительна или истекла' }, 401);
     const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
     const body = await req.json();
+    const driverRead = body.action === 'payments' && typeof body.driverId === 'string' && /^[0-9a-f-]{36}$/i.test(body.driverId) && !body.employeeId;
     const familyRead = body.action === 'list' && typeof body.familyId === 'string' && /^[0-9a-f-]{36}$/i.test(body.familyId);
     const { data: actor, error: actorError } = await db.from('v2_employees').select('role,status').eq('id',session.sub).maybeSingle();
     if (actorError) throw actorError;
-    if (!actor || actor.status !== 'active' || !(ALLOWED_ROLES.has(actor.role) || familyRead && ['manager','director'].includes(actor.role))) return response({ok:false,error:'Нет доступа к расходам'},403);
+    if (!actor || actor.status !== 'active' || !(ALLOWED_ROLES.has(actor.role) || familyRead && ['manager','director'].includes(actor.role) || driverRead && ['director','logist','senior_logist','b2b_logist'].includes(actor.role))) return response({ok:false,error:'Нет доступа к расходам'},403);
     const personal = PERSONAL_DETAILS_ROLES.has(actor.role);
+    if (body.action === 'payments') {
+      const driverId = typeof body.driverId === 'string' ? body.driverId : '';
+      const employeeId = typeof body.employeeId === 'string' ? body.employeeId : '';
+      const offset = Number(body.offset ?? 0);
+      if (Boolean(driverId) === Boolean(employeeId) || !Number.isSafeInteger(offset) || offset < 0 || (driverId && !/^[0-9a-f-]{36}$/i.test(driverId)) || employeeId.length > 200) return response({ok:false,error:'Выберите получателя'},400);
+      let query = db.from('v2_spending_entries').select('payload').is('deleted_at',null).is('source_table',null)
+        .eq(driverId ? 'payload->>driverId' : 'payload->>employeeId',driverId || employeeId)
+        .in('category',driverId ? ['COGS','Доп. Выезды','Logistics'] : ['OPEX'])
+        .in('payload->>subcategory',driverId ? ['Авансы водителям','Зарплата водителей','Оплата водителю'] : ['Авансы сотрудникам','Зарплата офиса'])
+        .order('expense_date',{ascending:false}).order('id').range(offset,offset+499);
+      const {data,error} = await query;
+      if (error) throw error;
+      return response({ok:true,rows:(data ?? []).map(row=>row.payload)});
+    }
     if (body.action === 'list') {
       const offset = Number(body.offset ?? 0);
       if (!Number.isSafeInteger(offset) || offset < 0) return response({ok:false,error:'Некорректная страница'},400);
