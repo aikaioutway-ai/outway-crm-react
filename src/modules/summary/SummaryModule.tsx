@@ -53,6 +53,38 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
     return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onKey); };
   }, [daysMenu]);
 
+  const isV2 = tab === 'v2';
+  // 2.0 — минивэны и седаны: те же школы, что в 1.0, без рабочих дней. Цифры появятся, когда владелец задаст ставки водителям за день.
+  const columns = [
+    { key: 'school', label: 'Школы', total: rows.length, color: '#64748B' },
+    { key: 'microbusCount', label: isV2 ? 'Cars' : 'Buses', total: isV2 ? EMPTY : totals.microbusCount, color: KPI_COLORS.childrenCount },
+    { key: 'revenue', label: 'Revenue', total: isV2 ? EMPTY : money(totals.revenue), color: KPI_COLORS.charged },
+    { key: 'cogs', label: 'COGS', total: isV2 ? EMPTY : money(totals.cogs), color: '#B45309' },
+    { key: 'revenueTax', label: 'Revenue Tax 4%', total: isV2 ? EMPTY : money(totals.revenueTax), color: '#64748B' },
+    { key: 'grossProfit', label: 'Gross Profit', total: isV2 ? EMPTY : money(totals.grossProfit), color: !isV2 && totals.grossProfit < 0 ? 'var(--danger)' : KPI_COLORS.paid },
+    ...(isV2 ? [] : [{ key: 'workingDays', label: 'Days', total: workingDays, color: '#94A3B8' }]),
+  ];
+  const tableRows = isV2
+    ? [...rows].sort((a, b) => a.label.localeCompare(b.label)).map(row => ({
+      key: row.key,
+      label: row.label,
+      logo: row.logo,
+      values: { microbusCount: EMPTY, revenue: EMPTY, cogs: EMPTY, revenueTax: EMPTY, grossProfit: EMPTY },
+    }))
+    : sortedRows.map(row => ({
+      key: row.key,
+      label: row.label,
+      logo: row.logo,
+      values: {
+        microbusCount: row.microbusCount,
+        revenue: money(row.revenue),
+        cogs: money(row.cogs),
+        revenueTax: money(row.revenueTax),
+        grossProfit: money(row.grossProfit),
+        workingDays,
+      },
+    }));
+
   const menuPeriod = daysMenu ? MONTH_PERIODS.find(item => item.key === daysMenu.periodKey) : undefined;
   const menuDays = menuPeriod ? workingDaysFor(daysQuery.data, menuPeriod.year, menuPeriod.month) : null;
 
@@ -72,12 +104,12 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
             onPeriodKeyChange={setPeriodKey}
             periods={MONTH_PERIODS}
             showAll={false}
-            periodTitle={item => {
+            periodTitle={isV2 ? undefined : item => {
               const target = MONTH_PERIODS.find(p => p.key === item.key);
               const days = target ? workingDaysFor(daysQuery.data, target.year, target.month) : null;
               return `${item.label} · ${days ?? EMPTY} раб. дней. ПКМ — изменить`;
             }}
-            onPeriodContextMenu={(key, event) => setDaysMenu({ periodKey: key, x: Math.min(event.clientX, window.innerWidth - 200), y: Math.min(event.clientY, window.innerHeight - 380) })}
+            onPeriodContextMenu={isV2 ? undefined : (key, event) => setDaysMenu({ periodKey: key, x: Math.min(event.clientX, window.innerWidth - 200), y: Math.min(event.clientY, window.innerHeight - 380) })}
           />
         </div>
       </DashboardTopPanel>
@@ -88,10 +120,11 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
         </div>
       )}
 
-      {tab === 'v2' ? (
-        // 2.0 — минивэны и седаны: расчёт подключим, когда владелец задаст ставки водителям за день.
-        <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Прогноз по минивэнам и седанам появится, когда будут заданы ставки водителям.</div>
-      ) : forecastQuery.isPending || daysQuery.isPending ? (
+      {isV2 && (
+        <div role="status" style={{ padding: '0 4px', fontSize: 12.5, color: 'var(--text-2)' }}>Прогноз по минивэнам и седанам появится, когда будут заданы ставки водителям.</div>
+      )}
+
+      {forecastQuery.isPending || daysQuery.isPending ? (
         <div role="status" style={{ padding: 24, fontSize: 13, color: 'var(--text-2)' }}>Загрузка прогноза…</div>
       ) : forecastQuery.isError || daysQuery.isError ? (
         <div role="alert" style={{ padding: 24, fontSize: 13 }}>
@@ -103,31 +136,11 @@ export default function SummaryModule({ sessionToken, onSelectSchool }: Props) {
         <SchoolDashboardTable
           commentScope="summary/SummaryModule:forecast"
           commentContext={`forecast:${period.key}`}
-          columns={[
-            { key: 'school', label: 'Школы', total: rows.length, color: '#64748B' },
-            { key: 'microbusCount', label: 'Buses', total: totals.microbusCount, color: KPI_COLORS.childrenCount },
-            { key: 'revenue', label: 'Revenue', total: money(totals.revenue), color: KPI_COLORS.charged },
-            { key: 'cogs', label: 'COGS', total: money(totals.cogs), color: '#B45309' },
-            { key: 'revenueTax', label: 'Revenue Tax 4%', total: money(totals.revenueTax), color: '#64748B' },
-            { key: 'grossProfit', label: 'Gross Profit', total: money(totals.grossProfit), color: totals.grossProfit < 0 ? 'var(--danger)' : KPI_COLORS.paid },
-            { key: 'workingDays', label: 'Days', total: workingDays, color: '#94A3B8' },
-          ]}
-          rows={sortedRows.map(row => ({
-            key: row.key,
-            label: row.label,
-            logo: row.logo,
-            values: {
-              microbusCount: row.microbusCount,
-              revenue: money(row.revenue),
-              cogs: money(row.cogs),
-              revenueTax: money(row.revenueTax),
-              grossProfit: money(row.grossProfit),
-              workingDays,
-            },
-          }))}
-          sortKey={sortState.key}
-          ascending={sortState.dir === 'asc'}
-          onSort={key => { if (key === 'school' || key in totals) handleSort(key as SortKey); }}
+          columns={columns}
+          rows={tableRows}
+          sortKey={isV2 ? 'school' : sortState.key}
+          ascending={isV2 || sortState.dir === 'asc'}
+          onSort={key => { if (!isV2 && (key === 'school' || key in totals)) handleSort(key as SortKey); }}
           onSelect={key => onSelectSchool(key, period.key)}
         />
       )}
