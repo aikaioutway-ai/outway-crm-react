@@ -697,3 +697,10 @@
 .spending-inline-expense .spending-expense-dialog { position: relative; }
 .spending-split-view .spending-workspace:has(.spending-inline-expense) .spending-register-schools { height: calc(100dvh - 190px); }
 @media (prefers-reduced-motion: reduce) { .spending-split-view .spending-workspace { scroll-behavior: auto; } }
+
+/* Невысокий экран (ноутбук, iPad): все категории, включая «Все», помещаются без прокрутки. */
+@media (min-width: 761px) and (max-height: 1000px) {
+  .spending-module.spending-split-view .spending-categories { gap: 6px; }
+  .spending-module.spending-split-view .spending-categories > button { min-height: 0; padding: 8px 12px; gap: 2px 8px; }
+  .spending-module.spending-split-view .spending-categories strong { font-size: 15px; }
+}

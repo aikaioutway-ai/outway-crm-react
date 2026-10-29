@@ -43,7 +43,7 @@ import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
 import { scheduleRealtimeFamiliesRefresh, watchRealtimeRefreshOnReturn } from './services/crmV2Service';
-import { useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
+import { isTabletDevice, useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
 import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
@@ -137,7 +137,7 @@ export default function App() {
     window.addEventListener(TASK_VIEW_EVENT, view);
     return () => { active=false;window.removeEventListener(TASK_COMPOSER_EVENT, compose);window.removeEventListener(TASK_VIEW_EVENT, view); };
   }, [currentUser,isMobileViewport,forceDesktop]);
-  useDesktopViewport(isMobileViewport && forceDesktop && !!currentUser);
+  useDesktopViewport((isMobileViewport && forceDesktop && !!currentUser) || isTabletDevice());
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole, currentUser?.id)[0]);
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
