@@ -164,7 +164,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   const changeDraftCategory = (nextCategory: Category, current: Entry) => {
     if (!categories.includes(nextCategory) || busy) return;
     const driverCategory = ['COGS','Logistics','Доп. Выезды'].includes(nextCategory);
-    setDraft({...current,category:nextCategory,subcategory:SPENDING_CATEGORIES[nextCategory][0],classificationChanged:true,
+    setDraft({...current,category:nextCategory,subcategory:SPENDING_CATEGORIES[nextCategory].includes(current.subcategory) ? current.subcategory : SPENDING_CATEGORIES[nextCategory][0],classificationChanged:true,
       driverId:driverCategory ? current.driverId : undefined,transferId:driverCategory ? current.transferId : undefined,
       recipientKey:driverCategory ? current.recipientKey : undefined,transferNumber:driverCategory ? current.transferNumber : undefined,
       employeeId:nextCategory==='OPEX' ? current.employeeId : undefined,departmentKey:nextCategory==='OPEX' ? current.departmentKey : undefined,

@@ -11,9 +11,9 @@ import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 
 export type DriverPayment = { driverId: string; transferId: string; schoolKey: string; name: string; amount: string; temporary?: boolean; periodAmounts?:Record<string,string> };
 type PaymentRow = DriverPayment & { key: number; selected: boolean; choosing?: boolean; openChooser?: boolean };
-type Props = { unitPriceMode?:boolean; selectDriverOnly?:boolean; drivers:V2DriverTableRow[]; allDrivers?:V2DriverTableRow[]; school:string; initialSearch?:string; splitTotal?:boolean; compactCards?:boolean; sessionToken?:string; initial:DriverPayment[]; salary:boolean; periods?:{key:string;label:string}[]; onClose:()=>void; onConfirm:(rows:DriverPayment[])=>void; transferSchool:(transfer:V2DriverTableRow['transfers'][number])=>string };
+type Props = { unitPriceMode?:boolean; selectDriverOnly?:boolean; drivers:V2DriverTableRow[]; allDrivers?:V2DriverTableRow[]; school:string; initialSearch?:string; splitTotal?:boolean; compactCards?:boolean; sessionToken?:string; initial:DriverPayment[]; salary:boolean; periods?:{key:string;label:string;}[]; /** Сумма редактируемой записи: подставляется первому выбранному водителю. */ defaultAmount?:string; onClose:()=>void; onConfirm:(rows:DriverPayment[])=>void; transferSchool:(transfer:V2DriverTableRow['transfers'][number])=>string };
 
-export default function DriverPaymentPicker({unitPriceMode=false,selectDriverOnly=false,drivers,allDrivers=drivers,school,sessionToken,initial,salary,initialSearch='',splitTotal=false,compactCards=false,periods=[],onClose,onConfirm,transferSchool}:Props) {
+export default function DriverPaymentPicker({unitPriceMode=false,selectDriverOnly=false,drivers,allDrivers=drivers,school,sessionToken,initial,salary,initialSearch='',splitTotal=false,compactCards=false,periods=[],defaultAmount='',onClose,onConfirm,transferSchool}:Props) {
   const transfers=Array.from(new Map(drivers.flatMap(driver=>driver.transfers).filter(transfer=>isSchoolVisible(transfer.branchShort) && isSchoolVisible(transferSchool(transfer))).map(transfer=>[transfer.id,transfer])).values()).sort((a,b)=>transferSchool(a).localeCompare(transferSchool(b),'ru',{numeric:true}) || String(a.transferNumber).localeCompare(String(b.transferNumber),'ru',{numeric:true}));
   const people=Array.from(new Map(allDrivers.map(driver=>[driver.driverId,driver])).values()).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ru'));
   const [rows,setRows]=useState<PaymentRow[]>(()=>{
@@ -40,7 +40,7 @@ export default function DriverPaymentPicker({unitPriceMode=false,selectDriverOnl
     const gesture = dragSelection.current;
     if (!gesture || gesture.visited.has(key)) return;
     gesture.visited.add(key);
-    setRows(current => current.map(row => row.key === key ? {...row, selected: gesture.selected} : row));
+    setRows(current => current.map(row => row.key === key ? withDefaultAmount(current, row, {selected: gesture.selected}) : row));
   };
   const [creatingFor,setCreatingFor]=useState<number|null>(null);
   const nextKey=useRef(rows.length);
@@ -55,7 +55,9 @@ export default function DriverPaymentPicker({unitPriceMode=false,selectDriverOnl
   const keys=periods.map(period=>period.key);
   const rowTotal=(row:DriverPayment)=>periods.length?periodTotal(periodAmounts(keys,row.amount,row.periodAmounts)):Number(row.amount)||0;
   const total=selected.reduce((sum,row)=>sum+rowTotal(row),0);
-  const change=(key:number,patch:Partial<PaymentRow>)=>setRows(current=>current.map(row=>row.key===key?{...row,...patch}:row));
+  // Первый выбранный водитель получает сумму редактируемой записи, если своей суммы у него ещё нет.
+  const withDefaultAmount=(current:PaymentRow[],row:PaymentRow,patch:Partial<PaymentRow>):PaymentRow=>patch.selected && defaultAmount && !row.amount && !current.some(item=>item.selected)?{...row,...patch,amount:defaultAmount}:{...row,...patch};
+  const change=(key:number,patch:Partial<PaymentRow>)=>setRows(current=>current.map(row=>row.key===key?withDefaultAmount(current,row,patch):row));
   const addRecipient=(row:PaymentRow)=>{
     const key=nextKey.current++;setSearch('');
     setRows(current=>{const index=compactCards?current.length-1:current.findIndex(item=>item.key===row.key);return [...current.slice(0,index+1),{key,selected:true,schoolKey:row.schoolKey,transferId:row.transferId,driverId:'',name:'',amount:'',temporary:true,choosing:true,openChooser:true},...current.slice(index+1)];});

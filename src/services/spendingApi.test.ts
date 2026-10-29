@@ -64,7 +64,7 @@ test('driver-scoped history is available to logistics without access to employee
   const driverId='11111111-1111-1111-1111-111111111111';
   expect((await api.request({action:'payments',driverId})).status).toBe(200);
   expect(api.calls).toContainEqual({method:'eq',args:['payload->>driverId',driverId]});
-  expect(api.calls).toContainEqual({method:'is',args:['source_table',null]});
+  expect(api.calls).not.toContainEqual({method:'is',args:['source_table',null]});
   expect(api.calls).toContainEqual({method:'is',args:['deleted_at',null]});
   expect((await api.request({action:'payments',employeeId:'employee'})).status).toBe(403);
   expect((await api.request({action:'list'})).status).toBe(403);
@@ -74,6 +74,7 @@ test('employee history includes only salary and advances for the selected employ
   const api=setup('cashier');
   expect((await api.request({action:'payments',employeeId:'employee'})).status).toBe(200);
   expect(api.calls).toContainEqual({method:'eq',args:['payload->>employeeId','employee']});
+  expect(api.calls).toContainEqual({method:'is',args:['source_table',null]});
   expect(api.calls).toContainEqual({method:'in',args:['category',['OPEX']]});
   expect(api.calls).toContainEqual({method:'in',args:['payload->>subcategory',['Авансы сотрудникам','Зарплата офиса']]});
 });

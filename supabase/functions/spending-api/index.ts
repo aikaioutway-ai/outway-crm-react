@@ -55,7 +55,10 @@ Deno.serve(async req => {
       const employeeId = typeof body.employeeId === 'string' ? body.employeeId : '';
       const offset = Number(body.offset ?? 0);
       if (Boolean(driverId) === Boolean(employeeId) || !Number.isSafeInteger(offset) || offset < 0 || (driverId && !/^[0-9a-f-]{36}$/i.test(driverId)) || employeeId.length > 200) return response({ok:false,error:'Выберите получателя'},400);
-      let query = db.from('v2_spending_entries').select('payload').is('deleted_at',null).is('source_table',null)
+      // Копии из «Финансов» входят в историю водителя: их можно перенести в COGS и указать водителя.
+      let query = db.from('v2_spending_entries').select('payload').is('deleted_at',null);
+      if (!driverId) query = query.is('source_table',null);
+      query = query
         .eq(driverId ? 'payload->>driverId' : 'payload->>employeeId',driverId || employeeId)
         .in('category',driverId ? ['COGS','Доп. Выезды','Logistics'] : ['OPEX'])
         .in('payload->>subcategory',driverId ? ['Авансы водителям','Зарплата водителей','Оплата водителю'] : ['Авансы сотрудникам','Зарплата офиса'])
