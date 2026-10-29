@@ -209,20 +209,27 @@ test('loads copied finance records and keeps the original classification visible
   expect(screen.getByRole('form',{name:'Новый расход OPEX'})).toBeInTheDocument();
 });
 
-test('header total follows the period and access rights, independently of category and search', () => {
+test('all-expenses tile follows the period and access rights, independently of category and search', () => {
   const base = {subcategory:'Прочее',description:'Расход',recipient:'',method:'Безналичные'};
   localStorage.setItem('outway-spending-v1:totals',JSON.stringify([
     {...base,id:'oct',category:'Logistics',date:'2026-10-01',amount:100},
     {...base,id:'sep',category:'Logistics',date:'2026-09-01',amount:50},
     {...base,id:'personal',category:'Личное',date:'2026-10-01',amount:500},
   ]));
-  const onTotalChange=jest.fn();
-  const view=render(<SpendingModule userId="totals" role="admin" periodKey="10" onTotalChange={onTotalChange} />);
-  expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'10',total:600});
-  view.rerender(<SpendingModule userId="totals" role="admin" periodKey="ALL" searchQuery="Нет совпадений" onTotalChange={onTotalChange} />);
-  expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'ALL',total:650});
-  view.rerender(<SpendingModule userId="totals" role="cashier" periodKey="ALL" onTotalChange={onTotalChange} />);
-  expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'ALL',total:150});
+  const view=render(<SpendingModule userId="totals" role="admin" periodKey="10" />);
+  expect(screen.getByRole('button',{name:/^Все Все расходы за период/})).toHaveTextContent('600 сом');
+  expect(screen.getByRole('button',{name:/^Личное /})).toBeInTheDocument();
+  view.rerender(<SpendingModule userId="totals" role="admin" periodKey="ALL" searchQuery="Нет совпадений" />);
+  expect(screen.getByRole('button',{name:/^Все Все расходы за период/})).toHaveTextContent('650 сом');
+  view.rerender(<SpendingModule userId="totals" role="cashier" periodKey="ALL" />);
+  const all=screen.getByRole('button',{name:/^Все Все расходы за период/});
+  expect(all).toHaveTextContent('150 сом');
+  expect(all).toHaveClass('is-expanded');
+  expect(screen.queryByRole('button',{name:/^Личное /})).not.toBeInTheDocument();
+  fireEvent.click(all);
+  expect(screen.getByRole('region',{name:'Записи расходов'})).toBeInTheDocument();
+  expect(all).toHaveAttribute('aria-pressed','true');
+  expect(screen.getByRole('button',{name:/^Logistics /})).toHaveAttribute('aria-pressed','false');
 });
 
 test('editing uses the creation forms and switching category changes the form without replacing the record',()=>{

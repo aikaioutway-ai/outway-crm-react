@@ -38,7 +38,7 @@ function readEntries(key: string): Entry[] {
   return raw;
 }
 
-export default function SpendingModule({ userId, role, sessionToken, onOpenClient, periodKey: controlledPeriodKey, onPeriodKeyChange, embedded = false, searchQuery = '', onTotalChange, columnsOpen, onColumnsOpenChange }: { columnsOpen?: boolean; onColumnsOpenChange?: (open: boolean) => void; onTotalChange?: (summary: { userId: string; periodKey: string; total: number | null }) => void; searchQuery?: string; periodKey?: string; onPeriodKeyChange?: (key: string) => void; embedded?: boolean; userId: string; role: UserRole; sessionToken?: string; onOpenClient?: (familyId: string) => Promise<void> }) {
+export default function SpendingModule({ userId, role, sessionToken, onOpenClient, periodKey: controlledPeriodKey, onPeriodKeyChange, embedded = false, searchQuery = '', columnsOpen, onColumnsOpenChange }: { columnsOpen?: boolean; onColumnsOpenChange?: (open: boolean) => void; searchQuery?: string; periodKey?: string; onPeriodKeyChange?: (key: string) => void; embedded?: boolean; userId: string; role: UserRole; sessionToken?: string; onOpenClient?: (familyId: string) => Promise<void> }) {
   const workspace = useRef<HTMLDivElement>(null);
   const categoryBar = useRef<HTMLDivElement>(null);
   const scrollToCategories = () => categoryBar.current?.scrollIntoView?.({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
@@ -73,6 +73,8 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   const [recordsScrollRequest, setRecordsScrollRequest] = useState(0);
   const openAllRecords = () => {
     setAllRecords(true);
+    setCategory('ALL');
+    setDraft(null);
     setSchoolFilter(null);
     setRecordsScrollRequest(current => current + 1);
   };
@@ -125,9 +127,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   const categories: Category[] = ['COGS', 'Revenue Tax', 'OPEX', 'CAPEX', 'Доп. Выезды', 'Logistics', ...(personalAllowed ? ['Личное' as const] : [])];
   const periodRows = rows.filter(row => (personalAllowed || row.category !== 'Личное') && CASHIER_PERIODS.filter(period => periodKey === 'ALL' || period.key === periodKey).some(period => row.date.startsWith(`${period.year}-${String(period.month).padStart(2,'0')}`)));
   const periodTotal = periodRows.reduce((sum, row) => sum + row.amount, 0);
-  useEffect(() => {
-    onTotalChange?.({ userId, periodKey, total: busy || loadFailed || !!initial.error ? null : periodTotal });
-  }, [onTotalChange, userId, periodKey, busy, loadFailed, initial.error, periodTotal]);
+
   const normalizedSearch = searchQuery.trim().toLocaleLowerCase('ru-RU');
   const visible = periodRows.filter(row => (!normalizedSearch || [row.description, row.recipient, row.childName, row.category, row.subcategory, row.schoolKey, row.paymentOrderNumber, row.comment, String(row.amount)].filter(Boolean).join(' ').toLocaleLowerCase('ru-RU').includes(normalizedSearch)) && (allRecords || !schoolFilter || (schoolFilter.startsWith('opex:') ? OPEX_GROUPS[schoolFilter.slice(5) as keyof typeof OPEX_GROUPS]?.includes(row.subcategory) : (row.schoolKey || 'unassigned') === schoolFilter)) && (allRecords || category === 'ALL' || row.category === category)).sort((a,b) => b.date.localeCompare(a.date));
   const persist = (next: Entry[], onSaved: () => void = () => {}, onFailed: () => void = () => {}) => {
@@ -176,7 +176,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   return <section className={`spending-module${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
     {!embedded && <header className="spending-header"><div><span className="spending-eyebrow">УПРАВЛЕНИЕ РАСХОДАМИ</span><h1>Расходы</h1></div><div className="spending-finance-periods"><ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} /></div></header>}
     {error && <p role="alert" className="spending-error">{error}{loadFailed && <button type="button" onClick={() => setReloadKey(value => value + 1)}>Повторить загрузку</button>}</p>}{busy && <p role="status">Обработка расходов…</p>}
-    <div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { setAllRecords(false); setCategory(key);  setSchoolFilter(null); setDraft(blank(key)); scrollToWorkspace(); }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}</div>
+    <div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={!allRecords && category === key} onClick={() => { setAllRecords(false); setCategory(key);  setSchoolFilter(null); setDraft(blank(key)); scrollToWorkspace(); }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={openAllRecords}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
     <div className="spending-workspace" ref={workspace}>
 
 
