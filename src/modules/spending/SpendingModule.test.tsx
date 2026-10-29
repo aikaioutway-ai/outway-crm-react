@@ -334,11 +334,10 @@ test('only the current expense view is highlighted', () => {
   expect(screen.getByRole('button', { name: 'Вернуться к новому расходу' })).toHaveAttribute('aria-pressed', 'false');
 });
 
-test('opens tiles by default and on category selection', () => {
+test('opens tiles by default and keeps tiles on category selection', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   expect(screen.getByRole('group', { name: 'Расходы по школам' })).toBeInTheDocument();
   expect(screen.queryByRole('form')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
   fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
   expect(screen.getByRole('group', { name: 'Расходы по статьям' })).toBeInTheDocument();
   expect(screen.queryByRole('region', { name: 'Записи расходов' })).not.toBeInTheDocument();
@@ -384,4 +383,23 @@ test('sidebar changes the category while keeping a new expense open', () => {
   expect(screen.getByRole('form', { name: 'Новый расход CAPEX' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: /^Личное / }));
   expect(screen.getByRole('form', { name: 'Новый расход Личное' })).toBeInTheDocument();
+});
+
+test('switching category keeps the table view and shows that category records', () => {
+  const today = new Date().toISOString().slice(0, 10);
+  localStorage.setItem('outway-spending-v1:table-owner', JSON.stringify([
+    { id: 'c1', category: 'COGS', subcategory: 'Авансы водителям', date: today, amount: 100, description: 'Аванс водителю', recipient: '', method: 'Наличные' },
+    { id: 'o1', category: 'OPEX', subcategory: 'Аренда', date: today, amount: 200, description: 'Аренда офиса', recipient: '', method: 'Наличные' },
+  ]));
+  render(<SpendingModule userId="table-owner" role="admin" />);
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: /^COGS / }));
+  if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Таблица расходов' }));
+  expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: /^OPEX / }));
+  expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
+  expect(screen.queryByRole('group', { name: 'Расходы по школам' })).not.toBeInTheDocument();
+  expect(screen.getByText('Аренда офиса')).toBeInTheDocument();
+  expect(screen.queryByText('Аванс водителю')).not.toBeInTheDocument();
 });
