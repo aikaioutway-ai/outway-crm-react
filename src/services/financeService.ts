@@ -18,7 +18,7 @@ import {
 
 /** Платежи/начисления меняют total_paid/debt/pending в v2_families_summary —
  * сбрасываем те же ключи кэша, что и мутации семей/детей. */
-function invalidateFinanceCache(): void {
+export function invalidateFinanceCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
@@ -284,6 +284,8 @@ export async function setChildCharge(input: {
   year: number;
   amount: number;
   actor?: string;
+  /** Экран сам обновит данные позже одним разом (правка нескольких ячеек подряд). */
+  deferRefresh?: boolean;
 }): Promise<void> {
   const { error } = await supabase.rpc('v2_set_child_charge', {
     p_child_id: input.childId,
@@ -294,7 +296,7 @@ export async function setChildCharge(input: {
     p_actor: input.actor || 'CRM',
   });
   if (error) throw new Error(error.message);
-  invalidateFinanceCache();
+  if (!input.deferRefresh) invalidateFinanceCache();
 }
 
 /** «Перенести с прошлого месяца»: детям без начисления в месяце ставит сумму прошлого месяца. */

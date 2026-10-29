@@ -67,7 +67,8 @@ export async function cancelChargeDiscount(sessionToken: string | undefined, dis
   invalidateDiscountCaches();
 }
 
-export async function setChildDiscountChoice(sessionToken: string | undefined, childId: string, percent: number | null): Promise<void> {
+export async function setChildDiscountChoice(sessionToken: string | undefined, childId: string, percent: number | null, options?: { deferRefresh?: boolean }): Promise<void> {
   await callDiscountApi(sessionToken, { action: 'setDiscountChoice', childId, percent });
-  invalidateDiscountCaches();
+  // deferRefresh: экран сам обновит данные позже одним разом (правка нескольких ячеек подряд).
+  if (!options?.deferRefresh) invalidateDiscountCaches();
 }

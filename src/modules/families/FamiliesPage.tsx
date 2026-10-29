@@ -30,7 +30,7 @@ import NewDriverModal from '../drivers/NewDriverModal';
 import { B2B_ORDER_STATUSES, B2BOrder } from '../b2b/B2BOrders';
 import { useB2BOrders } from '../../hooks/useB2BData';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
-import { confirmFamilyPayment, copyPreviousMonthCharges, setChildCharge, undoCopyPreviousMonthCharges, updateFamilyPayment } from '../../services/financeService';
+import { confirmFamilyPayment, copyPreviousMonthCharges, invalidateFinanceCache, setChildCharge, undoCopyPreviousMonthCharges, updateFamilyPayment } from '../../services/financeService';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
@@ -485,6 +485,15 @@ const REQUEST_COLUMNS: ColumnDef<ChildRow>[] = [
 ];
 
 const EMPTY_PERIOD_STATS: PeriodChargeStats[] = [];
+const ACCRUAL_REFRESH_DELAY_MS = 2000;
+type AccrualColumns = { deposit: Map<string, number>; previous: Map<string, number>; current: Map<string, number> };
+
+/** Начисления изменились: колонки месяцев, долг по детям и итоги школ перечитаются при следующем показе. */
+function invalidateAccrualCaches() {
+  invalidateFinanceCache();
+  void queryClient.invalidateQueries({ queryKey: ['child-accrual-columns'] });
+  void queryClient.invalidateQueries({ queryKey: ['manager-charge-stats'] });
+}
 const CHARGES_COLUMN_ORDER = ['parentName', 'phone', 'childName', 'totalCharged', 'pendingPayment', 'balance', 'debtAmount'] as const;
 const CHARGES_COLUMN_KEYS = new Set<string>(CHARGES_COLUMN_ORDER);
 const CHARGES_COLUMNS: ColumnDef<ChildRow>[] = [
@@ -1226,10 +1235,16 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const canUndoAccrualCopy = canEditAccruals && lastAccrualCopy != null
     && lastAccrualCopy.month === accrualPeriod.month && lastAccrualCopy.year === accrualPeriod.year
     && lastAccrualCopy.day === todayKey();
+  const accrualQueryKey = ['child-accrual-columns', accrualPeriod.year, accrualPeriod.month] as const;
+  const accrualRefreshTimer = useRef<number | null>(null);
+  useEffect(() => () => {
+    // Ушли со страницы до фоновой перезагрузки — пусть данные обновятся при следующем открытии.
+    if (accrualRefreshTimer.current) { window.clearTimeout(accrualRefreshTimer.current); invalidateAccrualCaches(); }
+  }, []);
   const accrualQuery = useQuery({
-    queryKey: ['child-accrual-columns', accrualPeriod.year, accrualPeriod.month],
+    queryKey: accrualQueryKey,
     enabled: accrualsView,
-    queryFn: async () => {
+    queryFn: async (): Promise<AccrualColumns> => {
       const [deposit, previous, current] = await Promise.all([
         fetchChargesForPeriod(null, null, 'deposit'),
         fetchChargesForPeriod(previousAccrualMonth, previousAccrualYear, null),
@@ -1321,6 +1336,17 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     if (family && expandedFamilyRequestRef.current === familyId) setExpandedFamily(family);
   }
 
+  // После правок начислений и скидок — одна тихая перезагрузка через 2 с после последней правки,
+  // а не полная перезагрузка таблиц на каждую ячейку.
+  function scheduleAccrualRefresh() {
+    if (accrualRefreshTimer.current) window.clearTimeout(accrualRefreshTimer.current);
+    accrualRefreshTimer.current = window.setTimeout(() => {
+      accrualRefreshTimer.current = null;
+      invalidateAccrualCaches();
+      void load(false);
+    }, ACCRUAL_REFRESH_DELAY_MS);
+  }
+
   async function saveAccrualCell(row: ChildRow, key: string, value: any): Promise<boolean> {
     if (row.rowId.endsWith('_empty')) return false;
     const showError = (error: unknown, title: string) => setAccrualDialog({
@@ -1332,8 +1358,10 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       if (String(value) === currentChoice) return true;
       try {
         if (row.fixedPrice != null) throw new Error('У ребёнка фиксированная цена — скидку меняют в карточке');
-        await setChildDiscountChoice(authToken, row.rowId, value === 'auto' ? null : Number(value));
-        await load(false);
+        await setChildDiscountChoice(authToken, row.rowId, value === 'auto' ? null : Number(value), { deferRefresh: true });
+        const discountOverridePercent = value === 'auto' ? null : Number(value);
+        setRows(prev => prev.map(item => item.rowId === row.rowId ? { ...item, discountOverridePercent } : item));
+        scheduleAccrualRefresh();
         return true;
       } catch (error) {
         showError(error, 'Не удалось изменить скидку');
@@ -1355,8 +1383,16 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     const currentAmount = accrualQuery.data?.[key.replace('accrual_', '') as 'deposit' | 'previous' | 'current'].get(row.rowId) ?? 0;
     if (amount === currentAmount) return true;
     const save = async () => {
-      await setChildCharge({ childId: row.rowId, ...target, amount, actor: userName });
-      await Promise.all([accrualQuery.refetch(), load(false)]);
+      await setChildCharge({ childId: row.rowId, ...target, amount, actor: userName, deferRefresh: true });
+      // База приняла сумму — сразу показываем её в ячейке, остальное обновится в фоне.
+      const column = key.replace('accrual_', '') as 'deposit' | 'previous' | 'current';
+      queryClient.setQueryData<AccrualColumns>(accrualQueryKey, (old: AccrualColumns | undefined) => {
+        if (!old) return old;
+        const next = new Map(old[column]);
+        next.set(row.rowId, amount);
+        return { ...old, [column]: next };
+      });
+      scheduleAccrualRefresh();
     };
     // Любое изменение суммы подтверждается в окне CRM; ячейка закрывается сразу.
     setAccrualDialog({
