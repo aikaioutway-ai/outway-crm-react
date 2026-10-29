@@ -7,7 +7,7 @@ jest.mock('../../hooks/useCrmQueries', () => ({ useEmployees: () => ({ data: [{ 
 
 jest.mock('./CompensationChildSearch', () => ({ __esModule: true, default: ({ onSelect }: { onSelect: (row: unknown) => Promise<void> }) => <button type="button" onClick={() => onSelect({ familyId: 'family1', childName: 'Ребёнок', branchFilter: 'TIS' })}>Выбрать ребёнка</button> }));
 
-beforeEach(() => { localStorage.clear(); Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => 'expense-test' }); });
+beforeEach(() => { localStorage.clear(); localStorage.setItem('dt_cols:cashier_spending_records_v1', 'null'); Object.defineProperty(globalThis.crypto, 'randomUUID', { configurable: true, value: () => 'expense-test' }); });
 
 test('saves an independent expense, reloads it, and keeps personal totals separate', () => {
   render(<SpendingModule userId="owner" role="admin" />);
@@ -184,7 +184,7 @@ test.each(['Доп. Выезды', 'Logistics'])('%s uses the COGS picker and ro
 test('opens all records from the form header and returns with one click', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
-  expect(screen.getByRole('table', { name: 'Записи расходов' })).toBeInTheDocument();
+  expect(screen.getByRole('region', { name: 'Записи расходов' })).toBeInTheDocument();
   expect(screen.queryByRole('form', { name: 'Новая выплата COGS' })).not.toBeInTheDocument();
   expect(screen.queryByRole('group', { name: 'Вид расходов' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
@@ -195,18 +195,18 @@ jest.mock('../../services/spendingService', () => ({ fetchSpendingEntries: jest.
 const cloud = jest.requireMock('../../services/spendingService');
 test('loads copied finance records and keeps the original classification visible', async () => {
   cloud.saveSpendingEntries.mockResolvedValue(undefined);
-  cloud.fetchSpendingEntries.mockResolvedValue([{ id:'finance:v2_expenses:one', category:'OPEX',subcategory:'Аренда',date:'2026-10-01',amount:1250,description:'Аренда из Финансов',recipient:'',method:'Безналичные',sourceRef:'v2_expenses:one',originalCategory:'office',originalSubcategory:'Аренда' }]);
+  cloud.fetchSpendingEntries.mockResolvedValue([{ id:'finance:v2_expenses:one', category:'OPEX',subcategory:'Аренда',salaryPeriodKey:'2026-10',date:'2026-10-01',amount:1250,description:'Аренда из Финансов',recipient:'',method:'Безналичные',sourceRef:'v2_expenses:one',originalCategory:'office',originalSubcategory:'Аренда' }]);
   render(<SpendingModule userId="owner" role="admin" sessionToken="session" periodKey="ALL" />);
   await waitFor(() => expect(cloud.fetchSpendingEntries).toHaveBeenCalledWith('session'));
   fireEvent.click(screen.getByRole('button', { name: 'Все записи' }));
   expect(await screen.findByText('Аренда из Финансов')).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name:'Редактировать Аренда из Финансов' }));
-  expect(screen.getByRole('form',{name:'Копия расхода из Финансов'})).toBeInTheDocument();
+  expect(screen.getByRole('form',{name:'Новый расход OPEX'})).toBeInTheDocument();
   cloud.saveSpendingEntries.mockRejectedValueOnce(new Error('Сбой сохранения'));
-  fireEvent.change(screen.getByLabelText('Цена, сом'),{target:{value:'1500'}});
+  fireEvent.change(screen.getByLabelText('Сумма, сом'),{target:{value:'1500'}});
   fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
   expect(await screen.findByRole('alert')).toHaveTextContent('Сбой сохранения');
-  expect(screen.getByRole('form',{name:'Копия расхода из Финансов'})).toBeInTheDocument();
+  expect(screen.getByRole('form',{name:'Новый расход OPEX'})).toBeInTheDocument();
 });
 
 test('header total follows the period and access rights, independently of category and search', () => {
@@ -223,4 +223,34 @@ test('header total follows the period and access rights, independently of catego
   expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'ALL',total:650});
   view.rerender(<SpendingModule userId="totals" role="cashier" periodKey="ALL" onTotalChange={onTotalChange} />);
   expect(onTotalChange).toHaveBeenLastCalledWith({userId:'totals',periodKey:'ALL',total:150});
+});
+
+test('editing uses the creation forms and switching category changes the form without replacing the record',()=>{
+  localStorage.setItem('outway-spending-v1:edit',JSON.stringify([{id:'existing',category:'CAPEX',subcategory:'Мебель',date:'2026-10-01',amount:100,description:'Стол',recipient:'Поставщик',method:'Безналичные',paymentOrderNumber:'42',comment:'Сохранить комментарий'}]));
+  render(<SpendingModule userId="edit" role="admin" periodKey="ALL"/>);
+  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  fireEvent.click(screen.getByRole('button',{name:'Редактировать Стол'}));
+  expect(screen.getByRole('form',{name:'Новый расход CAPEX'})).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Назначение'),{target:{value:'Стол после правки'}});
+  fireEvent.change(screen.getByRole('combobox',{name:'Категория расхода'}),{target:{value:'COGS'}});
+  expect(screen.getByRole('form',{name:'Новая выплата COGS'})).toBeInTheDocument();
+  expect(screen.getByRole('button',{name:'Выбрать водителей'})).toBeInTheDocument();
+  expect(screen.getByLabelText('Комментарий')).toHaveValue('Сохранить комментарий');
+  fireEvent.change(screen.getByRole('combobox',{name:'Категория расхода'}),{target:{value:'CAPEX'}});
+  expect(screen.getByRole('form',{name:'Новый расход CAPEX'})).toBeInTheDocument();
+  expect(screen.getByLabelText('Назначение')).toHaveValue('Стол после правки');
+  expect(screen.getByLabelText('Сумма, сом')).toHaveValue(100);
+  fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
+  expect(JSON.parse(localStorage.getItem('outway-spending-v1:edit')!)).toEqual([expect.objectContaining({id:'existing',category:'CAPEX',description:'Стол после правки',amount:100})]);
+});
+
+test('historical non-driver logistics expenses remain ordinary expenses when editing',()=>{
+  localStorage.setItem('outway-spending-v1:ordinary',JSON.stringify([{id:'ordinary',category:'Logistics',subcategory:'Прочее',date:'2026-10-01',amount:100,description:'Такси',recipient:'',method:'Безналичные'}]));
+  render(<SpendingModule userId="ordinary" role="admin" periodKey="ALL"/>);
+  fireEvent.click(screen.getByRole('button',{name:'Все записи'}));
+  fireEvent.click(screen.getByRole('button',{name:'Редактировать Такси'}));
+  expect(screen.getByRole('form',{name:'Новый расход Logistics'})).toBeInTheDocument();
+  expect(screen.queryByRole('button',{name:'Выбрать водителей'})).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button',{name:'Сохранить'}));
+  expect(JSON.parse(localStorage.getItem('outway-spending-v1:ordinary')!)[0]).toMatchObject({id:'ordinary',category:'Logistics',subcategory:'Прочее',amount:100});
 });

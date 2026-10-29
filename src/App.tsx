@@ -1,6 +1,5 @@
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
-import SalaryExpensesView, { SalaryScope } from './modules/costs/SalaryExpensesView';
 import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
@@ -157,8 +156,6 @@ export default function App() {
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
-  const [salaryScope,setSalaryScope]=useState<SalaryScope>('all');
-  const [financeView, setFinanceView] = useState<'expenses' | 'salary'>('expenses');
   const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | null>(null);
   const [expenseSubcategory, setExpenseSubcategory] = useState('ALL');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
@@ -481,7 +478,7 @@ export default function App() {
               </div>
             </div>
             {cashierWorkspace === 'spending' && canAccessSpending(currentUser?.id) ? (
-              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule onTotalChange={setSpendingSummary} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
+              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} onTotalChange={setSpendingSummary} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
             ) : cashierSchoolKey ? (
               <>
               {cashierView === 'refunds' ? (
@@ -782,18 +779,16 @@ export default function App() {
             )}
           </div>
         ) : section === 'spending' ? (
-          canAccessSpending(currentUser?.id) && <SpendingModule key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
+          canAccessSpending(currentUser?.id) && <SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
         ) : section === 'expenses' ? (
 
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
             <div style={tabRowStyle}><div style={tabBarStyle}>
               {sectionLabel('Финансы')}
-              {financeView === 'salary' && <button type="button" onClick={() => setFinanceView('expenses')} className="ow-btn ow-btn--ghost"><ChevronLeft size={16} aria-hidden="true" />Расходы</button>}
-              {financeView === 'expenses' && expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} className="ow-btn ow-btn--ghost"><ChevronLeft size={16} aria-hidden="true" />Категории</button>}
+              {expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} className="ow-btn ow-btn--ghost"><ChevronLeft size={16} aria-hidden="true" />Категории</button>}
               {extraTabs(true)}
             </div></div>
-            {canAccessFinanceExpenses(currentUserRole) && financeView === 'salary' && <SalaryExpensesView columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={salaryScope} scope={salaryScope} sessionToken={currentUser?.sessionToken} />}
-            {canAccessFinanceExpenses(currentUserRole) && financeView === 'expenses' && <ExpensesModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} onOpenSalary={scope=>{setSalaryScope(scope);setFinanceView('salary');}} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
+            {canAccessFinanceExpenses(currentUserRole) && <ExpensesModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
 
           </div>
         ) : section === 'summary' ? (

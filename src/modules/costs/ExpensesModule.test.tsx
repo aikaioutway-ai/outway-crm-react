@@ -15,24 +15,15 @@ test.each(['school','office'] as const)('new %s expense changes to salary inside
   expect(screen.getByRole('button',{name:'Периоды выплаты'})).toBeInTheDocument();
 });
 
-test('salary rows separate payroll from ordinary expenses and open the scoped salary view',async()=>{
+test('old salary screens are absent while ordinary finance expenses remain available',async()=>{
   (loadExpenseRows as jest.Mock).mockResolvedValue([
     {id:'office-cost',category:'office',subcategory:'Аренда',amount:100,paymentMethod:'cashless'},
     {id:'office-salary',category:'office',subcategory:'ЗП',amount:700,paymentMethod:'cashless'},
-    {id:'office-advance',category:'office',subcategory:'Аванс',source:'advance',amount:300,paymentMethod:'cashless'},
-    {id:'school-cost',category:'school',subcategory:'Прочее',amount:120,paymentMethod:'cashless'},
-    {id:'school-salary',category:'school',subcategory:'ЗП',amount:500,paymentMethod:'cashless'},
   ]);
-  const open=jest.fn();
-  render(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin" sessionToken="session" onOpenSalary={open}/>);
-  const officeSalary=await screen.findByRole('row',{name:/ЗП офис/});
-  expect(within(officeSalary).getAllByText(/1\s000/).length).toBeGreaterThan(0);
-  const officeCosts=screen.getByRole('row',{name:/^Офис/});
-  expect(within(officeCosts).getAllByText('100').length).toBeGreaterThan(0);
-  fireEvent.click(within(officeSalary).getByRole('button'));
-  expect(open).toHaveBeenCalledWith('office');
-  fireEvent.click(within(screen.getByRole('row',{name:/ЗП школа/})).getByRole('button'));
-  expect(open).toHaveBeenLastCalledWith('school');
+  render(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin" sessionToken="session" />);
+  expect(await screen.findByRole('row',{name:/^Офис/})).toBeInTheDocument();
+  expect(screen.queryByRole('row',{name:/ЗП офис/})).not.toBeInTheDocument();
+  expect(screen.queryByRole('row',{name:/ЗП школа/})).not.toBeInTheDocument();
 });
 
 const expenseRows = [
@@ -120,7 +111,7 @@ test('advance amounts are editable in finance and saved to the payout source',as
   const {supabase}=jest.requireMock('../../services/supabase');
   supabase.from.mockImplementation(()=>({select:()=>({eq:()=>({maybeSingle:async()=>({data:null})})}),update}));
   render(<ExpensesModule selectedCategory={null} onCategoryChange={jest.fn()} selectedSubcategory="ALL" onSubcategoryChange={jest.fn()} userRole="admin"/>);
-  await screen.findByRole('row',{name:/^ЗП офис/});
+  await screen.findByRole('row',{name:/^Офис/});
   await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Все расходы'}));});
   const row=screen.getByText('Аванс — Зульфия').closest('tr')!;
   const headers=Array.from(document.querySelectorAll('thead th'));

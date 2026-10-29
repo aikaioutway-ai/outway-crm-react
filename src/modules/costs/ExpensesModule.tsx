@@ -24,7 +24,6 @@ import './ExpensesModule.css';
 
 interface ExpensesModuleProps { columnsOpen?: boolean; onColumnsOpenChange?: (open: boolean) => void; userName?: string; userRole?: UserRole; sessionToken?: string;
   toolbarContent?: React.ReactNode;
-  onOpenSalary?: (scope:'school'|'office')=>void;
   selectedCategory: ExpenseCategory | null;
   onCategoryChange: (category: ExpenseCategory | null) => void;
   selectedSubcategory: string;
@@ -77,7 +76,7 @@ export function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId
       </div>
     ) : <span title="Системная выплата редактируется в разделе «Зарплата»"><LockKeyhole size={14} /></span> },
   ];
-  return <DataTable<ExpenseRecord> storageKey={settingsKey} commentTableKey={settingsKey.startsWith("finance_salary_") ? "costs/SalaryExpensesView:0" : "costs/ExpensesModule:0"} showProperties={columnsOpen} onShowPropertiesChange={onColumnsOpenChange} columns={withSchoolColumn(columns.map(column => ({...column, width: column.width ?? (column.key === 'subcategory' ? 170 : 130), visible: !['schoolKey','departmentKey','salaryPeriodKey','source'].includes(column.key), editable: !['source','actions'].includes(column.key)})), row => SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey ?? '')} toolbarExtra={toolbar} onRowOpen={onEdit} canRowOpen={row => row.source === 'manual' || row.source === 'advance'} onCellSave={onCellSave} canEditCell={(row, key) => row.source === 'advance' ? ADVANCE_EDITABLE_FIELDS.includes(key) : row.source === 'manual' && (key !== 'schoolKey' || row.category === 'school' && row.subcategory === 'ЗП') && (key !== 'departmentKey' || row.category === 'office' && row.subcategory === 'ЗП') && (key !== 'salaryPeriodKey' || row.subcategory === 'ЗП')} data={rows} rowKey="id" emptyText="За выбранный период расходов пока нет" canManageProperties={false} />;
+  return <DataTable<ExpenseRecord> storageKey={settingsKey} commentTableKey="costs/ExpensesModule:0" showProperties={columnsOpen} onShowPropertiesChange={onColumnsOpenChange} columns={withSchoolColumn(columns.map(column => ({...column, width: column.width ?? (column.key === 'subcategory' ? 170 : 130), visible: !['schoolKey','departmentKey','salaryPeriodKey','source'].includes(column.key), editable: !['source','actions'].includes(column.key)})), row => SCHOOL_TABS.find(school => school.key === row.schoolKey)?.label ?? row.schoolKey ?? '')} toolbarExtra={toolbar} onRowOpen={onEdit} canRowOpen={row => row.source === 'manual' || row.source === 'advance'} onCellSave={onCellSave} canEditCell={(row, key) => row.source === 'advance' ? ADVANCE_EDITABLE_FIELDS.includes(key) : row.source === 'manual' && (key !== 'schoolKey' || row.category === 'school' && row.subcategory === 'ЗП') && (key !== 'departmentKey' || row.category === 'office' && row.subcategory === 'ЗП') && (key !== 'salaryPeriodKey' || row.subcategory === 'ЗП')} data={rows} rowKey="id" emptyText="За выбранный период расходов пока нет" canManageProperties={false} />;
 }
 
 export function ExpenseModal({ initialCategory, expense, userName, sessionToken, allowPersonalCategory, onClose, onSaved, onPaymentsSaved }: {
@@ -86,7 +85,7 @@ export function ExpenseModal({ initialCategory, expense, userName, sessionToken,
   return <EmployeeAdvanceModal initialPaymentType="expense" initialCategory={initialCategory==='personal' && !allowPersonalCategory?'school':initialCategory ?? 'school'} expense={expense ?? undefined} userName={userName} sessionToken={sessionToken} allowPersonalCategory={allowPersonalCategory} onClose={onClose} onSaved={()=>onPaymentsSaved?.()} onRecordSaved={onSaved}/>;
 }
 
-export default function ExpensesModule({ userName, userRole, sessionToken, toolbarContent, columnsOpen, onColumnsOpenChange, selectedCategory, onCategoryChange: setSelectedCategory, selectedSubcategory, onSubcategoryChange: setSelectedSubcategory, onOpenSalary }: ExpensesModuleProps) {
+export default function ExpensesModule({ userName, userRole, sessionToken, toolbarContent, columnsOpen, onColumnsOpenChange, selectedCategory, onCategoryChange: setSelectedCategory, selectedSubcategory, onSubcategoryChange: setSelectedSubcategory }: ExpensesModuleProps) {
   const [tableOpen, setTableOpen] = useState(false);
   const [localColumnsOpen, setLocalColumnsOpen] = useState(false);
   const propertiesOpen = columnsOpen ?? localColumnsOpen;
@@ -164,7 +163,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
 
   const overviewRows = (selectedCategory
     ? subcategoryTotals.map(item => ({ key: item.subcategory, category: selectedCategory, label: item.subcategory }))
-    : [...EXPENSE_CATEGORY_KEYS.filter(key => canViewPersonalDetails || key !== 'personal').map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label })), {key:'salary-office',category:'office' as const,label:'ЗП офис'}, {key:'salary-school',category:'school' as const,label:'ЗП школа'}]
+    : EXPENSE_CATEGORY_KEYS.filter(key => canViewPersonalDetails || key !== 'personal').map(key => ({ key, category: key, label: EXPENSE_CATEGORIES[key].label }))
   ).map(item => {
     const matching = categoryRows.filter(row => selectedCategory ? row.subcategory === item.key : row.category === item.category && (item.key.startsWith('salary-') ? isPayrollExpense(row) : !isPayrollExpense(row)));
     const meta = EXPENSE_CATEGORIES[item.category];
@@ -279,8 +278,6 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
         sortKey={sortKey} ascending={ascending}
         onSort={key => { setAscending(key === sortKey ? !ascending : key === 'category'); setSortKey(key); }}
         onSelect={key => {
-          if(key.startsWith('salary-')){onOpenSalary?.(key==='salary-office'?'office':'school');return;}
-          if (selectedCategory && key==='ЗП' && (selectedCategory==='school' || selectedCategory==='office')){onOpenSalary?.(selectedCategory);return;}
           if (selectedCategory) setSelectedSubcategory(key);
           else if (key !== 'personal' || canViewPersonalDetails) { setSelectedCategory(key as ExpenseCategory); setSelectedSubcategory('ALL'); }
         }}
