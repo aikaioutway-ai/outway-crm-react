@@ -199,7 +199,14 @@
   min-height: 0;
   overflow: auto;
 }
-.spending-module .payment-composer-inline .payment-composer-head { padding: 16px 20px; }
+/* Compact header: title and category sit in one row. */
+.spending-module .payment-composer-inline .payment-composer-head { padding: 10px 20px; }
+.spending-module .payment-composer-inline .payment-composer-title { align-items: center; gap: 12px; }
+.spending-module .payment-composer-inline .payment-composer-icon { width: 34px; height: 34px; }
+.spending-module .payment-composer-inline .payment-composer-icon svg { width: 18px; height: 18px; }
+.spending-module .payment-composer-inline .payment-composer-title > div { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.spending-module .payment-composer-inline .payment-composer-title h2 { order: -1; margin: 0; font-size: 18px; line-height: 26px; white-space: nowrap; }
+.spending-module .payment-composer-inline .payment-composer-kicker { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .spending-module .payment-composer-inline .payment-composer-main,
 .spending-module .payment-composer-inline .payment-composer-details { padding: 16px 18px; }
 .spending-module .payment-composer-inline .office-payroll-main { justify-content: flex-start; gap: 18px; }
@@ -244,7 +251,11 @@
 .spending-module .payment-composer-inline .payment-composer-details > .payment-requisites { padding-top: 12px; }
 .spending-module .payment-composer-inline .payment-requisites label { margin-top: 8px; }
 .spending-module .payment-composer-inline .payment-requisites textarea { height: 54px; min-height: 54px; }
-.spending-module .payment-composer-inline .payment-composer-footer { padding: 12px 20px; }
+.spending-module .payment-composer-inline .payment-composer-footer { padding: 8px 20px; }
+.spending-module .payment-composer-inline .payment-composer-footer .spending-actions > button { min-height: 36px; padding: 7px 14px; }
+.spending-module .payment-composer-inline .payment-footer-total { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 12px; min-width: 0; }
+.spending-module .payment-composer-inline .payment-footer-total strong { font-size: 20px; line-height: 28px; }
+.spending-module .payment-composer-inline .payment-footer-total p { margin: 0; }
 .spending-module .payment-composer-inline .compensation-selected-child { margin-top: 10px; padding: 6px 10px; gap: 8px; }
 .spending-module .payment-composer-inline .compensation-selected-child > button { min-height: 34px; }
 .spending-module .payment-composer-inline .compensation-family-finance { margin-top: 8px; }
