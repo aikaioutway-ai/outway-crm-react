@@ -19,7 +19,7 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolInTier, schoolTabsForTier
 } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
-import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchChildPaymentDots, fetchFamilyPaymentDots, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
+import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchChildPaymentDots, fetchFamilyPaymentDots, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildBoardingDate, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable, usePeriodChargeStats } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
@@ -159,6 +159,8 @@ interface FamiliesPageProps {
   initialOpenDriverId?: string;
   mode?: FamiliesMode;
   accrualsView?: boolean;
+  /** Дату посадки правят только владелец и руководство. */
+  canEditBoardingDate?: boolean;
   userRole?: UserRole;
   userName?: string;
   authToken?: string;
@@ -733,7 +735,7 @@ function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
   }
 }
 
-export default function FamiliesPage({ mode = 'requests', accrualsView = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0' }: FamiliesPageProps) {
+export default function FamiliesPage({ mode = 'requests', accrualsView = false, canEditBoardingDate = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0' }: FamiliesPageProps) {
   // В разделе «Школы 2.0» таблица работает только со школами 2.0.
   const schoolTabs = useMemo(() => schoolTabsForTier(schoolTier), [schoolTier]);
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
@@ -1347,6 +1349,26 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     }, ACCRUAL_REFRESH_DELAY_MS);
   }
 
+  async function saveBoardingDate(row: ChildRow, date: string): Promise<boolean> {
+    if (!canEditBoardingDate || row.rowId.endsWith('_empty')) return false;
+    if (date === (row.transferAssignedAt ?? '').slice(0, 10)) return true;
+    try {
+      const saved = await updateV2ChildBoardingDate({
+        childId: row.rowId, familyId: row.familyId, childName: row.childName,
+        date, previous: row.transferAssignedAt, actorName: userName,
+      });
+      setRows(prev => {
+        const next = prev.map(item => item.rowId === row.rowId ? { ...item, transferAssignedAt: saved } : item);
+        familiesRowsCache = next;
+        return next;
+      });
+      return true;
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось сохранить дату посадки');
+      return false;
+    }
+  }
+
   async function saveAccrualCell(row: ChildRow, key: string, value: any): Promise<boolean> {
     if (row.rowId.endsWith('_empty')) return false;
     const showError = (error: unknown, title: string) => setAccrualDialog({
@@ -1497,6 +1519,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   }
 
   async function handleCellSave(row: ChildRow, key: string, value: any): Promise<boolean> {
+    if (key === 'transferAssignedAt') return saveBoardingDate(row, String(value ?? ''));
     if (accrualsView && (key === 'discountAmount' || key.startsWith('accrual_'))) return saveAccrualCell(row, key, value);
     try {
       if (['parentName', 'phone', 'secondPhone', 'contactName', 'contactPhone'].includes(key)) {
@@ -2700,6 +2723,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     }];
     const dateColumn = (key: 'childCreatedAt' | 'transferAssignedAt', label: string): ColumnDef<ChildRow> => ({
       key, label, type: 'date', width: 120, visible: true,
+      editable: key === 'transferAssignedAt' && canEditBoardingDate,
       getValue: row => row[key] ?? '',
       render: (_value, row) => formatDateShort(row[key] ?? undefined),
     });

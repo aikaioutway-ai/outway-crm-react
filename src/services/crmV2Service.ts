@@ -2319,6 +2319,26 @@ export async function clearV2TransferVehicleType(params: {
   invalidateFamiliesCache();
 }
 
+/** Дата посадки ребёнка вручную (владелец и руководство). Дата — 'ГГГГ-ММ-ДД', время Бишкека.
+ * На деньги не влияет: только показывается в таблицах и карточке. */
+export async function updateV2ChildBoardingDate(input: { childId: string; familyId: string; childName: string; date: string; previous: string | null; actorName?: string }): Promise<string> {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.date)) throw new Error('Выберите дату посадки');
+  const value = `${input.date}T00:00:00+06:00`;
+  const { error } = await supabase.from('v2_children').update({ transfer_assigned_at: value }).eq('id', input.childId);
+  if (error) throw new Error(error.message);
+  await addV2Audit({
+    actorName: input.actorName,
+    action: 'Изменение даты посадки',
+    entityType: 'child',
+    entityId: input.familyId,
+    oldValue: input.previous ? input.previous.slice(0, 10) : '—',
+    newValue: input.date,
+    comment: input.childName,
+  });
+  invalidateFamiliesCache();
+  return value;
+}
+
 export async function addV2Audit(params: {
   actorName?: string;
   action: string;

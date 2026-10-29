@@ -615,6 +615,7 @@ export default function App() {
               ) : (
                 <FamiliesPage
                   mode="logistics"
+                  canEditBoardingDate={canViewManagerAccruals}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
                   authToken={currentUser?.sessionToken}
@@ -687,6 +688,7 @@ export default function App() {
                 <FamiliesPage
                   mode={managerSchoolMode === 'accruals' ? 'charges' : managerSchoolMode}
                   accrualsView={managerSchoolMode === 'accruals'}
+                  canEditBoardingDate={canViewManagerAccruals}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
                   authToken={currentUser?.sessionToken}

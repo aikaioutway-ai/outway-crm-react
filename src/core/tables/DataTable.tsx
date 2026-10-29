@@ -636,6 +636,8 @@ export function DataTable<T extends Record<string, any>>({
     // Ноль в числовой ячейке не оставляем в поле, чтобы сумму можно было сразу вводить.
     const value = getCellValue(row, col);
     const isNumeric = col.type === 'currency' || col.type === 'number';
+    // Дата правится календарём: в поле — только 'ГГГГ-ММ-ДД'.
+    if (col.type === 'date') { setDraftValue(String(value ?? '').slice(0, 10)); return; }
     setDraftValue(isNumeric && Number(value) === 0 && !col.editOptions ? '' : String(value ?? ''));
   };
 
@@ -1194,6 +1196,7 @@ export function DataTable<T extends Record<string, any>>({
                           ) : (
                             <input
                               autoFocus
+                              type={col.type === 'date' ? 'date' : undefined}
                               className="dt-cell-input"
                               value={draftValue}
                               disabled={savingCell}

@@ -335,3 +335,23 @@ test('a table with checkboxes still opens the card from the row button', async (
   fireEvent.click(screen.getByTitle('Открыть карточку'));
   expect(onRowOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'child-1' }));
 });
+
+test('an editable date cell opens a date picker with the day and saves it', async () => {
+  const onCellSave = jest.fn().mockResolvedValue(true);
+  type DateRow = { id: string; boardedAt: string };
+  await render(
+    <DataTable<DateRow>
+      columns={[{ key: 'boardedAt', label: 'Дата посадки', type: 'date', editable: true }]}
+      data={[{ id: 'child-1', boardedAt: '2026-10-12T05:21:20.287+00:00' }]}
+      rowKey="id"
+      onCellSave={onCellSave}
+    />,
+  );
+  fireEvent.click(screen.getByText('2026-10-12T05:21:20.287+00:00'));
+  const input = document.querySelector('input.dt-cell-input') as HTMLInputElement;
+  expect(input.type).toBe('date');
+  expect(input.value).toBe('2026-10-12');
+  fireEvent.change(input, { target: { value: '2026-10-20' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  await waitFor(() => expect(onCellSave).toHaveBeenCalledWith(expect.objectContaining({ id: 'child-1' }), 'boardedAt', '2026-10-20'));
+});
