@@ -20,7 +20,7 @@ import {
 } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchChildPaymentDots, fetchFamilyPaymentDots, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
-import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable } from '../../hooks/useCrmQueries';
+import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable, usePeriodChargeStats } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
 import InlineFamilyCard from './InlineFamilyCard';
 import AccrualDialog, { AccrualDialogState } from './AccrualDialog';
@@ -484,6 +484,7 @@ const REQUEST_COLUMNS: ColumnDef<ChildRow>[] = [
   ...COLUMNS.filter(column => !REQUEST_COLUMN_KEYS.has(column.key)),
 ];
 
+const EMPTY_PERIOD_STATS: PeriodChargeStats[] = [];
 const CHARGES_COLUMN_ORDER = ['parentName', 'phone', 'childName', 'totalCharged', 'pendingPayment', 'balance', 'debtAmount'] as const;
 const CHARGES_COLUMN_KEYS = new Set<string>(CHARGES_COLUMN_ORDER);
 const CHARGES_COLUMNS: ColumnDef<ChildRow>[] = [
@@ -873,8 +874,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
   ], [cashierDates, cashierConfirmingId, cashierEditingId, hasAdminAccess, cashierView, userRole]);
-  const [periodStats, setPeriodStats] = useState<PeriodChargeStats[]>([]);
-  const [, setLoadingPeriod] = useState(false);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(initialOpenDriverId ?? null);
   useEffect(() => { if (initialOpenDriverId) setSelectedDriverId(initialOpenDriverId); }, [initialOpenDriverId]);
@@ -1190,25 +1189,17 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     onSchoolsSidebarWidthChange?.(schoolsSidebarReserveWidth);
   }, [onSchoolsSidebarWidthChange, schoolsSidebarReserveWidth]);
 
-  useEffect(() => {
-    if (!isChargesMode || accrualsView) return;
-    if (chargesPeriodKey === 'ALL') { setPeriodStats([]); return; }
-    const period = ALL_PERIODS.find(p => p.key === chargesPeriodKey);
-    if (!period) return;
-    let cancelled = false;
-    setLoadingPeriod(true);
-    const isDeposit = period.key === 'deposit';
-    fetchChargesForPeriod(
-      isDeposit ? null : period.month,
-      isDeposit ? null : period.year,
-      isDeposit ? 'deposit' : null,
-    ).then(stats => {
-      if (!cancelled) setPeriodStats(stats);
-    }).catch(console.error).finally(() => {
-      if (!cancelled) setLoadingPeriod(false);
-    });
-    return () => { cancelled = true; };
-  }, [isChargesMode, accrualsView, chargesPeriodKey]);
+  // Начисления по детям за выбранный период ('ALL' — за всё время); тот же кеш, что у полосы цифр школы.
+  const periodStatsQuery = usePeriodChargeStats(chargesPeriodKey, { enabled: isChargesMode && !accrualsView });
+  const childPeriodStats = periodStatsQuery.data ?? EMPTY_PERIOD_STATS;
+  const periodStats = chargesPeriodKey === 'ALL' ? EMPTY_PERIOD_STATS : childPeriodStats;
+  // В строке ребёнка — его начисление и долг, а не итог семьи.
+  const periodStatsByChild = useMemo(() => {
+    const map = new Map<string, PeriodChargeStats>();
+    childPeriodStats.forEach(stat => { if (stat.childId) map.set(stat.childId, stat); });
+    return map;
+  }, [childPeriodStats]);
+  const rowDebt = (row: ChildRow) => periodStatsByChild.get(row.rowId)?.debt ?? (chargesPeriodKey === 'ALL' ? childDebtAmount(row) : 0);
 
   const accrualPeriod = ALL_PERIODS.find(p => p.key === chargesPeriodKey && p.key !== 'deposit')
     ?? ALL_PERIODS.find(p => p.key === currentPayrollPeriodKey())!;
@@ -1964,7 +1955,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       }
       if ((dashboardMetric === 'pendingSum' || dashboardMetric === 'pendingAmount') && r.pendingPayment <= 0) return false;
       if (dashboardMetric === 'debtorsCount' || dashboardMetric === 'debtSum') {
-        const periodDebt = periodStatsFiltered ? (periodStatsByFamily.get(r.familyId)?.debt ?? 0) : childDebtAmount(r);
+        const periodDebt = rowDebt(r);
         if (periodDebt <= 0) return false;
       }
       if (dashboardMetric === 'balanceSum' && Number(r.balance || 0) <= 0) return false;
@@ -1977,7 +1968,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     if (quickChildStatus && quickChildStatus !== 'new' && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [accrualsView, dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer]);
+  }), [accrualsView, dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer, periodStatsByChild, periodStatsFiltered]);
 
   const filteredSorted = useMemo(() => {
     if (isDirectoryMode) {
@@ -2014,8 +2005,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     const base = periodFamilyIds
       ? filtered.filter(r => periodFamilyIds.has(r.familyId))
       : filtered;
-    return [...base].sort((a, b) => childDebtAmount(b) - childDebtAmount(a));
-  }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats]);
+    // Семьи — по общему долгу детей, дети одной семьи идут подряд.
+    const familyDebt = new Map<string, number>();
+    base.forEach(row => familyDebt.set(row.familyId, (familyDebt.get(row.familyId) ?? 0) + rowDebt(row)));
+    return [...base].sort((a, b) => (familyDebt.get(b.familyId) ?? 0) - (familyDebt.get(a.familyId) ?? 0)
+      || a.familyId.localeCompare(b.familyId)
+      || a.familyIndex - b.familyIndex);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- rowDebt зависит от periodStatsByChild
+  }, [filtered, accrualsView, isChargesMode, isDirectoryMode, chargesPeriodKey, periodStats, periodStatsByChild]);
 
   // Точки видят все разделы с детьми, включая Логистику: по ним видно, когда ребёнка пора убрать.
   const showPaymentDots = !isDriversModule;
@@ -2123,11 +2120,6 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         : quickTransfer
           ? `Трансфер ${quickTransfer}`
           : 'Все трансферы';
-  const periodStatsByFamily = useMemo(() => {
-    const map = new Map<string, PeriodChargeStats>();
-    periodStats.forEach(s => map.set(s.familyId, s));
-    return map;
-  }, [periodStats]);
 
   const driverReserveSchool = { key: DRIVER_RESERVE_KEY, label: 'Резерв', branches: [], codes: [] };
   const selectedDashboardSchool = isDriversModule && (dashboardSchoolKey === DRIVER_RESERVE_KEY || activeTab === DRIVER_RESERVE_KEY)
@@ -2730,16 +2722,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               ...column,
               label: column.key === 'totalCharged' ? 'Начислено' : column.label,
               visible: CHARGES_COLUMN_KEYS.has(String(column.key)),
-              ...(column.key === 'totalCharged' && chargesPeriodKey !== 'ALL' ? {
-                render: (_val: any, row: ChildRow) => {
-                  const s = periodStatsByFamily.get(row.familyId);
-                  return <span>{money(s ? s.charged : 0)}</span>;
-                },
+              ...(column.key === 'totalCharged' ? {
+                getValue: (row: ChildRow) => periodStatsByChild.get(row.rowId)?.charged ?? 0,
+                render: (_val: any, row: ChildRow) => <span>{money(periodStatsByChild.get(row.rowId)?.charged ?? 0)}</span>,
               } : {}),
-              ...(column.key === 'debtAmount' && chargesPeriodKey !== 'ALL' ? {
+              ...(column.key === 'debtAmount' ? {
+                getValue: rowDebt,
                 render: (_val: any, row: ChildRow) => {
-                  const s = periodStatsByFamily.get(row.familyId);
-                  const debt = s ? s.debt : 0;
+                  const debt = rowDebt(row);
                   return <span style={{ color: debt > 0 ? '#C62828' : undefined, fontWeight: debt > 0 ? 700 : undefined }}>{money(debt)}</span>;
                 },
               } : {}),
@@ -2763,7 +2753,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       ? [...dataCols, openCardCol]
       : [openCardCol, ...otherActionCols, ...dataCols];
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByFamily]);
+  }, [accrualsView, canEditAccruals, accrualQuery.data, accrualQuery.isPending, accrualQuery.isError, accrualPeriod.month, accrualPeriod.year, previousAccrualMonth, previousAccrualYear, isChargesMode, isDirectoryMode, isRequestsModule, isPaymentsMode, mode, userRole, chargesPeriodKey, periodStatsByChild]);
 
   // Точки оплат прямо в ячейке ребёнка: депозит, затем месяцы сезона.
   // При редактировании ФИО вместо ячейки показывается поле ввода, и точки скрываются.
