@@ -19,7 +19,7 @@ interface DriversTransferDashboardProps {
 
 
 
-function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string): boolean {
+export function driverMatchesTransfer(driver: V2DriverTableRow, transferNumber: string): boolean {
   return driver.transferNumbers
     .split(',')
     .map(item => item.replace(/[^\d]/g, ''))

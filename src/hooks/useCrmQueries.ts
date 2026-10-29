@@ -35,11 +35,13 @@ import {
   V2PayrollApproval,
   V2PayrollPayment,
   V2DriverAdvance,
+  fetchChargesForPeriod,
+  PeriodChargeStats,
 } from '../services/crmV2Service';
 import { fetchEmployees } from '../services/employeeService';
 import { Employee } from '../types';
 import { QK } from '../services/queryClient';
-import { getBranchFilter } from '../modules/families/constants';
+import { ALL_PERIODS, getBranchFilter } from '../modules/families/constants';
 
 /** Таблица семей — самый тяжёлый запрос CRM. Одна копия на всё приложение
  * (меню, Логистика, FamiliesPage): данные с финансами нужны части экранов,
@@ -171,6 +173,22 @@ export function useV2Branches(): UseQueryResult<V2BranchOption[]> {
 
 /** Плашки трансферов одной школы: филиалы школы находятся по той же
  * группировке getBranchFilter, что и вкладки школ. */
+/** Начисления/оплаты/долг по детям за период ('ALL' — за всё время). Один кеш на
+ * обзор Менеджера, полосу трансферов и полосу цифр школы. */
+export function usePeriodChargeStats(periodKey: string, options?: { enabled?: boolean }): UseQueryResult<PeriodChargeStats[]> {
+  return useQuery({
+    queryKey: QK.periodChargeStats(periodKey),
+    enabled: options?.enabled ?? true,
+    queryFn: () => {
+      if (periodKey === 'ALL') return fetchChargesForPeriod(null, null, null, true);
+      const period = ALL_PERIODS.find(p => p.key === periodKey);
+      if (!period) throw new Error('Неизвестный период');
+      const deposit = period.key === 'deposit';
+      return fetchChargesForPeriod(deposit ? null : period.month, deposit ? null : period.year, deposit ? 'deposit' : null);
+    },
+  });
+}
+
 export function useSchoolTransferStats(schoolKey: string, options?: { enabled?: boolean }): UseQueryResult<Record<string, SchoolTransferGroupStat>> {
   const { data: branches } = useV2Branches();
   const branchIds = (branches ?? [])

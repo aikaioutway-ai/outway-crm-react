@@ -1,14 +1,13 @@
 import { managerFinancialStats } from './managerFinancialStats';
-import { useQuery } from '@tanstack/react-query';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import DirectorySchoolDashboard from './DirectorySchoolDashboard';
 import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { List, Plus, Search, X } from 'lucide-react';
-import { fetchChargesForPeriod, FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { useFamiliesTable, useBranchStats, useFamilySearch, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
-import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
+import { FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
+import { useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
+import { currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
 import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -314,17 +313,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const periodQuery = useQuery({
-    queryKey: ['manager-charge-stats', periodKey],
-    enabled: mode !== 'directory',
-    queryFn: () => {
-      if (periodKey === 'ALL') return fetchChargesForPeriod(null, null, null, true);
-      const period = ALL_PERIODS.find(p => p.key === periodKey);
-      if (!period) throw new Error('Неизвестный период');
-      const deposit = period.key === 'deposit';
-      return fetchChargesForPeriod(deposit ? null : period.month, deposit ? null : period.year, deposit ? 'deposit' : null);
-    },
-  });
+  const periodQuery = usePeriodChargeStats(periodKey, { enabled: mode !== 'directory' });
   const periodStats = periodQuery.data ?? EMPTY_PERIOD_STATS;
 
   const stats = useMemo(

@@ -10,6 +10,8 @@ interface CashierSchoolKpiStripProps {
   schoolKey: string;
   view?: CashierView;
   periodKey: string;
+  /** Фишка трансфера: '' — все, номер, 'empty' — без трансфера. */
+  selectedKey?: string;
   rightReserveWidth?: number;
 }
 
@@ -65,12 +67,13 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierSchoolKpiStrip({ view = 'pending', schoolKey, periodKey, rightReserveWidth = 0 }: CashierSchoolKpiStripProps) {
+export default function CashierSchoolKpiStrip({ view = 'pending', schoolKey, periodKey, rightReserveWidth = 0, selectedKey = '' }: CashierSchoolKpiStripProps) {
   const { data: rows = null } = usePaymentsTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const stats = useMemo(() => {
-    const schoolRows = (rows ?? []).filter(row => rowMatchesSchool(row, schoolKey) && matchesPeriod(row, periodKey));
+    const schoolRows = (rows ?? []).filter(row => rowMatchesSchool(row, schoolKey) && matchesPeriod(row, periodKey)
+      && (!selectedKey || (selectedKey === 'empty' ? !row.transferNumber : row.transferNumber === selectedKey)));
     const pendingRows = schoolRows.filter(isPending);
     const confirmedRows = schoolRows.filter(isConfirmed);
     const paymentRows = schoolRows.filter(row => isPending(row) || isConfirmed(row));
@@ -83,7 +86,7 @@ export default function CashierSchoolKpiStrip({ view = 'pending', schoolKey, per
       qrAmount: activeRows.filter(isQr).reduce((sum, row) => sum + row.amount, 0),
       cashAmount: activeRows.filter(isCash).reduce((sum, row) => sum + row.amount, 0),
     };
-  }, [periodKey, rows, schoolKey, view]);
+  }, [periodKey, rows, schoolKey, selectedKey, view]);
 
   if (!school || rows === null) return null;
 

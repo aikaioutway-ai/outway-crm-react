@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import SchoolTransferDashboard from './SchoolTransferDashboard';
 import { useFamiliesTable, useSchoolTransferStats } from '../../hooks/useCrmQueries';
 
-jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferStats: jest.fn(), useSchoolTransferNumbers: () => [] }));
+jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferStats: jest.fn(), useSchoolTransferNumbers: () => [], usePeriodChargeStats: () => ({ data: [] }) }));
 
 beforeEach(() => {
   (useFamiliesTable as jest.Mock).mockReturnValue({ data: undefined });

@@ -6,9 +6,12 @@ import { SCHOOL_TABS } from './constants';
 import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
 import { isInTestTransfer, useTestTransfers } from './testTransfers';
+import { rowsForTransferSelection } from './schoolKpiStats';
 
 interface LogisticsSchoolKpiStripProps {
   schoolKey: string;
+  /** Фишка трансфера: '' — все, номер, 'empty' — без трансфера, 'rejected' — Х. */
+  selectedKey?: string;
   rightReserveWidth?: number;
 }
 
@@ -49,19 +52,19 @@ function transferStats(rows: FamilyListRow[]) {
   };
 }
 
-export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: LogisticsSchoolKpiStripProps) {
+export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth = 0, selectedKey = '' }: LogisticsSchoolKpiStripProps) {
   const { data: rows } = useLogisticsTable();
   const testMarks = useTestTransfers();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
   const stats = useMemo(() => {
-    const schoolRows = (rows ?? []).filter(row => row.branchFilter === schoolKey);
+    const schoolRows = rowsForTransferSelection((rows ?? []).filter(row => row.branchFilter === schoolKey), selectedKey);
     return {
       newRequests: schoolRows.filter(row => isNewUnassignedRow(row) || isInTestTransfer(row)).length,
       ...transferStats(schoolRows),
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- testMarks: пересчёт при смене тестовых отметок
-  }, [rows, schoolKey, testMarks]);
+  }, [rows, schoolKey, selectedKey, testMarks]);
 
   if (!school || !rows) return null;
 

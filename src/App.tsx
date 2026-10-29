@@ -501,6 +501,7 @@ export default function App() {
                     view={cashierView}
                     schoolKey={cashierSchoolKey}
                     periodKey={cashierPeriodKey}
+                    selectedKey={cashierTransferFilter}
                     rightReserveWidth={schoolSidebarReserveWidth}
                   />}
                   {cashierSchoolKey !== 'ALL' && <CashierSchoolTransferDashboard
@@ -589,6 +590,7 @@ export default function App() {
               <DashboardTopPanel>
                 {logisticsSchoolKey !== 'ALL' && <LogisticsSchoolKpiStrip
                   schoolKey={logisticsSchoolKey}
+                  selectedKey={logisticsTransferFilter}
                   rightReserveWidth={schoolSidebarReserveWidth}
                 />}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
@@ -670,7 +672,7 @@ export default function App() {
                       <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
                     </div>
                   )}
-                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
+                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} periodKey={managerPeriodKey} selectedKey={managerTransferFilter} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
                   {managerSchoolMode !== 'directory' ? (
                     managerSchoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
                   ) : (
@@ -738,6 +740,7 @@ export default function App() {
                 <DashboardTopPanel>
                   {driversSchoolKey !== 'ALL' && <DriversSchoolKpiStrip
                     schoolKey={driversSchoolKey}
+                    selectedKey={driversTransferFilter}
                     rightReserveWidth={schoolSidebarReserveWidth}
                   />}
                   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>

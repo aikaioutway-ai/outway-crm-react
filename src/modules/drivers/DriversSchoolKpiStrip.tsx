@@ -1,4 +1,5 @@
 import React, { useMemo } from 'react';
+import { driverMatchesTransfer } from './DriversTransferDashboard';
 import { Bus, Car, FileWarning, UserCheck, UserX } from 'lucide-react';
 import { useDriversTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from '../families/constants';
@@ -8,6 +9,8 @@ import { driverMatchesSchool } from './driverSchoolVisibility';
 
 interface DriversSchoolKpiStripProps {
   schoolKey: string;
+  /** Фишка трансфера: '' — все, номер, 'empty' — без трансфера, 'inactive' — неактивные. */
+  selectedKey?: string;
   rightReserveWidth?: number;
 }
 
@@ -22,7 +25,7 @@ const COLORS = {
 };
 
 
-export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 0 }: DriversSchoolKpiStripProps) {
+export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 0, selectedKey = '' }: DriversSchoolKpiStripProps) {
   const { data: rows = null } = useDriversTable();
 
   const school = SCHOOL_TABS.find(item => item.key === schoolKey);
@@ -36,7 +39,10 @@ export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 0
       isReserve
         ? isReserveDriver(row)
         : !isReserveDriver(row) && driverMatchesSchool(row, schoolKey)
-    ));
+    )).filter(row => !selectedKey
+      || (selectedKey === 'empty' ? row.transferCount === 0
+        : selectedKey === 'inactive' ? row.status !== 'active'
+          : driverMatchesTransfer(row, selectedKey)));
     return {
       activeCount: schoolRows.filter(row => row.status === 'active').length,
       inactiveCount: schoolRows.filter(row => row.status !== 'active').length,
@@ -45,7 +51,7 @@ export default function DriversSchoolKpiStrip({ schoolKey, rightReserveWidth = 0
       sedanCount: schoolRows.filter(row => row.vehicleType === 'sedan').length,
       incompleteDocumentsCount: schoolRows.filter(row => row.hasIncompleteDocuments).length,
     };
-  }, [isReserve, rows, schoolKey]);
+  }, [isReserve, rows, schoolKey, selectedKey]);
 
   if ((!school && !isReserve) || rows === null) return null;
 

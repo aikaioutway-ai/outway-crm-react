@@ -1,11 +1,10 @@
 import { showTaskContextMenu } from '../tasks/TaskContextMenu';
 import TransferCell from '../../core/dashboard/TransferCell';
 import { ManagerMode } from './ManagerModeTabs';
-import { ALL_PERIODS } from './constants';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
-import React, { useEffect, useState } from 'react';
-import { FamilyListRow, PeriodChargeStats, fetchChargesForPeriod } from '../../services/crmV2Service';
-import { useFamiliesTable, useSchoolTransferNumbers, useSchoolTransferStats } from '../../hooks/useCrmQueries';
+import React from 'react';
+import { FamilyListRow, PeriodChargeStats } from '../../services/crmV2Service';
+import { useFamiliesTable, usePeriodChargeStats, useSchoolTransferNumbers, useSchoolTransferStats } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import { isNewUnassignedRow } from './familiesRowHelpers';
@@ -52,18 +51,8 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   const { data: familyRows } = useFamiliesTable({ enabled: !isDirectory });
   const { data: transferStats } = useSchoolTransferStats(schoolKey, { enabled: isDirectory });
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
-  const [periodDebts, setPeriodDebts] = useState<PeriodChargeStats[]>([]);
-  useEffect(() => {
-    setPeriodDebts([]);
-    if (mode !== 'charges' || periodKey === 'ALL') return;
-    const period = ALL_PERIODS.find(item => item.key === periodKey);
-    if (!period) return;
-    let cancelled = false;
-    const deposit = period.key === 'deposit';
-    fetchChargesForPeriod(deposit ? null : period.month, deposit ? null : period.year, deposit ? 'deposit' : null)
-      .then(data => { if (!cancelled) setPeriodDebts(data); }).catch(console.error);
-    return () => { cancelled = true; };
-  }, [mode, periodKey]);
+  const periodDebtsQuery = usePeriodChargeStats(periodKey, { enabled: mode === 'charges' && periodKey !== 'ALL' });
+  const periodDebts: PeriodChargeStats[] = mode === 'charges' && periodKey !== 'ALL' ? periodDebtsQuery.data ?? [] : [];
 
 
   if (!isSchoolAllowed(schoolKey, allowedSchools, schoolTier)) return null;
