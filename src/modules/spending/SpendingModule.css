@@ -126,7 +126,6 @@
 .spending-module .spending-register-schools > .spending-table-wrap { flex: none; padding-bottom: 0; margin-bottom: 0; }
 
 /* Shared compact frame: both columns finish on the same baseline. */
-.spending-module .spending-workspace { --expense-composer-height: 800px; }
 .spending-module .payment-composer-inline .payment-composer-main { display: flex; flex-direction: column; padding-bottom: 18px; }
 .spending-module .payment-composer-inline .payment-composer-details { padding-bottom: 18px; }
 .spending-module .payment-composer-inline .payment-composer-main > .payment-period-section { margin-top: auto; padding-top: 18px; }
@@ -138,9 +137,6 @@
   .spending-module .spending-cogs-editor .payment-composer-details > .payment-requisites { margin-top: 18px; }
 }
 
-/* Keep the full composer visible; only the page scrolls when needed. */
-.spending-module .spending-workspace .payment-composer-inline { height: auto; min-height: var(--expense-composer-height); max-height: none; }
-.spending-module .spending-workspace .payment-composer-inline > .payment-composer-body { flex: 1 0 auto; min-height: 0; overflow: visible; }
 
 .spending-module .payment-composer .capex-category-strip {
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -191,12 +187,6 @@
 .spending-module .compensation-selected-child > button { color: #196667; min-height: 44px; font-weight: 600; }
 
 /* Keep expense forms compact and stable when changing categories. */
-.spending-module .spending-workspace { --expense-composer-height: min(740px, 88dvh); }
-.spending-module .spending-workspace .payment-composer-inline {
-  height: var(--expense-composer-height);
-  min-height: var(--expense-composer-height);
-  max-height: var(--expense-composer-height);
-}
 .spending-module .spending-workspace .payment-composer-inline > .payment-composer-body {
   flex: 1 1 auto;
   min-height: 0;
@@ -254,12 +244,9 @@
 .spending-module .payment-composer-inline .compensation-family-finance .spending-table-wrap { max-height: none; overflow: visible; }
 .spending-module .payment-composer-inline .compensation-family-finance th,
 .spending-module .payment-composer-inline .compensation-family-finance td { padding: 6px 10px; }
-@media (max-width: 850px), (max-height: 760px) {
+@media (max-width: 850px) {
   .spending-module .spending-workspace .payment-composer-inline { height: auto; min-height: var(--expense-composer-height); max-height: none; }
 }
-
-/* Extra height keeps the payment comment fully visible. */
-.spending-module .spending-workspace { --expense-composer-height: calc(min(740px, 88dvh) + 4cm); }
 
 /* Keep requisites close to the summary instead of pushing them down. */
 .spending-module .payment-composer-inline .payment-composer-details > .expense-summary-list { margin-bottom: 10px; }
