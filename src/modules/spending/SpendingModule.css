@@ -751,3 +751,49 @@
 .spending-module .expense-selection-heading h3 { flex: 1; }
 .spending-module .expense-selection-heading .expense-selection-back,
 .expense-recipient-drawer .expense-modal-head .expense-selection-back { display: inline-flex; align-items: center; justify-content: center; gap: 4px; width: auto; min-width: 78px; min-height: 36px; padding: 6px 10px; border: 1px solid #dce5eb; border-radius: 8px; background: #fff; color: #196667; flex-shrink: 0; }
+
+/* Recipient editors live inside the existing contextual panel. */
+.spending-module .expense-selection-panel[data-panel="drivers"] > .expense-selection-heading,
+.spending-module .expense-selection-panel[data-panel="drivers"] > .expense-selection-done,
+.spending-module .expense-selection-panel[data-panel="drivers"] > .payment-field-label { display: none; }
+.spending-module .expense-selection-panel[data-panel="drivers"] { padding: 0; }
+.spending-module .expense-selection-panel > .expense-recipient-drawer .payment-picker-overlay { position: absolute; inset: 0; width: 100%; height: 100%; padding: 0; }
+.spending-module .expense-selection-panel > .expense-recipient-drawer .payment-picker { width: 100%; height: 100%; border: 0; border-radius: inherit; box-shadow: none; }
+.spending-module .expense-selection-panel .office-recipient-inline { position: absolute; inset: 72px 0 0; width: 100%; height: auto; padding: 0; background: transparent; z-index: 3; }
+.spending-module .expense-selection-panel .office-recipient-inline .payment-driver-modal { position: static; width: 100%; height: 100%; max-height: 100%; border: 0; border-radius: 0; box-shadow: none; }
+.spending-module .expense-selection-panel .office-recipient-inline .payment-driver-modal > header { display: none; }
+
+/* Embedded pickers must not reserve space for the obsolete standalone drawer. */
+.spending-module.spending-split-view.has-picker { padding-right: 24px; }
+.spending-module .expense-recipient-drawer .payment-picker-select-all > label { display: flex; align-items: center; gap: 8px; margin: 0; }
+.spending-module .expense-recipient-drawer .payment-picker-select-all > label > input { width: 17px; height: 17px; min-height: 17px; margin: 0; padding: 0; flex-shrink: 0; }
+
+.spending-module .expense-selection-panel > .expense-recipient-drawer .expense-modal.payment-picker {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.spending-module .expense-selection-panel > .expense-recipient-drawer .payment-picker > .expense-modal-head {
+  border-top-left-radius: 0;
+}
+
+.spending-module .payment-composer-compact .expense-selection-panel.is-open[data-panel="drivers"] {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+.spending-module .expense-selection-panel[data-panel="drivers"] > .expense-recipient-drawer,
+.spending-module .expense-selection-panel[data-panel="drivers"] > .expense-recipient-drawer .payment-picker-overlay {
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+}
+
+/* Embedded recipient panel overrides the global modal theme. */
+.spending-module .expense-selection-panel > .expense-recipient-drawer .expense-modal-overlay.payment-picker-overlay {
+  background: transparent !important;
+  backdrop-filter: none;
+  animation: none;
+}
+.spending-module .expense-selection-panel > .expense-recipient-drawer .expense-modal.payment-picker {
+  border-radius: 0 16px 16px 0 !important;
+  box-shadow: none !important;
+  animation: none;
+}
