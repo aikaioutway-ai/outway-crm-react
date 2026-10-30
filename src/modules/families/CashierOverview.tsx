@@ -21,7 +21,6 @@ interface CashierOverviewProps {
   view: CashierView;
   onViewChange: (view: CashierView) => void;
   onSpending?: () => void;
-  onPreview?: () => void;
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
   onSelectSchool: (key: string) => void;
@@ -68,14 +67,14 @@ const KPI_COLORS: Record<SortKey, string> = {
   refundsConfirmedAmount: 'var(--success)',
 };
 
-export function paymentDate(row: PaymentTableRow): Date | null {
+function paymentDate(row: PaymentTableRow): Date | null {
   const raw = row.actualPaymentDate || row.paymentDate || row.createdAt;
   if (!raw) return null;
   const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function matchesPeriod(row: PaymentTableRow, periodKey: string): boolean {
+function matchesPeriod(row: PaymentTableRow, periodKey: string): boolean {
   if (periodKey === 'ALL') {
     return CASHIER_PERIODS.some(period => matchesPeriod(row, period.key));
   }
@@ -85,17 +84,17 @@ export function matchesPeriod(row: PaymentTableRow, periodKey: string): boolean 
   return date.getMonth() + 1 === period.month && date.getFullYear() === period.year;
 }
 
-export function isPending(row: PaymentTableRow): boolean {
+function isPending(row: PaymentTableRow): boolean {
   const status = String(row.status ?? '').toLowerCase();
   return status === 'pending' || status.includes('провер');
 }
 
-export function isConfirmed(row: PaymentTableRow): boolean {
+function isConfirmed(row: PaymentTableRow): boolean {
   const status = String(row.status ?? '').toLowerCase();
   return status === 'paid' || status === 'confirmed' || status.includes('оплач') || status.includes('подтверж');
 }
 
-export function isQr(row: PaymentTableRow): boolean {
+function isQr(row: PaymentTableRow): boolean {
   const method = String(row.paymentMethod ?? '').toLowerCase();
   return method === 'transfer' || method === 'card' || method.includes('qr') || method.includes('безнал');
 }
@@ -105,24 +104,24 @@ function isCash(row: PaymentTableRow): boolean {
   return method === 'cash' || method.includes('нал');
 }
 
-export function rowMatchesSchool(row: PaymentTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
+function rowMatchesSchool(row: PaymentTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
   const branch = row.branchShort.toLowerCase();
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export function refundMatchesSchool(row: RefundTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
+function refundMatchesSchool(row: RefundTableRow, tab: typeof SCHOOL_TABS[number]): boolean {
   const branch = row.branchShort.toLowerCase();
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export function refundDate(row: RefundTableRow): Date | null {
+function refundDate(row: RefundTableRow): Date | null {
   const raw = row.requestedAt || row.createdAt;
   if (!raw) return null;
   const date = new Date(raw);
   return Number.isNaN(date.getTime()) ? null : date;
 }
 
-export function refundMatchesPeriod(row: RefundTableRow, periodKey: string): boolean {
+function refundMatchesPeriod(row: RefundTableRow, periodKey: string): boolean {
   if (periodKey === 'ALL') return CASHIER_PERIODS.some(period => refundMatchesPeriod(row, period.key));
   const period = CASHIER_PERIODS.find(item => item.key === periodKey);
   const date = refundDate(row);
@@ -211,7 +210,7 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
   );
 }
 
-export default function CashierOverview({ view, onViewChange, onSpending, onPreview, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
+export default function CashierOverview({ view, onViewChange, onSpending, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
   const { data: rows = null } = usePaymentsTable();
   const { data: refundRows = [] } = useRefundsTable();
   const searchablePayments = useMemo(
@@ -305,7 +304,7 @@ export default function CashierOverview({ view, onViewChange, onSpending, onPrev
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel className="dashboard-control-row cashier-control-row overview-control-row">
-          <CashierViewTabs value={view} onChange={onViewChange} onSpending={onSpending} onPreview={onPreview} />
+          <CashierViewTabs value={view} onChange={onViewChange} onSpending={onSpending} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
               periodKey={periodKey}
