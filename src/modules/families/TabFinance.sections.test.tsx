@@ -33,12 +33,12 @@ test('keeps charges separate and shows receipts without a new refund form', () =
   expect(screen.getByText('Прикрепить чек')).toBeInTheDocument();
   expect(screen.queryByText('Начисления по периодам')).not.toBeInTheDocument();
   expect(screen.queryByPlaceholderText('Сумма возврата')).not.toBeInTheDocument();
-  expect(screen.getByText('Платежи (0)')).toBeInTheDocument();
+  expect(screen.getByText('Платежи и возвраты (0)')).toBeInTheDocument();
   expect(screen.queryByText('Чеки (0)')).not.toBeInTheDocument();
 
   rerender(<TabFinance {...props} mode="refunds" />);
   expect(screen.queryByPlaceholderText('Сумма возврата')).not.toBeInTheDocument();
-  expect(screen.getByText('Платежи (0)')).toBeInTheDocument();
+  expect(screen.getByText('Платежи и возвраты (0)')).toBeInTheDocument();
   expect(screen.queryByText('Чеки (0)')).not.toBeInTheDocument();
   expect(screen.getByText('Новый платёж')).toBeInTheDocument();
   expect(screen.queryByText('Начисления по периодам')).not.toBeInTheDocument();
@@ -77,9 +77,21 @@ test('combines refunds and saved client expenses and excludes other families', (
   ]));
   try {
     render(<TabFinance {...props} mode="payments" family={{ ...props.family, id: 'family1' }} refunds={[{ id: 'r1', familyId: 'family1', amount: 200, status: 'Подтверждено', requestedAt: '2026-10-28' } as React.ComponentProps<typeof TabFinance>['refunds'][number]]} />);
-    expect(screen.getByText('Расходы на клиента (2)')).toBeInTheDocument();
+    expect(screen.getByText('Платежи и возвраты (2)')).toBeInTheDocument();
     expect(screen.getByText('Возмещение такси родителю')).toBeInTheDocument();
     expect(screen.getByText('Возврат')).toBeInTheDocument();
+    expect(screen.getByText(/^−200/)).toBeInTheDocument();
+    expect(screen.getByText(/^−500/)).toBeInTheDocument();
     expect(screen.queryByText('Чужой расход')).not.toBeInTheDocument();
   } finally { setCrmActor(null); localStorage.removeItem('outway-spending-v1:owner'); }
+});
+
+test('payments and refunds share one list, newest first, with refunds negative', () => {
+  render(<TabFinance {...props} mode="payments"
+    payments={[{ id: 'p1', amount: 6500, paymentType: 'transfer', status: 'Подтверждено', paymentDate: '2026-09-30', createdAt: '2026-09-30' } as React.ComponentProps<typeof TabFinance>['payments'][number]]}
+    refunds={[{ id: 'r1', familyId: 'family', amount: 2527, status: 'Подтверждено', requestedAt: '2026-10-26' } as React.ComponentProps<typeof TabFinance>['refunds'][number]]} />);
+  expect(screen.getByText('Платежи и возвраты (2)')).toBeInTheDocument();
+  expect(screen.queryByText(/Расходы на клиента/)).not.toBeInTheDocument();
+  const refund = screen.getByText(/^−2.527/), payment = screen.getByText(/6 500/);
+  expect(refund.compareDocumentPosition(payment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });

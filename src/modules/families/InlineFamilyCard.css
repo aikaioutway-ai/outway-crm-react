@@ -241,8 +241,10 @@
 }
 
 .family-money-grid .family-money-refund-list { grid-column: 1 / -1; grid-row: 3; }
-.client-expense-kind { font-size: 12px; color: var(--text-2); margin: 10px 0 6px; }
-.client-expense-row { display: flex; justify-content: space-between; gap: 16px; padding: 14px 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
+.client-expense-kind { display: block; font-size: 11px; font-weight: 600; color: var(--text-2); margin-bottom: 2px; }
+.money-out { color: #B42318; font-variant-numeric: tabular-nums; }
+.client-expense-row { align-items: flex-start; }
+.client-expense-row { display: flex; justify-content: space-between; gap: 16px; padding: 9px 12px; margin-bottom: 7px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); }
 .client-expense-row > div { display: grid; gap: 6px; }
 .client-expense-row span { font-size: 12px; color: var(--text-2); }
 @media (max-width: 700px) { .family-money-grid .family-money-refund-list { grid-column: 1; grid-row: auto; } }

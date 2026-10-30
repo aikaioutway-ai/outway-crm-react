@@ -17,7 +17,7 @@ test('saves separate payments for each selected driver and period in one batch',
   fireEvent.click(screen.getByRole('button', { name: /Все/ }));
   fireEvent.click(screen.getByLabelText('Выбрать всех в списке'));
   fireEvent.change(screen.getByLabelText('Сумма для всех выбранных'), { target: { value: '1000' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Применить выбранным' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Применить' }));
   expect(screen.getByLabelText('Сумма для Водитель А')).toHaveValue(1000);
   fireEvent.click(screen.getByRole('button', { name: 'Разделить' }));
   const firstAmount = screen.getByLabelText('Сумма для Водитель А');
@@ -29,13 +29,12 @@ test('saves separate payments for each selected driver and period in one batch',
   fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
   expect(screen.getByRole('form', { name: 'Новая выплата COGS' })).toBeInTheDocument();
   expect(screen.queryByLabelText('Учебный год')).not.toBeInTheDocument();
-  const periodCheckboxes = screen.getAllByRole('checkbox').filter(input => input.closest('.spending-periods'));
-  fireEvent.click(periodCheckboxes[0]);
-  fireEvent.click(periodCheckboxes[1]);
-  fireEvent.click(screen.getByRole('button', { name: 'Следующий квартал' }));
-  expect(screen.getAllByRole('checkbox').filter(input => input.closest('.payment-period-month-grid'))).toHaveLength(6);
-  fireEvent.click(screen.getByRole('button', { name: 'Предыдущий квартал' }));
-  expect(screen.getAllByRole('checkbox').filter(input => input.closest('.payment-period-month-grid') && (input as HTMLInputElement).checked)).toHaveLength(2);
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  // Периоды — кнопки по половинам месяца, все месяцы видны сразу.
+  const periodButtons = () => screen.getAllByRole('button').filter(button => button.closest('.payment-period-month-grid'));
+  fireEvent.click(periodButtons()[0]);
+  fireEvent.click(periodButtons()[1]);
+  expect(periodButtons().filter(button => button.getAttribute('aria-pressed') === 'true')).toHaveLength(2);
   fireEvent.change(screen.getByLabelText('Платёжное поручение'), { target: { value: 'ПП-123' } });
   fireEvent.change(screen.getByLabelText('Комментарий'), { target: { value: 'Выплата по ведомости' } });
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить выплаты' }));
@@ -57,8 +56,26 @@ test('finds and pays a driver without selecting school or transfer first', () =>
   fireEvent.click(screen.getByLabelText('Водитель Б'));
   fireEvent.change(screen.getByLabelText('Сумма для Водитель Б'), { target: { value: '2500' } });
   fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
-  fireEvent.click(screen.getAllByRole('checkbox').filter(input => input.closest('.payment-period-month-grid'))[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  fireEvent.click(screen.getAllByRole('button').filter(button => button.closest('.payment-period-month-grid'))[0]);
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить выплаты' }));
   expect(save).toHaveBeenCalledTimes(1);
   expect(save.mock.calls[0][0][0]).toMatchObject({ driverId: 'driver-b', transferId: 'transfer-b', schoolKey: SCHOOL_TABS.find(item => item.key !== 'ALL')!.key, amount: 2500 });
+});
+
+test('editing a record without a driver keeps its amount for the chosen driver', () => {
+  const save = jest.fn((_entries: SpendingEntry[]) => true);
+  render(<CogsPaymentForm entry={{ id: 'finance:v2_expenses:x', category: 'COGS', subcategory: 'Авансы водителям', date: '2026-10-15', amount: 10000, description: 'Аванс Водителям', recipient: '', method: 'Безналичные', comment: 'Аванс школа Нова 8 трансфер Алым' }} disabled={false} onCancel={() => undefined} onSave={save} />);
+  expect(screen.getByText('Сумма записи — подставится выбранному водителю')).toBeInTheDocument();
+  expect(document.querySelector('.payment-footer-total .payment-carried')).toHaveTextContent(/^10.000/);
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать водителей' }));
+  expect(screen.getByLabelText('Сумма для всех выбранных')).toHaveAttribute('placeholder', expect.stringMatching(/^10.000 — сумма записи$/));
+  fireEvent.click(screen.getByLabelText('Водитель Б'));
+  expect(screen.getByLabelText('Сумма для Водитель Б')).toHaveValue(10000);
+  fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  fireEvent.click(screen.getAllByRole('button').filter(button => button.closest('.payment-period-month-grid'))[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'Сохранить выплаты' }));
+  expect(save).toHaveBeenCalledTimes(1);
+  expect(save.mock.calls[0][0]).toEqual([expect.objectContaining({ id: 'finance:v2_expenses:x', driverId: 'driver-b', amount: 10000, comment: 'Аванс школа Нова 8 трансфер Алым', date: '2026-10-15' })]);
 });

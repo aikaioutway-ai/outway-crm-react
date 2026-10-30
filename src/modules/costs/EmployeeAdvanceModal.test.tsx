@@ -48,7 +48,7 @@ test('select all and a common amount prepare individual driver advances',async()
   openDrivers();
   fireEvent.click(screen.getByRole('checkbox',{name:'Выбрать всех в списке'}));
   fireEvent.change(screen.getByRole('spinbutton',{name:'Сумма для всех выбранных'}),{target:{value:'500'}});
-  fireEvent.click(screen.getByRole('button',{name:'Применить выбранным'}));
+  fireEvent.click(screen.getByRole('button',{name:'Применить'}));
   fireEvent.click(screen.getByRole('button',{name:'Готово'}));
   choosePeriod();fireEvent.click(screen.getByRole('button',{name:'Выдать аванс'}));
   await waitFor(()=>expect(saved).toHaveBeenCalledTimes(1));

@@ -43,7 +43,7 @@ import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
 import { scheduleRealtimeFamiliesRefresh, watchRealtimeRefreshOnReturn } from './services/crmV2Service';
-import { useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
+import { isTabletDevice, useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
 import './index.css';
 
 // Крупные страницы разделов подгружаются только при первом открытии раздела —
@@ -137,7 +137,7 @@ export default function App() {
     window.addEventListener(TASK_VIEW_EVENT, view);
     return () => { active=false;window.removeEventListener(TASK_COMPOSER_EVENT, compose);window.removeEventListener(TASK_VIEW_EVENT, view); };
   }, [currentUser,isMobileViewport,forceDesktop]);
-  useDesktopViewport(isMobileViewport && forceDesktop && !!currentUser);
+  useDesktopViewport((isMobileViewport && forceDesktop && !!currentUser) || isTabletDevice());
   const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole, currentUser?.id)[0]);
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
@@ -467,14 +467,14 @@ export default function App() {
                     <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
                       <ChevronLeft size={16} aria-hidden="true" />Все школы
                     </button>
-                    <CashierViewTabs compact value={cashierView} onChange={setCashierView} onSpending={canAccessSpending(currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
+                    <CashierViewTabs compact value={cashierView} onChange={setCashierView} onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
                   </>
                 )}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
-            {cashierWorkspace === 'spending' && canAccessSpending(currentUser?.id) ? (
+            {cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
               <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
             ) : cashierSchoolKey ? (
               <>
@@ -544,7 +544,7 @@ export default function App() {
               </>
             ) : (
               <CashierOverview
-                onSpending={canAccessSpending(currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
+                onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
                 view={cashierView}
                 onViewChange={setCashierView}
                 periodKey={cashierPeriodKey}
@@ -776,7 +776,7 @@ export default function App() {
             )}
           </div>
         ) : section === 'spending' ? (
-          canAccessSpending(currentUser?.id) && <SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
+          canAccessSpending(currentUserRole, currentUser?.id) && <SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
         ) : section === 'expenses' ? (
 
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>

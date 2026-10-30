@@ -35,7 +35,7 @@ export async function fetchSpendingPayments(token: string, recipient: { driverId
   const result: SpendingEntry[] = [];
   for (let offset = 0; ; offset += 500) {
     const { rows } = await request(token, { action: 'payments', ...recipient, offset });
-    result.push(...rows.filter((row: SpendingEntry) => !row.sourceRef));
+    result.push(...rows);
     if (rows.length < 500) return result;
   }
 }

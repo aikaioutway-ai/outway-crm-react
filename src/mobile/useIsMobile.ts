@@ -19,6 +19,17 @@ function isPhone(): boolean {
 }
 
 /**
+ * Планшет (iPad и т.п.): сенсорный экран шире телефона. Мобильный интерфейс ему
+ * не нужен, а полная версия рисуется шириной компьютера и уменьшается под экран —
+ * расположение то же, что на мониторе, просто мельче.
+ */
+export function isTabletDevice(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  if (isMobilePreview() || !window.matchMedia('(pointer: coarse)').matches) return false;
+  return Math.min(window.screen?.width ?? 0, window.screen?.height ?? 0) > MOBILE_MAX_WIDTH;
+}
+
+/**
  * Просмотр мобильной версии на компьютере по ссылке `?mobile=1`
  * (`?mobile=0` выключает). Выбор держится до закрытия вкладки.
  */

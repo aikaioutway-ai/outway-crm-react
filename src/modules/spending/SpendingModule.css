@@ -697,3 +697,40 @@
 .spending-inline-expense .spending-expense-dialog { position: relative; }
 .spending-split-view .spending-workspace:has(.spending-inline-expense) .spending-register-schools { height: calc(100dvh - 190px); }
 @media (prefers-reduced-motion: reduce) { .spending-split-view .spending-workspace { scroll-behavior: auto; } }
+
+/* Невысокий экран (ноутбук, iPad): все категории, включая «Все», помещаются без прокрутки. */
+@media (min-width: 761px) and (max-height: 1000px) {
+  .spending-module.spending-split-view .spending-categories { gap: 6px; }
+  .spending-module.spending-split-view .spending-categories > button { min-height: 0; padding: 8px 12px; gap: 2px 8px; }
+  .spending-module.spending-split-view .spending-categories strong { font-size: 15px; }
+}
+
+/* Сумма редактируемой записи, пока её не получил выбранный получатель: бледно, чтобы было видно, что она ещё не распределена. */
+.spending-module .payment-carried, .spending-module .payment-footer-total strong.payment-carried { color: #9aa7b4; font-weight: 600; }
+.spending-module .payment-carried small { color: #b3bec8; }
+.spending-module .payment-carried-amount { color: #8796a5; font-size: 11px; margin: 2px 0 0; }
+.payment-picker-footer strong.payment-carried, .office-payroll-overlay b.payment-carried { color: #9aa7b4; }
+
+/* Доп. Выезды: сколько выездов было у школы — метка в углу плитки. */
+.spending-module.spending-split-view .spending-school-expenses > button { position: relative; }
+.spending-trip-badge { position: absolute; top: 8px; right: 8px; display: inline-flex; align-items: center; gap: 4px; padding: 2px 7px; border-radius: 999px; background: #fff1e4; color: #b4621d; font-size: 11px; font-weight: 700; line-height: 16px; font-variant-numeric: tabular-nums; }
+
+
+/* Окно семьи при возврате: сводка, вкладки истории, переход в карточку. */
+.spending-module .compensation-family-finance { margin-top: 12px; padding: 14px; border: 1px solid #e3e9ee; border-radius: 12px; background: #fafcfc; display: grid; gap: 10px; }
+.compensation-family-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.spending-module .compensation-family-head h3 { margin: 0; font-size: 14px; }
+.spending-module .compensation-open-family { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 5px 10px; font-size: 12px; font-weight: 600; color: #196667; border-color: #cfe3df; background: #fff; }
+.compensation-family-stats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.compensation-family-stats > div { padding: 8px 10px; border-radius: 9px; background: #fff; border: 1px solid #e8edf1; min-width: 0; }
+.compensation-family-stats dt { font-size: 11px; color: #708091; }
+.compensation-family-stats dd { margin: 2px 0 0; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; color: #22364a; }
+.compensation-family-finance .is-negative { color: #b42318; }
+.compensation-family-tabs { display: flex; gap: 4px; background: #eef2f4; border-radius: 9px; padding: 3px; width: fit-content; }
+.spending-module .compensation-family-tabs button { min-height: 30px; padding: 4px 12px; border: 0; background: transparent; font-size: 12px; font-weight: 600; color: #627586; border-radius: 7px; }
+.spending-module .compensation-family-tabs button[aria-selected="true"] { background: #fff; color: #196667; box-shadow: 0 1px 3px #18304718; }
+.compensation-family-tabs button span { margin-left: 4px; color: #9aa7b4; font-weight: 500; }
+.compensation-family-pager { justify-content: flex-end; gap: 8px; }
+@media (max-width: 900px) { .compensation-family-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* В правой панели «Получатель» финансы семьи — по две плитки в ряд. */
+.spending-module .expense-selection-panel .compensation-family-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }

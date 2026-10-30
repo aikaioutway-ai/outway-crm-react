@@ -46,7 +46,7 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   else sections = ['families'];
   sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
 
-  if (canAccessSpending(userId)) sections = sections.flatMap(section => section === 'expenses' ? [section, 'spending'] : [section]);
+  if (canAccessSpending(role, userId)) sections = sections.flatMap(section => section === 'expenses' ? [section, 'spending'] : [section]);
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
@@ -61,8 +61,9 @@ export function canAccessSummary(role: UserRole, userId?: string): boolean {
   return userId === OWNER_EMPLOYEE_ID || role === 'gen_director';
 }
 
-export function canAccessSpending(userId?: string): boolean {
-  return userId === OWNER_EMPLOYEE_ID;
+// «Расходы» в кассире заменяют «Финансы», поэтому доступ тот же, что был у «Финансов».
+export function canAccessSpending(role: UserRole | undefined, userId?: string): boolean {
+  return userId === OWNER_EMPLOYEE_ID || (!!role && canAccessFinanceExpenses(role));
 }
 
 export function canAccessFinanceExpenses(role: UserRole): boolean {
