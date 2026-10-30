@@ -24,7 +24,7 @@ const groupIcons = [Users, Landmark, Building2, Monitor, Megaphone, Banknote, He
 const kindIcons: Record<string, typeof WalletCards> = {
   'Авансы сотрудникам': HandCoins, 'Зарплата офиса': Banknote,
   'Социальный фонд': Landmark, 'Страховые взносы': ShieldCheck, 'Обязательное страхование сотрудников': ShieldCheck,
-  'Аренда': KeyRound, 'Коммунальные услуги': Plug, 'Канцтовары': FileText, 'Уборка': Brush, 'Текущий ремонт': Wrench,
+  'Аренда': KeyRound, 'Коммунальные услуги': Plug, 'Канцтовары': FileText, 'Хозяйственные расходы': ShoppingBasket, 'Уборка': Brush, 'Текущий ремонт': Wrench,
   'Подписки': CalendarDays, 'Пополнение баланса': CreditCard, 'Связь': Wifi, 'Интернет': Wifi, 'Программы': Monitor, 'Хостинг': Monitor, 'Обслуживание IT': Wrench,
   'Промоматериалы': FileText, 'Реклама': Megaphone, 'Печать': Printer, 'Акции': Gift, 'Подарки клиентам': Gift,
   'Банковские комиссии': Landmark, 'Эквайринг': CreditCard,
