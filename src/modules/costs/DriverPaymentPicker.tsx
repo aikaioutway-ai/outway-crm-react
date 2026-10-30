@@ -17,7 +17,7 @@ export default function DriverPaymentPicker({unitPriceMode=false,selectDriverOnl
   const transfers=Array.from(new Map(drivers.flatMap(driver=>driver.transfers).filter(transfer=>isSchoolVisible(transfer.branchShort) && isSchoolVisible(transferSchool(transfer))).map(transfer=>[transfer.id,transfer])).values()).sort((a,b)=>transferSchool(a).localeCompare(transferSchool(b),'ru',{numeric:true}) || String(a.transferNumber).localeCompare(String(b.transferNumber),'ru',{numeric:true}));
   const people=Array.from(new Map(allDrivers.map(driver=>[driver.driverId,driver])).values()).sort((a,b)=>a.fullName.localeCompare(b.fullName,'ru'));
   const [rows,setRows]=useState<PaymentRow[]>(()=>{
-    const result:PaymentRow[]=initial.filter(row=>isSchoolVisible(row.schoolKey)).map((row,key)=>({...row,key,selected:true,choosing:Boolean(row.temporary)}));
+    const result:PaymentRow[]=initial.filter(row=>(unitPriceMode && !row.schoolKey) || isSchoolVisible(row.schoolKey)).map((row,key)=>({...row,key,selected:true,choosing:Boolean(row.temporary)}));
     for(const transfer of transfers.filter(item=>!school || transferSchool(item)===school)) {
       const driver=drivers.find(item=>item.transfers.some(choice=>choice.id===transfer.id));
       if(!driver || result.some(row=>row.transferId===transfer.id && row.driverId===driver.driverId))continue;
@@ -68,7 +68,7 @@ export default function DriverPaymentPicker({unitPriceMode=false,selectDriverOnl
   const assignment=(driverId:string,transferId:string)=>!drivers.some(driver=>driver.driverId===driverId && driver.transfers.some(transfer=>transfer.id===transferId));
   const confirm=()=>{
     if(selectDriverOnly) { if(selected.length !== 1 || !selected[0].driverId) { setError('Выберите одного водителя.'); return; } onConfirm(selected.map(({key: _key,selected: _selected,choosing: _choosing,openChooser: _openChooser,...row}) => row)); return; }
-    if(!selected.length || selected.some(row=>!row.driverId || ((salary || row.temporary) && (!row.schoolKey || !row.transferId)) || Object.values(periods.length?periodAmounts(keys,row.amount,row.periodAmounts):{single:row.amount}).some(value=>!Number.isFinite(Number(value)) || Number(value)<=0))){setError('Выберите водителей, школу, трансфер и укажите сумму каждому.');return;}
+    if(!selected.length || selected.some(row=>!row.driverId || ((salary || (row.temporary && !unitPriceMode)) && (!row.schoolKey || !row.transferId)) || Object.values(periods.length?periodAmounts(keys,row.amount,row.periodAmounts):{single:row.amount}).some(value=>!Number.isFinite(Number(value)) || Number(value)<=0))){setError('Выберите водителей, школу, трансфер и укажите сумму каждому.');return;}
     if(new Set(selected.map(row=>`${row.driverId}:${row.transferId}`)).size!==selected.length){setError('Один водитель выбран дважды для одного трансфера. Объедините сумму в одной строке.');return;}
     onConfirm(selected.map(({key,selected,choosing,openChooser,...row})=>{
       void key;void selected;void choosing;void openChooser;

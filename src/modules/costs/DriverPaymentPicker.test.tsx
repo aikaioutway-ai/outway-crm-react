@@ -52,3 +52,13 @@ test('typing an amount selects a compact recipient and moves it to the top', () 
   fireEvent.keyDown(container.querySelector('.payment-picker-row')!,{key:'Enter'});
   expect(screen.getByRole('checkbox',{name:'Водитель 12'})).not.toBeChecked();
 });
+
+test('trip recipient without school or transfer stays selected on reopen and can be confirmed', () => {
+  const confirm = jest.fn();
+  const reserve = { driverId: 'reserve', fullName: 'Резервный водитель', status: 'reserve', transfers: [] } as any;
+  render(<DriverPaymentPicker {...props} drivers={[reserve]} school="" unitPriceMode compactCards initial={[{ driverId: 'reserve', name: 'Резервный водитель', schoolKey: '', transferId: '', amount: '2000', temporary: true }]} onConfirm={confirm} />);
+  expect(screen.getByRole('spinbutton', { name: 'Сумма для Резервный водитель' })).toHaveValue(2000);
+  fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(confirm).toHaveBeenCalledWith([expect.objectContaining({ driverId: 'reserve', schoolKey: '', transferId: '', amount: '2000' })]);
+});

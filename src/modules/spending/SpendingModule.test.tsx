@@ -2,6 +2,7 @@ jest.mock('./CompensationFamilyFinance', () => ({ __esModule: true, default: () 
 import React from 'react';
 import { fireEvent, render, screen, cleanup, within, waitFor } from '@testing-library/react';
 import SpendingModule from './SpendingModule';
+import CogsPaymentForm from './CogsPaymentForm';
 import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
 const SCHOOL_TABS_FOR_TEST = () => SCHOOL_TABS.find(item => item.key !== 'ALL' && isSchoolVisible(item.key))!.key;
 
@@ -406,12 +407,28 @@ test('school selection advances directly to transfer selection', () => {
   expect(screen.getByRole('button', { name: 'Выбрать: Школа' })).toHaveTextContent('TIS');
 });
 
-test('payment type stays in summary and all four quarters share one panel', () => {
+test('payment periods navigate between two quarters and the preceding summer', () => {
   render(<SpendingModule userId="owner" role="admin" />);
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.getByRole('button', { name: 'Аванс' })).toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
-  ['1-й квартал','2-й квартал','3-й квартал','4-й квартал'].forEach(label => expect(screen.getByText(label)).toBeInTheDocument());
+  const panel = screen.getByRole('dialog', { name: 'Выбор параметров выплаты' });
+  const previous = within(panel).getByRole('button', { name: 'Предыдущие кварталы' });
+  const next = within(panel).getByRole('button', { name: 'Следующие кварталы' });
+  while (!previous.hasAttribute('disabled')) fireEvent.click(previous);
+  expect(within(panel).getByText('Летний квартал')).toBeInTheDocument();
+  expect(panel.querySelectorAll('fieldset')).toHaveLength(3);
+  const summerPeriod = within(panel).getAllByRole('button', { name: /июнь.*1–15/i })[0];
+  fireEvent.click(summerPeriod);
+  fireEvent.click(next);
+  ['1-й квартал', '2-й квартал'].forEach(label => expect(within(panel).getByText(label)).toBeInTheDocument());
+  expect(panel.querySelectorAll('fieldset')).toHaveLength(6);
+  fireEvent.click(next);
+  ['3-й квартал', '4-й квартал'].forEach(label => expect(within(panel).getByText(label)).toBeInTheDocument());
+  expect(next).toBeDisabled();
+  fireEvent.click(previous);
+  fireEvent.click(previous);
+  expect(within(panel).getByRole('button', { name: /июнь.*1–15/i })).toHaveAttribute('aria-pressed', 'true');
   fireEvent.keyDown(document, { key: 'Escape' });
   expect(screen.queryByRole('dialog', { name: 'Выбор параметров выплаты' })).not.toBeInTheDocument();
   expect(screen.getByRole('dialog', { name: 'Новый расход' })).toBeInTheDocument();
@@ -478,4 +495,30 @@ test('extra trip school tiles show how many trips the school had', () => {
   if (screen.queryByRole('dialog')) fireEvent.click(screen.getByRole('button', { name: 'Закрыть окно расхода' }));
   if (screen.queryByRole('region', { name: 'Записи расходов' })) toTiles();
   expect(screen.getByText('3 выезда')).toBeInTheDocument();
+});
+
+
+test('Logistics saves a driver payment without a school', () => {
+  const onSave = jest.fn(() => true);
+  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 2000, unitPrice: 2000, quantity: 1, description: 'Бишкек', recipient: 'Назначить водителя !!!', driverId: 'external-driver', recipientKey: 'external-driver:', paymentOnly: true, method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
+  fireEvent.submit(screen.getByRole('form', { name: 'Новый выезд Logistics' }));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(onSave).toHaveBeenCalledWith([expect.objectContaining({ schoolKey: '', driverId: 'external-driver', amount: 2000 })]);
+});
+
+test('Logistics uses the school already chosen in the form for an unassigned recipient', () => {
+  const onSave = jest.fn(() => true);
+  const schoolKey = SCHOOL_TABS_FOR_TEST();
+  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 2000, unitPrice: 2000, quantity: 1, description: 'Бишкек', recipient: 'Тестовый водитель', driverId: 'driver1', schoolKey, method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
+  fireEvent.submit(screen.getByRole('form', { name: 'Новый выезд Logistics' }));
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(onSave).toHaveBeenCalledWith([expect.objectContaining({ schoolKey, amount: 2000, description: 'Бишкек' })]);
+});
+
+test('Logistics lists only missing route and invalid price for a selected recipient', () => {
+  const onSave = jest.fn(() => true);
+  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 0, quantity: 1, description: '', recipient: 'Тестовый водитель', driverId: 'driver1', schoolKey: SCHOOL_TABS_FOR_TEST(), method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
+  fireEvent.submit(screen.getByRole('form', { name: 'Новый выезд Logistics' }));
+  expect(screen.getByRole('alert')).toHaveTextContent('Укажите маршрут. Укажите цену больше нуля для: Тестовый водитель.');
+  expect(onSave).not.toHaveBeenCalled();
 });

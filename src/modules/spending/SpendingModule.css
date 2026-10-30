@@ -734,3 +734,6 @@
 @media (max-width: 900px) { .compensation-family-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 /* В правой панели «Получатель» финансы семьи — по две плитки в ряд. */
 .spending-module .expense-selection-panel .compensation-family-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+.spending-module .payment-period-section .payment-period-navigation { flex-shrink: 0; gap: 8px; }
+.spending-module .payment-period-section .payment-period-navigation button { width: 44px; min-height: 44px; }
