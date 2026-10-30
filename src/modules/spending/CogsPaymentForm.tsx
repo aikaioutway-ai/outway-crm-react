@@ -1,3 +1,4 @@
+import { useSelectionHistory } from './useSelectionHistory';
 import ExpenseCategorySelect, { CategoryChange } from './ExpenseCategorySelect';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import PaymentSummary from './PaymentSummary';
@@ -26,7 +27,7 @@ export default function CogsPaymentForm({ entry, onSave, onCancel, disabled, onP
   categories?: SpendingEntry['category'][]; onCategoryChange?: CategoryChange;
   entry: SpendingEntry; onSave: (entries: SpendingEntry[]) => boolean; onCancel: () => void; disabled: boolean; sessionToken?: string; onAllRecords?: () => void; onPanelChange?: (open: boolean) => void;
 }) {
-  const [selectionPanel, setSelectionPanel] = useState<'school' | 'transfer' | 'period' | 'route' | null>(null);
+  const { panel: selectionPanel, navigate: setSelectionPanel, back: previousSelection, canGoBack } = useSelectionHistory<'school' | 'transfer' | 'period' | 'route' | 'drivers'>();
   const selectionRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!selectionPanel) return;
@@ -39,12 +40,13 @@ export default function CogsPaymentForm({ entry, onSave, onCancel, disabled, onP
   const [route, setRoute] = useState(entry.description || '');
   const [quantity, setQuantity] = useState(entry.quantity ?? 1);
   const { data: drivers = [], isLoading, error: loadError } = useDriversTable();
-  const [driversOpen, setDriversOpen] = useState(false);
+  const driversOpen = selectionPanel === 'drivers';
+  const setDriversOpen = (open: boolean) => setSelectionPanel(open ? 'drivers' : null);
   useEffect(() => {
     if (!selectionPanel && !driversOpen) return;
     const dismiss = (event: PointerEvent) => {
       const target = event.target as Element;
-      if (selectionPanel && !selectionRef.current?.contains(target)) setSelectionPanel(null);
+      if (selectionPanel && !driversOpen && !selectionRef.current?.contains(target)) setSelectionPanel(null);
       if (driversOpen && !target.closest('.expense-recipient-drawer .payment-picker')) setDriversOpen(false);
     };
     const escape = (event: KeyboardEvent) => { if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); setSelectionPanel(null); setDriversOpen(false); } };
@@ -100,7 +102,7 @@ export default function CogsPaymentForm({ entry, onSave, onCancel, disabled, onP
   const periodMonths = Array.from({ length: periodPage < 0 ? 3 : 6 }, (_, index) => new Date(Date.UTC(schoolYear, 8 + firstMonth + index, 1)).toISOString().slice(0, 7));
   const periodOptions = periodMonths.flatMap(month => [1, 2].map(half => ({ key: `${month}-${half}`, label: periodLabel(`${month}-${half}`) })));
   const previewTotal = isExtraTrip ? tripTotal : selectedPeriods.length ? total : recipients.reduce((sum, person) => sum + (Number(baseAmounts[person.key]) || 0), 0);
-  return <><form inert={driversOpen} ref={dialog} tabIndex={-1} aria-label={isExtraTrip ? `Новый выезд ${entry.category}` : "Новая выплата COGS"} className={`payment-composer payment-composer-inline payment-composer-compact${selectionPanel ? ' has-selection-panel' : ''}`} onSubmit={event => {
+  return <><form aria-hidden={driversOpen || undefined} inert={driversOpen} ref={dialog} tabIndex={-1} aria-label={isExtraTrip ? `Новый выезд ${entry.category}` : "Новая выплата COGS"} className={`payment-composer payment-composer-inline payment-composer-compact${selectionPanel ? ' has-selection-panel' : ''}`} onSubmit={event => {
     event.preventDefault();
     if (isExtraTrip) {
       const issues: string[] = [];
@@ -131,7 +133,7 @@ export default function CogsPaymentForm({ entry, onSave, onCancel, disabled, onP
     if (!saved) setError('Не удалось сохранить выплаты. Проверьте доступность хранилища браузера и повторите попытку.');
   }}>
     <header className="payment-composer-head"><div className="payment-composer-title"><span className="payment-composer-icon"><WalletCards size={22} /></span><div><span className="payment-composer-kicker">{isExtraTrip ? entry.category === 'Logistics' ? 'LOGISTICS' : 'ДОП. ВЫЕЗДЫ' : 'COGS · ШКОЛЬНЫЕ ПЕРЕВОЗКИ'}</span><h2>{entry.id ? 'Редактирование выплаты' : 'Новая выплата'}</h2></div></div>{headerActions || <div className="spending-actions">{onAllRecords && <AllRecordsButton label="Все записи" onClick={onAllRecords} />}<button type="button" aria-label="Закрыть форму выплаты" className="payment-close" onClick={onCancel}><X size={20} /></button></div>}</header>
-    <div className="payment-composer-body"><div className={`payment-composer-main expense-selection-panel${selectionPanel ? ' is-open' : ''}`} data-panel={selectionPanel || ''} ref={selectionRef} tabIndex={-1} role={selectionPanel ? 'dialog' : undefined} aria-label="Выбор параметров выплаты" onKeyDown={event => { if (event.key === 'Escape' && selectionPanel) { event.stopPropagation(); setSelectionPanel(null); } }}><div className="expense-selection-heading"><h3>{selectionPanel === 'school' ? 'Выберите школу' : selectionPanel === 'transfer' ? 'Выберите трансфер' : selectionPanel === 'period' ? 'Период выплаты' : 'Маршрут и количество'}</h3><button type="button" aria-label="Закрыть панель выбора" onClick={() => setSelectionPanel(null)}><X size={18} /></button></div>
+    <div className="payment-composer-body"><div className={`payment-composer-main expense-selection-panel${selectionPanel && !driversOpen ? ' is-open' : ''}`} data-panel={selectionPanel || ''} ref={selectionRef} tabIndex={-1} role={selectionPanel ? 'dialog' : undefined} aria-label="Выбор параметров выплаты" onKeyDown={event => { if (event.key === 'Escape' && selectionPanel) { event.stopPropagation(); setSelectionPanel(null); } }}><div className="expense-selection-heading">{canGoBack && <button type="button" className="expense-selection-back" aria-label="Назад к предыдущему шагу" onClick={previousSelection}><ChevronLeft size={18} /><span>Назад</span></button>}<h3>{selectionPanel === 'school' ? 'Выберите школу' : selectionPanel === 'transfer' ? 'Выберите трансфер' : selectionPanel === 'period' ? 'Период выплаты' : 'Маршрут и количество'}</h3><button type="button" aria-label="Закрыть панель выбора" onClick={() => setSelectionPanel(null)}><X size={18} /></button></div>
       <section className="payment-section"><div className="payment-section-heading"><div><h3>Кому выплачиваем</h3><p>Выберите школу и нужные трансферы</p></div></div>
       <div className="spending-school-strip">{schools.map(item => <button type="button" key={item.key} aria-pressed={school === item.key} onClick={() => { setSchool(item.key); setTransfer(''); setSelectionPanel('transfer'); }}><span className="spending-school-logo">{item.logo ? <img src={item.logo} alt="" /> : item.label.slice(0, 2)}</span><span>{item.label}</span></button>)}</div>
       <><p className="payment-field-label">Трансферы</p><div className="spending-transfer-strip" inert={!school} style={!school ? { filter: "grayscale(1)", opacity: .5 } : undefined}><TransferBarPages scopeKey={school} counts={Array.from({ length: 15 }, (_, index) => choices.filter(item => item.transferNumber === index + 1).length)}>
@@ -151,6 +153,7 @@ export default function CogsPaymentForm({ entry, onSave, onCancel, disabled, onP
     <footer className="payment-composer-footer"><div className="payment-footer-total"><span>Итого к выплате</span>{!previewTotal && carriedAmount > 0 ? <strong className="payment-carried" title="Сумма записи — подставится выбранному получателю">{carriedAmount.toLocaleString('ru-RU')} <small>сом</small></strong> : <strong>{previewTotal.toLocaleString('ru-RU')} <small>сом</small></strong>}<p>{recipients.length} получателей · {isExtraTrip ? `${quantity} выездов` : selectedPeriods.length ? `${selectedPeriods.length} периодов` : 'Период не выбран'}</p>{carriedAmount > 0 && !recipients.length && <p className="payment-carried-amount">Сумма записи — подставится выбранному водителю</p>}</div><div className="spending-actions"><button type="button" onClick={onCancel}>Отмена</button><button className="spending-primary" type="submit" disabled={disabled || isLoading || !!loadError}><Check size={16} />Сохранить выплаты</button></div></footer>
   </form>
   {driversOpen && createPortal(<div className="spending-finance-picker expense-recipient-drawer" style={{ '--expense-frame-top': `${dialog.current?.closest('.spending-expense-dialog')?.getBoundingClientRect().top || 28}px`, '--expense-frame-height': `${dialog.current?.closest('.spending-expense-dialog')?.getBoundingClientRect().height || 800}px`, '--expense-frame-right': `${dialog.current?.closest('.spending-expense-dialog')?.getBoundingClientRect().right || 0}px` } as React.CSSProperties}><DriverPaymentPicker
+    onBack={canGoBack ? previousSelection : undefined}
     unitPriceMode={isExtraTrip}
     drivers={activeDrivers.map(driver => ({ ...driver, transfers: driver.transfers.filter(item => (!school || schoolFor(item) === school) && (!transfer || transfer === 'ALL' || transfer === item.id || transfer === `number:${item.transferNumber}`)) }))}
     allDrivers={drivers} school={school} sessionToken={sessionToken} splitTotal compactCards defaultAmount={carriedAmount ? String(carriedAmount) : ''}
@@ -159,8 +162,8 @@ export default function CogsPaymentForm({ entry, onSave, onCancel, disabled, onP
     onClose={() => setDriversOpen(false)}
     onConfirm={payments => {
       const payees = payments.map(person => ({ key: `${person.driverId}:${person.transferId}`, driverId: person.driverId, schoolKey: person.schoolKey || (isExtraTrip ? school : ''), transferId: person.transferId, name: person.name, transferNumber: drivers.flatMap(driver => driver.transfers).find(item => item.id === person.transferId)?.transferNumber || 0, paymentOnly: person.temporary }));
-      setExtraPayees(payees); setSelected(payees.map(person => person.key)); setBaseAmounts(Object.fromEntries(payees.map((person,index) => [person.key, payments[index].amount]))); setDriversOpen(false); if (!isExtraTrip) setSelectionPanel('period'); else dialog.current?.querySelector<HTMLInputElement>('input[aria-label="Маршрут"]')?.focus();
+      setExtraPayees(payees); setSelected(payees.map(person => person.key)); setBaseAmounts(Object.fromEntries(payees.map((person,index) => [person.key, payments[index].amount]))); if (!isExtraTrip) setSelectionPanel('period'); else { setSelectionPanel(null); dialog.current?.querySelector<HTMLInputElement>('input[aria-label="Маршрут"]')?.focus(); }
     }}
-  /></div>, document.body)}
+  /></div>, dialog.current?.parentElement || document.body)}
   </>;
 }

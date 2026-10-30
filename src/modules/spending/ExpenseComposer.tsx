@@ -1,3 +1,5 @@
+import { useSelectionHistory } from './useSelectionHistory';
+import { ChevronLeft } from 'lucide-react';
 import ExpenseCategorySelect, { CategoryChange } from './ExpenseCategorySelect';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import CompensationFamilyFinance from './CompensationFamilyFinance';
@@ -40,7 +42,7 @@ export default function ExpenseComposer({ entry, subcategories, disabled, onSave
   onSavePayroll: (rows: SpendingEntry[]) => boolean;
   onSave: (row: SpendingEntry) => boolean; onCancel: () => void;
 }) {
-  const [selectionPanel, setSelectionPanel] = useState<string | null>(null);
+  const { panel: selectionPanel, navigate: setSelectionPanel, back: previousSelection, canGoBack } = useSelectionHistory<string>();
   const selectionRef = useRef<HTMLDivElement>(null);
   const recipientInput = useRef<HTMLInputElement>(null);
   useEffect(() => {
@@ -96,7 +98,7 @@ export default function ExpenseComposer({ entry, subcategories, disabled, onSave
     if (!onSave({ ...normalizeExpenseClassification(draft), employeeId: undefined, salaryPeriodKey: undefined, departmentKey: undefined, ...(isCapex || isPersonal ? { schoolKey: undefined } : {}), ...(isRevenueTax ? { schoolKey: undefined, recipient: '', taxPeriodKey: undefined, taxPeriods: periods } : {}), id: draft.id || crypto.randomUUID(), description: isCompensation ? `${OPEX_KIND_LABELS[draft.subcategory] || draft.subcategory} — ${draft.childName || draft.recipient}` : draft.description.trim() })) setError('Не удалось сохранить расход.');
   }}>
     <header className="payment-composer-head"><div className="payment-composer-title"><span className="payment-composer-icon"><WalletCards size={22} /></span><div><span className="payment-composer-kicker">{entry.category}</span><h2>{entry.id ? 'Редактирование расхода' : 'Новый расход'}</h2></div></div>{headerActions || <div className="spending-actions">{onAllRecords && <AllRecordsButton label="Все записи" onClick={onAllRecords} />}<button type="button" className="payment-close" aria-label="Закрыть форму расхода" onClick={onCancel}><X size={20} /></button></div>}</header>
-    <div className="payment-composer-body"><div className={`payment-composer-main expense-selection-panel expense-general-selection${selectionPanel ? ' is-open' : ''}`} ref={selectionRef} tabIndex={-1} data-selection={selectionPanel || ''} role={selectionPanel ? 'dialog' : undefined} aria-label="Параметры расхода"><div className="expense-selection-heading"><h3>{selectionPanel}</h3><button type="button" aria-label="Закрыть панель выбора" onClick={() => setSelectionPanel(null)}><X size={18}/></button></div>
+    <div className="payment-composer-body"><div className={`payment-composer-main expense-selection-panel expense-general-selection${selectionPanel ? ' is-open' : ''}`} ref={selectionRef} tabIndex={-1} data-selection={selectionPanel || ''} role={selectionPanel ? 'dialog' : undefined} aria-label="Параметры расхода"><div className="expense-selection-heading">{canGoBack && <button type="button" className="expense-selection-back" aria-label="Назад к предыдущему шагу" onClick={previousSelection}><ChevronLeft size={18} /><span>Назад</span></button>}<h3>{selectionPanel}</h3><button type="button" aria-label="Закрыть панель выбора" onClick={() => setSelectionPanel(null)}><X size={18}/></button></div>
       {!isOpex && !isExtraTrip && <section className="payment-section expense-selection-category"><div className="payment-section-heading"><div><h3>{entry.category}</h3><p>Категория расхода</p></div></div>
         {isPersonal ? null : isRevenueTax ? <div className="spending-school-strip expense-group-strip" role="group" aria-label="Категория налога"><button type="button" aria-pressed={true} onClick={() => setSelectionPanel('За период')}><span className="spending-school-logo"><Landmark size={23} aria-hidden="true" /></span><span>Налоги</span></button></div> : isCapex ? null : options.length === 1 ? <div className="expense-fixed-subcategory">{options[0]}</div> : <div className="expense-subcategory-options" role="group" aria-label="Подкатегория">{options.map(name => <button type="button" key={name} aria-pressed={draft.subcategory === name} onClick={() => { field('subcategory', name); setSelectionPanel(null); focusDetails(); }}>{name}</button>)}</div>}
       </section>}
