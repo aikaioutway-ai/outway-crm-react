@@ -1,0 +1,15 @@
+.cashier-review-note { margin: 0 0 12px; padding: 8px 12px; border-radius: 8px; background: #fff8e6; color: #7a5a12; font-size: 12px; }
+.cashier-review-preview .spending-categories > button small { text-align: left; }
+.cashier-review-preview .spending-school-expenses > button.is-empty { opacity: .55; }
+.cashier-review-count { font-size: 11px; color: #237c7d; background: #e8f4f2; border-radius: 6px; padding: 2px 8px; }
+.cashier-review-records { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-height: 0; }
+.cashier-review-records.has-panel { grid-template-columns: minmax(0, 1fr) 340px; }
+.cashier-review-panel { display: flex; flex-direction: column; gap: 14px; padding: 18px; border: 1px solid #dce5eb; border-radius: 14px; background: #fff; align-self: start; position: sticky; top: 0; max-height: calc(100dvh - 190px); overflow-y: auto; }
+.cashier-review-panel header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.cashier-review-panel h3 { margin: 4px 0 0; font-size: 22px; font-variant-numeric: tabular-nums; color: #22364a; }
+.spending-module .cashier-review-receipt { display: grid; place-items: center; padding: 0; min-height: 180px; max-height: 360px; overflow: hidden; border-radius: 10px; background: #f4f6f8; }
+.cashier-review-receipt img { width: 100%; max-height: 360px; object-fit: contain; }
+.spending-module .cashier-review-receipt.is-pdf { gap: 8px; color: #237c7d; font-weight: 600; }
+.cashier-review-no-receipt { margin: 0; padding: 24px; text-align: center; border-radius: 10px; background: #f4f6f8; color: #708091; font-size: 12px; }
+.cashier-review-panel > .spending-primary { justify-content: center; }
+@media (max-width: 1100px) { .cashier-review-records.has-panel { grid-template-columns: minmax(0, 1fr); } .cashier-review-panel { position: static; max-height: none; } }
