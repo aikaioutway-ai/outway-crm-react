@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ListTodo, Users, School, Wallet, Route, Receipt, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { BarChart3, ListTodo, Users, School, Wallet, Route, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'expenses' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary' | 'spending';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary' | 'spending';
 
 interface SidebarProps {
   active: NavSection;
@@ -27,7 +27,6 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'schools2',  label: 'Школы 2.0',  icon: <School size={18} />, expandedOnly: true },
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
-  { key: 'expenses',   label: 'Финансы',   icon: <Receipt size={18} /> },
   { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
@@ -35,18 +34,16 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
 
 export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
   let sections: NavSection[];
-  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
-  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses', 'b2b'];
-  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'expenses'];
+  if (role === 'admin')             sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'b2b'];
+  else if (role === 'gen_director') sections = ['families', 'employees', 'cashier', 'logistics', 'drivers', 'b2b'];
+  else if (role === 'director')     sections = ['families', 'employees', 'cashier', 'logistics', 'drivers'];
   else if (role === 'manager')      sections = ['families'];
   else if (role === 'logist')       sections = ['logistics', 'drivers'];
-  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'expenses', 'employees', 'b2b'];
+  else if (role === 'senior_logist') sections = ['logistics', 'drivers', 'employees', 'b2b'];
   else if (role === 'b2b_manager' || role === 'b2b_logist') sections = ['b2b'];
-  else if (role === 'cashier')       sections = ['cashier', 'families', 'expenses', 'b2b'];
+  else if (role === 'cashier')       sections = ['cashier', 'families', 'b2b'];
   else sections = ['families'];
-  sections = sections.filter(section => section !== 'expenses' || canAccessFinanceExpenses(role));
-
-  if (canAccessSpending(role, userId)) sections = sections.flatMap(section => section === 'expenses' ? [section, 'spending'] : [section]);
+  if (canAccessSpending(role, userId)) sections = [...sections, 'spending'];
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
@@ -61,13 +58,9 @@ export function canAccessSummary(role: UserRole, userId?: string): boolean {
   return userId === OWNER_EMPLOYEE_ID || role === 'gen_director';
 }
 
-// «Расходы» в кассире заменяют «Финансы», поэтому доступ тот же, что был у «Финансов».
+// «Расходы» в кассире заменили раздел «Финансы» и открыты тем же ролям, что были у «Финансов».
 export function canAccessSpending(role: UserRole | undefined, userId?: string): boolean {
-  return userId === OWNER_EMPLOYEE_ID || (!!role && canAccessFinanceExpenses(role));
-}
-
-export function canAccessFinanceExpenses(role: UserRole): boolean {
-  return role === 'admin' || role === 'gen_director' || role === 'cashier';
+  return userId === OWNER_EMPLOYEE_ID || role === 'admin' || role === 'gen_director' || role === 'cashier';
 }
 
 export function canAccessSection(role: UserRole, section: NavSection, userId?: string): boolean {

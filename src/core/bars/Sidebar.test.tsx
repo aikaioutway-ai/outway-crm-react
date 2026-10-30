@@ -1,12 +1,24 @@
 import { fireEvent, render, screen } from '@testing-library/react';
-import Sidebar, { canAccessFinanceExpenses, canAccessSection, getAllowedSections } from './Sidebar';
+import Sidebar, { canAccessSection, canAccessSpending, getAllowedSections } from './Sidebar';
 
-test('cashier can open expenses while personal details stay handled separately', () => {
-  expect(canAccessFinanceExpenses('cashier')).toBe(true);
+test('cashier works with spending; the old Finance section is gone for everyone', () => {
+  expect(canAccessSpending('cashier')).toBe(true);
   expect(canAccessSection('cashier', 'families', 'cashier')).toBe(true);
-  expect(canAccessSection('cashier', 'expenses', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'b2b', 'cashier')).toBe(true);
-  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'expenses', 'spending', 'b2b', 'tasks']);
+  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'b2b', 'spending', 'tasks']);
+});
+
+test('spending stays limited to admin, general director, cashier and the owner', () => {
+  expect(canAccessSpending('admin')).toBe(true);
+  expect(canAccessSpending('gen_director')).toBe(true);
+  expect(canAccessSpending('director')).toBe(false);
+  expect(canAccessSpending('senior_logist')).toBe(false);
+  expect(canAccessSpending('director', 'emp-admin')).toBe(true);
+});
+
+test('nobody sees Finance in the sidebar', () => {
+  render(<Sidebar active="cashier" userRole="admin" userId="emp-admin" onChange={jest.fn()} />);
+  expect(screen.queryByTitle('Финансы')).toBeNull();
 });
 
 test('cashier sees Manager in the Sidebar and can open it', () => {

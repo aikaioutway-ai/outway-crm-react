@@ -1,13 +1,12 @@
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
-import { ExpenseCategory, EXPENSE_CATEGORIES } from './modules/costs/expenseTypes';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import Sidebar, { canAccessSpending, canAccessFinanceExpenses, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
+import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import { setCrmActor } from './services/crmActor';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview from './modules/families/CashierOverview';
@@ -53,7 +52,6 @@ const FamiliesPage = lazy(loadFamiliesPage);
 const SpendingModule = lazy(() => import('./modules/spending/SpendingModule'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
-const ExpensesModule = lazy(() => import('./modules/costs/ExpensesModule'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
 const SummaryModule = lazy(() => import('./modules/summary/SummaryModule'));
 const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
@@ -155,8 +153,6 @@ export default function App() {
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
-  const [expenseCategory, setExpenseCategory] = useState<ExpenseCategory | null>(null);
-  const [expenseSubcategory, setExpenseSubcategory] = useState('ALL');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
   const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals'>('directory');
   const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
@@ -777,17 +773,6 @@ export default function App() {
           </div>
         ) : section === 'spending' ? (
           canAccessSpending(currentUserRole, currentUser?.id) && <SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
-        ) : section === 'expenses' ? (
-
-          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
-            <div style={tabRowStyle}><div style={tabBarStyle}>
-              {sectionLabel('Финансы')}
-              {expenseCategory && <button type="button" onClick={() => { if (expenseSubcategory !== 'ALL') setExpenseSubcategory('ALL'); else setExpenseCategory(null); }} className="ow-btn ow-btn--ghost"><ChevronLeft size={16} aria-hidden="true" />Категории</button>}
-              {extraTabs(true)}
-            </div></div>
-            {canAccessFinanceExpenses(currentUserRole) && <ExpensesModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} selectedCategory={expenseCategory} onCategoryChange={setExpenseCategory} selectedSubcategory={expenseSubcategory} onSubcategoryChange={setExpenseSubcategory} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken} />}
-
-          </div>
         ) : section === 'summary' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
