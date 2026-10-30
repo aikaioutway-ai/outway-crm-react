@@ -158,6 +158,36 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
     try { localStorage.setItem(storageKey, JSON.stringify(next)); window.dispatchEvent(new Event('outway-spending-updated')); setRows(next); setError(''); onSaved(); return true; }
     catch { setError('Не удалось сохранить. Проверьте свободное место и настройки браузера.'); onFailed(); return false; }
   };
+  // Правка одной ячейки: сразу показываем новое значение и сохраняем по очереди,
+  // без перезагрузки всех расходов и без блокировки таблицы.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const cellSaveQueue = useRef<Promise<unknown>>(Promise.resolve());
+  const saveCell = (entry: Entry): Promise<boolean> => {
+    if (initial.error || loadFailed) return Promise.resolve(false);
+    if (!sessionToken) return new Promise(resolve => { if (!persist(rows.map(row => row.id === entry.id ? entry : row), () => resolve(true), () => resolve(false))) resolve(false); });
+    const token = sessionToken;
+    const run = cellSaveQueue.current.then(async () => {
+      const before = rowsRef.current.find(row => row.id === entry.id);
+      if (!before) return false;
+      setRows(current => current.map(row => row.id === entry.id ? entry : row));
+      try {
+        await saveSpendingEntries(token, [entry]);
+        setError('');
+        if (entry.driverId) void queryClient.invalidateQueries({ queryKey: ['driverPayments'] });
+        if (entry.employeeId) void queryClient.invalidateQueries({ queryKey: ['employeePaymentHistory'] });
+        if (entry.familyId) invalidateFinanceCache();
+        window.dispatchEvent(new Event('outway-spending-updated'));
+        return true;
+      } catch (reason) {
+        setRows(current => current.map(row => row.id === entry.id ? before : row));
+        setError(reason instanceof Error ? reason.message : 'Не удалось сохранить расход');
+        return false;
+      }
+    });
+    cellSaveQueue.current = run.catch(() => false);
+    return run;
+  };
   const { data: driversTable = [] } = useDriversTable();
   // Номер трансфера по id: в записях COGS хранится только id трансфера.
   const transferNumbers = Object.fromEntries(driversTable.flatMap(driver => driver.transfers.map(transfer => [transfer.id, Number(transfer.transferNumber)])));
@@ -208,7 +238,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
 
     {<div className={`spending-register${!allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch ? ' spending-register-schools' : ''}`}>{overviewVisible && <div className="spending-register-heading"><h2>{category}</h2><div className="spending-overview-tools"><button type="button" className="overview-icon-button spending-sort-button" aria-label={amountSort === 'desc' ? 'Сортировать сумму по возрастанию' : 'Сортировать сумму по убыванию'} title={amountSort === 'desc' ? 'По сумме: по убыванию. Нажмите для возрастания' : 'Сортировать по сумме: по убыванию'} onClick={() => setAmountSort(value => value === 'desc' ? 'asc' : 'desc')}>{amountSort === 'asc' ? <ArrowUpNarrowWide size={18} /> : <ArrowDownWideNarrow size={18} />}</button>{registerActions}</div></div>}
       {!allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch ? <div className="spending-school-overview"><div className="spending-school-strip spending-school-expenses" role="group" aria-label={category === 'COGS' ? 'Расходы по школам' : 'Расходы по статьям'}>{schoolRows.map(school => { const logo = SCHOOL_TABS.find(item => item.key === school.key)?.logo; return <button type="button" key={school.key} onClick={() => setSchoolFilter(school.key)}><span className="spending-school-logo">{logo ? <img src={logo} alt="" /> : school.key.startsWith('opex:') || school.key.startsWith('subcategory:') ? <Layers size={28} aria-hidden="true" /> : <School size={28} aria-hidden="true" />}</span><span className="spending-school-name">{school.key.startsWith('opex:') ? OPEX_GROUP_LABELS[school.label] || school.label : school.label}</span><strong>{money(school.total)}</strong>{category === 'Доп. Выезды' && school.trips > 0 && <span className="spending-trip-badge" title="Количество выездов"><Bus size={12} aria-hidden="true" />{school.trips} {tripWord(school.trips)}</span>}</button>; })}</div></div> : <>
-      <SpendingRecordsTable category={category} transferNumbers={transferNumbers} showSchoolDetails={!!schoolFilter && !schoolFilter.startsWith('opex:') && !schoolFilter.startsWith('subcategory:')} title={category === 'ALL' ? 'Все расходы' : category} toolbarActions={viewActions(true)} onBack={() => { setAllRecords(false); setDraft(null); setSchoolFilter(null); scrollToCategories(); }} columnsOpen={columnsOpen} onColumnsOpenChange={onColumnsOpenChange} rows={visible} disabled={busy || loadFailed || !!initial.error} onEdit={row => { setCategory(row.category); setAllRecords(false); setDraft({...row}); scrollToWorkspace(); }} onDelete={row => { if (window.confirm(`Удалить расход «${row.description}» на сумму ${money(row.amount)}?`)) persist(rows.filter(item=>item.id!==row.id)); }} onSave={entry => new Promise<boolean>(resolve => { if (!persist(rows.map(row => row.id === entry.id ? entry : row), () => resolve(true), () => resolve(false))) resolve(false); })} />
+      <SpendingRecordsTable category={category} transferNumbers={transferNumbers} showSchoolDetails={!!schoolFilter && !schoolFilter.startsWith('opex:') && !schoolFilter.startsWith('subcategory:')} title={category === 'ALL' ? 'Все расходы' : category} toolbarActions={viewActions(true)} onBack={() => { setAllRecords(false); setDraft(null); setSchoolFilter(null); scrollToCategories(); }} columnsOpen={columnsOpen} onColumnsOpenChange={onColumnsOpenChange} rows={visible} disabled={busy || loadFailed || !!initial.error} onEdit={row => { setCategory(row.category); setAllRecords(false); setDraft({...row}); scrollToWorkspace(); }} onDelete={row => { if (window.confirm(`Удалить расход «${row.description}» на сумму ${money(row.amount)}?`)) persist(rows.filter(item=>item.id!==row.id)); }} onSave={saveCell} />
     </>}
     </div>}
     {draft && <div className="spending-inline-expense"><div className="spending-expense-dialog" role="dialog" aria-modal="false" aria-label={draft.id ? 'Редактирование расхода' : 'Новый расход'} tabIndex={-1} ref={expenseDialog} onKeyDown={event => {

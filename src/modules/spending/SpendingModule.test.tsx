@@ -241,6 +241,29 @@ test('loads copied finance records and keeps the original classification visible
   expect(screen.getByRole('form',{name:'Новый расход OPEX'})).toBeInTheDocument();
 });
 
+test('editing a table cell saves only that record and keeps the table usable without reloading everything', async () => {
+  cloud.saveSpendingEntries.mockReset().mockResolvedValue(undefined);
+  cloud.fetchSpendingEntries.mockReset().mockResolvedValue([
+    { id:'cell-1', category:'OPEX',subcategory:'Аренда',date:'2026-10-01',amount:1250,description:'Аренда',recipient:'',method:'Безналичные' },
+    { id:'cell-2', category:'OPEX',subcategory:'Аренда',date:'2026-10-02',amount:900,description:'Склад',recipient:'',method:'Безналичные' },
+  ]);
+  render(<SpendingModule userId="owner" role="admin" sessionToken="session" periodKey="ALL" />);
+  await waitFor(() => expect(cloud.fetchSpendingEntries).toHaveBeenCalledTimes(1));
+  fireEvent.click(screen.getByRole('button', { name: /^Все Все расходы за период/ }));
+  fireEvent.click(await screen.findByText('1 250'));
+  const input = screen.getByDisplayValue('1250');
+  fireEvent.change(input, { target: { value: '1500' } });
+  fireEvent.blur(input);
+  fireEvent.click(screen.getByText('900'));
+  expect(screen.getByDisplayValue('900')).toBeEnabled();
+  await waitFor(() => expect(cloud.saveSpendingEntries).toHaveBeenCalledWith('session', [expect.objectContaining({ id:'cell-1', amount:1500 })]));
+  expect(screen.getByDisplayValue('900')).toBeInTheDocument();
+  expect(screen.getByText('1 500')).toBeInTheDocument();
+  expect(cloud.fetchSpendingEntries).toHaveBeenCalledTimes(1);
+  fireEvent.blur(screen.getByDisplayValue('900'));
+  expect(cloud.saveSpendingEntries.mock.calls.filter((call: unknown[]) => call[2] !== true)).toHaveLength(1);
+});
+
 test('all-expenses tile follows the period and access rights, independently of category and search', () => {
   const base = {subcategory:'Прочее',description:'Расход',recipient:'',method:'Безналичные'};
   localStorage.setItem('outway-spending-v1:totals',JSON.stringify([

@@ -1,4 +1,4 @@
-jest.mock('../../services/spendingService',()=>({fetchSpendingPayments:jest.fn().mockResolvedValue([])}));
+jest.mock('../../services/spendingService',()=>({fetchSpendingPayments:jest.fn().mockResolvedValue({rows:[],replacedRefs:new Set()})}));
 import { render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import DriverPaymentsPanel from './DriverPaymentsPanel';

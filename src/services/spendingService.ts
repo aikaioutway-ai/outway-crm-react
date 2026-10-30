@@ -31,11 +31,17 @@ export async function deleteSpendingEntry(token: string, id: string): Promise<vo
   await request(token, { action: 'delete', id });
 }
 
-export async function fetchSpendingPayments(token: string, recipient: { driverId: string } | { employeeId: string }): Promise<SpendingEntry[]> {
-  const result: SpendingEntry[] = [];
+/** Выплаты получателю из «Расходов» и ссылки на старые записи, которые эти копии заменили. */
+export type SpendingPayments = { rows: SpendingEntry[]; replacedRefs: Set<string> };
+export async function fetchSpendingPayments(token: string, recipient: { driverId: string } | { employeeId: string }): Promise<SpendingPayments> {
+  const rows: SpendingEntry[] = [];
+  const replacedRefs = new Set<string>();
   for (let offset = 0; ; offset += 500) {
-    const { rows } = await request(token, { action: 'payments', ...recipient, offset });
-    result.push(...rows);
-    if (rows.length < 500) return result;
+    const page = await request(token, { action: 'payments', ...recipient, offset });
+    rows.push(...page.rows);
+    for (const ref of page.replacedRefs ?? []) replacedRefs.add(ref);
+    if (page.rows.length < 500) break;
   }
+  for (const row of rows) if (row.sourceRef) replacedRefs.add(row.sourceRef);
+  return { rows, replacedRefs };
 }

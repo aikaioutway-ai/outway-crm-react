@@ -17,7 +17,7 @@ function setup(role = 'cashier', previous: object[] = [], status = 'active', rpc
   const db = {rpc,from:(table:string) => {
     const result = {data:table === 'v2_employees' ? {role,status,full_name:'Касса Тест'} : previous,error:null};
     const query: Record<string,unknown> = {then:(resolve:(value:unknown)=>void)=>Promise.resolve(result).then(resolve)};
-    for (const method of ['select','eq','is','order','range','neq','gte','lte','in']) query[method]=(...args:unknown[])=>{ calls.push({method,args}); return query; };
+    for (const method of ['select','eq','is','not','order','range','neq','gte','lte','in']) query[method]=(...args:unknown[])=>{ calls.push({method,args}); return query; };
     query.maybeSingle=async()=>result;
     query.upsert=upsert;
     query.update=(...args:unknown[])=>{ calls.push({method:'update',args}); return query; };
@@ -74,9 +74,17 @@ test('employee history includes only salary and advances for the selected employ
   const api=setup('cashier');
   expect((await api.request({action:'payments',employeeId:'employee'})).status).toBe(200);
   expect(api.calls).toContainEqual({method:'eq',args:['payload->>employeeId','employee']});
-  expect(api.calls).toContainEqual({method:'is',args:['source_table',null]});
+  expect(api.calls).not.toContainEqual({method:'is',args:['source_table',null]});
   expect(api.calls).toContainEqual({method:'in',args:['category',['OPEX']]});
   expect(api.calls).toContainEqual({method:'in',args:['payload->>subcategory',['Авансы сотрудникам','Зарплата офиса']]});
+});
+
+test('payment history names the old records that a copy in spending replaced, even deleted or moved ones', async () => {
+  const api=setup('cashier',[{source_table:'v2_employee_advances',source_id:'old-advance'}]);
+  const result=await api.request({action:'payments',employeeId:'employee'});
+  expect(result.status).toBe(200);
+  expect(result.body.replacedRefs).toEqual(['v2_employee_advances:old-advance']);
+  expect(api.calls).toContainEqual({method:'eq',args:['source_record->>employee_id','employee']});
 });
 
 const refund = {...entry,id:'refund-1',subcategory:'Возврат родителю',familyId:'family-1',recipient:'Ребёнок',description:''};

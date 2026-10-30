@@ -4,10 +4,9 @@ import type { DriverPaymentRecord } from '../modules/drivers/driverPayments';
 
 export async function fetchDriverPaymentHistory(driverId: string, token?: string): Promise<DriverPaymentRecord[]> {
   if (!token) throw new Error('Для просмотра выплат войдите в CRM');
-  const [legacy, spending] = await Promise.all([fetchDriverPayments(driverId, token), fetchSpendingPayments(token, {driverId})]);
-  // Копия старой записи в «Расходах» — главная версия: её можно было исправить (сумму, категорию, водителя).
-  const copied = new Set(spending.map(row => row.sourceRef).filter(Boolean));
-  const legacyKept = legacy.filter(row => !copied.has(`${row.kind === 'advance' ? 'v2_driver_advances' : 'v2_expenses'}:${row.sourceId}`));
+  const [legacy, { rows: spending, replacedRefs }] = await Promise.all([fetchDriverPayments(driverId, token), fetchSpendingPayments(token, {driverId})]);
+  // Копия старой записи в «Расходах» — главная версия: её можно исправить, передать другому водителю или удалить.
+  const legacyKept = legacy.filter(row => !replacedRefs.has(`${row.kind === 'advance' ? 'v2_driver_advances' : 'v2_expenses'}:${row.sourceId}`));
   const added: DriverPaymentRecord[] = spending.filter(row => row.driverId === driverId).map(row => ({
     id:`spending-${row.id}`,sourceId:row.id,spendingId:row.id,
     kind:row.subcategory === 'Авансы водителям' ? 'advance' : row.subcategory === 'Зарплата водителей' ? 'salary' : 'payment',

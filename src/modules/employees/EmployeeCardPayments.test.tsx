@@ -13,18 +13,18 @@ jest.mock('../../services/employeeService',()=>({
 }));
 test('new advances update the card summary once, including after a save event',async()=>{
   const native={id:'new',employeeId:'employee',category:'OPEX',subcategory:'Авансы сотрудникам',date:'2026-10-02',salaryPeriodKey:'2026-10',amount:300,comment:'Аванс из новых расходов'};
-  (fetchSpendingPayments as jest.Mock).mockResolvedValue([native,{...native,id:'copy',sourceRef:'v2_employee_advances:old',amount:50}]);
+  (fetchSpendingPayments as jest.Mock).mockResolvedValue({rows:[native,{...native,id:'copy',sourceRef:'v2_employee_advances:old',amount:50}],replacedRefs:new Set(['v2_employee_advances:old'])});
   const employee: Employee={id:'employee',fullName:'Сотрудник',role:'manager',status:'active',schoolKeys:[],login:'',position:'',phone1:'',createdAt:'',updatedAt:''};
   render(<EmployeeCardModal employee={employee} sessionToken="session" restrictedRole={null} onClose={()=>{}} onChanged={()=>{}} onDeleted={()=>{}} />);
   expect(await screen.findByText(/Авансы: 350/)).toBeInTheDocument();
-  (fetchSpendingPayments as jest.Mock).mockResolvedValue([{...native,amount:500}]);
+  (fetchSpendingPayments as jest.Mock).mockResolvedValue({rows:[{...native,amount:500}],replacedRefs:new Set()});
   fireEvent(window,new Event('outway-spending-updated'));
   await waitFor(()=>expect(screen.getByText(/Авансы: 550/)).toBeInTheDocument());
 });
 
 test('a payroll failure does not hide existing advances or show a false zero debt',async()=>{
   (fetchV2PayrollEntriesForPeriod as jest.Mock).mockRejectedValueOnce(new Error('Табель недоступен'));
-  (fetchSpendingPayments as jest.Mock).mockResolvedValue([]);
+  (fetchSpendingPayments as jest.Mock).mockResolvedValue({rows:[],replacedRefs:new Set()});
   const employee: Employee={id:'employee',fullName:'Сотрудник',role:'manager',status:'active',schoolKeys:[],login:'',position:'',phone1:'',createdAt:'',updatedAt:''};
   render(<EmployeeCardModal employee={employee} sessionToken="session" restrictedRole={null} onClose={()=>{}} onChanged={()=>{}} onDeleted={()=>{}} />);
   expect(await screen.findByText(/Авансы: 50/)).toBeInTheDocument();

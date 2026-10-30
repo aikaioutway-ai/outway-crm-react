@@ -55,17 +55,24 @@ Deno.serve(async req => {
       const employeeId = typeof body.employeeId === 'string' ? body.employeeId : '';
       const offset = Number(body.offset ?? 0);
       if (Boolean(driverId) === Boolean(employeeId) || !Number.isSafeInteger(offset) || offset < 0 || (driverId && !/^[0-9a-f-]{36}$/i.test(driverId)) || employeeId.length > 200) return response({ok:false,error:'Выберите получателя'},400);
-      // Копии из «Финансов» входят в историю водителя: их можно перенести в COGS и указать водителя.
-      let query = db.from('v2_spending_entries').select('payload').is('deleted_at',null);
-      if (!driverId) query = query.is('source_table',null);
-      query = query
+      // Копии из «Финансов» входят в историю выплат: их можно исправить, перенести или удалить в «Расходах».
+      const query = db.from('v2_spending_entries').select('payload').is('deleted_at',null)
         .eq(driverId ? 'payload->>driverId' : 'payload->>employeeId',driverId || employeeId)
         .in('category',driverId ? ['COGS','Доп. Выезды','Logistics'] : ['OPEX'])
         .in('payload->>subcategory',driverId ? ['Авансы водителям','Зарплата водителей','Оплата водителю'] : ['Авансы сотрудникам','Зарплата офиса'])
         .order('expense_date',{ascending:false}).order('id').range(offset,offset+499);
       const {data,error} = await query;
       if (error) throw error;
-      return response({ok:true,rows:(data ?? []).map(row=>row.payload)});
+      // Старые записи получателя, у которых уже есть копия в «Расходах» (даже удалённая или
+      // переданная другому получателю): карточка показывает копию, а не старую запись.
+      let replacedRefs: string[] = [];
+      if (offset === 0) {
+        const {data: copies,error: copiesError} = await db.from('v2_spending_entries').select('source_table,source_id')
+          .not('source_table','is',null).eq(driverId ? 'source_record->>driver_id' : 'source_record->>employee_id',driverId || employeeId);
+        if (copiesError) throw copiesError;
+        replacedRefs = (copies ?? []).map(row => `${row.source_table}:${row.source_id}`);
+      }
+      return response({ok:true,rows:(data ?? []).map(row=>row.payload),replacedRefs});
     }
     if (body.action === 'list') {
       const offset = Number(body.offset ?? 0);

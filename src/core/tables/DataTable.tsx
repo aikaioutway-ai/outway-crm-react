@@ -540,7 +540,10 @@ export function DataTable<T extends Record<string, any>>({
   };
   const [editingCell, setEditingCell] = useState<{ rowId: any; key: string } | null>(null);
   const [draftValue, setDraftValue] = useState('');
-  const [savingCell, setSavingCell] = useState(false);
+  // Сохраняется только та ячейка, из которой ушли: соседнюю можно сразу править дальше.
+  const [savingCellKey, setSavingCellKey] = useState<string | null>(null);
+  const editStartValueRef = useRef('');
+  const committingCellsRef = useRef(new Set<string>());
   const [page, setPage] = useState(1);
 
   const resizeRef = useRef<{ key: string; startX: number; startW: number } | null>(null);
@@ -637,19 +640,30 @@ export function DataTable<T extends Record<string, any>>({
     const value = getCellValue(row, col);
     const isNumeric = col.type === 'currency' || col.type === 'number';
     // Дата правится календарём: в поле — только 'ГГГГ-ММ-ДД'.
-    if (col.type === 'date') { setDraftValue(String(value ?? '').slice(0, 10)); return; }
-    setDraftValue(isNumeric && Number(value) === 0 && !col.editOptions ? '' : String(value ?? ''));
+    const startValue = col.type === 'date' ? String(value ?? '').slice(0, 10) : isNumeric && Number(value) === 0 && !col.editOptions ? '' : String(value ?? '');
+    editStartValueRef.current = startValue;
+    setDraftValue(startValue);
   };
 
   const commitCellEdit = async (row: T, col: ColumnDef<T>, nextValue = draftValue) => {
     if (!editingCell || !onCellSave) return;
     const previousEditingCell = editingCell;
+    const cellKey = `${String(previousEditingCell.rowId)}:${previousEditingCell.key}`;
+    // Enter и потеря фокуса не должны сохранить одну правку дважды.
+    if (committingCellsRef.current.has(cellKey)) return;
+    const closeIfStillOpen = () => setEditingCell(current => current && current.rowId === previousEditingCell.rowId && current.key === previousEditingCell.key ? null : current);
+    if (nextValue === editStartValueRef.current) { closeIfStillOpen(); return; }
+    committingCellsRef.current.add(cellKey);
     if (col.editOptions) setEditingCell(null);
-    setSavingCell(true);
-    const ok = await Promise.resolve(onCellSave(row, col.key, nextValue));
-    setSavingCell(false);
-    if (ok) setEditingCell(null);
-    if (!ok && col.editOptions) setEditingCell(previousEditingCell);
+    setSavingCellKey(cellKey);
+    try {
+      const ok = await Promise.resolve(onCellSave(row, col.key, nextValue));
+      if (ok) closeIfStillOpen();
+      if (!ok && col.editOptions) setEditingCell(current => current ?? previousEditingCell);
+    } finally {
+      committingCellsRef.current.delete(cellKey);
+      setSavingCellKey(current => current === cellKey ? null : current);
+    }
   };
 
   const cancelCellEdit = () => {
@@ -1184,7 +1198,7 @@ export function DataTable<T extends Record<string, any>>({
                               autoFocus
                               value={draftValue}
                               options={col.editOptions}
-                              disabled={savingCell}
+                              disabled={savingCellKey === `${String(id)}:${col.key}`}
                               variant="cell"
                               onChange={nextValue => {
                                 setDraftValue(nextValue);
@@ -1199,7 +1213,7 @@ export function DataTable<T extends Record<string, any>>({
                               type={col.type === 'date' ? 'date' : undefined}
                               className="dt-cell-input"
                               value={draftValue}
-                              disabled={savingCell}
+                              disabled={savingCellKey === `${String(id)}:${col.key}`}
                               onClick={e => e.stopPropagation()}
                               onChange={e => setDraftValue(e.target.value)}
                               onBlur={() => commitCellEdit(row, col)}
