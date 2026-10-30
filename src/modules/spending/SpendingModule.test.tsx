@@ -306,6 +306,16 @@ test('editing uses the creation forms and switching category changes the form wi
   expect(JSON.parse(localStorage.getItem('outway-spending-v1:edit')!)).toEqual([expect.objectContaining({id:'existing',category:'CAPEX',description:'Стол после правки',amount:100})]);
 });
 
+test('an old logistics driver payment can be switched to COGS and keeps its amount for the driver',()=>{
+  localStorage.setItem('outway-spending-v1:lump',JSON.stringify([{id:'lump',category:'Logistics',subcategory:'Оплата водителю',date:'2026-10-05',amount:44000,description:'Логистика',recipient:'',method:'Безналичные'}]));
+  render(<SpendingModule userId="lump" role="admin" periodKey="ALL"/>);
+  fireEvent.click(screen.getByRole('button',{name:/^Все Все расходы за период/}));
+  fireEvent.click(screen.getByRole('button',{name:'Редактировать Логистика'}));
+  fireEvent.change(screen.getByRole('combobox',{name:'Категория расхода'}),{target:{value:'COGS'}});
+  expect(screen.getByRole('form',{name:'Новая выплата COGS'})).toBeInTheDocument();
+  expect(screen.getByText('Сумма записи — подставится выбранному водителю')).toBeInTheDocument();
+});
+
 test('historical non-driver logistics expenses remain ordinary expenses when editing',()=>{
   localStorage.setItem('outway-spending-v1:ordinary',JSON.stringify([{id:'ordinary',category:'Logistics',subcategory:'Прочее',date:'2026-10-01',amount:100,description:'Такси',recipient:'',method:'Безналичные'}]));
   render(<SpendingModule userId="ordinary" role="admin" periodKey="ALL"/>);

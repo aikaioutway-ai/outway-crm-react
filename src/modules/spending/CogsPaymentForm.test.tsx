@@ -79,3 +79,21 @@ test('editing a record without a driver keeps its amount for the chosen driver',
   expect(save).toHaveBeenCalledTimes(1);
   expect(save.mock.calls[0][0]).toEqual([expect.objectContaining({ id: 'finance:v2_expenses:x', driverId: 'driver-b', amount: 10000, comment: 'Аванс школа Нова 8 трансфер Алым', date: '2026-10-15' })]);
 });
+
+test('a lump logistics payment moved to COGS becomes one driver payment with the same record and amount', () => {
+  const save = jest.fn((_entries: SpendingEntry[]) => true);
+  render(<CogsPaymentForm entry={{ id: 'finance:v2_expenses:lump', category: 'COGS', subcategory: 'Зарплата водителей', date: '2026-10-05', amount: 44000, unitPrice: 22000, quantity: 2, description: 'Логистика', recipient: '', method: 'Наличные', comment: 'Зарплата Алым', sourceRef: 'v2_expenses:lump', classificationChanged: true }} disabled={false} onCancel={() => undefined} onSave={save} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать водителей' }));
+  fireEvent.click(screen.getByLabelText('Водитель А'));
+  expect(screen.getByLabelText('Сумма для Водитель А')).toHaveValue(44000);
+  fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: За период' }));
+  fireEvent.click(screen.getAllByRole('button').filter(button => button.closest('.payment-period-month-grid'))[0]);
+  fireEvent.click(screen.getByRole('button', { name: 'Сохранить выплаты' }));
+  expect(save.mock.calls[0][0]).toHaveLength(1);
+  const saved = save.mock.calls[0][0][0];
+  expect(saved).toMatchObject({ id: 'finance:v2_expenses:lump', category: 'COGS', subcategory: 'Зарплата водителей', driverId: 'driver-a', transferId: 'transfer-a', amount: 44000, method: 'Наличные', comment: 'Зарплата Алым', date: '2026-10-05', classificationChanged: true });
+  expect(saved.salaryPeriodKey).toMatch(/^\d{4}-\d{2}-[12]$/);
+  expect(saved.unitPrice).toBeUndefined();
+  expect(saved.quantity).toBeUndefined();
+});
