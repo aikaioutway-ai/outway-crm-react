@@ -1,6 +1,8 @@
 jest.mock('./CompensationFamilyFinance', () => ({ __esModule: true, default: () => <div>История платежей семьи</div> }));
 import React from 'react';
-import { fireEvent, render, screen, cleanup, within, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+const render = (ui: React.ReactElement) => { const client = new QueryClient({ defaultOptions: { queries: { retry: false } } }); client.setQueryData(['b2b','clients'], [{id:'client-a',clientType:'company',companyName:'Компания А'}]); return baseRender(<QueryClientProvider client={client}>{ui}</QueryClientProvider>); };
+import { fireEvent, render as baseRender, screen, cleanup, within, waitFor } from '@testing-library/react';
 import SpendingModule from './SpendingModule';
 import CogsPaymentForm from './CogsPaymentForm';
 import { SCHOOL_TABS, isSchoolVisible } from '../families/constants';
@@ -203,15 +205,14 @@ test.each(['Доп. Выезды', 'Logistics'])('%s uses the COGS picker and ro
   fireEvent.click(screen.getByRole('button', { name: 'Вернуться к новому расходу' }));
   expect(screen.queryByText('Периоды выплаты')).not.toBeInTheDocument();
   expect(screen.queryByRole('group', { name: 'Подкатегория' })).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'TIS' }));
-  fireEvent.click(screen.getByTitle('Резерв'));
+  if (category === 'Logistics') { fireEvent.click(screen.getByRole('button', { name: /Юрлицо/ })); fireEvent.click(screen.getByRole('button', { name: /Компания А/ })); } else { fireEvent.click(screen.getByRole('button', { name: 'TIS' })); fireEvent.click(screen.getByTitle('Резерв')); }
   fireEvent.change(screen.getByLabelText('Маршрут'), { target: { value: 'Школа — музей' } });
   fireEvent.change(screen.getByLabelText('Количество'), { target: { value: '3' } });
   fireEvent.click(screen.getByRole('checkbox', { name: 'Тестовый водитель' }));
   fireEvent.change(screen.getByLabelText('Сумма для Тестовый водитель'), { target: { value: '1250.5' } });
   fireEvent.click(screen.getByRole('button', { name: 'Готово' }));
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить выплаты' }));
-  expect(JSON.parse(localStorage.getItem('outway-spending-v1:owner')!)[0]).toMatchObject({ category, driverId: 'driver1', recipient: 'Тестовый водитель', schoolKey: 'TIS', description: 'Школа — музей', unitPrice: 1250.5, quantity: 3, amount: 3751.5 });
+  expect(JSON.parse(localStorage.getItem('outway-spending-v1:owner')!)[0]).toMatchObject({ category, driverId: 'driver1', recipient: 'Тестовый водитель', ...(category === 'Logistics' ? {b2bClientId:'client-a'} : {schoolKey:'TIS'}), description: 'Школа — музей', unitPrice: 1250.5, quantity: 3, amount: 3751.5 });
 });
 
 test('opens all records from the form header and returns with one click', () => {
@@ -478,7 +479,7 @@ test('editing a record without an employee in office payroll keeps its amount fo
   fireEvent.click(within(screen.getByRole('group', { name: 'Отдел выплаты' })).getByRole('button', { name: 'Сервис' }));
   const picker = screen.getByRole('dialog', { name: 'Сотрудники и суммы' });
   expect(within(picker).getByLabelText('Сумма Тестовый сотрудник')).toHaveAttribute('placeholder', expect.stringMatching(/^10.000$/));
-  fireEvent.click(within(picker).getByRole('checkbox'));
+  fireEvent.click(within(picker).getAllByRole('checkbox').filter(input => !input.closest('label'))[0]);
   expect(within(picker).getByLabelText('Сумма Тестовый сотрудник')).toHaveValue(10000);
 });
 
@@ -500,24 +501,24 @@ test('extra trip school tiles show how many trips the school had', () => {
 
 test('Logistics saves a driver payment without a school', () => {
   const onSave = jest.fn(() => true);
-  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 2000, unitPrice: 2000, quantity: 1, description: 'Бишкек', recipient: 'Назначить водителя !!!', driverId: 'external-driver', recipientKey: 'external-driver:', paymentOnly: true, method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
+  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', b2bClientId: 'client-a', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 2000, unitPrice: 2000, quantity: 1, description: 'Бишкек', recipient: 'Назначить водителя !!!', driverId: 'external-driver', recipientKey: 'external-driver:', paymentOnly: true, method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
   fireEvent.submit(screen.getByRole('form', { name: 'Новый выезд Logistics' }));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(onSave).toHaveBeenCalledWith([expect.objectContaining({ schoolKey: '', driverId: 'external-driver', amount: 2000 })]);
+  expect(onSave).toHaveBeenCalledWith([expect.objectContaining({ schoolKey: undefined, b2bClientId: 'client-a', transferId: undefined, driverId: 'external-driver', amount: 2000 })]);
 });
 
-test('Logistics uses the school already chosen in the form for an unassigned recipient', () => {
+test('Logistics saves the B2B client and clears the old school', () => {
   const onSave = jest.fn(() => true);
   const schoolKey = SCHOOL_TABS_FOR_TEST();
-  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 2000, unitPrice: 2000, quantity: 1, description: 'Бишкек', recipient: 'Тестовый водитель', driverId: 'driver1', schoolKey, method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
+  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', b2bClientId: 'client-a', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 2000, unitPrice: 2000, quantity: 1, description: 'Бишкек', recipient: 'Тестовый водитель', driverId: 'driver1', schoolKey, method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
   fireEvent.submit(screen.getByRole('form', { name: 'Новый выезд Logistics' }));
   expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  expect(onSave).toHaveBeenCalledWith([expect.objectContaining({ schoolKey, amount: 2000, description: 'Бишкек' })]);
+  expect(onSave).toHaveBeenCalledWith([expect.objectContaining({ schoolKey: undefined, b2bClientId: 'client-a', amount: 2000, description: 'Бишкек' })]);
 });
 
 test('Logistics lists only missing route and invalid price for a selected recipient', () => {
   const onSave = jest.fn(() => true);
-  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 0, quantity: 1, description: '', recipient: 'Тестовый водитель', driverId: 'driver1', schoolKey: SCHOOL_TABS_FOR_TEST(), method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
+  render(<CogsPaymentForm entry={{ id: 'trip', category: 'Logistics', b2bClientId: 'client-a', subcategory: 'Оплата водителю', date: '2026-10-30', amount: 0, quantity: 1, description: '', recipient: 'Тестовый водитель', driverId: 'driver1', schoolKey: SCHOOL_TABS_FOR_TEST(), method: 'Безналичные' }} onSave={onSave} onCancel={() => {}} disabled={false} />);
   fireEvent.submit(screen.getByRole('form', { name: 'Новый выезд Logistics' }));
   expect(screen.getByRole('alert')).toHaveTextContent('Укажите маршрут. Укажите цену больше нуля для: Тестовый водитель.');
   expect(onSave).not.toHaveBeenCalled();

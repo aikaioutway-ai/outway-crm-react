@@ -1,5 +1,7 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+const render = (ui: React.ReactElement) => baseRender(<QueryClientProvider client={new QueryClient({defaultOptions:{queries:{retry:false}}})}>{ui}</QueryClientProvider>);
+import { fireEvent, render as baseRender, screen } from '@testing-library/react';
 import type { SpendingEntry } from './SpendingModule';
 import CogsPaymentForm from './CogsPaymentForm';
 import { SCHOOL_TABS } from '../families/constants';
@@ -96,4 +98,19 @@ test('a lump logistics payment moved to COGS becomes one driver payment with the
   expect(saved.salaryPeriodKey).toMatch(/^\d{4}-\d{2}-[12]$/);
   expect(saved.unitPrice).toBeUndefined();
   expect(saved.quantity).toBeUndefined();
+});
+
+test('Logistics selects a B2B client without school or transfer fields', () => {
+  const client = new QueryClient();
+  client.setQueryData(['b2b', 'clients'], [{ id: 'client-a', clientType: 'company', companyName: 'Компания А', contactName: '' }]);
+  baseRender(<QueryClientProvider client={client}><CogsPaymentForm entry={{ id: '', category: 'Logistics', subcategory: 'Оплата водителю', date: '2026-11-02', amount: 0, description: '', recipient: '', method: 'Безналичные' }} disabled={false} onCancel={() => undefined} onSave={() => true} /></QueryClientProvider>);
+  expect(screen.queryByRole('button', { name: 'Выбрать: Школа' })).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Выбрать: Трансфер' })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: 'Выбрать: Получатели' })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Выбрать: B2B-клиент' }));
+  fireEvent.click(screen.getByRole('button', { name: /Юрлицо/ }));
+  fireEvent.change(screen.getByLabelText('Поиск B2B-клиента'), { target: { value: 'Несуществующий' } });
+  expect(screen.queryByRole('button', { name: /Компания А/ })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText('Поиск B2B-клиента'), { target: { value: 'Компания' } });
+  expect(screen.getByRole('button', { name: /Компания А/ })).toBeInTheDocument();
 });
