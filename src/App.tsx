@@ -5,7 +5,7 @@ import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
-import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
 import { setCrmActor } from './services/crmActor';
@@ -34,9 +34,12 @@ import {
   getEmployeeSessionExpiresAt,
   isEmployeeSessionActive,
 } from './services/employeeSession';
-import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible } from './modules/families/constants';
+import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
 import { Family, UserRole } from './types';
-import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
+import { FamilySearchHit, fetchOverdueRequestCount, fetchV2Family } from './services/crmV2Service';
+import { onMessageComposer, requestOverdueNotification, useMessageChannels } from './services/messageService';
+import { useQuery } from '@tanstack/react-query';
+import { queryClient, QK } from './services/queryClient';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { OPEN_TARGET_EVENT, TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
@@ -56,6 +59,8 @@ const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
 const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
 const SummaryModule = lazy(() => import('./modules/summary/SummaryModule'));
 const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
+const MessagesModule = lazy(() => import('./modules/messages/MessagesModule'));
+const MessageComposer = lazy(() => import('./modules/messages/MessageComposer'));
 const TaskComposer = lazy(() => import('./modules/tasks/TaskComposer'));
 const TaskFamilyCard = lazy(() => import('./modules/families/InlineFamilyCard'));
 const MobileApp = lazy(() => import('./mobile/MobileApp'));
@@ -150,12 +155,13 @@ export default function App() {
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
-  const [logisticsView, setLogisticsView] = useState<'table' | 'map'>('table');
+  // Модули менеджера и логиста открываются на «Новых заявках».
+  const [logisticsView, setLogisticsView] = useState<'requests' | 'table' | 'map'>('requests');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
-  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals' | 'requests'>('directory');
+  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals' | 'requests'>('requests');
   const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
   const managerSchoolMode = requestedManagerSchoolMode === 'accruals' && !canViewManagerAccruals ? 'directory' : requestedManagerSchoolMode;
   const setManagerSchoolMode = (mode: 'directory' | 'charges' | 'accruals' | 'requests') => {
@@ -187,6 +193,55 @@ export default function App() {
     setManagerTransferFilter(row.status === 'rejected' ? 'rejected' : row.transferNumber || 'empty');
     setManagerSchoolMode('directory');
     setManagerSchoolKey(schoolKey);
+  };
+  // Кнопка в уведомлении: «Новые заявки» в модуле сотрудника (логисту — «Логистика»).
+  const openRequestsTab = (schoolKey?: string) => {
+    const sections = getAllowedSections(currentUserRole, currentUser?.id);
+    if (sections.includes('logistics') && (currentUserRole === 'logist' || currentUserRole === 'senior_logist' || !sections.includes('families'))) {
+      setLogisticsSchoolKey(schoolKey ?? null); setLogisticsView('requests'); setSection('logistics');
+    } else if (sections.includes('families')) {
+      setManagerSchoolKey(schoolKey ?? null); setManagerSchoolMode('requests'); setSection('families');
+    }
+  };
+  // Закрыли карточку семьи (кнопкой или кликом по фону) — обновляем списки: трансфер или комментарий могли поменяться.
+  const closeTaskFamily = () => {
+    setTaskFamily(null);
+    void queryClient.invalidateQueries({ queryKey: QK.familiesTable });
+    void queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
+  };
+  // «Отправить сообщение» из меню правой кнопки.
+  const [messageTarget, setMessageTarget] = useState<{ target: TaskTarget | null } | null>(null);
+  useEffect(() => onMessageComposer(target => setMessageTarget({ target })), []);
+  // Канбан заявок меняют только логисты и админ, остальные смотрят.
+  const notifiesOverdueRequests = currentUserRole === 'senior_logist' || currentUserRole === 'director' || currentUserRole === 'gen_director' || currentUserRole === 'admin';
+  // Те же школы, что в сводке «Новые заявки»: уровень 1.0 и доступные сотруднику.
+  const overdueSchoolKeys = useMemo(() => new Set(schoolTabsForTier('1.0').map(tab => tab.key).filter(key => key !== 'ALL' && isSchoolAllowed(key, currentUser?.schoolKeys))), [currentUser?.schoolKeys]);
+  const overdueRequestsQuery = useQuery({
+    queryKey: ['overdueRequestCount', Array.from(overdueSchoolKeys).sort().join(',')],
+    queryFn: () => fetchOverdueRequestCount(overdueSchoolKeys),
+    enabled: !!currentUser && notifiesOverdueRequests,
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 60 * 1000,
+  });
+  const overdueRequestCount = notifiesOverdueRequests ? overdueRequestsQuery.data ?? 0 : 0;
+  // Непрочитанные сообщения — счётчик на пункте «Сообщения».
+  const messageChannels = useMessageChannels(currentUser?.sessionToken);
+  const unreadMessageCount = (messageChannels.data ?? []).reduce((sum, channel) => sum + channel.unread, 0);
+  // Раз в день сводка просрочки в «Уведомления»: создаёт первый из руководства, кто открыл CRM.
+  useEffect(() => {
+    if (currentUser?.sessionToken && notifiesOverdueRequests) void requestOverdueNotification(currentUser.sessionToken).catch(() => undefined);
+  }, [currentUser?.sessionToken, notifiesOverdueRequests]);
+  const canEditRequests = currentUserRole === 'logist' || currentUserRole === 'senior_logist' || currentUserRole === 'admin';
+  // Карточка семьи из канбана заявок открывается поверх доски — закрыл и снова на канбане.
+  const openRequestFamily = async (familyId: string, childId: string) => {
+    try {
+      const family = await fetchV2Family(familyId);
+      if (!family) throw new Error('Семья не найдена');
+      setTaskChildId(childId);
+      setTaskFamily(family);
+    } catch (error) {
+      window.alert(error instanceof Error ? error.message : 'Не удалось открыть карточку семьи');
+    }
   };
   const handleLogisticsSelectSchool = (schoolKey: string) => {
     if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
@@ -326,7 +381,8 @@ export default function App() {
 
   // В сайдбаре виден только счётчик задач (значок Логистики скрыт),
   // поэтому полную таблицу семей на старте не грузим.
-  const badges: Partial<Record<NavSection, number>> = { tasks: taskBadge };
+  // Уведомление о красных заявках — начальнику логистики, директору, гендиректору и админу.
+  const badges: Partial<Record<NavSection, number>> = { tasks: taskBadge, families: overdueRequestCount, logistics: overdueRequestCount, messages: unreadMessageCount };
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
@@ -424,6 +480,7 @@ export default function App() {
       <Suspense fallback={<SectionLoading />}>
         <MobileApp user={currentUser} onLogout={handleLogout} onOpenDesktop={() => setForceDesktop(true)} onOpenTaskTarget={target => { setForceDesktop(true); void openTaskTarget(target); }} />
         <TaskContextMenu />
+        {messageTarget && <MessageComposer sessionToken={currentUser.sessionToken} target={messageTarget.target} onClose={() => setMessageTarget(null)} />}
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
       </Suspense>
     );
@@ -580,7 +637,9 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            {logisticsSchoolKey && (logisticsSchoolKey === 'ALL' || isSchoolAllowed(logisticsSchoolKey, currentUser?.schoolKeys)) ? (
+            {logisticsSchoolKey && (logisticsSchoolKey === 'ALL' || isSchoolAllowed(logisticsSchoolKey, currentUser?.schoolKeys)) ? (logisticsView === 'requests' ? (
+              <SchoolRequestsKanban key={logisticsSchoolKey} schoolKey={logisticsSchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier="1.0" actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} />
+            ) : (
               <>
               <DashboardTopPanel>
                 {logisticsSchoolKey !== 'ALL' && <LogisticsSchoolKpiStrip
@@ -630,7 +689,7 @@ export default function App() {
                 />
               )}
               </>
-            ) : (
+            )) : (
               <LogisticsOverview
                 onDrivers={() => setSection('drivers')}
                 view={logisticsView}
@@ -657,7 +716,7 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            {managerSchoolKey ? (managerSchoolMode === 'requests' ? <SchoolRequestsKanban key={managerSchoolKey} schoolKey={managerSchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} onOpen={row => handleManagerOpenFamily(row.branchFilter, row.familyId, row.childName || row.parentName, row)} /> : (
+            {managerSchoolKey ? (managerSchoolMode === 'requests' ? <SchoolRequestsKanban key={managerSchoolKey} schoolKey={managerSchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
               <>
                 <DashboardTopPanel>
                   {managerSchoolMode !== 'directory' && (
@@ -794,6 +853,10 @@ export default function App() {
               }}
             />
           </div>
+        ) : section === 'messages' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0, gap: 0 }}>
+            <MessagesModule sessionToken={currentUser?.sessionToken} employeeId={currentUser?.id} onOpenRequests={openRequestsTab} onOpenTarget={target => void openTaskTarget(target)} />
+          </div>
         ) : section === 'tasks' ? (
           <TasksModule user={currentUser} context={taskContext ?? undefined} onClearContext={()=>setTaskContext(null)} onOpenTarget={target => void openTaskTarget(target)} />
         ) : section === 'employees' ? (
@@ -819,8 +882,9 @@ export default function App() {
       </main>
       <Suspense fallback={null}>
         <TaskContextMenu />
+        {messageTarget && <MessageComposer sessionToken={currentUser.sessionToken} target={messageTarget.target} onClose={() => setMessageTarget(null)} />}
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
-        {taskFamily && <div className="ow-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setTaskFamily(null); }} style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
+        {taskFamily && <div className="ow-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeTaskFamily(); }} style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={closeTaskFamily} /></div>}
       </Suspense>
       {isMobileViewport && (
         <button

@@ -5,7 +5,7 @@ test('cashier works with spending; the old Finance section is gone for everyone'
   expect(canAccessSpending('cashier')).toBe(true);
   expect(canAccessSection('cashier', 'families', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'b2b', 'cashier')).toBe(true);
-  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'b2b', 'spending', 'tasks']);
+  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'b2b', 'spending', 'tasks', 'messages']);
 });
 
 test('spending stays limited to admin, general director, cashier and the owner', () => {

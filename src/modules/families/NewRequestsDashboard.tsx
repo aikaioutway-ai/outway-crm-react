@@ -1,7 +1,6 @@
-import { requestStage, isRequestOnBoard } from './requestWorkflow';
+import { requestStage, isRequestOnBoard, isRequestOverdue } from './requestWorkflow';
 import React, { useMemo, useState } from 'react';
 import type { FamilyListRow } from '../../services/crmV2Service';
-import type { SchoolStat } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 
 export const REQUEST_DAY_PERIODS = Array.from({ length: 11 }, (_, index) => ({
@@ -18,33 +17,46 @@ export function requestMatchesDay(createdAt: string | null, day: string, now = n
   return day === '11' ? age > 10 : age === Number(day);
 }
 
+type CountKey = 'newRequests' | 'inWork' | 'waiting' | 'overdue';
+const STAGE_COUNT_KEY = { new: 'newRequests', in_work: 'inWork', waiting: 'waiting' } as const;
+
+/** Сколько у каждой школы заявок «—», «!», «?» и сколько из них красных (отказы на доске не считаем). */
+export function countRequestsBySchool(rows: FamilyListRow[], day: string, now = new Date()): Map<string, Record<CountKey, number>> {
+  const counts = new Map<string, Record<CountKey, number>>();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.rowId) || row.rowId.endsWith('_empty') || !isRequestOnBoard(row) || !requestMatchesDay(row.childCreatedAt, day, now)) continue;
+    seen.add(row.rowId);
+    const stage = requestStage(row);
+    if (stage === 'rejected') continue;
+    const count = counts.get(row.branchFilter) ?? { newRequests: 0, inWork: 0, waiting: 0, overdue: 0 };
+    count[STAGE_COUNT_KEY[stage]]++;
+    if (isRequestOverdue(row, now.getTime())) count.overdue++;
+    counts.set(row.branchFilter, count);
+  }
+  return counts;
+}
+
 export default function NewRequestsDashboard({ rows, schools, day, onSelectSchool }: {
-  rows: FamilyListRow[]; schools: SchoolStat[]; day: string; onSelectSchool: (key: string) => void;
+  rows: FamilyListRow[]; schools: { key: string; label: string; color: string; logo?: string }[]; day: string; onSelectSchool: (key: string) => void;
 }) {
-  const [sort, setSort] = useState({ key: 'newRequests', ascending: false });
+  const [sort, setSort] = useState<{ key: string; ascending: boolean }>({ key: 'newRequests', ascending: false });
   const stats = useMemo(() => {
-    const counts = new Map<string, { newRequests: number; inWork: number }>();
-    const seen = new Set<string>();
-    const now = new Date();
-    for (const row of rows) {
-      if (seen.has(row.rowId) || !requestMatchesDay(row.childCreatedAt, day, now)) continue;
-      seen.add(row.rowId);
-      const count = counts.get(row.branchFilter) ?? { newRequests: 0, inWork: 0 };
-      if (isRequestOnBoard(row) && requestStage(row) === 'new') count.newRequests++;
-      if (isRequestOnBoard(row) && requestStage(row) === 'in_work') count.inWork++;
-      counts.set(row.branchFilter, count);
-    }
-    return schools.map(school => ({ ...school, values: counts.get(school.key) ?? { newRequests: 0, inWork: 0 } }));
+    const counts = countRequestsBySchool(rows, day);
+    return schools.map(school => ({ ...school, values: counts.get(school.key) ?? { newRequests: 0, inWork: 0, waiting: 0, overdue: 0 } }));
   }, [rows, schools, day]);
   const sorted = [...stats].sort((a, b) => {
-    const comparison = sort.key === 'school' ? a.label.localeCompare(b.label) : a.values[sort.key as 'newRequests' | 'inWork'] - b.values[sort.key as 'newRequests' | 'inWork'];
+    const comparison = sort.key === 'school' ? a.label.localeCompare(b.label) : a.values[sort.key as CountKey] - b.values[sort.key as CountKey];
     return sort.ascending ? comparison : -comparison;
   });
+  const total = (key: CountKey) => stats.reduce((sum, row) => sum + row.values[key], 0);
   return <SchoolDashboardTable commentScope="families/ManagerOverview:requests" commentContext={day}
     columns={[
       { key: 'school', label: 'Школа', total: schools.length, color: '#64748B' },
-      { key: 'newRequests', label: 'К-во новых заявок', total: stats.reduce((sum, row) => sum + row.values.newRequests, 0), color: '#378ADD' },
-      { key: 'inWork', label: 'В работе', total: stats.reduce((sum, row) => sum + row.values.inWork, 0), color: '#B45309' },
+      { key: 'newRequests', label: 'Новые (—)', total: total('newRequests'), color: '#378ADD' },
+      { key: 'inWork', label: 'В работе (!)', total: total('inWork'), color: '#2563EB' },
+      { key: 'waiting', label: 'Ожидание (?)', total: total('waiting'), color: '#B45309' },
+      { key: 'overdue', label: 'Просрочено', total: total('overdue'), color: '#DC2626' },
     ]} rows={sorted} sortKey={sort.key} ascending={sort.ascending}
     onSort={key => setSort(previous => ({ key, ascending: previous.key === key ? !previous.ascending : key === 'school' }))}
     onSelect={onSelectSchool} />;

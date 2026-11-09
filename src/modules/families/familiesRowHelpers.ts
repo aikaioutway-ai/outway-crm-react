@@ -165,3 +165,20 @@ export function formatPhoneDisplay(value?: string | null): string {
   if (digits.length === 10 && digits.startsWith('0')) return `0${digits.slice(1, 4)} ${digits.slice(4, 7)} ${digits.slice(7)}`;
   return raw;
 }
+
+/**
+ * Как строка выглядит сразу после выбора трансфера — до ответа базы.
+ * Выбор показываем мгновенно, а сохранение идёт в фоне.
+ */
+export function optimisticTransferPatch(
+  row: { status: string },
+  choice: number | string | undefined,
+  comment?: string | null,
+  author?: string | null,
+): Record<string, unknown> {
+  const commentPatch = comment ? { transferComment: comment, transferCommentBy: author ?? null, transferCommentAt: new Date().toISOString() } : {};
+  if (choice === 'X') return { status: 'rejected', transferNumber: null, transferMark: null, stopNumber: null, ...commentPatch };
+  if (choice === '!' || choice === '?') return { status: 'new', transferNumber: null, transferMark: choice === '!' ? 'in_work' : 'waiting', stopNumber: null, ...commentPatch };
+  if (typeof choice === 'number') return { status: 'boarded', transferNumber: String(choice), transferMark: null, ...commentPatch };
+  return { status: row.status === 'rejected' ? 'new' : row.status, transferNumber: null, transferMark: null, ...commentPatch };
+}

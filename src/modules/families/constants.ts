@@ -218,19 +218,54 @@ export const TRANSFER_NUMBER_VALUES = Array.from({ length: MAX_TRANSFER_NUMBER }
 // снимает его с номера и пишет историю (см. миграцию rejected_children_transfer_x).
 export const TRANSFER_X = 'X';
 export const TRANSFER_X_LABEL = 'Х';
-export type TransferChoice = number | typeof TRANSFER_X;
+// «!» — логист принял в работу, «?» — ожидание. Это пометка у ребёнка без номера,
+// статус остаётся «новый» (см. миграцию transfer_marks_and_comments).
+export const TRANSFER_IN_WORK = '!';
+export const TRANSFER_WAITING = '?';
+export type TransferMark = 'in_work' | 'waiting';
+export type TransferChoice = number | typeof TRANSFER_X | typeof TRANSFER_IN_WORK | typeof TRANSFER_WAITING;
 
-/** Значение из списка трансферов → номер, Х или «без трансфера». */
+/** Порядок в списке трансферов: «—», 1…15, затем «!», «?» и «Х» в самом низу. */
+export const TRANSFER_SPECIAL_OPTIONS = [
+  { value: TRANSFER_IN_WORK, label: '!', title: 'Принят логистом в работу' },
+  { value: TRANSFER_WAITING, label: '?', title: 'Ожидание' },
+  { value: TRANSFER_X, label: TRANSFER_X_LABEL, title: 'Отказ' },
+] as const;
+
+/** Значение из списка трансферов → номер, «!», «?», Х или «без трансфера». */
 export function parseTransferChoice(value: string | number | null | undefined): TransferChoice | undefined {
   if (value === TRANSFER_X || value === TRANSFER_X_LABEL) return TRANSFER_X;
+  if (value === TRANSFER_IN_WORK) return TRANSFER_IN_WORK;
+  if (value === TRANSFER_WAITING) return TRANSFER_WAITING;
   const number = Number(value);
   return Number.isInteger(number) && number > 0 ? number : undefined;
 }
 
-/** Что показать в списке трансферов у ребёнка: у отказника всегда Х. */
-export function transferChoiceValue(status: string | null | undefined, transferNumber: string | number | null | undefined): string {
+export function transferMarkOf(choice: TransferChoice | undefined): TransferMark | null {
+  if (choice === TRANSFER_IN_WORK) return 'in_work';
+  if (choice === TRANSFER_WAITING) return 'waiting';
+  return null;
+}
+
+/** Что показать в списке трансферов у ребёнка: у отказника всегда Х, без номера — «!» или «?», если стоят. */
+export function transferChoiceValue(status: string | null | undefined, transferNumber: string | number | null | undefined, mark?: string | null): string {
   if (status === 'rejected') return TRANSFER_X;
-  return transferNumber ? String(transferNumber) : '';
+  if (transferNumber) return String(transferNumber);
+  if (mark === 'in_work') return TRANSFER_IN_WORK;
+  if (mark === 'waiting') return TRANSFER_WAITING;
+  return '';
+}
+
+/**
+ * Без комментария нельзя: отправить в «?» или «Х» и вернуть из «Х» куда угодно.
+ * Возвращает текст вопроса для окна комментария или null, если комментарий не нужен.
+ */
+export function transferCommentPrompt(currentStatus: string | null | undefined, choice: TransferChoice | undefined): string | null {
+  const wasRejected = currentStatus === 'rejected';
+  if (choice === TRANSFER_X) return wasRejected ? null : 'Почему отказ (трансфер Х)?';
+  if (wasRejected) return 'Почему возвращаем из трансфера Х?';
+  if (choice === TRANSFER_WAITING) return 'Почему ожидание (трансфер «?»)? Что ждём?';
+  return null;
 }
 
 export const ALL_PERIODS = [

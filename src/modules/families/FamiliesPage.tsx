@@ -1,5 +1,7 @@
 import { withFormerTransferDrivers } from '../drivers/formerTransferDrivers';
-import { MAX_TRANSFER_NUMBER, parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
+import { MAX_TRANSFER_NUMBER, parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_SPECIAL_OPTIONS, transferChoiceValue, transferCommentPrompt } from './constants';
+import { askTransferComment, formatTransferComment } from '../../core/dashboard/askTransferComment';
+import { optimisticTransferPatch } from './familiesRowHelpers';
 import { fetchTransferDriversHistory } from '../../services/expenseService';
 import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
@@ -19,6 +21,7 @@ import {
   SCHOOL_TABS, ZONE_COLOR, VT_LABEL, getBranchFilter, isSchoolInTier, schoolTabsForTier
 } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
+import type { FamiliesPageResult } from '../../services/crmV2Service';
 import { adminDeleteV2Child, CashierPaymentRow, changeV2DriverTransfer, clearV2TransferVehicleType, createDefaultV2DriverDocuments, deleteV2Driver, FAMILIES_CHANGED_EVENT, fetchAllV2FamiliesPages, fetchCashierPaymentsTable, fetchChargesForPeriod, fetchChildPaymentDots, fetchFamilyPaymentDots, fetchPageFilters, fetchPaymentsTable, fetchV2Branches, fetchV2DriverDocuments, fetchV2DriversTable, fetchV2Family, fetchV2TransfersDashboard, PageFilterSettings, PaymentTableRow, PeriodChargeStats, rejectV2Family, savePageFilter, saveV2DriverDocuments, updateV2Child, updateV2ChildBoardingDate, updateV2ChildRoute, updateV2Driver, updateV2Family, updateV2TransferVehicleType, V2BranchOption, V2DriverDocumentInput, V2DriverTableRow, V2TransferDashboardRow } from '../../services/crmV2Service';
 import { familiesTableQuery, logisticsTableQuery, useFamiliesPages, useBranchStats, usePaymentsTable, usePeriodChargeStats } from '../../hooks/useCrmQueries';
 import { queryClient } from '../../services/queryClient';
@@ -121,6 +124,10 @@ export interface ChildRow {
   status: string;
   paymentStatus: string;
   transferNumber: string | null;
+  transferMark?: string | null;
+  transferComment?: string | null;
+  transferCommentBy?: string | null;
+  transferCommentAt?: string | null;
   driverId: string | null;
   stopNumber: string | null;
   timeMorning: string | null;
@@ -299,9 +306,10 @@ const COLUMNS: ColumnDef<ChildRow>[] = [
   },
   {
     key: 'transferNumber', label: '№ Трансфера', type: 'select', category: 'Маршрут', width: 100, editable: true,
-    editOptions: [{ value: '', label: '—' }, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...TRANSFER_OPTIONS],
-    getValue: (row) => transferChoiceValue(row.status, row.transferNumber),
-    render: (val, row) => <TransferNumberBadge number={val} vehicleType={row.vehicleType} />,
+    // «—», номера, а в самом низу «!» (в работе), «?» (ожидание) и «Х» (отказ).
+    editOptions: [{ value: '', label: '—' }, ...TRANSFER_OPTIONS, ...TRANSFER_SPECIAL_OPTIONS.map(option => ({ value: option.value, label: option.label }))],
+    getValue: (row) => transferChoiceValue(row.status, row.transferNumber, row.transferMark),
+    render: (val, row) => <TransferNumberBadge number={val} vehicleType={row.vehicleType} note={formatTransferComment(row.transferComment, row.transferCommentBy, row.transferCommentAt)} />,
   },
   {
     key: 'stopNumber', label: 'Остановка', type: 'select', category: 'Маршрут', width: 95, editable: true,
@@ -1590,8 +1598,28 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
         }
 
         if (key === 'transferNumber') {
-          if (value === TRANSFER_X && !window.confirm(`Отправить «${row.childName || row.parentName}» в трансфер Х (отказ)?`)) return false;
-          await updateV2ChildRoute({
+          const choice = parseTransferChoice(value);
+          const question = transferCommentPrompt(row.status, choice);
+          // «?», «Х» и возврат из «Х» — только с комментарием; отмена окна ничего не меняет.
+          const comment = question ? await askTransferComment(question, row.childName || row.parentName) : null;
+          if (question && !comment) return false;
+          // Показываем выбор сразу, а сохраняем и обновляем таблицу в фоне — ячейка не ждёт базу.
+          const optimistic = optimisticTransferPatch(row, choice, comment, userName) as Partial<ChildRow>;
+          const applyToRow = (patch: Partial<ChildRow>) => {
+            setRows(prev => {
+              const next = prev.map(item => item.rowId === row.rowId ? { ...item, ...patch } : item);
+              familiesRowsCache = next;
+              return next;
+            });
+            queryClient.setQueriesData({ queryKey: ['familiesPage'] }, (page: FamiliesPageResult | undefined) => page && {
+              ...page,
+              rows: page.rows.map((item: FamiliesPageResult['rows'][number]) => item.rowId === row.rowId ? { ...item, ...patch } as typeof item : item),
+            });
+          };
+          const previous: Partial<ChildRow> = Object.fromEntries(Object.keys(optimistic).map(field => [field, (row as any)[field] ?? null]));
+          applyToRow(optimistic);
+          void updateV2ChildRoute({
+            comment,
             child: {
               id: row.rowId,
               familyId: row.familyId,
@@ -1605,13 +1633,19 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               vehicleType: row.vehicleType as VehicleType,
             },
             vehicleType: row.vehicleType as VehicleType,
-            transferNumber: parseTransferChoice(value),
+            transferNumber: choice,
             stopNumber: row.stopNumber ? Number(row.stopNumber) : undefined,
             timeMorning: row.timeMorning ?? undefined,
             source: 'transfer_move',
             actorName: userName,
-          });
-          await load(false);
+          })
+            .then(() => load(false))
+            .catch(error => {
+              console.error('Transfer save failed', { row, value, error });
+              applyToRow(previous);
+              window.alert(`Трансфер «${row.childName || row.parentName}» не сохранён: ${error instanceof Error ? error.message : String(error)}`);
+              void load(false);
+            });
           return true;
         } else {
           await updateV2Child(row.rowId, updates);
@@ -1632,6 +1666,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       return true;
     } catch (error) {
       console.error('Cell save failed', { row, key, value, error });
+      // Трансфер с комментарием не должен «молча» откатываться — говорим, что не сохранилось.
+      if (key === 'transferNumber') window.alert(`Трансфер не сохранён: ${error instanceof Error ? error.message : String(error)}`);
       return false;
     }
   }
@@ -3521,15 +3557,17 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
                 // Строка без детей (пустая семья) — отказ всей семьи.
                 const isChildRow = !row.rowId.endsWith('_empty');
                 const question = isChildRow
-                  ? `Отправить «${row.childName || 'ребёнка'}» в трансфер Х (отказ)? Остальные дети семьи не изменятся.`
-                  : `Перевести семью "${row.parentName}" в «Отказ»? Все данные сохранятся.`;
-                if (!window.confirm(question)) return;
+                  ? 'Почему отказ (трансфер Х)? Остальные дети семьи не изменятся.'
+                  : 'Почему отказ всей семьи? Все данные сохранятся.';
+                // Отказ — только с комментарием: кто и когда, база запишет сама.
+                const comment = await askTransferComment(question, isChildRow ? row.childName : row.parentName);
+                if (!comment) return;
                 try {
-                  if (isChildRow) await updateV2Child(row.rowId, { status: 'rejected' });
-                  else await rejectV2Family(row.familyId, userName);
+                  if (isChildRow) await updateV2Child(row.rowId, { status: 'rejected', stop_order: null, transfer_mark: null, transfer_comment: comment, transfer_comment_at: new Date().toISOString() });
+                  else await rejectV2Family(row.familyId, userName, comment);
                   setRows(prev => {
                     const next = prev.map(item => (isChildRow ? item.rowId === row.rowId : item.familyId === row.familyId)
-                      ? { ...item, status: 'rejected', transferNumber: null }
+                      ? { ...item, status: 'rejected', transferNumber: null, transferMark: null, transferComment: comment, transferCommentBy: userName ?? null, transferCommentAt: new Date().toISOString() }
                       : item);
                     familiesRowsCache = next;
                     return next;

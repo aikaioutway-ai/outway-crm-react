@@ -1,5 +1,6 @@
 import TaskButton from '../modules/tasks/TaskButton';
-import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from '../modules/families/constants';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_SPECIAL_OPTIONS, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue, transferCommentPrompt, transferMarkOf } from '../modules/families/constants';
+import { askTransferComment, formatTransferComment } from '../core/dashboard/askTransferComment';
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
 import { useFamiliesTable } from '../hooks/useCrmQueries';
@@ -20,10 +21,9 @@ function numberOptions(values: string[], current: string | null, emptyLabel: str
   return [{ value: '', label: emptyLabel }, ...list.map(value => ({ value, label: `${prefix}${value}` }))];
 }
 
-// «Х» стоит сразу после «Без трансфера», как в полной версии.
+// «!», «?» и «Х» — в самом низу, как в полной версии.
 function transferOptions(current: string | null) {
-  const [blank, ...numbers] = numberOptions(TRANSFER_NUMBERS, current, 'Без трансфера', '№');
-  return [blank, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...numbers];
+  return [...numberOptions(TRANSFER_NUMBERS, current, 'Без трансфера', '№'), ...TRANSFER_SPECIAL_OPTIONS.map(option => ({ value: option.value, label: option.label }))];
 }
 
 function patchRow(childId: string, patch: Partial<FamilyListRow>) {
@@ -49,7 +49,11 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
 
   /** Перенос в другой трансфер — как в полной версии: база пересчитывает цену под тип машины. */
   const changeTransfer = async (child: FamilyListRow, transfer: string) => {
-    if (transfer === TRANSFER_X && !window.confirm(`Отправить «${formatName(child.childName)}» в трансфер Х (отказ)?`)) return;
+    // «?», «Х» и возврат из «Х» — только с комментарием; отмена ничего не меняет.
+    const choice = parseTransferChoice(transfer);
+    const question = transferCommentPrompt(child.status, choice);
+    const comment = question ? await askTransferComment(question, formatName(child.childName)) : null;
+    if (question && !comment) return;
     setSavingId(child.rowId);
     setError('');
     try {
@@ -67,16 +71,21 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
           vehicleType: child.vehicleType as VehicleType,
         },
         vehicleType: child.vehicleType as VehicleType,
-        transferNumber: parseTransferChoice(transfer),
+        transferNumber: choice,
+        comment,
         stopNumber: child.stopNumber ? Number(child.stopNumber) : undefined,
         timeMorning: child.timeMorning ?? undefined,
         source: 'transfer_move',
         actorName: userName,
       });
       // Статус следует из трансфера: номер — ездит, пусто — не ездит, Х — отказ.
-      patchRow(child.rowId, transfer === TRANSFER_X
-        ? { transferNumber: null, status: 'rejected' }
-        : { transferNumber: transfer || null, status: transfer ? 'boarded' : 'new' });
+      const mark = transferMarkOf(choice);
+      const commentPatch = comment ? { transferComment: comment, transferCommentBy: userName ?? null, transferCommentAt: new Date().toISOString() } : {};
+      patchRow(child.rowId, choice === TRANSFER_X
+        ? { transferNumber: null, transferMark: null, status: 'rejected', ...commentPatch }
+        : mark
+          ? { transferNumber: null, transferMark: mark, status: 'new', ...commentPatch }
+          : { transferNumber: transfer || null, transferMark: null, status: transfer ? 'boarded' : 'new', ...commentPatch });
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Не удалось сменить трансфер');
     } finally {
@@ -171,17 +180,22 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
               <div className="m-card-meta">
                 {child.status === 'rejected'
                   ? <span className="m-badge">Трансфер {TRANSFER_X_LABEL}</span>
-                  : <TransferBadge number={child.transferNumber} vehicleType={child.vehicleType} />}
+                  : child.transferNumber
+                    ? <TransferBadge number={child.transferNumber} vehicleType={child.vehicleType} />
+                    : child.transferMark === 'in_work' ? <span className="m-badge">Трансфер ! · в работе</span>
+                    : child.transferMark === 'waiting' ? <span className="m-badge">Трансфер ? · ожидание</span>
+                    : <TransferBadge number={null} vehicleType={child.vehicleType} />}
                 {child.stopNumber && <span className="m-badge">Остановка {child.stopNumber}</span>}
                 {child.timeMorning && <span className="m-badge">Утро {child.timeMorning.slice(0, 5)}</span>}
                 {showFinance && child.monthlyPrice > 0 && <span className="m-badge">{money(child.monthlyPrice)}/мес</span>}
               </div>
+              {child.transferComment && <div className="m-note" style={{ marginTop: 6 }}>{formatTransferComment(child.transferComment, child.transferCommentBy, child.transferCommentAt)}</div>}
               {canEditStatus && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 10 }}>
                   <div className="m-selects">
                     <SelectField
                       label="Трансфер"
-                      value={transferChoiceValue(child.status, child.transferNumber)}
+                      value={transferChoiceValue(child.status, child.transferNumber, child.transferMark)}
                       disabled={savingId === child.rowId}
                       onChange={transfer => changeTransfer(child, transfer)}
                       options={transferOptions(child.transferNumber)}

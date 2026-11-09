@@ -60,7 +60,7 @@ test('school bar filters new requests and opens the child card', () => {
   (useFamiliesTable as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [
     { ...child('a', 'TIS', '', '', 0, 'new'), childName: 'Ребёнок А' },
     { ...child('b', 'EPS', '', '', 0, 'new'), childName: 'Ребёнок Б' },
-    { ...child('c', 'TIS', '', '', 0, 'new'), childName: 'В работе', requestStage: 'in_work' },
+    { ...child('c', 'TIS', '', '', 0, 'new'), childName: 'В работе', transferMark: 'in_work' },
   ] });
   render(<SummaryModule onOpenChild={onOpen} />);
   expect(screen.getByText('Ребёнок А')).toBeInTheDocument();

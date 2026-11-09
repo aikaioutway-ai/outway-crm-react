@@ -13,3 +13,13 @@ test('keeps day 10 separate from older requests and rejects invalid dates', () =
   expect(requestMatchesDay('invalid', '1', now)).toBe(false);
   expect(requestMatchesDay('2026-11-10T12:00:00+06:00', '1', now)).toBe(false);
 });
+
+import { countRequestsBySchool } from './NewRequestsDashboard';
+test('school counts split new, in work and waiting; rejected and boarded are left out', () => {
+  const row = (rowId: string, extra: object) => ({ rowId, branchFilter: 'ABL2', childCreatedAt: '2026-11-08T10:00:00Z', transferNumber: null, status: 'new', transferMark: null, ...extra }) as any;
+  const counts = countRequestsBySchool([
+    row('a', {}), row('b', { transferMark: 'in_work' }), row('c', { transferMark: 'waiting' }),
+    row('d', { status: 'rejected' }), row('e', { status: 'boarded', transferNumber: '3' }),
+  ], 'ALL', now);
+  expect(counts.get('ABL2')).toEqual({ newRequests: 1, inWork: 1, waiting: 1, overdue: 0 });
+});

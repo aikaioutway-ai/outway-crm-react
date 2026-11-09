@@ -64,6 +64,10 @@ export interface Child {
   familyId: string;
   createdAt?: string;
   transferAssignedAt?: string;
+  transferMark?: string;
+  transferComment?: string;
+  transferCommentBy?: string;
+  transferCommentAt?: string;
   childName: string;
   class: string;
   selfExitAllowed: boolean;

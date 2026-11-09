@@ -2,7 +2,8 @@ import { supabase } from './supabase';
 import { chargeState, periodKey, worstState, type ChildPaymentDots, type DotPeriod } from '../modules/families/paymentDotsModel';
 import { safeStorageFileName, uploadToBucket } from './storage';
 import { Child, ChildStatus, Family, SchoolCode, VehicleType, Zone } from '../types';
-import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
+import { isRequestOverdue } from '../modules/families/requestWorkflow';
+import { getBranchFilter, MAX_TRANSFER_NUMBER, TRANSFER_X, TransferChoice, transferCommentPrompt, transferMarkOf, normalizeSchoolCode, normalizeVehicle, normalizeZone, VT_LABEL } from '../modules/families/constants';
 import { queryClient, QK } from './queryClient';
 import { formatName, formatPhone, phoneQueryDigits } from '../utils/format';
 import {
@@ -29,6 +30,7 @@ export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   queryClient.invalidateQueries({ queryKey: QK.transfersDashboard });
+  queryClient.invalidateQueries({ queryKey: ['overdueRequestCount'] });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
 }
 
@@ -335,11 +337,16 @@ export interface FamilyListRow {
   familyId: string;
   familyIndex: number;
   isFirstChild: boolean;
-  requestStage?: 'new' | 'in_work' | 'waiting' | 'rejected';
-  waitingReason?: string;
-  waitingComment?: string;
   childCreatedAt: string | null;
   transferAssignedAt: string | null;
+  /** «!» / «?» у ребёнка без номера (in_work / waiting). */
+  transferMark?: string | null;
+  /** Когда поставили «!» / «?» — от этого считается просрочка в канбане. */
+  transferMarkAt?: string | null;
+  /** Последний комментарий к трансферу: текст, кто и когда. */
+  transferComment?: string | null;
+  transferCommentBy?: string | null;
+  transferCommentAt?: string | null;
   childName: string;
   childClass: string;
   parentName: string;
@@ -525,6 +532,10 @@ export function mapV2Child(row: any, family: Family): Child {
     familyId: String(row.family_id),
     createdAt: row.created_at ?? undefined,
     transferAssignedAt: row.transfer_assigned_at ?? undefined,
+    transferMark: row.transfer_mark ?? undefined,
+    transferComment: row.transfer_comment ?? undefined,
+    transferCommentBy: row.transfer_comment_by ?? undefined,
+    transferCommentAt: row.transfer_comment_at ?? undefined,
     childName: row.child_name ?? '',
     class: row.class_name ?? '',
     selfExitAllowed: Boolean(row.self_exit_allowed),
@@ -726,6 +737,11 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
         isFirstChild: idx === 0,
         childCreatedAt: child?.created_at ?? family.created_at ?? null,
         transferAssignedAt: child?.transfer_assigned_at ?? null,
+        transferMark: child?.transfer_mark ?? null,
+        transferMarkAt: child?.transfer_mark_at ?? null,
+        transferComment: child?.transfer_comment ?? null,
+        transferCommentBy: child?.transfer_comment_by ?? null,
+        transferCommentAt: child?.transfer_comment_at ?? null,
         childName: child?.child_name ?? '',
         childClass: child?.class_name ?? '',
         parentName: family.parent_name ?? '',
@@ -854,20 +870,22 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
   const childIds = (data ?? [])
     .map((row: any) => row.child_id)
     .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
-  const childDatesById: Record<string, { createdAt: string | null; transferAssignedAt: string | null; requestStage: FamilyListRow['requestStage']; waitingReason: string; waitingComment: string }> = {};
+  const childDatesById: Record<string, { createdAt: string | null; transferAssignedAt: string | null; transferMark: string | null; transferMarkAt: string | null; transferComment: string | null; transferCommentBy: string | null; transferCommentAt: string | null }> = {};
   if (childIds.length > 0) {
     const { data: childDates, error: childDatesError } = await supabase
       .from('v2_children')
-      .select('id, created_at, transfer_assigned_at, request_stage, waiting_reason, waiting_comment')
+      .select('id, created_at, transfer_assigned_at, transfer_mark, transfer_mark_at, transfer_comment, transfer_comment_by, transfer_comment_at')
       .in('id', childIds);
     if (childDatesError) throw new Error(childDatesError.message);
     (childDates ?? []).forEach((row: any) => {
       childDatesById[String(row.id)] = {
-        requestStage: row.request_stage ?? 'new',
-        waitingReason: row.waiting_reason ?? '',
-        waitingComment: row.waiting_comment ?? '',
         createdAt: row.created_at ?? null,
         transferAssignedAt: row.transfer_assigned_at ?? null,
+        transferMark: row.transfer_mark ?? null,
+        transferMarkAt: row.transfer_mark_at ?? null,
+        transferComment: row.transfer_comment ?? null,
+        transferCommentBy: row.transfer_comment_by ?? null,
+        transferCommentAt: row.transfer_comment_at ?? null,
       };
     });
   }
@@ -907,11 +925,13 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
         familyId: String(child.family_id),
         familyIndex,
         isFirstChild: idx === 0,
-        requestStage: childDatesById[String(child.child_id)]?.requestStage,
-        waitingReason: childDatesById[String(child.child_id)]?.waitingReason,
-        waitingComment: childDatesById[String(child.child_id)]?.waitingComment,
         childCreatedAt: childDatesById[String(child.child_id)]?.createdAt ?? child.family_created_at ?? null,
         transferAssignedAt: childDatesById[String(child.child_id)]?.transferAssignedAt ?? null,
+        transferMark: childDatesById[String(child.child_id)]?.transferMark ?? null,
+        transferMarkAt: childDatesById[String(child.child_id)]?.transferMarkAt ?? null,
+        transferComment: childDatesById[String(child.child_id)]?.transferComment ?? null,
+        transferCommentBy: childDatesById[String(child.child_id)]?.transferCommentBy ?? null,
+        transferCommentAt: childDatesById[String(child.child_id)]?.transferCommentAt ?? null,
         childName: formatName(child.child_name),
         childClass: child.class_name ?? '',
         parentName: formatName(child.parent_name),
@@ -1240,14 +1260,6 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
   invalidateFamiliesCache();
 }
 
-/** A concurrently assigned transfer must never be overwritten by a kanban move. */
-export async function updateV2RequestStage(childId: string, previousStatus: string, updates: Record<string, unknown>): Promise<void> {
-  const { error } = await supabase.from('v2_children').update(updates)
-    .eq('id', childId).eq('status', previousStatus).is('transfer_id', null).select('id').single();
-  if (error) throw new Error('Не удалось изменить этап. Возможно, заявка уже назначена в трансфер. Обновите список и повторите.');
-  invalidateFamiliesCache();
-}
-
 export async function updateV2Child(childId: string, updates: Record<string, unknown>): Promise<void> {
   const { error } = await supabase.from('v2_children').update(updates).eq('id', childId);
   if (error) throw new Error(error.message);
@@ -1436,27 +1448,46 @@ export async function updateV2ChildRoute(params: {
   source?: TransferRepricingSource;
   actorId?: string | null;
   actorName?: string | null;
+  /** Обязателен для «?», «Х» и возврата из «Х». Автора и время ставит база. */
+  comment?: string | null;
 }): Promise<void> {
+  const { data: current, error: statusError } = await supabase
+    .from('v2_children').select('status').eq('id', params.child.id).single();
+  if (statusError) throw new Error(statusError.message);
+  const wasRejected = current?.status === 'rejected';
+  const comment = params.comment?.trim() || '';
+  if (transferCommentPrompt(current?.status, params.transferNumber) && !comment) {
+    throw new Error('Нужен комментарий: без него нельзя отправить в «?» или «Х» и вернуть из «Х».');
+  }
+  // Комментарий пишется вместе с первым изменением ребёнка — база ставит автора, время и историю.
+  const commentPatch = comment ? { transfer_comment: comment, transfer_comment_at: new Date().toISOString() } : {};
+
   // Х = отказ: база сама снимет ребёнка с номера и запишет историю.
   if (params.transferNumber === TRANSFER_X) {
-    await updateV2Child(params.child.id, { status: 'rejected', stop_order: null });
+    if (wasRejected) return;
+    await updateV2Child(params.child.id, { status: 'rejected', stop_order: null, transfer_mark: null, ...commentPatch });
     return;
   }
-  if (params.transferNumber) {
-    // Отказника на номер не посадить, пока он в отказе: возвращаем его в «Новые».
-    const { data: current, error: statusError } = await supabase
-      .from('v2_children').select('status').eq('id', params.child.id).single();
-    if (statusError) throw new Error(statusError.message);
-    if (current?.status === 'rejected') await updateV2Child(params.child.id, { status: 'new' });
+  // «!» и «?» — ребёнок без номера, но с пометкой; статус «новый» (в том числе после Х).
+  const mark = transferMarkOf(params.transferNumber);
+  if (mark) {
+    await updateV2Child(params.child.id, { status: 'new', transfer_id: null, stop_order: null, transfer_mark: mark, ...commentPatch });
+    return;
   }
+  // Уйти из Х можно и на номер, и в «—»: в обоих случаях отказник возвращается в «Новые».
   if (!params.transferNumber) {
     await updateV2Child(params.child.id, {
+      ...(wasRejected ? { status: 'new' } : {}),
       transfer_id: null,
+      transfer_mark: null,
       stop_order: params.stopNumber ?? null,
       time_morning: params.timeMorning || null,
+      ...commentPatch,
     });
     return;
   }
+  if (typeof params.transferNumber !== 'number') return;
+  if (wasRejected) await updateV2Child(params.child.id, { status: 'new', ...commentPatch });
 
   const transferId = await ensureV2Transfer({
     schoolId: params.child.schoolId,
@@ -2391,10 +2422,10 @@ export async function addV2Audit(params: {
   if (error) throw new Error(error.message);
 }
 
-export async function rejectV2Family(familyId: string, actorName = 'CRM'): Promise<void> {
+export async function rejectV2Family(familyId: string, actorName = 'CRM', reason?: string): Promise<void> {
   const { error: childrenError } = await supabase
     .from('v2_children')
-    .update({ status: 'rejected' })
+    .update({ status: 'rejected', ...(reason ? { transfer_comment: reason, transfer_comment_at: new Date().toISOString() } : {}) })
     .eq('family_id', familyId);
   if (childrenError) throw new Error(childrenError.message);
 
@@ -2413,7 +2444,7 @@ export async function rejectV2Family(familyId: string, actorName = 'CRM'): Promi
     entity_type: 'family_status',
     entity_id: familyId,
     new_value: { status: 'rejected' },
-    comment: 'Семья переведена в группу «Отказ»',
+    comment: reason ? `Семья переведена в группу «Отказ»: ${reason}` : 'Семья переведена в группу «Отказ»',
   });
   invalidateFamiliesCache();
 }
@@ -2773,4 +2804,26 @@ export async function fetchFamilyPaymentDots(familyIds: string[], periods: DotPe
     if (row.charge_type === 'monthly' && wanted.has(key)) dots.months[key] = worstState(dots.months[key] ?? 'none', state);
   });
   return result;
+}
+
+/**
+ * Сколько новых заявок просрочено (красные в канбане) — для уведомления в меню.
+ * Считаем только школы из сводки «Новые заявки» (schoolKeys), как там же.
+ */
+export async function fetchOverdueRequestCount(schoolKeys: ReadonlySet<string>, now = Date.now()): Promise<number> {
+  const { data, error } = await supabase
+    .from('v2_children')
+    .select('status, transfer_id, transfer_mark, transfer_mark_at, transfer_comment_at, created_at, v2_school_branches!inner(active, code, name)')
+    .eq('status', 'new')
+    .is('transfer_id', null)
+    .eq('v2_school_branches.active', true);
+  if (error) throw new Error(error.message);
+  return (data ?? []).filter((row: any) => {
+    const branch = Array.isArray(row.v2_school_branches) ? row.v2_school_branches[0] : row.v2_school_branches;
+    if (!schoolKeys.has(getBranchFilter(branch?.name ?? null, branch?.code ?? ''))) return false;
+    return isRequestOverdue({
+      status: row.status, transferNumber: null, transferMark: row.transfer_mark,
+      transferMarkAt: row.transfer_mark_at, transferCommentAt: row.transfer_comment_at, childCreatedAt: row.created_at,
+    }, now);
+  }).length;
 }

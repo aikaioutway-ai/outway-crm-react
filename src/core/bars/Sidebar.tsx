@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ListTodo, Users, School, Wallet, Route, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { BarChart3, ListTodo, MessageCircle, Users, School, Wallet, Route, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'b2b' | 'settings' | 'tasks' | 'schools2' | 'summary' | 'spending';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'b2b' | 'settings' | 'tasks' | 'messages' | 'schools2' | 'summary' | 'spending';
 
 interface SidebarProps {
   active: NavSection;
@@ -28,6 +28,7 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
   { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
+  { key: 'messages', label: 'Сообщения', icon: <MessageCircle size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
 ];
@@ -47,7 +48,8 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
-  return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks'] : [...sections, 'tasks'];
+  // «Сообщения» — у всех сотрудников: уведомления и переписка «Все» / отдел.
+  return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks', 'messages'] : [...sections, 'tasks', 'messages'];
 }
 
 // Владелец компании (учётная запись администратора).
@@ -104,7 +106,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
         {!collapsed && <div className="ow-sidebar-caption">Разделы</div>}
         {navItems.map(n => {
           const isActive = active === n.key;
-          const badge = n.key === 'logistics' ? 0 : (badges[n.key] ?? 0);
+          const badge = badges[n.key] ?? 0;
           return (
             <button
               key={n.key}
@@ -118,7 +120,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
               <span className="ow-nav-icon">{n.icon}</span>
               {!collapsed && <span className="ow-nav-label">{n.label}</span>}
               {badge > 0 && (
-                <span className={`ow-nav-badge${n.key === 'tasks' ? ' is-alert' : ''}`}>{badge > 99 ? '99+' : badge}</span>
+                <span className={`ow-nav-badge${n.key === 'tasks' || n.key === 'families' || n.key === 'logistics' || n.key === 'messages' ? ' is-alert' : ''}`} title={n.key === 'families' || n.key === 'logistics' ? 'Просроченные новые заявки' : n.key === 'messages' ? 'Непрочитанные сообщения' : undefined}>{badge > 99 ? '99+' : badge}</span>
               )}
             </button>
           );
