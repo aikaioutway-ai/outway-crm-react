@@ -1,5 +1,21 @@
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
+import ManagerPeriodBar from './ManagerPeriodBar';
+import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
+import { requestStage, isRequestOnBoard } from './requestWorkflow';
+
+/** Красные счётчики над днями: сколько новых («—») заявок в каждом дне. */
+function requestDayCounts(rows: FamilyListRow[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  const now = new Date();
+  const seen = new Set<string>();
+  for (const row of rows) {
+    if (seen.has(row.rowId) || row.rowId.endsWith('_empty') || !isRequestOnBoard(row) || requestStage(row) !== 'new') continue;
+    seen.add(row.rowId);
+    for (const period of REQUEST_DAY_PERIODS) if (requestMatchesDay(row.childCreatedAt, period.key, now)) counts[period.key] = (counts[period.key] ?? 0) + 1;
+  }
+  return counts;
+}
 import { ManagerSearch } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
@@ -20,8 +36,8 @@ interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
   onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilySearchHit) => void;
   onDrivers: () => void;
-  view: 'table' | 'map';
-  onViewChange: (view: 'table' | 'map') => void;
+  view: 'requests' | 'table' | 'map';
+  onViewChange: (view: 'requests' | 'table' | 'map') => void;
   allowedSchools?: string[];
   onSidebarWidthChange?: (width: number) => void;
 }
@@ -124,6 +140,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [schoolTier] = useState<SchoolTier>('1.0');
+  const [requestDay, setRequestDay] = useState('ALL');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
@@ -184,11 +201,13 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
         <DashboardTopPanel className="dashboard-control-row overview-control-row">
           <LogisticsTabs value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} />
-          <div style={{ flex: 1 }} />
+          {view === 'requests'
+            ? <div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={requestDay} onPeriodKeyChange={setRequestDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" useLabels periodCounts={requestDayCounts(rows)} periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} /></div>
+            : <div style={{ flex: 1 }} />}
           <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
+        {view === 'requests' ? <NewRequestsDashboard rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
           columns={[
             { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
             { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },
@@ -202,7 +221,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           ascending={sortState.dir === 'asc'}
           onSort={key => handleSort(key as SortKey)}
           onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
-        />
+        />}
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

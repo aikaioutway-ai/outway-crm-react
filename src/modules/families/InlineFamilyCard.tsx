@@ -2,7 +2,9 @@ import FilterableTable from '../../core/tables/FilterableTable';
 import { canAccessSection } from '../../core/bars/Sidebar';
 import { openCrmTarget } from '../tasks/taskTypes';
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
-import { TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
+import { parseTransferChoice, TransferChoice, TRANSFER_IN_WORK, TRANSFER_NUMBER_VALUES, TRANSFER_SPECIAL_OPTIONS, TRANSFER_WAITING, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue, transferCommentPrompt, transferMarkOf } from './constants';
+import { askTransferComment, formatTransferComment } from '../../core/dashboard/askTransferComment';
+import HoverNote from '../../core/dashboard/HoverNote';
 import './InlineFamilyCard.css';
 import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import TaskButton from '../tasks/TaskButton';
@@ -60,13 +62,38 @@ const VEHICLE_TYPE_OPTIONS: { value: VehicleType; label: string }[] = [
   { value: 'minivan', label: 'Минивэн' },
   { value: 'sedan', label: 'Седан' },
 ];
-const TRANSFER_OPTIONS = [{ value: '', label: '-' }, { value: TRANSFER_X, label: TRANSFER_X_LABEL }, ...TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `№ ${value}` }))];
+// «-», номера, а в самом низу «!» (в работе), «?» (ожидание) и «Х» (отказ).
+const TRANSFER_OPTIONS = [{ value: '', label: '-' }, ...TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `№ ${value}` })), ...TRANSFER_SPECIAL_OPTIONS.map(option => ({ value: option.value, label: option.label }))];
 const STOP_OPTIONS = [{ value: '', label: '-' }, ...Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }))];
 const TRANSFER_X_BADGE = '#64748B';
-// Х = отказ: ребёнка с номера снимает база. Номер для отказника вернёт его в «Новые».
-function transferChoicePatch(value: string): Partial<Child> {
-  if (value === TRANSFER_X) return { status: 'rejected' };
-  return { transferNumber: value ? Number(value) : undefined };
+/**
+ * Выбор в списке трансферов → черновик ребёнка. «?», «Х» и возврат из «Х» — только с
+ * комментарием: окно спрашивает его сразу, отмена (null) ничего не меняет.
+ */
+async function transferChoicePatch(child: Child, value: string): Promise<Partial<Child> | null> {
+  const choice = parseTransferChoice(value);
+  const question = transferCommentPrompt(child.status, choice);
+  const comment = question ? await askTransferComment(question, formatName(child.childName)) : null;
+  if (question && !comment) return null;
+  const withComment = comment ? { transferComment: comment } : {};
+  const mark = transferMarkOf(choice);
+  if (choice === TRANSFER_X) return { status: 'rejected', transferNumber: undefined, transferMark: undefined, ...withComment };
+  const status = child.status === 'rejected' ? 'new' : child.status;
+  if (mark) return { status: 'new', transferNumber: undefined, transferMark: mark, ...withComment };
+  return { status, transferNumber: typeof choice === 'number' ? choice : undefined, transferMark: undefined, ...withComment };
+}
+
+/** Значок трансфера; комментарий (кто, когда, почему) — в окошке при наведении. */
+function TransferBadgeView({ child }: { child: Child }) {
+  return <HoverNote note={formatTransferComment(child.transferComment, child.transferCommentBy, child.transferCommentAt)}><TransferBadgeInner child={child} /></HoverNote>;
+}
+
+function TransferBadgeInner({ child }: { child: Child }) {
+  if (child.status === 'rejected') return <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span>;
+  if (child.transferNumber) return <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span>;
+  if (child.transferMark === 'in_work') return <span className="family-transfer-badge" title="Принят логистом в работу" style={{ background: '#2563EB' }}>!</span>;
+  if (child.transferMark === 'waiting') return <span className="family-transfer-badge" title="Ожидание" style={{ background: '#B45309' }}>?</span>;
+  return <ReadOnlyValue value="—" />;
 }
 
 function formatInlineDate(value?: string): string {
@@ -563,11 +590,18 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
       // скидки меняются только через discount-api.
       if (shouldReprice) dbPatch.base_price = nextChild.basePrice;
 
-      if ('vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch) {
+      // Трансфер, «!», «?», «Х» и комментарий к ним — одной операцией через общий маршрут.
+      const transferChanged = 'transferNumber' in patch || 'transferMark' in patch || 'transferComment' in patch || ('status' in patch && (patch.status === 'rejected' || child.status === 'rejected'));
+      if (transferChanged) delete dbPatch.status;
+      if ('vehicleType' in patch || 'transferNumber' in patch || 'stopNumber' in patch || 'timeMorning' in patch || transferChanged) {
+        const transferChoice: TransferChoice | undefined = nextChild.status === 'rejected'
+          ? TRANSFER_X
+          : nextChild.transferNumber ?? (nextChild.transferMark === 'in_work' ? TRANSFER_IN_WORK : nextChild.transferMark === 'waiting' ? TRANSFER_WAITING : undefined);
         await updateV2ChildRoute({
           child: nextChild,
           vehicleType: nextChild.vehicleType as VehicleType,
-          transferNumber: nextChild.transferNumber,
+          transferNumber: transferChoice,
+          comment: 'transferComment' in patch ? patch.transferComment : undefined,
           stopNumber: nextChild.stopNumber,
           timeMorning: nextChild.timeMorning,
           source: 'family_card',
@@ -1550,7 +1584,7 @@ function ChildCard({
               },
               {
                 label: 'Трансфер',
-                content: editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber)} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, transferChoicePatch(value))} width={60} panelWidth={130} /> : child.status === 'rejected' ? <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : <ReadOnlyValue value="—" />,
+                content: <>{editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber, child.transferMark)} options={TRANSFER_OPTIONS} onCommit={async value => { const patch = await transferChoicePatch(child, value); return patch ? onSaveChild(child, patch) : false; }} width={60} panelWidth={130} /> : <TransferBadgeView child={child} />}</>,
               },
               {
                 label: 'Остановка',
@@ -1658,7 +1692,7 @@ function ChildrenOverviewTable({
                 <td>{editing ? <EditableText value={child.childName} onCommit={value => onSaveChild(child, { childName: formatName(value) })} strong /> : <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}><strong>{formatName(child.childName)}</strong>{paymentDots && <PaymentDots dots={paymentDots[child.id]} periods={PAYMENT_DOT_PERIODS} />}</span>}</td>
                 <td><span>{child.branchShort || child.schoolCode}</span><span className="family-children-secondary">{child.class ? (/класс/i.test(child.class) ? child.class : `${child.class} класс`) : 'Класс не указан'}</span></td>
                 <td>{VEHICLE_TYPE_OPTIONS.find(option => option.value === child.vehicleType)?.label || '—'}<span className="family-children-secondary">Зона {child.zone}</span></td>
-                <td>{editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber)} options={TRANSFER_OPTIONS} onCommit={value => onSaveChild(child, transferChoicePatch(value))} /> : child.status === 'rejected' ? <span className="family-transfer-badge" style={{ background: TRANSFER_X_BADGE }}>{TRANSFER_X_LABEL}</span> : child.transferNumber ? <span className="family-transfer-badge" style={{ background: VEHICLE_COLOR[child.vehicleType] || VEHICLE_COLOR.microbus }}>№ {child.transferNumber}</span> : '—'}</td>
+                <td>{editing ? <EditableSelect value={transferChoiceValue(child.status, child.transferNumber, child.transferMark)} options={TRANSFER_OPTIONS} onCommit={async value => { const patch = await transferChoicePatch(child, value); return patch ? onSaveChild(child, patch) : false; }} /> : <TransferBadgeView child={child} />}</td>
                 <td><DriverCell child={child} canOpen={canOpenDriver} /></td>
                 <td>{editing ? <EditableSelect value={String(child.stopNumber || '')} options={STOP_OPTIONS} onCommit={value => onSaveChild(child, { stopNumber: value ? Number(value) : undefined })} /> : child.stopNumber || '—'}</td>
                 <td className="family-children-price"><strong>{money(Number(child.finalPrice || 0))}</strong>{childDiscountLabel(child) !== '—' && <span className="family-children-secondary">{childDiscountLabel(child)}</span>}</td>

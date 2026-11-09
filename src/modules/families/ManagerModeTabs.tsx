@@ -5,13 +5,13 @@ export function canAccessManagerAccruals(role: UserRole, userId?: string): boole
   return userId === 'emp-admin' || role === 'gen_director' || role === 'director';
 }
 
-export type ManagerMode = 'directory' | 'charges' | 'accruals';
-interface Props { compact?: boolean; canViewAccruals?: boolean; value: ManagerMode; onChange: (mode: ManagerMode) => void; }
+export type ManagerMode = 'directory' | 'charges' | 'accruals' | 'requests';
+interface Props { compact?: boolean; showRequests?: boolean; canViewAccruals?: boolean; value: ManagerMode; onChange: (mode: ManagerMode) => void; }
 
-export default function ManagerModeTabs({ value, onChange, canViewAccruals = false }: Props) {
+export default function ManagerModeTabs({ value, onChange, canViewAccruals = false, showRequests = false }: Props) {
   return (
     <div role="tablist" aria-label="Раздел менеджера" className="ow-seg">
-      {([['directory', 'Справочник'], ['charges', 'Оплаты'], ['accruals', 'Начисления']] as const).filter(([mode]) => mode !== 'accruals' || canViewAccruals).map(([mode, label]) => (
+      {([['requests', 'Новые заявки'], ['directory', 'Справочник'], ['charges', 'Оплаты'], ['accruals', 'Начисления']] as const).filter(([mode]) => (mode !== 'accruals' || canViewAccruals) && (mode !== 'requests' || showRequests)).map(([mode, label]) => (
         <button key={mode} type="button" role="tab" className="ow-seg-btn" aria-selected={value === mode} onClick={() => onChange(mode)}>{label}</button>
       ))}
     </div>

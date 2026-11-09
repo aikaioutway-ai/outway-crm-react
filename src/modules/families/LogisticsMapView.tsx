@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_X, TRANSFER_X_LABEL, transferChoiceValue } from './constants';
+import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_SPECIAL_OPTIONS, transferChoiceValue, transferCommentPrompt } from './constants';
+import { askTransferComment, formatTransferComment } from '../../core/dashboard/askTransferComment';
 import { createPortal } from 'react-dom';
 import {
   fetchV2Branches,
@@ -106,11 +107,14 @@ function escapeHtml(value: string): string {
 const TRANSFER_SELECT_OPTIONS = TRANSFER_NUMBER_VALUES;
 const STOP_SELECT_OPTIONS = Array.from({ length: 20 }, (_, i) => String(i + 1));
 
-function buildSelectOptions(options: string[], selected: string | null, withTransferX = false): string {
+function buildSelectOptions(options: string[], selected: string | null, withSpecial = false): string {
   const blank = `<option value="" ${selected ? '' : 'selected'}>—</option>`;
-  const x = withTransferX ? `<option value="${TRANSFER_X}" ${selected === TRANSFER_X ? 'selected' : ''}>${TRANSFER_X_LABEL}</option>` : '';
   const rest = options.map(value => `<option value="${value}" ${selected === value ? 'selected' : ''}>${value}</option>`).join('');
-  return blank + x + rest;
+  // «!», «?» и «Х» — в самом низу списка трансферов.
+  const special = withSpecial
+    ? TRANSFER_SPECIAL_OPTIONS.map(option => `<option value="${option.value}" ${selected === option.value ? 'selected' : ''} title="${option.title}">${option.label}</option>`).join('')
+    : '';
+  return blank + rest + special;
 }
 
 function buildBalloonBody(address: string, group: PointRow[]): string {
@@ -119,12 +123,13 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
       <button data-role="open-family" data-family-id="${row.familyId}" style="background:none;border:none;padding:0;margin-bottom:6px;font-weight:700;font-size:13px;color:#17222F;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">${escapeHtml(row.childName)}</button>
       <div style="display:flex;gap:6px;align-items:center;">
         <select data-role="transfer" style="width:88px;padding:4px 6px;border:1px solid #D7E0E3;border-radius:6px;font-size:12px;">
-          ${buildSelectOptions(TRANSFER_SELECT_OPTIONS, transferChoiceValue(row.status, row.transferNumber), true)}
+          ${buildSelectOptions(TRANSFER_SELECT_OPTIONS, transferChoiceValue(row.status, row.transferNumber, row.transferMark), true)}
         </select>
         <select data-role="stop" style="width:80px;padding:4px 6px;border:1px solid #D7E0E3;border-radius:6px;font-size:12px;">
           ${buildSelectOptions(STOP_SELECT_OPTIONS, row.stopNumber)}
         </select>
       </div>
+      ${row.transferComment ? `<div style="font-size:11px;color:#465066;margin-top:4px;white-space:pre-wrap;">${escapeHtml(formatTransferComment(row.transferComment, row.transferCommentBy, row.transferCommentAt))}</div>` : ''}
       <div data-role="status" style="font-size:11px;color:#7A859D;margin-top:4px;min-height:14px;"></div>
     </div>
   `).join('');
@@ -289,6 +294,15 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
           const transferValue = transferInput?.value.trim() ?? '';
           const stopValue = stopInput?.value.trim() ?? '';
 
+          // «?», «Х» и возврат из «Х» — только с комментарием; отмена возвращает прежний выбор.
+          const choice = parseTransferChoice(transferValue);
+          const question = select.getAttribute('data-role') === 'transfer' ? transferCommentPrompt(row.status, choice) : null;
+          const comment = question ? await askTransferComment(question, row.childName) : null;
+          if (question && !comment) {
+            if (transferInput) transferInput.value = transferChoiceValue(row.status, row.transferNumber, row.transferMark);
+            return;
+          }
+
           select.setAttribute('disabled', 'true');
           if (statusEl) statusEl.textContent = 'Сохраняю…';
 
@@ -307,14 +321,18 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
                 vehicleType: row.vehicleType as VehicleType,
               },
               vehicleType: row.vehicleType as VehicleType,
-              transferNumber: parseTransferChoice(transferValue),
+              transferNumber: choice,
               stopNumber: stopValue ? Number(stopValue) : undefined,
               timeMorning: row.timeMorning ?? undefined,
               source: 'map',
+              comment,
             });
             queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, (prev: FamilyListRow[] | undefined) => prev?.map((r: FamilyListRow) => (
-              r.rowId === childId ? { ...r, transferNumber: transferValue || null, stopNumber: stopValue || null } : r
+              r.rowId === childId ? { ...r, transferNumber: typeof choice === 'number' ? transferValue : null, stopNumber: stopValue || null } : r
             )) ?? prev);
+            // Статус, «!», «?» и комментарий с автором приходят из базы.
+            void queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
+            void queryClient.invalidateQueries({ queryKey: QK.familiesTable });
             if (statusEl) statusEl.textContent = 'Сохранено ✓';
           } catch {
             if (statusEl) statusEl.textContent = 'Ошибка сохранения';

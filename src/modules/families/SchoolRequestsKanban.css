@@ -1,0 +1,58 @@
+.requests-workspace { display: flex; flex-direction: column; gap: 16px; min-height: 0; flex: 1; padding-bottom: 16px; }
+.requests-toolbar { display: flex; align-items: center; gap: 12px; }
+.requests-toolbar > div { flex: 1; }
+.requests-search { min-width: 260px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--surface, #fff); color: var(--text); }
+
+.requests-kanban { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, .7fr); gap: 14px; overflow: auto; flex: 1; min-height: 0; align-items: stretch; }
+.requests-column { display: flex; flex-direction: column; min-height: 420px; background: var(--surface-2, #f3f5f7); border: 1px solid var(--border); border-radius: 12px; min-width: 0; transition: border-color .15s ease, box-shadow .15s ease, background .15s ease; }
+/* Пока тянем карточку, все колонки показывают, что в них можно бросить. */
+.requests-kanban--dragging .requests-column { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+.requests-column--over { border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 18%, transparent); }
+.requests-column--reject { border-style: dashed; }
+.requests-column--reject.requests-column--over { border-color: var(--danger); background: color-mix(in srgb, var(--danger) 8%, var(--surface-2, #f3f5f7)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--danger) 18%, transparent); }
+.requests-column h2 { display: flex; justify-content: space-between; align-items: center; font-size: 14px; margin: 0; padding: 14px; border-top: 3px solid; border-radius: 12px 12px 0 0; }
+.requests-column-title b { font-size: 15px; margin-right: 2px; }
+.requests-column-count { background: var(--surface, #fff); border-radius: 7px; padding: 3px 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.requests-cards { flex: 1; display: flex; flex-direction: column; gap: 8px; padding: 0 10px 12px; overflow-y: auto; }
+.requests-empty { flex: 1; display: flex; align-items: center; justify-content: center; text-align: center; font-size: 12px; color: var(--text-2); margin: 0; padding: 22px 10px; border-radius: 8px; }
+.requests-reject-hint { margin: 0; padding: 22px 10px; text-align: center; font-size: 12px; color: var(--text-2); }
+
+.request-card { background: var(--surface, #fff); border: 1px solid var(--border); border-left: 3px solid; border-radius: 10px; padding: 10px 12px 8px; display: flex; flex-direction: column; gap: 5px; font-size: 12.5px; overflow-wrap: anywhere; cursor: grab; user-select: none; transition: box-shadow .15s ease, transform .15s ease, opacity .15s ease; animation: request-card-in .2s ease; }
+.request-card:hover { box-shadow: 0 4px 14px rgba(15, 23, 42, .08); transform: translateY(-1px); }
+.request-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.request-card:active { cursor: grabbing; }
+.request-card--saving { opacity: .65; }
+.request-card--dragging { opacity: .35; }
+.request-card--moved { animation: request-card-moved 1.2s ease; }
+.request-card-top { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+.request-card-school { font-size: 11px; font-weight: 700; color: var(--text-2); text-transform: uppercase; letter-spacing: .02em; }
+.request-card-title { font-size: 14px; font-weight: 700; color: var(--text); }
+.request-card-class { font-weight: 500; color: var(--text-2); }
+.request-card-line { display: flex; align-items: center; gap: 6px; color: var(--text-2); }
+.request-card-line svg { flex-shrink: 0; }
+.request-card-line a { color: var(--accent); text-decoration: none; font-variant-numeric: tabular-nums; }
+.request-card-line a:hover { text-decoration: underline; }
+.request-card-note { margin-top: 2px; padding: 6px 8px; background: var(--surface-2); border-radius: 6px; white-space: pre-wrap; font-size: 11.5px; }
+.request-card-foot { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+.request-card-age { font-size: 11px; color: var(--text-2); }
+.request-arrow { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border: 1px solid var(--border); border-radius: 7px; background: var(--surface, #fff); color: var(--text-2); cursor: pointer; }
+.request-arrow:hover:not(:disabled) { color: var(--text); border-color: var(--accent); }
+.request-arrow:disabled { opacity: .3; cursor: default; }
+
+@keyframes request-card-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@keyframes request-card-moved { 0% { box-shadow: 0 0 0 3px var(--accent); } 100% { box-shadow: 0 0 0 0 transparent; } }
+@media (prefers-reduced-motion: reduce) { .request-card, .request-card--moved { animation: none; transition: none; } }
+@media (max-width: 1000px) { .requests-kanban { grid-template-columns: repeat(2, minmax(0, 1fr)); } .requests-toolbar { flex-wrap: wrap; } .requests-search { width: 100%; box-sizing: border-box; } }
+@media (max-width: 600px) { .requests-kanban { grid-template-columns: 1fr; } }
+
+/* Просрочка: больше 2 дней в «Новых», 3 в «В работе», 5 в «Ожидании». */
+.request-card--overdue { background: color-mix(in srgb, var(--danger) 7%, var(--surface, #fff)); border-color: color-mix(in srgb, var(--danger) 45%, var(--border)); }
+.request-card-age--overdue { color: var(--danger); font-weight: 700; }
+.request-card--readonly { cursor: pointer; }
+.requests-column-counts { display: inline-flex; gap: 6px; align-items: center; }
+.requests-column-red { background: var(--danger); color: #fff; border-radius: 7px; padding: 3px 8px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.requests-overdue-toggle { flex-shrink: 0; display: inline-flex; align-items: center; gap: 6px; padding: 8px 12px; border: 1px solid color-mix(in srgb, var(--danger) 40%, var(--border)); border-radius: 8px; background: var(--surface, #fff); color: var(--danger); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
+.requests-overdue-toggle b { font-variant-numeric: tabular-nums; }
+.requests-overdue-toggle--on { background: var(--danger); color: #fff; border-color: var(--danger); }
+.requests-overdue-toggle:disabled { opacity: .45; cursor: default; }
+.requests-readonly { margin: 0; font-size: 12px; color: var(--text-2); }
