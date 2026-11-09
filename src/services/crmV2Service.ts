@@ -335,6 +335,9 @@ export interface FamilyListRow {
   familyId: string;
   familyIndex: number;
   isFirstChild: boolean;
+  requestStage?: 'new' | 'in_work' | 'waiting' | 'rejected';
+  waitingReason?: string;
+  waitingComment?: string;
   childCreatedAt: string | null;
   transferAssignedAt: string | null;
   childName: string;
@@ -851,15 +854,18 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
   const childIds = (data ?? [])
     .map((row: any) => row.child_id)
     .filter((id: unknown): id is string => typeof id === 'string' && id.length > 0);
-  const childDatesById: Record<string, { createdAt: string | null; transferAssignedAt: string | null }> = {};
+  const childDatesById: Record<string, { createdAt: string | null; transferAssignedAt: string | null; requestStage: FamilyListRow['requestStage']; waitingReason: string; waitingComment: string }> = {};
   if (childIds.length > 0) {
     const { data: childDates, error: childDatesError } = await supabase
       .from('v2_children')
-      .select('id, created_at, transfer_assigned_at')
+      .select('id, created_at, transfer_assigned_at, request_stage, waiting_reason, waiting_comment')
       .in('id', childIds);
     if (childDatesError) throw new Error(childDatesError.message);
     (childDates ?? []).forEach((row: any) => {
       childDatesById[String(row.id)] = {
+        requestStage: row.request_stage ?? 'new',
+        waitingReason: row.waiting_reason ?? '',
+        waitingComment: row.waiting_comment ?? '',
         createdAt: row.created_at ?? null,
         transferAssignedAt: row.transfer_assigned_at ?? null,
       };
@@ -901,6 +907,9 @@ export async function fetchV2FamiliesPage(params: FamiliesPageParams = {}): Prom
         familyId: String(child.family_id),
         familyIndex,
         isFirstChild: idx === 0,
+        requestStage: childDatesById[String(child.child_id)]?.requestStage,
+        waitingReason: childDatesById[String(child.child_id)]?.waitingReason,
+        waitingComment: childDatesById[String(child.child_id)]?.waitingComment,
         childCreatedAt: childDatesById[String(child.child_id)]?.createdAt ?? child.family_created_at ?? null,
         transferAssignedAt: childDatesById[String(child.child_id)]?.transferAssignedAt ?? null,
         childName: formatName(child.child_name),
@@ -1228,6 +1237,14 @@ export async function updateV2Family(familyId: string, updated: Family): Promise
     status: updated.status,
   }).eq('id', familyId).select('id').single();
   if (error) throw new Error(error.message);
+  invalidateFamiliesCache();
+}
+
+/** A concurrently assigned transfer must never be overwritten by a kanban move. */
+export async function updateV2RequestStage(childId: string, previousStatus: string, updates: Record<string, unknown>): Promise<void> {
+  const { error } = await supabase.from('v2_children').update(updates)
+    .eq('id', childId).eq('status', previousStatus).is('transfer_id', null).select('id').single();
+  if (error) throw new Error('Не удалось изменить этап. Возможно, заявка уже назначена в трансфер. Обновите список и повторите.');
   invalidateFamiliesCache();
 }
 
