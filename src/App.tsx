@@ -203,6 +203,12 @@ export default function App() {
       setManagerSchoolKey(schoolKey ?? null); setManagerSchoolMode('requests'); setSection('families');
     }
   };
+  // Закрыли карточку семьи (кнопкой или кликом по фону) — обновляем списки: трансфер или комментарий могли поменяться.
+  const closeTaskFamily = () => {
+    setTaskFamily(null);
+    void queryClient.invalidateQueries({ queryKey: QK.familiesTable });
+    void queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
+  };
   // «Отправить сообщение» из меню правой кнопки.
   const [messageTarget, setMessageTarget] = useState<{ target: TaskTarget | null } | null>(null);
   useEffect(() => onMessageComposer(target => setMessageTarget({ target })), []);
@@ -878,7 +884,7 @@ export default function App() {
         <TaskContextMenu />
         {messageTarget && <MessageComposer sessionToken={currentUser.sessionToken} target={messageTarget.target} onClose={() => setMessageTarget(null)} />}
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
-        {taskFamily && <div className="ow-overlay" style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>{setTaskFamily(null);void queryClient.invalidateQueries({queryKey:QK.familiesTable});void queryClient.invalidateQueries({queryKey:QK.logisticsTable});}} /></div>}
+        {taskFamily && <div className="ow-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeTaskFamily(); }} style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={closeTaskFamily} /></div>}
       </Suspense>
       {isMobileViewport && (
         <button

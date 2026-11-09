@@ -1,111 +1,75 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import SummaryModule from './SummaryModule';
-import { fetchSummaryForecast, fetchSummaryWorkingDays } from '../../services/summaryService';
-import { useLogisticsTable, usePeriodChargeStats } from '../../hooks/useCrmQueries';
+import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import type { FamilyListRow } from '../../services/crmV2Service';
+import { groupStats, SUMMARY_GROUPS } from './summaryGroups';
 
-jest.mock('../../hooks/useCrmQueries', () => ({
-  ...jest.requireActual('../../hooks/useCrmQueries'),
-  useLogisticsTable: jest.fn(),
-  usePeriodChargeStats: jest.fn(),
-}));
+jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn() }));
+jest.mock('../families/testTransfers', () => ({ useTestTransfers: jest.fn(), isInTestTransfer: () => false }));
+jest.mock('../../services/supabase', () => ({ supabase: {} }));
 
-// Настройки колонок таблицы детей (DataTable) — без реальной базы.
-jest.mock('../../services/supabase', () => ({ supabase: { from: jest.fn(() => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: null, error: null }) }) }), upsert: async () => ({ error: null }) })) } }));
-
-jest.mock('../../services/summaryService', () => ({
-  fetchSummaryForecast: jest.fn(),
-  fetchSummaryWorkingDays: jest.fn(),
-  setSummaryWorkingDays: jest.fn(),
-}));
-
-const onOpenChild = jest.fn();
-function show() {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={client}><SummaryModule onOpenChild={onOpenChild} /></QueryClientProvider>);
-}
+const child = (id: string, school: string, transfer: string, vehicle: string, debt = 0, status = 'active') => ({
+  rowId: id, familyId: `family-${id}`, branchFilter: school, transferNumber: transfer,
+  vehicleType: vehicle, childDebtAmount: debt, status,
+} as FamilyListRow);
 
 beforeEach(() => {
-  jest.clearAllMocks();
-  (fetchSummaryForecast as jest.Mock).mockResolvedValue([]);
-  (fetchSummaryWorkingDays as jest.Mock).mockResolvedValue([]);
-  (useLogisticsTable as jest.Mock).mockReturnValue({ data: [], isPending: false, isError: false });
-  (usePeriodChargeStats as jest.Mock).mockReturnValue({ data: [], isPending: false, isError: false });
+  (useFamiliesTable as jest.Mock).mockReturnValue({ data: [], isPending: false, isError: false });
 });
 
-const child = (id: string, transferNumber: string, vehicleType: string, status = 'active') => ({ rowId: id, familyId: `fam-${id}`, childName: `Ребёнок ${id}`, parentName: '', branchFilter: 'TEST', transferNumber, vehicleType, status });
-const charge = (childId: string, charged: number) => ({ familyId: `fam-${childId}`, childId, charged, paid: 0, debt: 0, pending: 0 });
-
-test('forecast opens on tab 1.0 with the microbus forecast', async () => {
-  show();
-  expect(screen.getByRole('tab', { name: '1.0' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByRole('tab', { name: '2.0' })).toHaveAttribute('aria-selected', 'false');
-  expect(await screen.findByText(/нет активных микроавтобусов/)).toBeInTheDocument();
+test('group tiles open a separate school dialog', () => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+  HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); this.dispatchEvent(new Event('close')); };
+  render(<SummaryModule onOpenChild={jest.fn()} />);
+  expect(screen.getByRole('table')).toBeInTheDocument();
+  expect(screen.getAllByRole('button', { name: /Открыть Группа/ })).toHaveLength(3);
+  fireEvent.click(screen.getByRole('button', { name: 'Открыть Группа №1' }));
+  expect(screen.getByRole('dialog', { name: 'Группа №1' })).toBeInTheDocument();
+  expect(within(screen.getByRole('dialog')).getByText('TIS')).toBeInTheDocument();
+  expect(within(screen.getByRole('dialog')).queryByText('AES')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Закрыть' }));
+  expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-test('tab 2.0 counts only minivan and sedan cars, passengers, revenue and tax, without Days', async () => {
-  (fetchSummaryForecast as jest.Mock).mockResolvedValue([{ branchId: '1', branchCode: 'TEST', branchName: 'Тестовая школа', revenue: 120000, microbusCount: 2 }]);
-  (useLogisticsTable as jest.Mock).mockReturnValue({
-    isPending: false,
-    isError: false,
-    data: [
-      child('a', '1', 'microbus'), child('b', '1', 'microbus'),
-      child('c', '2', 'minivan'), child('d', '2', 'minivan'),
-      child('e', '3', 'sedan'), child('f', '3', 'sedan', 'rejected'),
-    ],
+test('group counts use weighted bus average, distinguish schools and deduplicate child debts', () => {
+  const rows = [
+    child('a', 'TIS', '1', 'microbus', 100),
+    child('b', 'TIS', '1', 'microbus', 200),
+    child('c', 'EPS', '1', 'microbus'),
+    child('d', 'EPS', '2', 'sedan', 300),
+    child('e', 'EPS', '', '', 0, 'new'),
+    child('f', 'EPS', '3', 'microbus', 900, 'rejected'),
+  ];
+  expect(groupStats([...rows, rows[0]])).toMatchObject({
+    microbusCount: 2, microbusAverage: 1.5, lightVehicleCount: 1,
+    newRequests: 1, debtorsCount: 3, debtSum: 600,
   });
-  // Микроавтобус «a» не входит в Revenue 2.0: 10 000 + 5 000 + 10 000 = 25 000, налог 4% = 1 000.
-  (usePeriodChargeStats as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [charge('a', 99000), charge('c', 10000), charge('d', 5000), charge('e', 10000)] });
-  show();
-  await screen.findByText('Тестовая школа');
-  expect(screen.getByText('Days')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('tab', { name: '2.0' }));
-  expect(screen.getByRole('tab', { name: '2.0' })).toHaveAttribute('aria-selected', 'true');
-  expect(screen.getByText('Тестовая школа')).toBeInTheDocument();
-  expect(screen.queryByText('Days')).not.toBeInTheDocument();
-  expect(screen.getByText('Cars')).toBeInTheDocument();
-  expect(screen.getByText('Passengers')).toBeInTheDocument();
-  // 2 машины (минивэн + седан) и 3 пассажира (отказник не считается) — в строке школы и в итоге.
-  expect(screen.getAllByText('2').length).toBeGreaterThanOrEqual(2);
-  expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(2);
-  expect(screen.queryByText(/120\s?000/)).not.toBeInTheDocument();
-  expect(screen.getAllByText(/25\s000/).length).toBeGreaterThanOrEqual(2);
-  expect(screen.getAllByText(/^1\s000/).length).toBeGreaterThanOrEqual(2);
-  expect(screen.getByText(/COGS, оплата водителю, остаток и Gross Profit появятся/)).toBeInTheDocument();
-
-  // Клик по школе во 2.0 открывает экран школы здесь же: дети минивэнов и седанов.
-  fireEvent.click(screen.getByText('Тестовая школа'));
-  expect(await screen.findByText('Оплата водителю')).toBeInTheDocument();
-  expect(screen.getByText('Ребёнок c')).toBeInTheDocument();
-  expect(screen.getByText('Ребёнок e')).toBeInTheDocument();
-  expect(screen.queryByText('Ребёнок a')).not.toBeInTheDocument();
-  expect(screen.queryByText('Ребёнок f')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByText('Ребёнок c'));
-  expect(onOpenChild).toHaveBeenCalledWith('fam-c', 'c');
-  // Полоса трансферов: только минивэн №2 и седан №3; клик по №3 оставляет в таблице его детей.
-  expect(screen.queryByTitle(/^Трансфер 1 ·/)).not.toBeInTheDocument();
-  expect(screen.getByTitle('Трансфер 2 · 2 детей')).toBeInTheDocument();
-  fireEvent.click(screen.getByTitle('Трансфер 3 · 1 детей'));
-  expect(await screen.findByText('Ребёнок e')).toBeInTheDocument();
-  expect(screen.queryByText('Ребёнок c')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByTitle(/^Все трансферы/));
-  expect(await screen.findByText('Ребёнок c')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: /Все школы/ }));
-  expect(screen.queryByText('Оплата водителю')).not.toBeInTheDocument();
 });
 
-test('school click in 1.0 opens the forecast school screen with microbus children', async () => {
-  (fetchSummaryForecast as jest.Mock).mockResolvedValue([{ branchId: '1', branchCode: 'TEST', branchName: 'Тестовая школа', revenue: 120000, microbusCount: 2 }]);
-  (useLogisticsTable as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [child('a', '1', 'microbus'), child('c', '2', 'minivan')] });
-  (usePeriodChargeStats as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [charge('a', 6000)] });
-  show();
-  fireEvent.click(await screen.findByText('Тестовая школа'));
-  expect(await screen.findByText('Ребёнок a')).toBeInTheDocument();
-  expect(screen.queryByText('Ребёнок c')).not.toBeInTheDocument();
-  // Плашки — те же цифры, что в строке школы: 2 микроавтобуса, Revenue 120 000, COGS 2 × 4000 × 20.
-  expect(screen.getByText('2 · 1')).toBeInTheDocument();
-  expect(screen.getByTitle(/^120\s000/)).toBeInTheDocument();
-  expect(screen.getByTitle(/^160\s000/)).toBeInTheDocument();
-  fireEvent.click(screen.getByText('Ребёнок a'));
-  expect(onOpenChild).toHaveBeenCalledWith('fam-a', 'a');
+test('every directory school belongs to exactly one group, with ABL exceptions preserved', () => {
+  const keys = SUMMARY_GROUPS.flatMap(group => group.schools);
+  expect(new Set(keys).size).toBe(keys.length);
+  expect(SUMMARY_GROUPS[0].schools).toContain('ABL2');
+  expect(SUMMARY_GROUPS[1].schools).toContain('ABL1');
+  expect(SUMMARY_GROUPS[2].schools).toContain('AES');
+});
+
+
+test('school bar filters new requests and opens the child card', () => {
+  const onOpen = jest.fn();
+  (useFamiliesTable as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [
+    { ...child('a', 'TIS', '', '', 0, 'new'), childName: 'Ребёнок А' },
+    { ...child('b', 'EPS', '', '', 0, 'new'), childName: 'Ребёнок Б' },
+    { ...child('c', 'TIS', '', '', 0, 'new'), childName: 'В работе', transferMark: 'in_work' },
+  ] });
+  render(<SummaryModule onOpenChild={onOpen} />);
+  expect(screen.getByText('Ребёнок А')).toBeInTheDocument();
+  expect(screen.getByText('Ребёнок Б')).toBeInTheDocument();
+  expect(screen.queryByText('В работе')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByTitle('TIS · 1 новых заявок'));
+  expect(screen.queryByText('Ребёнок Б')).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole('button', { name: 'Ребёнок А' }));
+  expect(onOpen).toHaveBeenCalledWith('family-a', 'a');
+  fireEvent.click(screen.getByTitle('Все школы · 2 новых заявок'));
+  expect(screen.getByText('Ребёнок Б')).toBeInTheDocument();
 });

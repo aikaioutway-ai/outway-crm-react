@@ -55,9 +55,9 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
 // Владелец компании (учётная запись администратора).
 export const OWNER_EMPLOYEE_ID = 'emp-admin';
 
-// «Сводка» — итоги компании только для владельца и гендиректора.
-export function canAccessSummary(role: UserRole, userId?: string): boolean {
-  return userId === OWNER_EMPLOYEE_ID || role === 'gen_director';
+// «Сводка» доступна всем ролям, кроме кассира.
+export function canAccessSummary(role: UserRole, _userId?: string): boolean {
+  return role !== 'cashier';
 }
 
 // «Расходы» в кассире заменили раздел «Финансы» и открыты тем же ролям, что были у «Финансов».

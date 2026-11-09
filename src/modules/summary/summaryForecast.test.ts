@@ -1,5 +1,4 @@
 import { computeSummaryRows, DEFAULT_WORKING_DAYS, sumSummaryRows, workingDaysFor } from './summaryForecast';
-import { canAccessSection, getAllowedSections, OWNER_EMPLOYEE_ID } from '../../core/bars/Sidebar';
 
 test('forecast: COGS = microbuses × 4000 × days, tax 4%, gross profit', () => {
   const rows = computeSummaryRows([
@@ -25,11 +24,4 @@ test('working days default to 20 when the month is not set', () => {
   expect(workingDaysFor([{ year: 2026, month: 11, days: 18 }], 2026, 11)).toBe(18);
 });
 
-test('Summary is visible only to the owner and the general director', () => {
-  expect(canAccessSection('admin', 'summary', OWNER_EMPLOYEE_ID)).toBe(true);
-  expect(canAccessSection('gen_director', 'summary', 'general-director')).toBe(true);
-  expect(canAccessSection('admin', 'summary', 'another-admin')).toBe(false);
-  expect(getAllowedSections('director', 'director')).not.toContain('summary');
-  expect(getAllowedSections('cashier', 'cashier')).not.toContain('summary');
-  expect(getAllowedSections('manager', 'manager')).not.toContain('summary');
-});
+// Кто видит «Сводку» — в src/core/bars/summaryAccess.test.ts (всем, кроме кассира).

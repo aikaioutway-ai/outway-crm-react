@@ -8,9 +8,9 @@ import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface Column { key: string; label: string; total: string | number; color: string; }
 interface Row { key: string; label: string; logo?: string; icon?: React.ReactNode; values: Record<string, string | number>; isChild?: boolean; isGroup?: boolean; expanded?: boolean; disabled?: boolean; }
-interface Props { commentScope?: string; commentContext?: string; columns: Column[]; rows: Row[]; sortKey: string; ascending: boolean; onSort: (key: string) => void; onSelect: (key: string) => void; showAvatars?: boolean; rowGap?: number; className?: string; }
+interface Props { commentScope?: string; commentContext?: string; columns: Column[]; rows: Row[]; sortKey: string; ascending: boolean; onSort: (key: string) => void; onSelect: (key: string) => void; showAvatars?: boolean; showValueLabels?: boolean; rowGap?: number; className?: string; }
 
-export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, className = '', commentScope, commentContext = '' }: Props) {
+export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, showValueLabels = false, className = '', commentScope, commentContext = '' }: Props) {
   const [repeatedKey, setRepeatedKey] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
                   ? (row.expanded ? <ChevronDown size={15} aria-hidden="true" /> : <ChevronRight size={15} aria-hidden="true" />)
                   : <ChevronRight className="ow-school-table-go" size={15} aria-hidden="true" />}
               </button>
-            : row.values[column.key]}
+            : showValueLabels ? <div className="school-table-metric"><span className="school-table-metric-label">{column.label}</span><span>{row.values[column.key]}</span></div> : row.values[column.key]}
         </td>)}</tr>)}{!filteredRows.length && <tr><td colSpan={columns.length}>Повторяющихся значений нет</td></tr>}</tbody>
       </table>
     </div>
