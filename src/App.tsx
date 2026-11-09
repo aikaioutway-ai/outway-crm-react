@@ -820,7 +820,7 @@ export default function App() {
       <Suspense fallback={null}>
         <TaskContextMenu />
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
-        {taskFamily && <div className="ow-overlay" style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
+        {taskFamily && <div className="ow-overlay" onMouseDown={event => { if (event.target === event.currentTarget) setTaskFamily(null); }} style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={()=>setTaskFamily(null)} /></div>}
       </Suspense>
       {isMobileViewport && (
         <button
