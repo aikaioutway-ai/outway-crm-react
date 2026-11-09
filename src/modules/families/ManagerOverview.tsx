@@ -1,5 +1,3 @@
-import { requestStage } from './requestWorkflow';
-import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
 import { managerFinancialStats } from './managerFinancialStats';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import DirectorySchoolDashboard from './DirectorySchoolDashboard';
@@ -295,7 +293,6 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
-  const [requestDay, setRequestDay] = useState('ALL');
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
@@ -316,7 +313,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
   }, [onSidebarWidthChange, sidebarHidden]);
 
-  const periodQuery = usePeriodChargeStats(periodKey, { enabled: mode === 'charges' || mode === 'accruals' });
+  const periodQuery = usePeriodChargeStats(periodKey, { enabled: mode !== 'directory' });
   const periodStats = periodQuery.data ?? EMPTY_PERIOD_STATS;
 
   const stats = useMemo(
@@ -324,21 +321,6 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
       .filter(stat => isSchoolAllowed(stat.key, allowedSchools, schoolTier)),
     [allowedSchools, branchStatsQuery.data, schoolTier],
   );
-
-  const requestDayCounts = useMemo(() => {
-    const schoolKeys = new Set(stats.map(school => school.key));
-    const counts: Record<string, number> = {};
-    const seen = new Set<string>();
-    const now = new Date();
-    for (const row of accessibleRows ?? []) {
-      if (!schoolKeys.has(row.branchFilter) || seen.has(row.rowId) || !isNewUnassignedRow(row) || requestStage(row) !== 'new') continue;
-      seen.add(row.rowId);
-      for (const period of REQUEST_DAY_PERIODS) {
-        if (requestMatchesDay(row.childCreatedAt, period.key, now)) counts[period.key] = (counts[period.key] ?? 0) + 1;
-      }
-    }
-    return counts;
-  }, [accessibleRows, stats]);
 
   const displayStats = useMemo(() => managerFinancialStats(stats, accessibleRows ?? [], periodStats, periodKey === 'ALL'), [stats, accessibleRows, periodStats, periodKey]);
 
@@ -385,9 +367,9 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar">
-          <ManagerModeTabs showRequests canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
+          <ManagerModeTabs canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
           <div className="manager-overview-period">
-            {mode === 'requests' ? <ManagerPeriodBar periodKey={requestDay} onPeriodKeyChange={setRequestDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" periodCounts={requestDayCounts} useLabels periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} /> : mode !== 'directory' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
+            {mode !== 'directory' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
           </div>
           <div className="manager-overview-search"><ManagerSearch onOpenFamily={onOpenFamily} allowedSchools={allowedSchools} schoolTier={schoolTier} /></div>
           <div className="overview-icon-actions">
@@ -397,7 +379,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
           </div>
         </DashboardTopPanel>
 
-        {mode === 'requests' ? (familiesQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка заявок…</div> : familiesQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить заявки. <button onClick={() => void familiesQuery.refetch()}>Повторить</button></div> : <NewRequestsDashboard rows={accessibleRows ?? []} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} />) : mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
+        {mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
         <SchoolDashboardTable commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },

@@ -1,4 +1,3 @@
-import SchoolRequestsKanban from './modules/families/SchoolRequestsKanban';
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import LogisticsTabs from './modules/families/LogisticsTabs';
@@ -155,10 +154,10 @@ export default function App() {
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
-  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals' | 'requests'>('directory');
+  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals'>('directory');
   const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
   const managerSchoolMode = requestedManagerSchoolMode === 'accruals' && !canViewManagerAccruals ? 'directory' : requestedManagerSchoolMode;
-  const setManagerSchoolMode = (mode: 'directory' | 'charges' | 'accruals' | 'requests') => {
+  const setManagerSchoolMode = (mode: 'directory' | 'charges' | 'accruals') => {
     setRequestedManagerSchoolMode(mode === 'accruals' && !canViewManagerAccruals ? 'directory' : mode);
   };
   useEffect(() => {
@@ -652,12 +651,12 @@ export default function App() {
                     <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
-                {managerSchoolKey && <ManagerModeTabs showRequests canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
+                {managerSchoolKey && <ManagerModeTabs canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
-            {managerSchoolKey ? (managerSchoolMode === 'requests' ? <SchoolRequestsKanban key={managerSchoolKey} schoolKey={managerSchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} onOpen={row => handleManagerOpenFamily(row.branchFilter, row.familyId, row.childName || row.parentName, row)} /> : (
+            {managerSchoolKey ? (
               <>
                 <DashboardTopPanel>
                   {managerSchoolMode !== 'directory' && (
@@ -704,7 +703,7 @@ export default function App() {
                   initialSearchChildId={managerSearchChild?.query === managerOpenFamilySearch ? managerSearchChild.id : undefined}
                 />
               </>
-            )) : (
+            ) : (
               <ManagerOverview
                 canViewAccruals={canViewManagerAccruals}
                 mode={managerSchoolMode}
