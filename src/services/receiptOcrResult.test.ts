@@ -24,6 +24,13 @@ test('rebuilds MBANK codes cut by a line break',()=>{
  expect(normalizeReceiptCode('452 01a1aa22-5290-7819-8aa0-c8986abd32f6')).toBe('QR_452 01a1aa22-5290-7819-8aa0-c8986abd32f6');
  expect(normalizeReceiptCode('QR_45201a18b3e-3ca1-730b-bcc5-fb07634aed4c')).toBe('QR_452 01a18b3e-3ca1-730b-bcc5-fb07634aed4c');
 });
+test('restores dashes the OCR dropped inside an ID',()=>{
+ expect(normalizeReceiptCode('QR_45201a0c30a-8b68-7966-996bb8f631d16140')).toBe('QR_452 01a0c30a-8b68-7966-996b-b8f631d16140');
+ expect(normalizeReceiptCode('MBIZ_S_eed7187ddf29-410c-8aac170bb13b6591')).toBe('MBIZ_S_eed7187d-df29-410c-8aac-170bb13b6591');
+ expect(normalizeReceiptCode('01a115b1-5384-7ebe-b2bb58af12c6d084')).toBe('01a115b1-5384-7ebe-b2bb-58af12c6d084');
+ expect(normalizeReceiptCode('QR_45201a06c26-9d90-777e-a8ec')).toBe('QR_45201a06c26-9d90-777e-a8ec');
+ expect(normalizeReceiptCode('9a462460d41c9579a31269c785079aae')).toBe('9a462460d41c9579a31269c785079aae');
+});
 test('keeps the sender bank operation ID that the statement shows',()=>{
  expect(normalizeReceiptCode('ELQR ID: 8b8f011b-2b56-447c-9dc5-a11262044d9d')).toBe('8b8f011b-2b56-447c-9dc5-a11262044d9d');
  expect(normalizeReceiptCode('b5f13f5e-38e9-49a3-93 dc-bf3ee12187a2')).toBe('b5f13f5e-38e9-49a3-93dc-bf3ee12187a2');
