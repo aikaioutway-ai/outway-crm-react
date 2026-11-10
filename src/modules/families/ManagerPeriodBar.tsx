@@ -1,5 +1,4 @@
 import React from 'react';
-import { Layers3 } from 'lucide-react';
 import { ALL_PERIODS } from './constants';
 
 interface ManagerPeriodBarProps {
@@ -68,7 +67,7 @@ export default function ManagerPeriodBar({
             aria-label={allLabel ?? "Все периоды"}
             aria-pressed={periodKey === 'ALL'}
           >
-            {allLabel ?? <Layers3 size={17} />}
+            {allLabel ?? 'Все'}
           </button>
           <span aria-hidden="true" style={{ width: 1, height: 22, background: 'var(--border)', margin: '0 2px', flexShrink: 0 }} />
         </>
