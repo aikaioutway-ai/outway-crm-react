@@ -37,6 +37,7 @@ import {
 import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentReconciliationMonth, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchOverdueRequestCount, fetchV2Family } from './services/crmV2Service';
+import useIncomingMessageSound from './modules/messages/useIncomingMessageSound';
 import { onMessageComposer, requestOverdueNotification, useMessageChannels } from './services/messageService';
 import { useQuery } from '@tanstack/react-query';
 import { queryClient, QK } from './services/queryClient';
@@ -231,6 +232,7 @@ export default function App() {
   const overdueRequestCount = notifiesOverdueRequests ? overdueRequestsQuery.data ?? 0 : 0;
   // Непрочитанные сообщения — счётчик на пункте «Сообщения».
   const messageChannels = useMessageChannels(currentUser?.sessionToken);
+  useIncomingMessageSound(messageChannels.data, currentUser?.id, currentUser?.name);
   const unreadMessageCount = (messageChannels.data ?? []).reduce((sum, channel) => sum + channel.unread, 0);
   // Раз в день сводка просрочки в «Уведомления»: создаёт первый из руководства, кто открыл CRM.
   useEffect(() => {

@@ -103,3 +103,34 @@
 .msg-tab { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 7px 8px; border: 0; border-radius: 8px; background: transparent; color: var(--text-2); font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; }
 .msg-tab[aria-selected="true"] { background: var(--surface, #fff); color: var(--text); box-shadow: 0 1px 3px rgba(15, 23, 42, .08); }
 .msg-people-search { margin: 0 2px 6px; border: 1px solid var(--border); border-radius: 10px; }
+
+.msg-emoji-picker { position: relative; align-self: center; }
+.msg-emoji-picker summary, .msg-reply-button {
+  display: inline-grid;
+  place-items: center;
+  padding: 5px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-2);
+  cursor: pointer;
+}
+.msg-emoji-picker summary::-webkit-details-marker { display: none; }
+.msg-emoji-grid {
+  position: absolute;
+  z-index: 2;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  grid-template-columns: repeat(4, 36px);
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fff;
+  box-shadow: 0 4px 18px #0002;
+}
+.msg-emoji-grid button { border: 0; border-radius: 6px; background: none; cursor: pointer; font-size: 19px; min-height: 36px; }
+.msg-emoji-grid button:hover, .msg-reply-button:hover { background: #e8f2f2; }
+.msg-reply-draft { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; padding: 6px 8px; border-left: 3px solid var(--accent); background: #f0f6f6; }
+.msg-reply-draft > div { min-width: 0; }
+.msg-reply-draft span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { ExternalLink, Search, User, Users, X } from 'lucide-react';
 import { sendMessage, useMessageContacts } from '../../services/messageService';
 import { ROLE_LABELS, TaskTarget } from '../tasks/taskTypes';
+import MessageEmojiPicker from './MessageEmojiPicker';
 import './MessagesModule.css';
 
 type Recipient = { kind: 'group'; channel: string; title: string } | { kind: 'person'; id: string; title: string; role: string };
@@ -86,6 +87,7 @@ export default function MessageComposer({ sessionToken, target, onClose }: { ses
           onKeyDown={event => { if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) { event.preventDefault(); void send(); } }} />
         {error && <p className="msg-error" role="alert">{error}</p>}
         <div className="msg-composer-actions">
+          <MessageEmojiPicker onSelect={emoji => setText(current => current.length + emoji.length <= 4000 ? current + emoji : current)} />
           <button type="button" className="ow-btn ow-btn--ghost" onClick={onClose} disabled={sending}>Отмена</button>
           <button type="submit" className="msg-composer-send" disabled={!recipient || !text.trim() || sending || sent}>{sent ? 'Отправлено ✓' : sending ? 'Отправляю…' : 'Отправить'}</button>
         </div>

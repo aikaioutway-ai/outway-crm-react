@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Bell, ChevronLeft, ExternalLink, Search, Send, User, Users, UsersRound } from 'lucide-react';
+import { Bell, ChevronLeft, ExternalLink, Reply, Search, Send, User, Users, UsersRound, X } from 'lucide-react';
 import {
   CrmMessage, dmChannelOf, loadOlderMessages, markChannelRead, MessageChannel, MessageLink, sendMessage,
   useChannelMessages, useMessageChannels, useMessageContacts,
 } from '../../services/messageService';
 import { SCHOOL_DIRECTORY } from '../families/constants';
 import { ROLE_LABELS, TaskTarget } from '../tasks/taskTypes';
+import MessageEmojiPicker from './MessageEmojiPicker';
 import './MessagesModule.css';
 
 const TIME_ZONE = 'Asia/Bishkek';
@@ -176,6 +177,10 @@ function ChatPane({ channel, sessionToken, employeeId, onBack, onOpenRequests, o
   const [hasOlder, setHasOlder] = useState<boolean | null>(null);
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [draft, setDraft] = useState('');
+  const [replyTo, setReplyTo] = useState<CrmMessage | null>(null);
+  const draftRef = useRef<HTMLTextAreaElement>(null);
+  const quote = replyTo ? `> ${replyTo.author_name}: ${replyTo.body.replace(/\s+/g, ' ').slice(0, 200)}\n\n` : '';
+  const maxDraft = 4000 - quote.length;
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
   const listRef = useRef<HTMLDivElement>(null);
@@ -216,10 +221,11 @@ function ChatPane({ channel, sessionToken, employeeId, onBack, onOpenRequests, o
 
   const send = async () => {
     const text = draft.trim();
-    if (!text || sending) return;
+    if (!text || text.length > maxDraft || sending) return;
     setSending(true); setError('');
     try {
-      await sendMessage(sessionToken, { channel: channel.channel }, text);
+      await sendMessage(sessionToken, { channel: channel.channel }, quote + text);
+      setReplyTo(null);
       setDraft('');
       stickToBottom.current = true;
     } catch (cause) {
@@ -270,7 +276,11 @@ function ChatPane({ channel, sessionToken, employeeId, onBack, onOpenRequests, o
                   {!own && !sameAuthor && !dm && <div className="msg-author">{message.author_name}</div>}
                   {link?.type === 'target' && <TargetChip link={link} onOpenTarget={onOpenTarget} />}
                   <div className="msg-text">{message.body}</div>
-                  <div className="msg-time">{timeOf(message.created_at)}</div>
+                  <div className="msg-time">
+                    {!channel.readOnly && <button type="button" className="msg-reply-button" aria-label="Ответить на сообщение" title="Ответить"
+                      onClick={() => { setReplyTo(message); draftRef.current?.focus(); }}><Reply size={14} aria-hidden="true" /></button>}
+                    {timeOf(message.created_at)}
+                  </div>
                 </article>}
           </React.Fragment>;
         })}
@@ -278,11 +288,19 @@ function ChatPane({ channel, sessionToken, employeeId, onBack, onOpenRequests, o
       {channel.readOnly ? null : (
         <form className="msg-compose" onSubmit={event => { event.preventDefault(); void send(); }}>
           {error && <p className="msg-error" role="alert">{error}</p>}
+          {replyTo && <div className="msg-reply-draft">
+            <div><b>{replyTo.author_name}</b><span>{replyTo.body}</span></div>
+            <button type="button" className="msg-reply-button" aria-label="Отменить ответ" onClick={() => setReplyTo(null)}><X size={16} /></button>
+          </div>}
           <div className="msg-compose-row">
-            <textarea aria-label={`Сообщение в «${channel.title}»`} rows={1} value={draft} maxLength={4000} placeholder="Напишите сообщение…"
+            <MessageEmojiPicker onSelect={emoji => {
+              setDraft(current => current.length + emoji.length <= maxDraft ? current + emoji : current);
+              draftRef.current?.focus();
+            }} />
+            <textarea ref={draftRef} aria-label={`Сообщение в «${channel.title}»`} rows={1} value={draft} maxLength={maxDraft} placeholder="Напишите сообщение…"
               onChange={event => setDraft(event.target.value)}
               onKeyDown={event => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); } }} />
-            <button type="submit" className="msg-send" disabled={!draft.trim() || sending} aria-label="Отправить"><Send size={17} aria-hidden="true" /></button>
+            <button type="submit" className="msg-send" disabled={!draft.trim() || draft.trim().length > maxDraft || sending} aria-label="Отправить"><Send size={17} aria-hidden="true" /></button>
           </div>
           <div className="msg-hint">Enter — отправить, Shift+Enter — новая строка</div>
         </form>
