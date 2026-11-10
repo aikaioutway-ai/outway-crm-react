@@ -121,3 +121,13 @@
 .reconcile-source.reconcile-files-dialog { width: min(560px, calc(100vw - 32px)); }
 /* Широкая таблица прокручивается внутри себя, а не растягивает шапку и кнопки за край экрана. */
 .reconcile-page > * { min-width: 0; }
+.reconcile-table .reconcile-parent {
+  max-width: 100%;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+}
+.reconcile-table .reconcile-parent:hover { text-decoration: underline; }
+.reconcile-duplicate { color: var(--danger); }

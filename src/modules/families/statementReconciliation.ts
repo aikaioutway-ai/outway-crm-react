@@ -97,7 +97,8 @@ export function mergeStatements(statements: Array<{ entries: StatementEntry[] }>
   return merged;
 }
 
-// 1 — есть: код и сумма совпали; 2 — частично: код совпал, а сумма нет, или совпали только сумма и дата; Х — нет.
+// 1 — есть: код и сумма совпали; 2 — частично: код совпал, а сумма нет, или совпали только сумма и дата;
+// Д — дубли: один и тот же чек привязан к нескольким платежам CRM, подтверждать можно только один; Х — нет.
 export function reconcileBankStatement<T extends FamilyPayment>(entries: StatementEntry[], payments: T[]) {
   const byCode = new Map<string, Array<{ payment: T; codes: string[] }>>();
   for (const payment of payments) {
@@ -120,7 +121,7 @@ export function reconcileBankStatement<T extends FamilyPayment>(entries: Stateme
     const matching = sameAmount.length ? sameAmount : matches;
     if (matching.length) {
       return {
-        entry, group: sameAmount.length ? '1' as const : '2' as const,
+        entry, group: matching.length > 1 ? 'Д' as const : sameAmount.length ? '1' as const : '2' as const,
         candidates: matching.map(({ payment }) => payment),
         matchingCodes: statementCodes[index].filter(code => matching.some(item => item.codes.includes(code))),
       };

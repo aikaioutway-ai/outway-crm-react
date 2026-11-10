@@ -548,7 +548,8 @@ export default function App() {
                   </div>
                 </DashboardTopPanel>
                 <CashierReconciliation key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name}
-                  period={reconciliationPeriod} setPeriod={setReconciliationPeriod} />
+                  period={reconciliationPeriod} setPeriod={setReconciliationPeriod}
+                  onOpenFamily={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
               </>
             ) : cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
               <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>

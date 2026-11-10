@@ -24,6 +24,7 @@ function statementRange(statement: Statement) {
 const groups = [
   { key: '1', label: 'Есть: код и сумма совпали' },
   { key: '2', label: 'Частично: код совпал, а сумма нет, или совпали только сумма и дата' },
+  { key: 'Д', label: 'Дубли: один чек привязан к нескольким платежам CRM' },
   { key: 'Х', label: 'Нет: поступление без платежа в CRM' },
 ] as const;
 const statuses = [
@@ -64,8 +65,14 @@ function paymentRange(entries: StatementEntry[]) {
   return { from: dates[0], to: dates[dates.length - 1] };
 }
 
-export default function CashierReconciliation({ userId, userName, period, setPeriod }: {
+// Платёж из одной строки выписки уже подтверждён — остальные платежи с этим же чеком подтверждать нельзя.
+function duplicateOfConfirmed(row: Result, payment: ReconciliationPayment) {
+  return row.group === 'Д' && row.candidates.some(item => item.id !== payment.id && item.status === 'Подтверждено');
+}
+
+export default function CashierReconciliation({ userId, userName, period, setPeriod, onOpenFamily }: {
   userId: string; userName?: string; period: string; setPeriod: (period: string) => void;
+  onOpenFamily?: (familyId: string) => Promise<void> | void;
 }) {
   const storageKey = `cashier-reconciliation:v1:${userId}`;
   const [history, setHistory] = useState<Statement[]>(() => {
@@ -162,7 +169,11 @@ export default function CashierReconciliation({ userId, userName, period, setPer
     if (confirmationLock.current || payment.status !== 'На проверке' ||
         editing?.number !== row.entry.number || editing.paymentId !== payment.id || !editing.date) return;
     const actualPaymentDate = editing.date;
-    if (row.group !== '1' && !window.confirm(
+    if (duplicateOfConfirmed(row, payment)) return;
+    if (row.group === 'Д' && !window.confirm(
+      `Этот чек привязан к ${row.candidates.length} платежам CRM. Подтвердить только платёж ${payment.parentName || payment.familyId} на ${payment.amount.toLocaleString('ru-RU')} сом?`
+    )) return;
+    if (row.group === '2' && !window.confirm(
       `Подтвердить платёж CRM на ${payment.amount.toLocaleString('ru-RU')} сом? Сумма в выписке: ${row.entry.amount.toLocaleString('ru-RU')} сом.`
     )) return;
     confirmationLock.current = true;
@@ -194,8 +205,10 @@ export default function CashierReconciliation({ userId, userName, period, setPer
   const tableHeaders = statementOnly ? unmatchedHeaders : headers;
   const widths = statementOnly ? unmatchedWidths : columnWidths;
   // Строки с платежом показываем по статусу платежа; поступления без платежа (Х) статуса не имеют.
-  const rowsFor = (row: Result) => row.group === 'Х' ? [undefined] : row.candidates.filter(payment => payment.status === status);
-  const counts = { 1: 0, 2: 0, Х: 0 };
+  // Дубли показываем все сразу, независимо от статуса: так видно, какой из них уже подтверждён.
+  const rowsFor = (row: Result) => row.group === 'Х' ? [undefined]
+    : row.group === 'Д' ? row.candidates : row.candidates.filter(payment => payment.status === status);
+  const counts = { 1: 0, 2: 0, Д: 0, Х: 0 };
   for (const row of results) counts[row.group] += rowsFor(row).length;
   const visibleRows = results.filter(row => row.group === group).flatMap(row => {
     const { entry } = row;
@@ -304,7 +317,7 @@ export default function CashierReconciliation({ userId, userName, period, setPer
         <div className="reconcile-open-statement">
           <strong>{groups.find(item => item.key === group)?.label}</strong>
         </div>
-        {group !== 'Х' && <div className="ow-seg reconcile-groups" role="group" aria-label="Статус платежа">
+        {group !== 'Х' && group !== 'Д' && <div className="ow-seg reconcile-groups" role="group" aria-label="Статус платежа">
           {statuses.map(item => <button key={item.key} className="ow-seg-btn" type="button" aria-pressed={status === item.key}
             onClick={() => { setStatus(item.key); resetView(); }}>{item.label}</button>)}
         </div>}
@@ -333,7 +346,13 @@ export default function CashierReconciliation({ userId, userName, period, setPer
             </tr>
           :
             <tr className="dt-tr" key={`${entry.number}:${payment?.id ?? ''}`}>
-              {!statementOnly && <td className="dt-td" title={parent}>{parent}</td>}
+              {!statementOnly && <td className="dt-td" title={parent}>{payment && onOpenFamily
+                ? <button type="button" className="reconcile-link reconcile-parent" onClick={() => {
+                    setError('');
+                    Promise.resolve(onOpenFamily(payment.familyId)).catch(err =>
+                      setError(err instanceof Error ? err.message : 'Не удалось открыть карточку семьи.'));
+                  }}>{parent}</button>
+                : parent}</td>}
               {!statementOnly && <td className="dt-td">{payment ? payment.amount.toLocaleString('ru-RU') : '—'}</td>}
               <td className="dt-td">{entry.amount.toLocaleString('ru-RU')}</td>
               {!statementOnly && <td className="dt-td">{payment?.receiptUrl
@@ -353,7 +372,9 @@ export default function CashierReconciliation({ userId, userName, period, setPer
                   const key = `${entry.number}:${payment?.id ?? ''}`;
                   setExpandedComment(current => current === key ? null : key);
                 }}>{comment}</button> : '—'}</td>
-              {!statementOnly && <td className="dt-td">{payment?.status === 'На проверке' ? (
+              {!statementOnly && <td className="dt-td">{payment && duplicateOfConfirmed(row, payment) && payment.status === 'На проверке'
+                ? <span className="reconcile-duplicate">Дубль, не подтверждать</span>
+                : payment?.status === 'На проверке' ? (
                 editing?.number === entry.number && editing.paymentId === payment.id ? <div className="reconcile-confirm">
                   <input aria-label="Дата поступления" type="date" value={editing.date} disabled={confirming}
                     onChange={event => setEditing({ number: entry.number, paymentId: payment.id, date: event.target.value })} />

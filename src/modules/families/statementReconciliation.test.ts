@@ -66,3 +66,8 @@ test('merges overlapping statements and keeps each bank row once', () => {
   const merged = mergeStatements([{ entries: [row(5, '№ 1'), row(6, '№ 2')] }, { entries: [row(1, '№ 2'), row(2, '№ 3')] }]);
   expect(merged.map(item => [item.number, item.document])).toEqual([[1, '№ 1'], [2, '№ 2'], [3, '№ 3']]);
 });
+
+test('puts one receipt attached to several CRM payments into duplicates', () => {
+  const [row] = reconcileBankStatement([entry], [payment, { ...payment, id: 'p2', familyId: 'f2' }]);
+  expect([row.group, row.candidates.map(item => item.id)]).toEqual(['Д', ['p1', 'p2']]);
+});
