@@ -57,21 +57,6 @@
 .reconcile-source td:last-child { width: 37%; }
 .reconcile-source td:nth-child(5), .reconcile-source td:nth-child(6) { text-align: right; }
 
-.reconcile-tile { position: relative; }
-.reconcile-tile > button:first-child { padding-right: 32px; }
-.reconcile-tile .reconcile-tile-delete {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  padding: 3px;
-  opacity: 0;
-}
-.reconcile-tile:hover .reconcile-tile-delete,
-.reconcile-tile:focus-within .reconcile-tile-delete { opacity: 1; }
-@media (hover: none) {
-  .reconcile-tile .reconcile-tile-delete { opacity: 1; }
-}
-
 .reconcile-groups .ow-seg-btn[aria-pressed="true"] {
   background: var(--accent);
   color: #fff;
@@ -119,3 +104,20 @@
   white-space: nowrap;
 }
 .reconcile-open-statement span { color: var(--text-2); }
+
+.reconcile-files-hint { margin: 0 0 10px; color: var(--text-2); font-size: 13px; }
+.reconcile-files { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.reconcile-files li {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.reconcile-files li div { display: grid; gap: 2px; min-width: 0; }
+.reconcile-files li span { color: var(--text-2); font-size: 13px; }
+.reconcile-source.reconcile-files-dialog { width: min(560px, calc(100vw - 32px)); }
+/* Широкая таблица прокручивается внутри себя, а не растягивает шапку и кнопки за край экрана. */
+.reconcile-page > * { min-width: 0; }

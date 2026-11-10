@@ -1,12 +1,15 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Pencil, Upload, X } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useReconciliationPayments } from '../../hooks/useCrmQueries';
+import { QK } from '../../services/queryClient';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import { CASHIER_PERIODS, currentReconciliationMonth } from './constants';
 import './cashierReconciliation.css';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
-import { confirmFamilyPayment, fetchFamilyPayment, fetchReconciliationPayments } from '../../services/financeService';
-import { readBankStatement, reconcileBankStatement, type StatementEntry } from './statementReconciliation';
+import { confirmFamilyPayment, fetchFamilyPayment, type fetchReconciliationPayments } from '../../services/financeService';
+import { mergeStatements, readBankStatement, reconcileBankStatement, type StatementEntry } from './statementReconciliation';
 
 type ReconciliationPayment = Awaited<ReturnType<typeof fetchReconciliationPayments>>[number];
 type Result = ReturnType<typeof reconcileBankStatement<ReconciliationPayment>>[number];
@@ -19,11 +22,15 @@ function statementRange(statement: Statement) {
 }
 
 const groups = [
-  { key: '1', label: 'Код и сумма совпали' },
-  { key: '2', label: 'Код совпал, сумма отличается' },
-  { key: '3', label: 'Совпали сумма и дата' },
-  { key: 'Х', label: 'Без совпадений' },
+  { key: '1', label: 'Есть: код и сумма совпали' },
+  { key: '2', label: 'Частично: код совпал, а сумма нет, или совпали только сумма и дата' },
+  { key: 'Х', label: 'Нет: поступление без платежа в CRM' },
 ] as const;
+const statuses = [
+  { key: 'На проверке', label: 'На проверке' },
+  { key: 'Подтверждено', label: 'Подтверждённые' },
+] as const;
+type PaymentStatus = typeof statuses[number]['key'];
 const PAGE_SIZE = 20;
 type Group = typeof groups[number]['key'];
 
@@ -52,9 +59,9 @@ function paymentDate(date: string) {
   return date.split('-').reverse().join('.');
 }
 
-async function reconcile(entries: StatementEntry[]) {
+function paymentRange(entries: StatementEntry[]) {
   const dates = entries.flatMap(entry => [entry.operationDate ?? entry.postingDate, entry.postingDate]).sort();
-  return reconcileBankStatement(entries, await fetchReconciliationPayments(dates[0], dates[dates.length - 1]));
+  return { from: dates[0], to: dates[dates.length - 1] };
 }
 
 export default function CashierReconciliation({ userId, userName, period, setPeriod }: {
@@ -69,19 +76,31 @@ export default function CashierReconciliation({ userId, userName, period, setPer
       return [];
     }
   });
-  const [statement, setStatement] = useState<Statement | null>(() => history[0] ?? null);
+  const [status, setStatus] = useState<PaymentStatus>('На проверке');
   const [expandedComment, setExpandedComment] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{ url: string; id: string; parent: string } | null>(null);
   const [source, setSource] = useState<StatementEntry | null>(null);
   const [editing, setEditing] = useState<{ number: number; paymentId: string; date: string } | null>(null);
   const sourceDialog = useRef<HTMLDialogElement>(null);
-  const [results, setResults] = useState<Result[]>([]);
+  const filesDialog = useRef<HTMLDialogElement>(null);
   const [group, setGroup] = useState<Group>('1');
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ index: number; descending: boolean } | null>(null);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(Boolean(statement));
+  const [reading, setReading] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const queryClient = useQueryClient();
+  const selectedPeriod = CASHIER_PERIODS.find(item => item.key === period);
+  const month = selectedPeriod && `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}`;
+  // Все загруженные выписки сверяются как одна; фильтр месяца сверху оставляет поступления этого месяца.
+  const allEntries = useMemo(() => mergeStatements(history), [history]);
+  const entries = useMemo(() => month ? allEntries.filter(entry => entry.postingDate.startsWith(month)) : allEntries,
+    [allEntries, month]);
+  const range = useMemo(() => entries.length ? paymentRange(entries) : null, [entries]);
+  const paymentsQuery = useReconciliationPayments(range);
+  const results: Result[] = useMemo(() => entries.length && paymentsQuery.data
+    ? reconcileBankStatement(entries, paymentsQuery.data) : [], [entries, paymentsQuery.data]);
+  const busy = reading || (entries.length > 0 && paymentsQuery.isPending);
   const fileInput = useRef<HTMLInputElement>(null);
   const confirmationLock = useRef(false);
 
@@ -96,34 +115,15 @@ export default function CashierReconciliation({ userId, userName, period, setPer
     }
   }, [history, storageKey]);
 
-  useEffect(() => {
-    if (!statement) return;
-    let active = true;
-    setBusy(true);
-    reconcile(statement.entries).then(rows => {
-      if (active) setResults(rows);
-    }).catch(err => {
-      if (active) setError(err instanceof Error ? err.message : 'Не удалось сверить выписку.');
-    }).finally(() => {
-      if (active) setBusy(false);
-    });
-    return () => { active = false; };
-  }, [statement]);
-
-  function openStatement(next: Statement) {
-    if (statement === next) return;
-    setResults([]);
-    setGroup('1');
+  function resetView() {
     setPage(1);
     setExpandedComment(null);
     setSort(null);
     setEditing(null);
-    setBusy(true);
-    setStatement(next);
   }
 
   async function upload(file: File) {
-    setBusy(true);
+    setReading(true);
     setError('');
     try {
       const uploadedMonth = currentReconciliationMonth();
@@ -136,11 +136,13 @@ export default function CashierReconciliation({ userId, userName, period, setPer
       } catch {
         setError('Браузер не смог сохранить выписку для повторного открытия.');
       }
-      setPeriod(CASHIER_PERIODS.find(item => `${item.year}-${String(item.month).padStart(2, '0')}` === uploadedMonth)?.key ?? 'ALL');
-      openStatement(next);
+      const lastMonth = statementRange(next).to.slice(0, 7);
+      setPeriod(CASHIER_PERIODS.find(item => `${item.year}-${String(item.month).padStart(2, '0')}` === lastMonth)?.key ?? 'ALL');
+      resetView();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось прочитать выписку.');
-      setBusy(false);
+    } finally {
+      setReading(false);
     }
   }
 
@@ -153,11 +155,7 @@ export default function CashierReconciliation({ userId, userName, period, setPer
       return;
     }
     setHistory(next);
-    if (statement === item) {
-      setStatement(null);
-      setResults([]);
-      setEditing(null);
-    }
+    resetView();
   }
 
   async function confirm(row: Result, payment: ReconciliationPayment) {
@@ -182,9 +180,8 @@ export default function CashierReconciliation({ userId, userName, period, setPer
       }
       const savedDate = fresh.status === 'Подтверждено' ? fresh.actualPaymentDate : actualPaymentDate;
       setEditing(null);
-      setResults(current => current.map(item => ({ ...item, candidates: item.candidates.map(candidate =>
-        candidate.id === payment.id ? { ...candidate, status: 'Подтверждено', actualPaymentDate: savedDate } : candidate
-      ) })));
+      if (range) queryClient.setQueryData<ReconciliationPayment[]>(QK.reconciliationPayments(range.from, range.to), (list: ReconciliationPayment[] | undefined) =>
+        list?.map((item: ReconciliationPayment) => item.id === payment.id ? { ...item, status: 'Подтверждено', actualPaymentDate: savedDate } : item));
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось подтвердить платёж.');
     } finally {
@@ -196,11 +193,13 @@ export default function CashierReconciliation({ userId, userName, period, setPer
   const statementOnly = group === 'Х';
   const tableHeaders = statementOnly ? unmatchedHeaders : headers;
   const widths = statementOnly ? unmatchedWidths : columnWidths;
-  const counts = { 1: 0, 2: 0, 3: 0, Х: 0 };
-  for (const row of results) counts[row.group]++;
+  // Строки с платежом показываем по статусу платежа; поступления без платежа (Х) статуса не имеют.
+  const rowsFor = (row: Result) => row.group === 'Х' ? [undefined] : row.candidates.filter(payment => payment.status === status);
+  const counts = { 1: 0, 2: 0, Х: 0 };
+  for (const row of results) counts[row.group] += rowsFor(row).length;
   const visibleRows = results.filter(row => row.group === group).flatMap(row => {
-    const { entry, candidates } = row;
-    return (candidates.length ? candidates : [undefined]).map(payment => {
+    const { entry } = row;
+    return rowsFor(row).map(payment => {
       const crmCodes = payment?.receiptCode?.split('/').map(code => code.toLowerCase().replace(/[-\s]/g, '')) ?? [];
       const matchingCode = row.matchingCodes.find(code => crmCodes.some(crmCode => crmCode.includes(code)));
       const shortCode = (matchingCode ?? crmCodes[crmCodes.length - 1])?.slice(-8);
@@ -225,7 +224,8 @@ export default function CashierReconciliation({ userId, userName, period, setPer
     const order = typeof left === 'number' && typeof right === 'number' ? left - right : collator.compare(String(left), String(right));
     return sort.descending ? -order : order;
   });
-  const openedRange = statement ? statementRange(statement) : null;
+  const ranges = history.map(statementRange);
+  const allRange = ranges.length ? { from: ranges.map(item => item.from).sort()[0], to: ranges.map(item => item.to).sort().reverse()[0] } : null;
   const pageCount = Math.max(1, Math.ceil(visibleRows.length / PAGE_SIZE));
   const currentPage = Math.min(page, pageCount);
   const pageRows = visibleRows.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
@@ -234,19 +234,19 @@ export default function CashierReconciliation({ userId, userName, period, setPer
     ['Дата операции', source ? paymentDate(source.postingDate) : ''],
     ['Оборот Кт', source ? String(source.amount) : ''],
   ]);
-  const selectedPeriod = CASHIER_PERIODS.find(item => item.key === period);
-  const month = selectedPeriod && `${selectedPeriod.year}-${String(selectedPeriod.month).padStart(2, '0')}`;
-  const tiles = history.filter(item => !month || item.uploadedMonth === month);
 
-  return <section aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
+  return <section className="reconcile-page" aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
     <DashboardTopPanel className="dashboard-control-row">
       <div style={{ flex: 1 }}>
         <strong>Сверка платежей</strong>
-        {statement && <div style={{ color: 'var(--text-2)', fontSize: 12 }}>{statement.name} · {statement.entries.length} поступлений</div>}
+        {history.length > 0 && <div style={{ color: 'var(--text-2)', fontSize: 12 }}>
+          {entries.length} поступлений{month ? ' за месяц' : ''}
+          {paymentsQuery.isFetching && !busy && ' · обновляем статусы…'}
+        </div>}
       </div>
       <div className="ow-seg reconcile-groups" role="group" aria-label="Результат сверки">
         {groups.map(item => <button key={item.key} className="ow-seg-btn" type="button" title={item.label} aria-label={`${item.key} — ${item.label}`} aria-pressed={group === item.key}
-          onClick={() => { setGroup(item.key); setPage(1); setEditing(null); setSort(null); setExpandedComment(null); }}>{item.key} · {counts[item.key]}</button>)}
+          onClick={() => { setGroup(item.key); resetView(); }}>{item.key} · {counts[item.key]}</button>)}
       </div>
       <button className="ow-btn ow-btn--ghost" type="button" disabled={busy || confirming} onClick={() => fileInput.current?.click()}>
         <Upload size={16} aria-hidden="true" /> Загрузить выписку
@@ -257,23 +257,27 @@ export default function CashierReconciliation({ userId, userName, period, setPer
         if (file) void upload(file);
       }} />
     </DashboardTopPanel>
-    {history.length > 0 && <div className="reconcile-history" aria-label="История выписок">
-      {tiles.map(item => {
-        const { from, to } = statementRange(item);
-        return <div className="reconcile-tile" key={history.indexOf(item)}>
-          <button type="button" aria-pressed={statement === item}
-            disabled={busy || confirming} onClick={() => { setError(''); openStatement(item); }}>
-            <strong>{item.name}</strong>
-            <span>{paymentDate(from)} — {paymentDate(to)}</span>
-          </button>
-          <button type="button" className="reconcile-tile-delete" aria-label={`Удалить выписку ${item.name}`}
-            title="Удалить из истории" disabled={busy || confirming} onClick={() => deleteStatement(item)}>
-            <X size={14} aria-hidden="true" />
-          </button>
-        </div>;
-      })}
-      {!tiles.length && <p>За этот период выписок нет.</p>}
+    {history.length > 0 && allRange && <div className="reconcile-history">
+      <button type="button" disabled={busy || confirming} onClick={() => filesDialog.current?.showModal()}>
+        <strong>Выписки: {paymentDate(allRange.from)} — {paymentDate(allRange.to)}</strong>
+        <span>{history.length} {history.length === 1 ? 'файл' : history.length < 5 ? 'файла' : 'файлов'} · {allEntries.length} поступлений без повторов</span>
+      </button>
     </div>}
+    <dialog ref={filesDialog} className="reconcile-source reconcile-files-dialog" aria-label="Загруженные выписки">
+      <form method="dialog"><button className="ow-btn ow-btn--ghost" type="submit">Закрыть</button></form>
+      <h3>Загруженные выписки</h3>
+      <p className="reconcile-files-hint">Строки, которые есть в нескольких выписках, учитываются один раз.</p>
+      <ul className="reconcile-files">
+        {history.map((item, index) => {
+          const { from, to } = statementRange(item);
+          return <li key={index}>
+            <div><strong>{item.name}</strong><span>{paymentDate(from)} — {paymentDate(to)} · {item.entries.length} поступлений</span></div>
+            <button type="button" className="ow-btn ow-btn--ghost" aria-label={`Удалить выписку ${item.name}`}
+              disabled={busy || confirming} onClick={() => deleteStatement(item)}><X size={14} aria-hidden="true" /> Удалить</button>
+          </li>;
+        })}
+      </ul>
+    </dialog>
     {receipt && <ReceiptModal receiptUrl={receipt.url} paymentId={receipt.id} subtitle={receipt.parent}
       onClose={() => setReceipt(null)} />}
     <dialog ref={sourceDialog} className="reconcile-source" aria-label="Строка банковской выписки">
@@ -289,12 +293,20 @@ export default function CashierReconciliation({ userId, userName, period, setPer
     </dialog>
     {busy && <p role="status">Сверяем поступления…</p>}
     {error && <p role="alert">{error}</p>}
-    {!statement && !busy && <p>{history.length ? 'Выберите выписку из истории.' : 'Загрузите выписку АйКай Мбанк в формате .xlsx.'}</p>}
+    {paymentsQuery.isError && <p role="alert">
+      Не удалось загрузить платежи CRM для сверки{results.length ? ', показан прошлый результат' : ''}.{' '}
+      <button type="button" className="reconcile-link" onClick={() => void paymentsQuery.refetch()}>Повторить</button>
+    </p>}
+    {!history.length && !busy && <p>Загрузите выписку АйКай Мбанк в формате .xlsx.</p>}
+    {history.length > 0 && !entries.length && !busy && <p>За этот месяц в загруженных выписках поступлений нет.</p>}
     {!!results.length && <div className="dt-root">
       <div className="dt-toolbar" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 8, padding: '6px 10px' }}>
-        {statement && openedRange && <div className="reconcile-open-statement">
-          <strong title={statement.name}>{statement.name}</strong>
-          <span>{paymentDate(openedRange.from)} — {paymentDate(openedRange.to)}</span>
+        <div className="reconcile-open-statement">
+          <strong>{groups.find(item => item.key === group)?.label}</strong>
+        </div>
+        {group !== 'Х' && <div className="ow-seg reconcile-groups" role="group" aria-label="Статус платежа">
+          {statuses.map(item => <button key={item.key} className="ow-seg-btn" type="button" aria-pressed={status === item.key}
+            onClick={() => { setStatus(item.key); resetView(); }}>{item.label}</button>)}
         </div>}
         <button type="button" className="dt-btn" aria-label="Предыдущая страница" disabled={currentPage === 1}
           onClick={() => { setPage(currentPage - 1); setEditing(null); }}>‹</button>

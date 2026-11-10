@@ -1,4 +1,5 @@
 import { EmployeeAdvance, fetchAllEmployeeAdvances } from '../services/employeeService';
+import { fetchReconciliationPayments } from '../services/financeService';
 import { useQueries, useQuery, UseQueryResult, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchV2FamiliesTable,
@@ -131,6 +132,19 @@ export function usePaymentsTable(options?: { enabled?: boolean }): UseQueryResul
     queryKey: QK.paymentsTable,
     queryFn: fetchPaymentsTable,
     enabled: options?.enabled ?? true,
+  });
+}
+
+// Сверка показывает прошлый результат сразу, а статусы платежей и новые чеки подтягивает в фоне:
+// при каждом открытии и раз в 10 минут, пока экран открыт.
+export function useReconciliationPayments(range: { from: string; to: string } | null) {
+  return useQuery({
+    queryKey: QK.reconciliationPayments(range?.from ?? '', range?.to ?? ''),
+    queryFn: () => fetchReconciliationPayments(range!.from, range!.to),
+    enabled: Boolean(range),
+    staleTime: 0,
+    refetchInterval: 10 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
   });
 }
 

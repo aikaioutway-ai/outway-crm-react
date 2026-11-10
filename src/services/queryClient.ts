@@ -29,6 +29,7 @@ export const QK = {
   transfersDashboard: ['transfersDashboard'] as const,
   paymentsTable: ['paymentsTable'] as const,
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
+  reconciliationPayments: (from: string, to: string) => ['reconciliationPayments', from, to] as const,
   refundsTable: ['refundsTable'] as const,
   employees: ['employees'] as const,
   payrollEntries: (periodMonth: number, periodYear: number) => ['payrollEntries', periodMonth, periodYear] as const,
