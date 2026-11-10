@@ -197,8 +197,8 @@ export default function TabFinance({
                 <div style={newPaymentGridStyle}>
                   <input aria-label="Сумма платежа" min="0.01" step="0.01" type="number" value={paymentAmount} onChange={e => setPaymentAmount(e.target.value)} placeholder={totalDebt > 0 ? `Долг: ${money(totalDebt)}` : 'Сумма'} style={inputStyle} />
                   <select aria-label="Способ оплаты" value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
-                    <option value="cash">Наличные</option>
                     <option value="transfer">АйКай Мбанк</option>
+                    <option value="cash">Наличные</option>
                   </select>
                   <input aria-label="Дата платежа" type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
                   <input aria-label="Время операции чека" value={receiptTime} onChange={e=>setReceiptTime(e.target.value)} placeholder="ЧЧ:ММ или ЧЧ:ММ:СС" style={{...inputStyle,width:'100%',minWidth:0}}/>
@@ -453,8 +453,8 @@ function PaymentRow({ onOpenReceipt, payment, items, canConfirm, confirming, onC
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
             <input type="number" value={amount} onChange={e => setAmount(e.target.value)} placeholder="Сумма" style={inputStyle} />
             <select value={paymentType} onChange={e => setPaymentType(e.target.value as PaymentType)} style={inputStyle}>
-              <option value="cash">Наличные</option>
               <option value="transfer">АйКай Мбанк</option>
+              <option value="cash">Наличные</option>
             </select>
             <input type="date" value={paymentDate} onChange={e => setPaymentDate(e.target.value)} style={inputStyle} />
             <input type="date" value={actualPaymentDate} onChange={e => setActualPaymentDate(e.target.value)} style={inputStyle} />

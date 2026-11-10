@@ -65,7 +65,7 @@ export function ExpensesTable({ rows, showCategory, onEdit, onDelete, deletingId
     { key: 'quantity', label: 'Кол-во', type: 'number' },
     { key: 'amount', label: 'Сумма', type: 'currency', render: value => <strong className="finance-amount">{money(Number(value))}</strong> },
     { key: 'expenseDate', label: 'Дата', type: 'date', render: value => displayDate(value) },
-    { key: 'paymentMethod', label: 'Оплата', type: 'select', editOptions: [{value:'cash',label:'Наличные'},{value:'cashless',label:'АйКай Мбанк'}], render: (_value, row) => row.paymentMethod === 'cash' ? 'Наличные' : 'АйКай Мбанк' },
+    { key: 'paymentMethod', label: 'Оплата', type: 'select', editOptions: [{value:'cashless',label:'АйКай Мбанк'},{value:'cash',label:'Наличные'}], render: (_value, row) => row.paymentMethod === 'cash' ? 'Наличные' : 'АйКай Мбанк' },
     { key: 'source', label: 'Источник', type: 'text', getValue: row => row.source === 'salary' ? 'Из зарплаты' : row.source === 'advance' ? 'Из аванса' : 'Ручной расход' },
     { key: 'paymentOrderNumber', label: '№ платёжного поручения', type: 'text' },
     { key: 'comment', label: 'Комментарий', type: 'text', width: 250 },

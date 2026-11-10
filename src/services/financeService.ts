@@ -598,3 +598,26 @@ export async function rejectFamilyRefund(refund: Refund, reason: string, reviewe
   if (error) throw new Error(error.message);
   invalidateFinanceCache();
 }
+
+export async function fetchReconciliationPayments(from: string, to: string): Promise<Array<FamilyPayment & { parentName?: string }>> {
+  const payments: FamilyPayment[] = [];
+  for (let offset = 0; ; offset += 500) {
+    const { data, error } = await supabase.from('v2_payments')
+      .select('id,family_id,amount,status,payment_method,payment_date,actual_payment_date,receipt_code,receipt_time,receipt_bank,receipt_url,comment')
+      .in('status', ['pending', 'confirmed']).eq('payment_method', 'transfer')
+      .or(`and(payment_date.gte.${from},payment_date.lte.${to}),and(actual_payment_date.gte.${from},actual_payment_date.lte.${to})`)
+      .order('id').range(offset, offset + 499);
+    if (error) throw new Error(error.message);
+    payments.push(...data.map(mapPayment));
+    if (data.length < 500) break;
+  }
+  const familyIds = Array.from(new Set(payments.map(payment => payment.familyId)));
+  const parents = new Map<string, string>();
+  for (let offset = 0; offset < familyIds.length; offset += 100) {
+    const { data, error } = await supabase.from('v2_families')
+      .select('id,parent_name').in('id', familyIds.slice(offset, offset + 100));
+    if (error) throw new Error(error.message);
+    for (const family of data) parents.set(family.id, family.parent_name);
+  }
+  return payments.map(payment => ({ ...payment, parentName: parents.get(payment.familyId) }));
+}

@@ -34,7 +34,7 @@ import {
   getEmployeeSessionExpiresAt,
   isEmployeeSessionActive,
 } from './services/employeeSession';
-import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
+import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentReconciliationMonth, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchOverdueRequestCount, fetchV2Family } from './services/crmV2Service';
 import { onMessageComposer, requestOverdueNotification, useMessageChannels } from './services/messageService';
@@ -53,6 +53,7 @@ import './index.css';
 // сотрудник больше не скачивает код всех модулей CRM при каждом входе.
 const loadFamiliesPage = () => import('./modules/families/FamiliesPage');
 const FamiliesPage = lazy(loadFamiliesPage);
+const CashierReconciliation = lazy(() => import('./modules/families/CashierReconciliation'));
 const SpendingModule = lazy(() => import('./modules/spending/SpendingModule'));
 const DriversPage = lazy(() => import('./modules/drivers/DriversPage'));
 const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
@@ -149,8 +150,12 @@ export default function App() {
   const [cashierTransferFilter, setCashierTransferFilter] = useState('');
   const [cashierOpenFamilySearch, setCashierOpenFamilySearch] = useState('');
   const [cashierView, setCashierView] = useState<'pending' | 'confirmed' | 'refunds'>('pending');
+  const [reconciliationPeriod, setReconciliationPeriod] = useState(() => {
+    const month = currentReconciliationMonth();
+    return CASHIER_PERIODS.find(item => `${item.year}-${String(item.month).padStart(2, '0')}` === month)?.key ?? 'ALL';
+  });
   const [spendingSearch, setSpendingSearch] = useState('');
-  const [cashierWorkspace, setCashierWorkspace] = useState<'payments' | 'spending'>('payments');
+  const [cashierWorkspace, setCashierWorkspace] = useState<'payments' | 'spending' | 'reconciliation'>('payments');
   useEffect(() => { if (section === 'spending') { setSection('cashier'); setCashierWorkspace('spending'); } }, [section]);
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
@@ -231,6 +236,8 @@ export default function App() {
   useEffect(() => {
     if (currentUser?.sessionToken && notifiesOverdueRequests) void requestOverdueNotification(currentUser.sessionToken).catch(() => undefined);
   }, [currentUser?.sessionToken, notifiesOverdueRequests]);
+  const openReconciliation = () => setCashierWorkspace('reconciliation');
+  const canReconcilePayments = !currentUser?.schoolKeys?.length || currentUser.schoolKeys.includes('ALL');
   const canEditRequests = currentUserRole === 'logist' || currentUserRole === 'senior_logist' || currentUserRole === 'admin';
   // Карточка семьи из канбана заявок открывается поверх доски — закрыл и снова на канбане.
   const openRequestFamily = async (familyId: string, childId: string) => {
@@ -513,7 +520,7 @@ export default function App() {
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
-                {sectionLabel('Кассир')}<span style={{ color: 'var(--text-2)', fontSize: 14, marginLeft: 8 }}>{cashierWorkspace === 'spending' ? 'Расходы' : cashierView === 'pending' ? 'На проверке' : cashierView === 'confirmed' ? 'Подтверждённые' : 'Возвраты'}</span>
+                {sectionLabel('Кассир')}<span style={{ color: 'var(--text-2)', fontSize: 14, marginLeft: 8 }}>{cashierWorkspace === 'reconciliation' ? '' : cashierWorkspace === 'spending' ? 'Расходы' : cashierView === 'pending' ? 'На проверке' : cashierView === 'confirmed' ? 'Подтверждённые' : 'Возвраты'}</span>
 
 
                 {cashierWorkspace === 'payments' && cashierSchoolKey && (
@@ -521,15 +528,28 @@ export default function App() {
                     <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
                       <ChevronLeft size={16} aria-hidden="true" />Все школы
                     </button>
-                    <CashierViewTabs compact value={cashierView} onChange={setCashierView} onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
+                    <CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} compact value={cashierView} onChange={setCashierView} onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
                   </>
                 )}
                 {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
-            {cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
-              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
+            {cashierWorkspace === 'reconciliation' && canReconcilePayments ? (
+              <>
+                <DashboardTopPanel className="dashboard-control-row">
+                  <CashierViewTabs value="reconciliation" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }}
+                    onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
+                    onReconciliation={openReconciliation} />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <ManagerPeriodBar periodKey={reconciliationPeriod} onPeriodKeyChange={setReconciliationPeriod} periods={CASHIER_PERIODS} />
+                  </div>
+                </DashboardTopPanel>
+                <CashierReconciliation key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name}
+                  period={reconciliationPeriod} setPeriod={setReconciliationPeriod} />
+              </>
+            ) : cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
+              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
             ) : cashierSchoolKey ? (
               <>
               {cashierView === 'refunds' ? (
@@ -598,6 +618,7 @@ export default function App() {
               </>
             ) : (
               <CashierOverview
+                onReconciliation={canReconcilePayments ? openReconciliation : undefined}
                 onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
                 view={cashierView}
                 onViewChange={setCashierView}

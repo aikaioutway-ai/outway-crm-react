@@ -296,6 +296,13 @@ export const CASHIER_PERIODS = [
   { key: '5',  month: 5,  year: NEXT_SEASON_YEAR, label: `Май ${NEXT_SEASON_YEAR}` },
 ];
 
+export function currentReconciliationMonth(date = new Date()): string {
+  const parts = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Asia/Bishkek', year: 'numeric', month: '2-digit',
+  }).formatToParts(date);
+  return `${parts.find(part => part.type === 'year')?.value}-${parts.find(part => part.type === 'month')?.value}`;
+}
+
 export function currentCashierPeriodKey(): string {
   const month = new Date().getMonth() + 1;
   return CASHIER_PERIODS.find(period => period.month === month)?.key ?? '6';

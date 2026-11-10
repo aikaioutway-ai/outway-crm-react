@@ -2,10 +2,10 @@ export type B2BPaymentStatus = 'pending' | 'confirmed' | 'rejected';
 export type B2BPaymentMethod = 'cash' | 'legal_account' | 'personal_account' | 'bakai_account';
 
 export const B2B_PAYMENT_METHODS: { value: B2BPaymentMethod; label: string; hint: string }[] = [
-  { value: 'cash', label: 'Наличные', hint: 'Оплата наличными' },
   { value: 'legal_account', label: 'АйКай Мбанк — юрлицо', hint: 'Расчётный счёт компании' },
   { value: 'bakai_account', label: 'АйКай Бакай', hint: 'Расчётный счёт компании' },
   { value: 'personal_account', label: 'АйКай Мбанк — физлицо', hint: 'Личная карта или QR' },
+  { value: 'cash', label: 'Наличные', hint: 'Оплата наличными' },
 ];
 
 export function normalizeB2BPaymentMethod(value: unknown): B2BPaymentMethod {

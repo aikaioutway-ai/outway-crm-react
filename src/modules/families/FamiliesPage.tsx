@@ -215,8 +215,8 @@ const TRANSFER_OPTIONS = TRANSFER_NUMBER_VALUES.map(value => ({ value, label: `�
 const TRANSFER_BAR_OPTIONS = TRANSFER_NUMBER_VALUES;
 const STOP_OPTIONS = Array.from({ length: 20 }, (_, i) => ({ value: String(i + 1), label: String(i + 1) }));
 const PAYMENT_METHOD_OPTIONS: { value: PaymentType; label: string }[] = [
-  { value: 'cash', label: 'Наличные' },
   { value: 'transfer', label: 'АйКай Мбанк' },
+  { value: 'cash', label: 'Наличные' },
 ];
 
 const COLUMNS: ColumnDef<ChildRow>[] = [
