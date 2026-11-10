@@ -7,7 +7,7 @@ import { useB2BPaymentsQuery } from '../../hooks/useB2BPayments';
 import { queryClient } from '../../services/queryClient';
 import { updateB2BPaymentStatus } from '../../services/b2bDataService';
 import type { B2BDriverPayoutRecord, B2BExpenseRecord, B2BOrderRecord } from '../../services/b2bDataService';
-import { B2B_LEGAL_ACCOUNT_TAX_RATE, formatB2BPaymentMethod, type B2BPaymentRecord } from '../../services/b2bPaymentService';
+import { B2B_LEGAL_ACCOUNT_TAX_RATE, isB2BRevenueTaxMethod, formatB2BPaymentMethod, type B2BPaymentRecord } from '../../services/b2bPaymentService';
 import { b2bCashierPeriodBounds, normalizeB2BCashierDate, calculateB2BCashierSummary } from './b2bCashierCalculations';
 
 const MONTHS = ['Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь', 'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь'];
@@ -96,7 +96,7 @@ export default function B2BCashier({ onOpenOrder }: B2BCashierProps) {
   type DetailRow = { id: string; orderId?: string; order: string; description: string; date: string; amount: number; payment?: B2BPaymentRecord };
   let detailRows: DetailRow[] = [];
   if (detail === 'Поступило за месяц' || detail === 'На проверке' || detail === 'Расчётный налог B2B') {
-    detailRows = payments.filter(row => detail === 'На проверке' ? row.status === 'pending' : row.status === 'confirmed' && inPeriod(row.paymentDate) && (detail !== 'Расчётный налог B2B' || row.method === 'legal_account')).map(row => ({ id: row.id, orderId: row.orderId, order: row.orderNumber, description: row.clientName + ' · ' + formatB2BPaymentMethod(row.method) + (detail === 'Расчётный налог B2B' ? ` · ${money(row.amount)} × ${B2B_LEGAL_ACCOUNT_TAX_RATE * 100}%` : ''), date: row.paymentDate, amount: detail === 'Расчётный налог B2B' ? Math.round(row.amount * B2B_LEGAL_ACCOUNT_TAX_RATE * 100) / 100 : row.amount, payment: detail === 'На проверке' ? row : undefined }));
+    detailRows = payments.filter(row => detail === 'На проверке' ? row.status === 'pending' : row.status === 'confirmed' && inPeriod(row.paymentDate) && (detail !== 'Расчётный налог B2B' || isB2BRevenueTaxMethod(row.method))).map(row => ({ id: row.id, orderId: row.orderId, order: row.orderNumber, description: row.clientName + ' · ' + formatB2BPaymentMethod(row.method) + (detail === 'Расчётный налог B2B' ? ` · ${money(row.amount)} × ${B2B_LEGAL_ACCOUNT_TAX_RATE * 100}%` : ''), date: row.paymentDate, amount: detail === 'Расчётный налог B2B' ? Math.round(row.amount * B2B_LEGAL_ACCOUNT_TAX_RATE * 100) / 100 : row.amount, payment: detail === 'На проверке' ? row : undefined }));
   } else if (detail === 'Общий долг клиентов') {
     detailRows = summary.clientDebts.map(row => ({ id: row.orderId, orderId: row.orderId, order: row.orderNumber, description: row.client, date: '', amount: row.remaining }));
   } else if (detail === 'Прочие расходы B2B') {
@@ -106,7 +106,7 @@ export default function B2BCashier({ onOpenOrder }: B2BCashierProps) {
       ...payments.filter(row => row.status === 'confirmed').map(row => ({ id: `p-${row.id}`, orderId: row.orderId, order: row.orderNumber, description: row.clientName, date: row.paymentDate, amount: row.amount })),
       ...payouts.map(row => ({ id: `d-${row.id}`, orderId: row.orderId, order: orders.find(order => order.id === row.orderId)?.number || '', description: row.driverName, date: row.paymentDate, amount: -row.amount })),
       ...expenses.filter(row => row.source === 'manual').map(row => ({ id: `e-${row.id}`, orderId: orders.find(order => order.number === row.orderNumber)?.id, order: row.orderNumber || 'Без заказа', description: row.purpose, date: row.expenseDate, amount: -row.amount })),
-      ...payments.filter(row => row.status === 'confirmed' && row.method === 'legal_account').map(row => ({ id: `t-${row.id}`, orderId: row.orderId, order: row.orderNumber, description: 'Налог 4% с выручки', date: row.paymentDate, amount: -Math.round(row.amount * B2B_LEGAL_ACCOUNT_TAX_RATE * 100) / 100 })),
+      ...payments.filter(row => row.status === 'confirmed' && isB2BRevenueTaxMethod(row.method)).map(row => ({ id: `t-${row.id}`, orderId: row.orderId, order: row.orderNumber, description: 'Налог 4% с выручки', date: row.paymentDate, amount: -Math.round(row.amount * B2B_LEGAL_ACCOUNT_TAX_RATE * 100) / 100 })),
     ];
   } else if (detail) {
     detailRows = orders.filter(row => row.status !== 'cancelled' && inPeriod(row.departureDate || row.requestDate)).map(row => {

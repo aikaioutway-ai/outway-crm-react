@@ -2,6 +2,7 @@ import { calculateB2BRevenueTax, normalizeB2BPaymentMethod, normalizeB2BPaymentO
 
 describe('B2B revenue tax', () => {
   test('calculates 4% for legal-account client revenue', () => {
+    expect(calculateB2BRevenueTax(10_000, 'bakai_account')).toEqual(calculateB2BRevenueTax(10_000, 'legal_account'));
     expect(calculateB2BRevenueTax(10_000, 'legal_account')).toEqual({
       grossAmount: 10_000,
       taxAmount: 400,

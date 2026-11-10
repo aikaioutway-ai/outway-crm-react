@@ -1,5 +1,5 @@
 import type { B2BDriverPayoutRecord, B2BExpenseRecord, B2BOrderRecord } from '../../services/b2bDataService';
-import { B2B_LEGAL_ACCOUNT_TAX_RATE, type B2BPaymentMethod, type B2BPaymentRecord } from '../../services/b2bPaymentService';
+import { B2B_LEGAL_ACCOUNT_TAX_RATE, isB2BRevenueTaxMethod, type B2BPaymentMethod, type B2BPaymentRecord } from '../../services/b2bPaymentService';
 
 export interface B2BCashierPeriod {
   year: number;
@@ -65,7 +65,7 @@ export function b2bCashierPeriodBounds(period: B2BCashierPeriod) {
 }
 
 const roundMoney = (value: number) => Math.round(value * 100) / 100;
-const calculatePaymentTax = (payment: B2BPaymentRecord) => payment.status === 'confirmed' && payment.method === 'legal_account'
+const calculatePaymentTax = (payment: B2BPaymentRecord) => payment.status === 'confirmed' && isB2BRevenueTaxMethod(payment.method)
   ? roundMoney(payment.amount * B2B_LEGAL_ACCOUNT_TAX_RATE)
   : 0;
 
@@ -174,7 +174,7 @@ export function calculateB2BCashierSummary(
       paymentOrderNumber: expense.paymentOrderNumber,
       orderId: orderIdsByNumber.get(expense.orderNumber),
     })),
-    ...periodConfirmedPayments.filter(payment => payment.method === 'legal_account').map(payment => ({
+    ...periodConfirmedPayments.filter(payment => isB2BRevenueTaxMethod(payment.method)).map(payment => ({
       id: `tax-${payment.id}`,
       date: payment.paymentDate,
       direction: 'expense' as const,
@@ -208,7 +208,7 @@ export function calculateB2BCashierSummary(
     driverRemaining: driverPayables.reduce((sum, row) => sum + row.remaining, 0),
     manualExpenses: periodManualExpenses.reduce((sum, expense) => sum + expense.amount, 0),
     calculatedTax: periodConfirmedPayments
-      .filter(payment => payment.method === 'legal_account')
+      .filter(payment => isB2BRevenueTaxMethod(payment.method))
       .reduce((sum, payment) => sum + roundMoney(payment.amount * B2B_LEGAL_ACCOUNT_TAX_RATE), 0),
     riskyManualExpenses: {
       count: riskyManualRows.length,

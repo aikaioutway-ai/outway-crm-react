@@ -18,7 +18,7 @@ import { Badge, Empty, ErrorBox, formatDate, InfoRow, Kpi, PhoneRow, SearchField
 
 type CashierTab = 'pending' | 'confirmed' | 'refunds';
 
-const METHOD_LABEL: Record<string, string> = { cash: 'Наличные', transfer: 'АйКай Мбанк', cashless: 'Безналичные' };
+const METHOD_LABEL: Record<string, string> = { cash: 'Наличные', transfer: 'АйКай Мбанк', cashless: 'АйКай Мбанк' };
 const REFUND_STATUS: Record<string, { label: string; bg: string; color: string }> = {
   pending: { label: 'На проверке', bg: '#FEF3C7', color: '#92400E' },
   confirmed: { label: 'Подтверждено', bg: '#DCFCE7', color: '#166534' },

@@ -1,3 +1,4 @@
+import { formatSpendingPaymentMethod, SPENDING_PAYMENT_METHODS } from './paymentMethods';
 import React from 'react';
 import { Pencil, Trash2 } from 'lucide-react';
 import DataTable, { ColumnDef } from '../../core/tables/DataTable';
@@ -29,7 +30,7 @@ export function editSpendingCell(row: SpendingEntry, key: string, value: unknown
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(Date.parse(date))) return null;
     next.date = date;
   } else if (key === 'method') {
-    if (!['Наличные','Безналичные'].includes(String(value))) return null;
+    if (!SPENDING_PAYMENT_METHODS.includes(String(value))) return null;
     next.method = String(value);
   } else if (key === 'description') {
     if (!String(value).trim()) return null;
@@ -70,7 +71,7 @@ export default function SpendingRecordsTable({rows,disabled,onEdit,onDelete,onSa
     {key:'paymentOrderNumber',label:'№ платёжного поручения',type:'text',width:170,editable:true},
     {key:'comment',label:'Комментарий',type:'text',width:280,editable:true},
     {key:'recipient',label:'Получатель',type:'text',width:180,editable:true,visible:false},
-    {key:'method',label:'Оплата',type:'select',width:130,editable:true,visible:false,editOptions:[{value:'Наличные',label:'Наличные'},{value:'Безналичные',label:'Безналичные'}]},
+    {key:'method',label:'Оплата',type:'select',width:130,editable:true,visible:false,editOptions:SPENDING_PAYMENT_METHODS.map(method => ({value:method,label:formatSpendingPaymentMethod(method)})),render:(_value,row)=>formatSpendingPaymentMethod(row.method)},
     {key:'unitPrice',label:'Цена',type:'currency',width:120,editable:true,visible:false},
     {key:'quantity',label:'Кол-во',type:'number',width:90,editable:true,visible:false},
     {key:'salaryPeriodKey',label:'Период выплаты',type:'text',width:150,editable:true,visible:false},

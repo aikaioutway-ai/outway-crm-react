@@ -256,7 +256,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
 
       <section className="finance-summary" aria-label="Итоги расходов за период">
         <div className="finance-summary-total"><span>Расходы за период</span><strong>{loading ? '…' : money(scopedRows.reduce((sum,row)=>sum+row.amount,0))}<small> сом</small></strong></div>
-        <div><span>Безналичные</span><strong>{loading ? '…' : money(scopedRows.filter(row=>row.paymentMethod==='cashless').reduce((sum,row)=>sum+row.amount,0))}</strong></div>
+        <div><span>АйКай Мбанк</span><strong>{loading ? '…' : money(scopedRows.filter(row=>row.paymentMethod==='cashless').reduce((sum,row)=>sum+row.amount,0))}</strong></div>
         <div><span>Наличные</span><strong>{loading ? '…' : money(scopedRows.filter(row=>row.paymentMethod==='cash').reduce((sum,row)=>sum+row.amount,0))}</strong></div>
         <div className="finance-summary-count"><span>Записей</span><strong>{loading ? '…' : scopedRows.length}</strong></div>
       </section>
@@ -268,7 +268,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
           { key: 'category', label: selectedCategory ? 'Подкатегория' : 'Категория', total: overviewRows.length, color: '#64748B' },
           { key: 'count', label: 'К-во расходов', total: categoryRows.length, color: '#7C3AED' },
           { key: 'amount', label: 'Сумма расходов', total: money(categoryRows.reduce((sum, row) => sum + row.amount, 0)), color: '#2563EB' },
-          { key: 'cashless', label: 'Безналичные', total: money(categoryRows.filter(row => row.paymentMethod === 'cashless').reduce((sum, row) => sum + row.amount, 0)), color: '#1D6FA4' },
+          { key: 'cashless', label: 'АйКай Мбанк', total: money(categoryRows.filter(row => row.paymentMethod === 'cashless').reduce((sum, row) => sum + row.amount, 0)), color: '#1D6FA4' },
           { key: 'cash', label: 'Наличные', total: money(categoryRows.filter(row => row.paymentMethod === 'cash').reduce((sum, row) => sum + row.amount, 0)), color: '#15803D' },
         ]}
         rows={overviewRows.sort((a, b) => {

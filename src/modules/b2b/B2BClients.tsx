@@ -324,7 +324,7 @@ export default function B2BClients({ onOpenOrder, userName = 'CRM', canViewFinan
               {clientCardTab === 'taxes' && (selectedClientTaxes.length ? <div className="b2b-client-orders-wrap"><FilterableTable data-comment-table="b2b/B2BClients:2" className="b2b-client-orders-table b2b-compact-table"><thead><tr><th>Дата</th><th>Заказ</th><th>Основание</th><th>Способ</th><th className="number">Сумма</th></tr></thead><tbody>{selectedClientTaxes.map(tax => {
                 const order = selectedClientOrders.find(item => item.number === tax.orderNumber);
                 return <tr data-comment-row={tax.id} key={tax.id}><td>{tax.expenseDate}</td><td className="order-number">{order ? <button className="b2b-client-order-link" type="button" onClick={() => onOpenOrder?.(order.id, 'payment')}>{tax.orderNumber}</button> : tax.orderNumber}</td><td>{tax.purpose || 'Налог 4% с подтверждённой оплаты'}</td><td>{formatB2BPaymentMethod(tax.method)}</td><td className="number">{tax.amount.toLocaleString()}</td></tr>;
-              })}</tbody></FilterableTable></div> : <div className="b2b-client-tab-empty"><Percent size={28} /><strong>Налогов пока нет</strong><span>Начисления 4% появятся после подтверждённых безналичных оплат.</span></div>)}
+              })}</tbody></FilterableTable></div> : <div className="b2b-client-tab-empty"><Percent size={28} /><strong>Налогов пока нет</strong><span>Начисления 4% появятся после подтверждения оплат на счёт юрлица.</span></div>)}
 
               {canViewFinance && clientCardTab === 'finance' && <div className="b2b-client-finance-panel">
                 <div className="b2b-client-finance-summary">

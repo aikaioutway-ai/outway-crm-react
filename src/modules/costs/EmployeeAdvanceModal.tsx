@@ -158,7 +158,7 @@ export default function EmployeeAdvanceModal({ onClose, onSaved, sessionToken, e
     <label className="expense-field">Сумма, сом<input required={department!=='drivers'} readOnly={department==='drivers' || selectedPeriods.length>1} type="number" min="0.01" step="0.01" value={department==='drivers' || selectedPeriods.length>1?total:amount} onChange={event=>{setAmount(event.target.value);if(selectedPeriods.length===1)setOfficeAmounts(current=>({...current,[selectedPeriods[0]]:event.target.value}));}}/></label>
     </>}
     <label className="expense-field">{paymentType==='expense'?'Дата расхода':'Дата выплаты'}<input required type="date" value={date} onChange={event => setDate(event.target.value)} /></label>
-    <label className="expense-field">Способ оплаты<select value={method} onChange={event => setMethod(event.target.value as 'cash'|'cashless')}><option value="cashless">Безналичные</option><option value="cash">Наличные</option></select></label>
+    <label className="expense-field">Способ оплаты<select value={method} onChange={event => setMethod(event.target.value as 'cash'|'cashless')}><option value="cashless">АйКай Мбанк</option><option value="cash">Наличные</option></select></label>
     <label className="expense-field">№ платёжного поручения<input value={number} onChange={event => setNumber(event.target.value)} /></label>
     <label className="expense-field">Комментарий<input value={comment} onChange={event => setComment(event.target.value)} /></label>
     <div className="expense-total-preview"><span>{paymentType==='expense'?'Итого':department==='drivers' ? `К выплате · ${batch.length} водителей` : 'К выплате'}</span><strong>{total.toLocaleString('ru-RU')}</strong></div>
