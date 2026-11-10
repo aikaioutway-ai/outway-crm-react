@@ -165,7 +165,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
     const matches: FamilySearchHit[] = [];
     for (const row of rows) {
       if (seen.has(row.rowId)) continue;
-      const haystack = `${row.parentName} ${row.childName}`.toLowerCase();
+      const haystack = `${row.familyId} ${row.parentName} ${row.childName}`.toLowerCase();
       const matchesText = normalizedQuery.length >= 2 && haystack.includes(normalizedQuery);
       const matchesPhone = phoneMatchesQuery(query, row.phone, row.secondPhone);
       if (matchesText || matchesPhone) {
