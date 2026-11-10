@@ -155,13 +155,13 @@ export default function App() {
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
-  // Модули менеджера и логиста открываются на «Новых заявках».
-  const [logisticsView, setLogisticsView] = useState<'requests' | 'table' | 'map'>('requests');
+  // Модули менеджера и логиста открываются на «Справочнике».
+  const [logisticsView, setLogisticsView] = useState<'requests' | 'table' | 'map'>('table');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
-  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals' | 'requests'>('requests');
+  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals' | 'requests'>('directory');
   const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
   const managerSchoolMode = requestedManagerSchoolMode === 'accruals' && !canViewManagerAccruals ? 'directory' : requestedManagerSchoolMode;
   const setManagerSchoolMode = (mode: 'directory' | 'charges' | 'accruals' | 'requests') => {

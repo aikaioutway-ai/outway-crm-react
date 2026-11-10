@@ -11,7 +11,7 @@ interface Props { compact?: boolean; showRequests?: boolean; canViewAccruals?: b
 export default function ManagerModeTabs({ value, onChange, canViewAccruals = false, showRequests = false }: Props) {
   return (
     <div role="tablist" aria-label="Раздел менеджера" className="ow-seg">
-      {([['requests', 'Новые заявки'], ['directory', 'Справочник'], ['charges', 'Оплаты'], ['accruals', 'Начисления']] as const).filter(([mode]) => (mode !== 'accruals' || canViewAccruals) && (mode !== 'requests' || showRequests)).map(([mode, label]) => (
+      {([['directory', 'Справочник'], ['charges', 'Оплаты'], ['requests', 'Новые заявки'], ['accruals', 'Начисления']] as const).filter(([mode]) => (mode !== 'accruals' || canViewAccruals) && (mode !== 'requests' || showRequests)).map(([mode, label]) => (
         <button key={mode} type="button" role="tab" className="ow-seg-btn" aria-selected={value === mode} onClick={() => onChange(mode)}>{label}</button>
       ))}
     </div>

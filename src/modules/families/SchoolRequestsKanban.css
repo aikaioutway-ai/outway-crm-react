@@ -1,6 +1,7 @@
 .requests-workspace { display: flex; flex-direction: column; gap: 16px; min-height: 0; flex: 1; padding-bottom: 16px; }
 .requests-toolbar { display: flex; align-items: center; gap: 12px; }
 .requests-toolbar > div { flex: 1; }
+.requests-toolbar > .requests-school { flex: 0 0 auto; width: 220px; }
 .requests-search { min-width: 260px; padding: 9px 12px; border: 1px solid var(--border); border-radius: 8px; font: inherit; background: var(--surface, #fff); color: var(--text); }
 
 .requests-kanban { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, .7fr); gap: 14px; overflow: auto; flex: 1; min-height: 0; align-items: stretch; }

@@ -4,7 +4,8 @@ import React, { useMemo } from 'react';
 import { useBranchStats, useFamiliesTable, usePeriodChargeStats, useSchoolDirectoryStats, useSchoolTransferStats } from '../../hooks/useCrmQueries';
 import { managerSchoolKpi, rowsForTransferSelection } from './schoolKpiStats';
 import { computeSchoolStatsFromBranches, KPI_COLORS } from './ManagerOverview';
-import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { KpiChip } from '../../core/dashboard/DashboardUI';
+import SchoolKpiChip from './SchoolKpiChip';
 import { money } from '../../utils/pricing';
 import { isSchoolAllowed } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
@@ -60,20 +61,14 @@ export default function SchoolKpiStrip({ mode = 'charges', schoolKey, rightReser
       ['rejected', 'Отказ', counts.rejected],
     ] as const;
     return <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12, paddingRight: rightReserveWidth }}>
-      <KpiChip iconBackground="transparent" icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} />} label="Школа" value={stat.label} color={stat.color} />
+      <SchoolKpiChip small schoolKey={schoolKey} logo={stat.logo} label={stat.label} color={stat.color} />
       {metrics.map(([key, label, count]) => <KpiChip key={key} icon={null} label={label} value={String(count)} color={DIRECTORY_COLORS[key]} />)}
     </div>;
   }
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
-      <KpiChip
-        iconBackground="transparent"
-        icon={<SchoolAvatar logo={stat.logo} label={stat.label} color={stat.color} size={38} radius={11} fontSize={12} />}
-        label="Школа"
-        value={stat.label}
-        color={stat.color}
-      />
+      <SchoolKpiChip schoolKey={schoolKey} logo={stat.logo} label={stat.label} color={stat.color} />
       <KpiChip icon={null} label="К-во всех детей" value={kpi ? String(kpi.childrenCount) : '…'} color={KPI_COLORS.childrenCount} />
       <KpiChip icon={null} label="Новые заявки" value={kpi ? String(kpi.newRequests) : '…'} color={KPI_COLORS.newRequests} />
       <KpiChip icon={null} label="Начислено" value={kpi ? money(kpi.charged) : '…'} color={KPI_COLORS.charged} />

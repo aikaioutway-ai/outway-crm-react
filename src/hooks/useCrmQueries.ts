@@ -109,15 +109,21 @@ export function useDriversTable(): UseQueryResult<V2DriverTableRow[]> {
 /** Номера трансферов школы из v2_transfers — единый источник для панелей
  * трансферов: страница 16–30 появляется везде, как только у школы есть такой
  * трансфер, даже если на нём пока нет детей или водителя. */
-export function useSchoolTransferNumbers(schoolKey: string): string[] {
+function useSchoolTransfers(schoolKey: string): V2TransferDashboardRow[] {
   const { data } = useQuery({
     queryKey: QK.transfersDashboard,
     queryFn: fetchV2TransfersDashboard,
   });
-  const transfers: V2TransferDashboardRow[] = data ?? [];
-  return transfers
-    .filter((transfer: V2TransferDashboardRow) => getBranchFilter(transfer.branchName, transfer.branchCode) === schoolKey)
-    .map((transfer: V2TransferDashboardRow) => transfer.transferNumber);
+  return (data ?? []).filter((transfer: V2TransferDashboardRow) => getBranchFilter(transfer.branchName, transfer.branchCode) === schoolKey);
+}
+
+export function useSchoolTransferNumbers(schoolKey: string): string[] {
+  return useSchoolTransfers(schoolKey).map(transfer => transfer.transferNumber);
+}
+
+/** Тип ТС каждого трансфера школы (номер → тип) — для цветной метки в ряду трансферов. */
+export function useSchoolTransferVehicleTypes(schoolKey: string): Record<string, string> {
+  return Object.fromEntries(useSchoolTransfers(schoolKey).map(transfer => [transfer.transferNumber, transfer.vehicleType]));
 }
 
 export function usePaymentsTable(options?: { enabled?: boolean }): UseQueryResult<PaymentTableRow[]> {

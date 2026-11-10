@@ -1,9 +1,9 @@
 import { showTaskContextMenu } from '../tasks/TaskContextMenu';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
-import TransferCell from '../../core/dashboard/TransferCell';
+import TransferCell, { transferCellColor } from '../../core/dashboard/TransferCell';
 import { useMemo } from 'react';
 import { PaymentTableRow } from '../../services/crmV2Service';
-import { usePaymentsTable, useSchoolTransferNumbers } from '../../hooks/useCrmQueries';
+import { usePaymentsTable, useSchoolTransferNumbers, useSchoolTransferVehicleTypes } from '../../hooks/useCrmQueries';
 import { CASHIER_PERIODS, SCHOOL_TABS } from './constants';
 
 interface CashierSchoolTransferDashboardProps {
@@ -50,6 +50,7 @@ function rowMatchesSchool(row: PaymentTableRow, schoolKey: string): boolean {
 export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, rightReserveWidth = 0, selectedKey = '', onSelect, statusFilter = 'pending' }: CashierSchoolTransferDashboardProps) {
   const { data: rows = null } = usePaymentsTable();
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
+  const vehicleTypes = useSchoolTransferVehicleTypes(schoolKey);
   const statusPredicate = statusFilter === 'confirmed' ? isConfirmed : isPending;
 
   const schoolRows = useMemo(() => (
@@ -90,6 +91,7 @@ export default function CashierSchoolTransferDashboard({ schoolKey, periodKey, r
         <TransferCell
           key={cell.filterKey || 'all'}
           label={cell.label}
+          color={transferCellColor({ vehicleType: vehicleTypes[cell.filterKey] })}
           active={cell.count > 0}
           selected={selectedKey === cell.filterKey}
           value={cell.count}

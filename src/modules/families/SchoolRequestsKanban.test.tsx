@@ -12,7 +12,12 @@ jest.mock('../../hooks/useCrmQueries', () => ({ useLogisticsTable: () => ({ data
   { ...base, rowId: 'rej-1', childName: 'Отказник', status: 'rejected', transferMark: null },
   { ...base, rowId: 'boarded-1', childName: 'Посажен', status: 'boarded', transferNumber: '2' },
   { ...base, rowId: 'old-1', childName: 'Старая', status: 'new', transferMark: null, childCreatedAt: '2020-01-01T10:00:00Z' },
-], refetch: jest.fn(), isPending: false, isError: false }) }));
+], refetch: jest.fn(), isPending: false, isError: false }), useEmployees: () => ({ data: [
+  { id: 'l1', fullName: 'Адилет', role: 'logist', status: 'active', schoolKeys: ['ABL2', 'TIS'] },
+  { id: 'm1', fullName: 'Эркинбекова Аяна', role: 'manager', status: 'active', schoolKeys: ['ABL2'] },
+  { id: 'm2', fullName: 'Уволенный', role: 'manager', status: 'dismissed', schoolKeys: ['ABL2'] },
+  { id: 'd1', fullName: 'Директор', role: 'director', status: 'active', schoolKeys: ['ALL'] },
+] }) }));
 jest.mock('../../services/crmV2Service', () => ({ updateV2ChildRoute: jest.fn().mockResolvedValue(undefined) }));
 jest.mock('../../core/dashboard/askTransferComment', () => ({
   askTransferComment: jest.fn(),
@@ -88,4 +93,11 @@ test('without edit rights cards only open, nothing moves', () => {
   expect(updateV2ChildRoute).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: 'Новый: открыть карточку семьи' }));
   expect(onOpen).toHaveBeenCalled();
+});
+
+test('board shows which school it is and who runs it', () => {
+  renderBoard();
+  const staff = screen.getByText('Л: Адилет · М: Аяна');
+  expect(staff).toHaveAttribute('title', 'Логист: Адилет\nМенеджер: Эркинбекова Аяна');
+  expect(staff.closest('.requests-school')).toHaveTextContent('ABL #1');
 });

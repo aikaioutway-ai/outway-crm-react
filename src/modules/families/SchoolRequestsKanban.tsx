@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, MapPin, Phone } from 'lucide-react';
 import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { FamilyListRow, updateV2ChildRoute } from '../../services/crmV2Service';
@@ -8,12 +8,21 @@ import { askTransferComment, formatTransferComment } from '../../core/dashboard/
 import TransferNumberBadge from '../../core/dashboard/TransferNumberBadge';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import { REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
-import { isSchoolAllowed, transferChoiceValue, transferCommentPrompt } from './constants';
+import { isSchoolAllowed, schoolTabsForTier, transferChoiceValue, transferCommentPrompt } from './constants';
+import SchoolKpiChip from './SchoolKpiChip';
 import { optimisticTransferPatch } from './familiesRowHelpers';
 import type { SchoolTier } from './SchoolTierTabs';
 import type { VehicleType } from '../../types';
 import { isRequestOnBoard, isRequestOverdue, neighborStage, OVERDUE_DAYS, REQUEST_STAGES, requestStage, RequestStage, stageLabel, stageSince, stageTransferChoice } from './requestWorkflow';
+import { useRememberedScroll } from '../../hooks/useRememberedScroll';
 import './SchoolRequestsKanban.css';
+
+/** Колонка помнит, докуда её пролистали, — после перехода на другую вкладку школы и обратно. */
+function RequestCards({ scrollKey, children }: { scrollKey: string; children: React.ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useRememberedScroll(ref, scrollKey, true);
+  return <div ref={ref} className="requests-cards">{children}</div>;
+}
 
 function daysSince(value: string | null | undefined): string {
   if (!value) return '';
@@ -153,8 +162,12 @@ export default function SchoolRequestsKanban({ schoolKey, allowedSchools, school
     </article>;
   };
 
+  // В «Новых заявках» нет полосы показателей — без этой плашки не видно, в какой школе ты.
+  const school = schoolKey === 'ALL' ? undefined : schoolTabsForTier(schoolTier).find(item => item.key === schoolKey);
+
   return <div className="requests-workspace">
     <DashboardTopPanel><div className="requests-toolbar">
+      {school && <div className="requests-school"><SchoolKpiChip small schoolKey={school.key} logo={school.logo} label={school.label} color="var(--text-2)" /></div>}
       <ManagerPeriodBar periodKey={day} onPeriodKeyChange={setDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" useLabels periodCounts={counts} periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} />
       <button type="button" className={`requests-overdue-toggle${onlyOverdue ? ' requests-overdue-toggle--on' : ''}`} aria-pressed={onlyOverdue} disabled={!overdueCount && !onlyOverdue}
         title="Красные: больше 2 дней в «Новых», 3 в «В работе», 5 в «Ожидании»" onClick={() => setOnlyOverdue(value => !value)}>
@@ -176,11 +189,11 @@ export default function SchoolRequestsKanban({ schoolKey, allowedSchools, school
             const row = rows.find(item => item.rowId === event.dataTransfer.getData('text/plain')); if (row) void move(row, stage.key);
           }}>
           <h2 style={{ borderTopColor: stage.color }}><span className="requests-column-title"><b style={{ color: stage.color }}>{stage.symbol}</b> {stage.label}</span>{!isReject && <span className="requests-column-counts">{redCount > 0 && <span className="requests-column-red" title="Просрочено">{redCount}</span>}<span className="requests-column-count">{cards.length}</span></span>}</h2>
-          <div className="requests-cards">
+          <RequestCards scrollKey={`requests:${schoolTier}:${schoolKey}:${stage.key}`}>
             {isReject
               ? <p className="requests-reject-hint">Перетащите карточку сюда — трансфер станет «Х». Нужен комментарий.</p>
               : cards.length === 0 ? <p className="requests-empty">{dragging ? `Отпустите здесь — трансфер «${stage.symbol}»` : 'Нет заявок'}</p> : cards.map(row => renderCard(row, stage.key))}
-          </div>
+          </RequestCards>
         </section>;
       })}
     </div>}

@@ -70,18 +70,20 @@ export function SchoolApplicationCount({ count }: { count?: number }) {
   );
 }
 
-export function KpiChip({ icon, label, value, color, iconBackground }: {
+export function KpiChip({ icon, label, value, color, iconBackground, labelTitle }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   color: string;
   iconBackground?: string;
+  /** Подсказка к подписи, если она длиннее самой подписи (например, полные ФИО). */
+  labelTitle?: string;
 }) {
   return (
     <div className="dashboard-kpi" style={{ ['--kpi-color' as string]: color } as React.CSSProperties}>
       {icon && <div className="dashboard-kpi-icon" style={{ background: iconBackground ?? color }}>{icon}</div>}
       <div className="dashboard-kpi-copy">
-        <div className="dashboard-kpi-label" title={label}>{!icon && <span className="dashboard-kpi-dot" aria-hidden="true" />}{label}</div>
+        <div className="dashboard-kpi-label" title={labelTitle ?? label}>{!icon && <span className="dashboard-kpi-dot" aria-hidden="true" />}{label}</div>
         <div className="dashboard-kpi-value" title={value}>{value}</div>
       </div>
     </div>

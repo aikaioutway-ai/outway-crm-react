@@ -1,8 +1,9 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import SchoolTransferDashboard from './SchoolTransferDashboard';
+import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import { useFamiliesTable, useSchoolTransferStats } from '../../hooks/useCrmQueries';
 
-jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferStats: jest.fn(), useSchoolTransferNumbers: () => [], usePeriodChargeStats: () => ({ data: [] }) }));
+jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useSchoolTransferStats: jest.fn(), useSchoolTransferNumbers: () => [], useSchoolTransferVehicleTypes: () => ({ 1: 'minivan', 2: 'microbus' }), usePeriodChargeStats: () => ({ data: [] }) }));
 
 beforeEach(() => {
   (useFamiliesTable as jest.Mock).mockReturnValue({ data: undefined });
@@ -24,6 +25,9 @@ test('directory transfer marker shows how many children are in the transfer', ()
   expect(screen.getByTitle(/^2 детей/)).toHaveTextContent('21');
   expect(screen.getAllByTitle(/^1 детей/).some(cell => cell.textContent === '12')).toBe(true);
   expect(screen.queryByTitle(/Посадка не подтверждена/)).not.toBeInTheDocument();
+  // Цвет трансфера = тип ТС, как в логистике: 1 — минивэн, 2 — микроавтобус.
+  expect(screen.getByTitle(/^2 детей/).style.getPropertyValue('--cell-color')).toBe(VEHICLE_COLOR.minivan);
+  expect(screen.getAllByTitle(/^1 детей/).find(cell => cell.textContent === '12')!.style.getPropertyValue('--cell-color')).toBe(VEHICLE_COLOR.microbus);
 });
 
 

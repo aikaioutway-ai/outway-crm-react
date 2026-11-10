@@ -1,10 +1,10 @@
 import { showTaskContextMenu } from '../tasks/TaskContextMenu';
-import TransferCell from '../../core/dashboard/TransferCell';
+import TransferCell, { transferCellColor } from '../../core/dashboard/TransferCell';
 import { ManagerMode } from './ManagerModeTabs';
 import TransferBarPages, { transferCellCount } from '../../core/dashboard/TransferBarPages';
 import React from 'react';
 import { FamilyListRow, PeriodChargeStats } from '../../services/crmV2Service';
-import { useFamiliesTable, usePeriodChargeStats, useSchoolTransferNumbers, useSchoolTransferStats } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, usePeriodChargeStats, useSchoolTransferNumbers, useSchoolTransferStats, useSchoolTransferVehicleTypes } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import { isNewUnassignedRow } from './familiesRowHelpers';
@@ -51,6 +51,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   const { data: familyRows } = useFamiliesTable({ enabled: !isDirectory });
   const { data: transferStats } = useSchoolTransferStats(schoolKey, { enabled: isDirectory });
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
+  const vehicleTypes = useSchoolTransferVehicleTypes(schoolKey);
   const periodDebtsQuery = usePeriodChargeStats(periodKey, { enabled: mode === 'charges' && periodKey !== 'ALL' });
   const periodDebts: PeriodChargeStats[] = mode === 'charges' && periodKey !== 'ALL' ? periodDebtsQuery.data ?? [] : [];
 
@@ -117,7 +118,8 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
           // в оплатах — красный счётчик должников.
           value={isTransfer && mode !== 'directory' ? cell.unboardedCount : cell.childCount}
           alert={isTransfer && mode !== 'directory'}
-          color={cell.tone ?? '#2DD4BF'}
+          // Цвет трансфера = тип ТС, как в логистике (микроавтобус / минивэн / седан).
+          color={cell.tone ?? transferCellColor({ vehicleType: vehicleTypes[cell.filterKey] })}
           active={cell.childCount > 0}
           selected={selectedKey === cell.filterKey}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}

@@ -3,7 +3,8 @@ import { Bus, Car, Inbox } from 'lucide-react';
 import { FamilyListRow } from '../../services/crmV2Service';
 import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_TABS } from './constants';
-import { KpiChip, SchoolAvatar } from '../../core/dashboard/DashboardUI';
+import { KpiChip } from '../../core/dashboard/DashboardUI';
+import SchoolKpiChip from './SchoolKpiChip';
 import { isNewUnassignedRow, transferIdentityKey } from './familiesRowHelpers';
 import { isInTestTransfer, useTestTransfers } from './testTransfers';
 import { rowsForTransferSelection } from './schoolKpiStats';
@@ -70,13 +71,7 @@ export default function LogisticsSchoolKpiStrip({ schoolKey, rightReserveWidth =
 
   return (
     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(6, minmax(0, 1fr))', gap: 12, flexShrink: 0, padding: '10px 0 0', paddingRight: rightReserveWidth, transition: 'padding-right .18s ease' }}>
-      <KpiChip
-        icon={<SchoolAvatar logo={school.logo} label={school.label} color={COLORS.school} size={38} radius={11} fontSize={12} />}
-        iconBackground="transparent"
-        label="Школа"
-        value={school.label}
-        color={COLORS.school}
-      />
+      <SchoolKpiChip schoolKey={schoolKey} logo={school.logo} label={school.label} color={COLORS.school} />
       <KpiChip icon={null} label="Новые заявки" value={String(stats.newRequests)} color={COLORS.newRequests} />
       <KpiChip icon={null} label="Средний по МКР" value={stats.microbusAverage.toFixed(1)} color={COLORS.average} />
       <KpiChip icon={null} label="К-во трансферов" value={String(stats.transferCount)} color={COLORS.transfers} />

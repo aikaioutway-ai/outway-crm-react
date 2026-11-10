@@ -8,6 +8,7 @@ import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
 import { useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
 import PaymentDots from './PaymentDots';
+import { useRememberedScroll } from '../../hooks/useRememberedScroll';
 import { paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { driverMatchesSchool, isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
@@ -1926,6 +1927,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
   // familiesPageNumber — сколько страниц по 100 семей догружено сверх первой (листанием таблицы дальше конца).
   const familiesPageQuery = useFamiliesPages(familiesPageParams, familiesPageNumber + 1, { enabled: isPagedMode && branchesReadyForPaging });
+  const contentScrollRef = useRef<HTMLDivElement>(null);
+  useRememberedScroll(contentScrollRef, `families:${mode}:${accrualsView ? 'accruals' : ''}:${activeTab}`, !(isPagedMode ? familiesPageQuery.isPending : loading));
 
   useEffect(() => {
     setFamiliesPageNumber(0);
@@ -3146,6 +3149,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
       {/* ── ОСНОВНОЙ КОНТЕНТ ── */}
       <div
+        ref={contentScrollRef}
         className="no-scrollbar"
         onClick={() => {
           if (!schoolsBarCollapsed) setSchoolsBarCollapsed(true);
