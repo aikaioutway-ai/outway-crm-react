@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookUser, Banknote, Inbox, Calculator } from 'lucide-react';
+import { User, DollarSign, UserPlus, Calculator } from 'lucide-react';
 import type { UserRole } from '../../types';
 
 export function canAccessManagerAccruals(role: UserRole, userId?: string): boolean {
@@ -12,7 +12,7 @@ interface Props { compact?: boolean; showRequests?: boolean; canViewAccruals?: b
 export default function ManagerModeTabs({ value, onChange, canViewAccruals = false, showRequests = false }: Props) {
   return (
     <div role="tablist" aria-label="Раздел менеджера" className="ow-seg">
-      {([['directory', 'Справочник', BookUser], ['charges', 'Оплаты', Banknote], ['requests', 'Новые заявки', Inbox], ['accruals', 'Начисления', Calculator]] as const).filter(([mode]) => (mode !== 'accruals' || canViewAccruals) && (mode !== 'requests' || showRequests)).map(([mode, label, Icon]) => (
+      {([['directory', 'Справочник', User], ['charges', 'Оплаты', DollarSign], ['requests', 'Новые заявки', UserPlus], ['accruals', 'Начисления', Calculator]] as const).filter(([mode]) => (mode !== 'accruals' || canViewAccruals) && (mode !== 'requests' || showRequests)).map(([mode, label, Icon]) => (
         <button key={mode} type="button" role="tab" className="ow-seg-btn" aria-label={label} title={label} aria-selected={value === mode} onClick={() => onChange(mode)} style={{ minWidth: 44, minHeight: 36, display: 'grid', placeItems: 'center' }}><Icon size={18} aria-hidden="true" /></button>
       ))}
     </div>
