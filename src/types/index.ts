@@ -187,6 +187,8 @@ export interface FamilyPayment {
   confirmedBy?: string;
   confirmedAt?: string;
   comment?: string;
+  // Комментарий кассира к решению (подтвердить / отклонить), отдельно от комментария менеджера.
+  cashierComment?: string;
   createdAt: string;
 }
 

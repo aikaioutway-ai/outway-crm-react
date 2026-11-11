@@ -110,11 +110,51 @@ export function reconcileBankStatement<T extends FamilyPayment>(entries: Stateme
   const statementCodes = entries.map(entryCodes);
   const exact = statementCodes.map(list => Array.from(new Set(list.flatMap(code => byCode.get(code) ?? []))));
   const claimed = new Set(exact.flatMap(matches => matches.map(({ payment }) => payment.id)));
-  const byAmountAndDate = entries.map((entry, index) => exact[index].length ? [] : (byAmount.get(entry.amount) ?? [])
-    .filter(payment => !claimed.has(payment.id) && sameDate(entry, payment)));
-  // Если время чека совпало с одной строкой выписки, этот чек не предлагаем другим строкам с той же суммой.
-  const timed = byAmountAndDate.map((candidates, index) => candidates.filter(payment => sameTime(entries[index], payment)));
-  const reservedByTime = new Set(timed.flat().map(payment => payment.id));
+  // Сумма и дата: каждый платёж CRM достаётся только одной строке выписки, иначе один и тот же чек
+  // повторяется во всех поступлениях с той же суммой за день. Сначала пары, где совпало время чека
+  // (ближайшее первым), потом остальные: дата операции важнее даты проводки, затем ближе по времени.
+  const pairs: Array<{ index: number; payment: T; rank: number; distance: number }> = [];
+  entries.forEach((entry, index) => {
+    if (exact[index].length) return;
+    for (const payment of byAmount.get(entry.amount) ?? []) {
+      if (claimed.has(payment.id) || !sameDate(entry, payment)) continue;
+      const entryTime = minutes(entry.time);
+      const receiptTime = minutes(payment.receiptTime);
+      const gap = entryTime != null && receiptTime != null ? Math.abs(entryTime - receiptTime) : Infinity;
+      const operationDay = (payment.actualPaymentDate ?? payment.paymentDate) === (entry.operationDate ?? entry.postingDate);
+      pairs.push({ index, payment, rank: sameTime(entry, payment) ? 0 : operationDay ? 1 : 2, distance: gap });
+    }
+  });
+  pairs.sort((a, b) => a.rank - b.rank || a.distance - b.distance || a.index - b.index);
+  const byAmountAndDate = new Map<number, T>();
+  const taken = new Set<string>();
+  const owner = new Map<string, number>();
+  const locked = new Set<number>();
+  for (const pair of pairs) {
+    if (byAmountAndDate.has(pair.index) || taken.has(pair.payment.id)) continue;
+    byAmountAndDate.set(pair.index, pair.payment);
+    taken.add(pair.payment.id);
+    owner.set(pair.payment.id, pair.index);
+    if (pair.rank === 0) locked.add(pair.index);
+  }
+  // Строка без пары может забрать платёж у соседней, если той достанется другой подходящий платёж:
+  // так в пары попадает как можно больше поступлений. Пары с совпавшим временем не переставляем.
+  const options = new Map<number, T[]>();
+  for (const pair of pairs) options.set(pair.index, [...(options.get(pair.index) ?? []), pair.payment]);
+  const reassign = (index: number, seen: Set<string>): boolean => {
+    for (const payment of options.get(index) ?? []) {
+      if (seen.has(payment.id)) continue;
+      seen.add(payment.id);
+      const current = owner.get(payment.id);
+      if (current === undefined || (!locked.has(current) && reassign(current, seen))) {
+        owner.set(payment.id, index);
+        byAmountAndDate.set(index, payment);
+        return true;
+      }
+    }
+    return false;
+  };
+  for (const index of Array.from(options.keys())) if (!byAmountAndDate.has(index)) reassign(index, new Set());
   return entries.map((entry, index) => {
     const matches = exact[index];
     const sameAmount = matches.filter(({ payment }) => payment.amount === entry.amount);
@@ -126,8 +166,8 @@ export function reconcileBankStatement<T extends FamilyPayment>(entries: Stateme
         matchingCodes: statementCodes[index].filter(code => matching.some(item => item.codes.includes(code))),
       };
     }
-    const candidates = timed[index].length ? timed[index]
-      : byAmountAndDate[index].filter(payment => !reservedByTime.has(payment.id));
+    const paired = byAmountAndDate.get(index);
+    const candidates = paired ? [paired] : [];
     return { entry, group: candidates.length ? '2' as const : 'Х' as const, candidates, matchingCodes: [] as string[] };
   });
 }

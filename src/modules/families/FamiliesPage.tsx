@@ -34,7 +34,8 @@ import NewDriverModal from '../drivers/NewDriverModal';
 import { B2B_ORDER_STATUSES, B2BOrder } from '../b2b/B2BOrders';
 import { useB2BOrders } from '../../hooks/useB2BData';
 import { DRIVER_RESERVE_KEY, isReserveDriver } from '../drivers/DriversOverview';
-import { confirmFamilyPayment, copyPreviousMonthCharges, invalidateFinanceCache, setChildCharge, undoCopyPreviousMonthCharges, updateFamilyPayment } from '../../services/financeService';
+import { applyPaymentDecision, confirmFamilyPayment, copyPreviousMonthCharges, fetchFamilyPayment, invalidateFinanceCache, setChildCharge, undoCopyPreviousMonthCharges, updateFamilyPayment } from '../../services/financeService';
+import PaymentDecisionModal from './PaymentDecisionModal';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
@@ -758,8 +759,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const [cashierRows, setCashierRows] = useState<CashierPaymentRow[]>([]);
   const [loadingCashier, setLoadingCashier] = useState(false);
   const [cashierConfirmingId, setCashierConfirmingId] = useState<string | null>(null);
-  const [cashierEditingId, setCashierEditingId] = useState<string | null>(null);
-  const [cashierDates, setCashierDates] = useState<Record<string, string>>({});
+  // Окно решения по платежу «На проверке»: подтвердить / отклонить / удалить.
+  const [cashierDeciding, setCashierDeciding] = useState<{ row: CashierPaymentRow; payment: FamilyPayment } | null>(null);
   const [dashboardTransfers, setDashboardTransfers] = useState<V2TransferDashboardRow[]>([]);
   const [driverRows, setDriverRows] = useState<V2DriverTableRow[]>([]);
   const [loading, setLoading]     = useState(() => !familiesRowsCache);
@@ -813,7 +814,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     {
       key: 'createdAt', label: 'Дата поступления', type: 'text', category: 'Платёж', width: 130, sortable: false, filterable: false,
       render: (_val, row) => {
-        const date = cashierView === 'confirmed' ? row.actualPaymentDate : cashierDates[row.id];
+        const date = cashierView === 'confirmed' ? row.actualPaymentDate : undefined;
         return <span style={{ fontSize: 12, color: date ? 'var(--text)' : '#9AA7AE' }}>{date ? new Date(date).toLocaleDateString('ru-RU') : '—'}</span>;
       },
     },
@@ -828,49 +829,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           );
         }
         const busy = cashierConfirmingId === row.id;
-        if (cashierEditingId !== row.id) {
-          return (
-            <button
-              onClick={e => {
-                e.stopPropagation();
-                setCashierDates(prev => ({ ...prev, [row.id]: prev[row.id] || new Date().toISOString().slice(0, 10) }));
-                setCashierEditingId(row.id);
-              }}
-              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', cursor: 'pointer' }}
-            >
-              <Pencil size={12} /> На проверке
-            </button>
-          );
-        }
         return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }} onClick={e => e.stopPropagation()}>
-            <input
-              type="date"
-              autoFocus
-              disabled={busy}
-              value={cashierDates[row.id] ?? ''}
-              onChange={e => setCashierDates(prev => ({ ...prev, [row.id]: e.target.value }))}
-              style={{ border: '1px solid var(--border)', borderRadius: 6, padding: '3px 6px', fontSize: 12, color: 'var(--text)', background: '#fff', width: 118 }}
-            />
-            <button
-              title="Подтвердить"
-              disabled={busy || !cashierDates[row.id]}
-              onClick={() => cashierConfirm(row, cashierDates[row.id] ?? '')}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 600, color: '#fff', background: busy || !cashierDates[row.id] ? '#A7E4D3' : 'var(--success)', cursor: busy || !cashierDates[row.id] ? 'not-allowed' : 'pointer' }}
-            >✓</button>
-            <button
-              title="Отклонить"
-              disabled={busy}
-              onClick={() => cashierReject(row)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 13, fontWeight: 600, color: '#991B1B', background: '#FEE2E2', cursor: busy ? 'not-allowed' : 'pointer' }}
-            >✕</button>
-            <button
-              title="Отмена"
-              disabled={busy}
-              onClick={() => setCashierEditingId(null)}
-              style={{ border: 'none', borderRadius: 6, width: 26, height: 26, fontSize: 12, fontWeight: 600, color: 'var(--text-2)', background: 'var(--surface-2)', cursor: busy ? 'not-allowed' : 'pointer' }}
-            >×</button>
-          </div>
+          <button
+            disabled={busy}
+            onClick={e => { e.stopPropagation(); void openCashierDecision(row); }}
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 7, padding: '5px 10px', fontSize: 12, fontWeight: 600, color: 'var(--text)', background: '#fff', cursor: busy ? 'wait' : 'pointer' }}
+          >
+            <Pencil size={12} /> {busy ? 'Открываем…' : 'На проверке'}
+          </button>
         );
       },
     },
@@ -893,7 +859,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       }} />,
     },
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  ], [cashierDates, cashierConfirmingId, cashierEditingId, hasAdminAccess, cashierView, userRole]);
+  ], [cashierConfirmingId, hasAdminAccess, cashierView, userRole]);
   const [transferCardNumber, setTransferCardNumber] = useState<string | null>(null);
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(initialOpenDriverId ?? null);
   useEffect(() => { if (initialOpenDriverId) setSelectedDriverId(initialOpenDriverId); }, [initialOpenDriverId]);
@@ -1151,28 +1117,15 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     }
   }
 
-  async function cashierConfirm(row: CashierPaymentRow, actualDate: string) {
-    if (!actualDate) { alert('Укажите дату поступления'); return; }
+  // Перед окном берём платёж из базы: в таблице нет комментария, и статус мог измениться.
+  async function openCashierDecision(row: CashierPaymentRow) {
     setCashierConfirmingId(row.id);
     try {
-      await confirmFamilyPayment({
-        payment: { id: row.id, familyId: row.familyId, amount: row.amount, paymentType: (row.paymentMethod ?? 'cash') as any, paymentDate: row.paymentDate ?? '', status: 'На проверке', createdAt: row.createdAt },
-        charges: [],
-        confirmedBy: userName,
-        actualPaymentDate: actualDate,
-      });
-      setCashierEditingId(null);
-      loadCashierRows();
-    } catch (e: any) { alert('Не удалось подтвердить: ' + (e?.message ?? '')); }
+      const payment = await fetchFamilyPayment(row.id);
+      if (payment.status !== 'На проверке') { alert('Платёж уже не на проверке — список обновлён.'); loadCashierRows(); return; }
+      setCashierDeciding({ row, payment });
+    } catch (e: any) { alert('Не удалось открыть платёж: ' + (e?.message ?? '')); }
     finally { setCashierConfirmingId(null); }
-  }
-
-  async function cashierReject(row: CashierPaymentRow) {
-    try {
-      await updateFamilyPayment(row.id, { status: 'Отклонено' });
-      setCashierEditingId(null);
-      loadCashierRows();
-    } catch (e: any) { alert('Не удалось отклонить: ' + (e?.message ?? '')); }
   }
 
   useEffect(() => {
@@ -3146,6 +3099,18 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
   return (
     <div style={{ flex: 1, minHeight: 0, overflow: customTableContent ? 'hidden' : 'visible', background: 'var(--active-bg)', borderRadius: '0 0 22px 22px', display: 'flex', padding: '0 0 10px 0' }}>
+      {cashierDeciding && <PaymentDecisionModal
+        title={`${cashierDeciding.row.parentName || cashierDeciding.row.familyId} · ${money(cashierDeciding.payment.amount)}`}
+        subtitle={cashierDeciding.row.childrenNames || undefined}
+        defaultDate={new Date().toISOString().slice(0, 10)}
+        managerComment={cashierDeciding.payment.comment}
+        defaultComment={cashierDeciding.payment.cashierComment ?? ''}
+        canDelete={hasAdminAccess || userRole === 'cashier'}
+        onDecide={async (decision, values) => {
+          await applyPaymentDecision(cashierDeciding.payment, decision, values, { name: userName, sessionToken: authToken });
+          loadCashierRows();
+        }}
+        onClose={() => setCashierDeciding(null)} />}
 
       {/* ── ОСНОВНОЙ КОНТЕНТ ── */}
       <div

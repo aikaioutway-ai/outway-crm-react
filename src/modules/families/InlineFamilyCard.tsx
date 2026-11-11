@@ -446,7 +446,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
     try {
       await updateFamilyPayment(payment.id, { amount: updates.amount, paymentType: updates.paymentType,
         paymentDate: updates.paymentDate, actualPaymentDate: updates.actualPaymentDate,
-        status: updates.status, comment: updates.comment });
+        status: updates.status, comment: updates.comment, cashierComment: updates.cashierComment });
       await addAudit('Изменение платежа', 'family_payment', JSON.stringify(payment), JSON.stringify(updates));
       await loadFinance();
       await loadAudit();
