@@ -8,6 +8,7 @@ import { money } from '../../utils/pricing';
 import { ALL_PERIODS, PERIOD_LABEL } from './constants';
 import './ReceiptPreview.css';
 import ReceiptModal, { isPdfReceipt } from './ReceiptModal';
+import PaymentDecisionModal from './PaymentDecisionModal';
 import { Section, Spinner, Empty } from './DrawerUI';
 
 const PAYMENT_TYPE_LABEL: Record<string, string> = {
@@ -160,6 +161,7 @@ export default function TabFinance({
     setConfirmingPaymentId(null);
     setMsg(ok ? 'Платёж подтверждён и распределён' : 'Не удалось подтвердить платёж');
     setTimeout(() => setMsg(''), 2500);
+    return ok;
   }
 
   async function confirmRefund(refund: Refund, paymentMethod: 'cash' | 'cashless', paymentOrderNumber?: string) {
@@ -334,7 +336,7 @@ function PaymentRow({ onOpenReceipt, payment, items, canConfirm, confirming, onC
   items: PaymentItem[];
   canConfirm: boolean;
   confirming: boolean;
-  onConfirm: (actualPaymentDate: string) => void;
+  onConfirm: (actualPaymentDate: string) => Promise<boolean>;
   onUnconfirm?: () => void;
   onSave: (updates: Partial<FamilyPayment>) => Promise<boolean>;
   onDelete: () => Promise<boolean>;
@@ -354,6 +356,7 @@ function PaymentRow({ onOpenReceipt, payment, items, canConfirm, confirming, onC
   const [status, setStatus] = useState(payment.status);
   const [comment, setComment] = useState(payment.comment ?? '');
   const [saving, setSaving] = useState(false);
+  const [deciding, setDeciding] = useState(false);
   const statusStyle = payment.status === 'Подтверждено'
     ? { background: '#ECFDF5', color: '#065F46' }
     : payment.status === 'Отклонено'
@@ -409,43 +412,28 @@ function PaymentRow({ onOpenReceipt, payment, items, canConfirm, confirming, onC
         </div>
       </div>
 
-      {/* Кассир: подтверждение / отклонение */}
+      {/* Кассир: решение по платежу в отдельном окне */}
       {canConfirm && (
-        <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
-          <input
-            type="date"
-            value={actualPaymentDate}
-            onChange={e => setActualPaymentDate(e.target.value)}
-            placeholder="Дата поступления"
-            style={{ ...inputStyle, width: '100%' }}
-          />
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
-            <button
-              onClick={() => onConfirm(actualPaymentDate)}
-              disabled={confirming || !actualPaymentDate}
-              style={{
-                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 600,
-                cursor: confirming || !actualPaymentDate ? 'default' : 'pointer',
-                background: confirming || !actualPaymentDate ? '#D1FAE5' : '#10B981',
-                color: '#fff',
-              }}
-            >
-              {confirming ? '...' : '✓ Подтвердить'}
-            </button>
-            <button
-              onClick={() => onSave({ status: 'Отклонено' })}
-              disabled={confirming}
-              style={{
-                height: 30, border: 'none', borderRadius: 7, fontSize: 11, fontWeight: 600,
-                cursor: confirming ? 'default' : 'pointer',
-                background: '#FEE2E2', color: '#991B1B',
-              }}
-            >
-              ✕ Отклонить
-            </button>
-          </div>
-        </div>
+        <button type="button" onClick={() => setDeciding(true)} disabled={confirming || saving}
+          style={{ marginTop: 8, width: '100%', height: 30, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, border: '1px solid var(--border)', borderRadius: 7, background: '#fff', color: 'var(--text)', fontSize: 12, fontWeight: 600, cursor: confirming || saving ? 'default' : 'pointer' }}>
+          <Pencil size={12} /> {confirming ? 'Подтверждаем…' : 'На проверке — решить'}
+        </button>
       )}
+      {deciding && <PaymentDecisionModal
+        title={`Платёж ${money(payment.amount)}`}
+        subtitle={payment.paymentDate ? `от ${new Date(payment.paymentDate).toLocaleDateString('ru-RU')}` : undefined}
+        defaultDate={actualPaymentDate}
+        managerComment={payment.comment}
+        defaultComment={payment.cashierComment ?? ''}
+        canDelete={canDelete}
+        onDecide={async (decision, values) => {
+          const commentChanged = values.comment !== (payment.cashierComment ?? '').trim();
+          if (decision === 'delete') return await onDelete() ? undefined : 'Не удалось удалить платёж';
+          if (decision === 'reject') return await onSave({ status: 'Отклонено', ...(commentChanged ? { cashierComment: values.comment } : {}) }) ? undefined : 'Не удалось отклонить платёж';
+          if (!await onConfirm(values.date)) return 'Не удалось подтвердить платёж';
+          if (commentChanged && !await onSave({ cashierComment: values.comment })) return 'Платёж подтверждён, но комментарий не сохранился';
+        }}
+        onClose={() => setDeciding(false)} />}
 
       {/* Админ: редактирование */}
       {isAdmin && editing && (
@@ -475,6 +463,7 @@ function PaymentRow({ onOpenReceipt, payment, items, canConfirm, confirming, onC
         </div>
       )}
       {payment.comment && <div style={{ fontSize: 11, color: 'var(--text-2)', marginTop: 6 }}>{payment.comment}</div>}
+      {payment.cashierComment && <div style={{ fontSize: 11, color: 'var(--text)', marginTop: 4 }}><b>Кассир:</b> {payment.cashierComment}</div>}
       {payment.receiptUrl && (
         <button type="button" onClick={onOpenReceipt} style={{...receiptLinkStyle,border:0,background:'transparent',cursor:'pointer'}}>
           <Paperclip size={12} /> Чек

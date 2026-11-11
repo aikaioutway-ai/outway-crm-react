@@ -25,6 +25,8 @@ export function invalidateFinanceCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.paymentsTable });
   queryClient.invalidateQueries({ queryKey: QK.cashierPaymentsTable });
   queryClient.invalidateQueries({ queryKey: QK.refundsTable });
+  // Сверка платежей тоже показывает статусы: решение в любом разделе видно и там.
+  queryClient.invalidateQueries({ queryKey: ['reconciliationPayments'] });
 }
 
 function toPaymentStatus(status: string): PaymentStatus {
@@ -101,6 +103,7 @@ function mapPayment(row: any): FamilyPayment {
     confirmedBy: row.reviewed_by ?? undefined,
     confirmedAt: row.reviewed_at ?? undefined,
     comment: row.comment ?? '',
+    cashierComment: row.cashier_comment ?? '',
     createdAt: String(row.created_at ?? ''),
   };
 }
@@ -380,6 +383,7 @@ export async function updateFamilyPayment(paymentId: string, updates: {
   actualPaymentDate?: string;
   status?: PaymentReviewStatus;
   comment?: string;
+  cashierComment?: string;
 }): Promise<PaymentType | undefined> {
   const row: Record<string, unknown> = {};
   if (updates.amount !== undefined) {
@@ -398,6 +402,7 @@ export async function updateFamilyPayment(paymentId: string, updates: {
   if (updates.actualPaymentDate !== undefined) row.actual_payment_date = updates.actualPaymentDate || null;
   if (updates.status !== undefined) row.status = fromReviewStatus(updates.status);
   if (updates.comment !== undefined) row.comment = updates.comment || null;
+  if (updates.cashierComment !== undefined) row.cashier_comment = updates.cashierComment || null;
 
   if (Object.keys(row).length === 0) return undefined;
 
@@ -528,6 +533,26 @@ export async function confirmFamilyPayment(params: {
   });
   if (error) throw new Error(error.message);
   invalidateFinanceCache();
+}
+
+/**
+ * Решение кассира по платежу «На проверке» из общего окна: подтвердить с датой поступления,
+ * отклонить или удалить. Комментарий кассира сохраняется вместе с подтверждением или отклонением.
+ */
+export async function applyPaymentDecision(payment: FamilyPayment, decision: 'confirm' | 'reject' | 'delete',
+  values: { date: string; comment: string }, actor: { name?: string; sessionToken?: string }): Promise<void> {
+  const commentChanged = values.comment !== (payment.cashierComment ?? '').trim();
+  if (decision === 'delete') {
+    await deleteFamilyPayment(payment, actor.sessionToken);
+    return;
+  }
+  if (decision === 'reject') {
+    await updateFamilyPayment(payment.id, { status: 'Отклонено', ...(commentChanged ? { cashierComment: values.comment } : {}) });
+    return;
+  }
+  if (!values.date) throw new Error('Укажите дату поступления');
+  await confirmFamilyPayment({ payment, charges: [], confirmedBy: actor.name, actualPaymentDate: values.date });
+  if (commentChanged) await updateFamilyPayment(payment.id, { cashierComment: values.comment });
 }
 
 /**

@@ -71,3 +71,13 @@ test('puts one receipt attached to several CRM payments into duplicates', () => 
   const [row] = reconcileBankStatement([entry], [payment, { ...payment, id: 'p2', familyId: 'f2' }]);
   expect([row.group, row.candidates.map(item => item.id)]).toEqual(['Д', ['p1', 'p2']]);
 });
+
+test('gives each CRM payment to only one statement row with the same amount and date', () => {
+  const rows = [1, 2, 3].map(number => ({ ...entry, number, codes: [] }));
+  const one = { ...payment, receiptCode: undefined };
+  expect(reconcileBankStatement(rows, [one]).map(row => [row.group, row.candidates.map(item => item.id)]))
+    .toEqual([['2', [one.id]], ['Х', []], ['Х', []]]);
+  const two = [one, { ...one, id: 'p2' }];
+  const paired = reconcileBankStatement(rows, two).flatMap(row => row.candidates.map(item => item.id));
+  expect(paired.sort()).toEqual([one.id, 'p2'].sort());
+});

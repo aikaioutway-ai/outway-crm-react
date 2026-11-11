@@ -34,7 +34,7 @@ import {
   getEmployeeSessionExpiresAt,
   isEmployeeSessionActive,
 } from './services/employeeSession';
-import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentReconciliationMonth, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
+import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
 import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchOverdueRequestCount, fetchV2Family } from './services/crmV2Service';
 import useIncomingMessageSound from './modules/messages/useIncomingMessageSound';
@@ -117,6 +117,8 @@ export default function App() {
   const taskNavigation = useRef<{ section: 'families' | 'logistics'; transfer: string } | null>(null);
   const [taskNavigationVersion, setTaskNavigationVersion] = useState(0);
   const [taskChildId, setTaskChildId] = useState('');
+  // Сверка открывает карточку семьи сразу на вкладке «Дети».
+  const [taskFamilyTab, setTaskFamilyTab] = useState<'children' | undefined>();
   const [taskDriverId, setTaskDriverId] = useState('');
 
 
@@ -151,10 +153,6 @@ export default function App() {
   const [cashierTransferFilter, setCashierTransferFilter] = useState('');
   const [cashierOpenFamilySearch, setCashierOpenFamilySearch] = useState('');
   const [cashierView, setCashierView] = useState<'pending' | 'confirmed' | 'refunds'>('pending');
-  const [reconciliationPeriod, setReconciliationPeriod] = useState(() => {
-    const month = currentReconciliationMonth();
-    return CASHIER_PERIODS.find(item => `${item.year}-${String(item.month).padStart(2, '0')}` === month)?.key ?? 'ALL';
-  });
   const [spendingSearch, setSpendingSearch] = useState('');
   const [cashierWorkspace, setCashierWorkspace] = useState<'payments' | 'spending' | 'reconciliation'>('payments');
   useEffect(() => { if (section === 'spending') { setSection('cashier'); setCashierWorkspace('spending'); } }, [section]);
@@ -212,6 +210,7 @@ export default function App() {
   // Закрыли карточку семьи (кнопкой или кликом по фону) — обновляем списки: трансфер или комментарий могли поменяться.
   const closeTaskFamily = () => {
     setTaskFamily(null);
+    setTaskFamilyTab(undefined);
     void queryClient.invalidateQueries({ queryKey: QK.familiesTable });
     void queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   };
@@ -247,7 +246,7 @@ export default function App() {
       const family = await fetchV2Family(familyId);
       if (!family) throw new Error('Семья не найдена');
       setTaskChildId(childId);
-      setTaskFamily(family);
+      setTaskFamilyTab(undefined); setTaskFamily(family);
     } catch (error) {
       window.alert(error instanceof Error ? error.message : 'Не удалось открыть карточку семьи');
     }
@@ -455,7 +454,7 @@ export default function App() {
         if (!family) throw new Error('Семья не найдена');
         if (taskUserRef.current !== requestedUser) return;
         setTaskChildId(resolved.type === 'child' ? resolved.childId ?? resolved.id : '');
-        setTaskFamily(family);
+        setTaskFamilyTab(undefined); setTaskFamily(family);
       } else if (resolved.type === 'group' && resolved.schoolKey && canAccessSection(currentUserRole,'families',currentUser?.id)) {
         taskNavigation.current = { section: 'families', transfer: resolved.group ?? (resolved.transferNumber ? String(resolved.transferNumber) : '') };setTaskNavigationVersion(value=>value+1);setManagerOpenFamilySearch('');setManagerSchoolKey(resolved.schoolKey);setManagerTransferFilter(resolved.group ?? '');setSection(managerSectionFor(resolved.schoolKey));
       } else if (resolved.type === 'driver') {
@@ -543,16 +542,13 @@ export default function App() {
                   <CashierViewTabs value="reconciliation" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }}
                     onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
                     onReconciliation={openReconciliation} />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <ManagerPeriodBar periodKey={reconciliationPeriod} onPeriodKeyChange={setReconciliationPeriod} periods={CASHIER_PERIODS} />
-                  </div>
+                  <div style={{ flex: 1, minWidth: 0 }} />
                 </DashboardTopPanel>
-                <CashierReconciliation key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name}
-                  period={reconciliationPeriod} setPeriod={setReconciliationPeriod}
-                  onOpenFamily={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
+                <CashierReconciliation key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken}
+                  onOpenFamily={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab('children'); setTaskFamily(family); }} />
               </>
             ) : cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
-              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} /></>
+              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab(undefined); setTaskFamily(family); }} /></>
             ) : cashierSchoolKey ? (
               <>
               {cashierView === 'refunds' ? (
@@ -856,7 +852,7 @@ export default function App() {
             )}
           </div>
         ) : section === 'spending' ? (
-          canAccessSpending(currentUserRole, currentUser?.id) && <SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamily(family); }} />
+          canAccessSpending(currentUserRole, currentUser?.id) && <SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab(undefined); setTaskFamily(family); }} />
         ) : section === 'summary' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden', gap: 0 }}>
             <div style={tabRowStyle}>
@@ -872,7 +868,7 @@ export default function App() {
                   const family = await fetchV2Family(familyId);
                   if (!family) throw new Error('Семья не найдена');
                   setTaskChildId(childId);
-                  setTaskFamily(family);
+                  setTaskFamilyTab(undefined); setTaskFamily(family);
                 } catch (error) { window.alert(error instanceof Error ? error.message : 'Не удалось открыть карточку'); }
               }}
             />
@@ -908,7 +904,7 @@ export default function App() {
         <TaskContextMenu />
         {messageTarget && <MessageComposer sessionToken={currentUser.sessionToken} target={messageTarget.target} onClose={() => setMessageTarget(null)} />}
         {taskTarget && <TaskComposer token={currentUser.sessionToken} target={taskTarget} onClose={() => setTaskTarget(null)} />}
-        {taskFamily && <div className="ow-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeTaskFamily(); }} style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={closeTaskFamily} /></div>}
+        {taskFamily && <div className="ow-overlay" onMouseDown={event => { if (event.target === event.currentTarget) closeTaskFamily(); }} style={{position:'fixed',inset:0,zIndex:2400,padding:20,overflow:'auto'}}><TaskFamilyCard initialChildId={taskChildId} initialTab={taskFamilyTab} family={taskFamily} userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} onClose={closeTaskFamily} /></div>}
       </Suspense>
       {isMobileViewport && (
         <button
