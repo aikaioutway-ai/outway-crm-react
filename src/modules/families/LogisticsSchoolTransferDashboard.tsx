@@ -13,6 +13,7 @@ import { VehicleType } from '../../types';
 interface LogisticsSchoolTransferDashboardProps {
   schoolKey: string;
   rightReserveWidth?: number;
+  showBusFilter?: boolean;
   selectedKey?: string;
   onSelect?: (key: string) => void;
 }
@@ -25,7 +26,7 @@ const VEHICLE_MENU_OPTIONS: { value: VehicleType | 'unassigned'; label: string }
 
 
 
-export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect }: LogisticsSchoolTransferDashboardProps) {
+export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReserveWidth = 0, selectedKey = '', showBusFilter = false, onSelect }: LogisticsSchoolTransferDashboardProps) {
   const { data: rows, refetch } = useLogisticsTable();
   const schoolTransferNumbers = useSchoolTransferNumbers(schoolKey);
   const [vehicleMenu, setVehicleMenu] = useState<{
@@ -131,6 +132,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
   const fixedCells = [
     { filterKey: 'empty', label: '—', count: noTransferCount, vehicleType: '' },
     { filterKey: 'rejected', label: '×', count: rejectedCount, vehicleType: '', color: '#64748B' },
+    ...(showBusFilter ? [{ filterKey: 'bus', label: 'bus', count: schoolRows.length - noTransferCount, vehicleType: '' }] : []),
     { filterKey: '', label: '≡', count: schoolRows.length, vehicleType: '' },
   ];
 
@@ -156,7 +158,7 @@ export default function LogisticsSchoolTransferDashboard({ schoolKey, rightReser
           targets: 'targets' in cell ? cell.targets : [],
         });
       }}
-      title={cell.count > 0 ? `Учеников: ${cell.count}${'test' in cell && cell.test ? ' · тестовый трансфер' : ''}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
+      title={cell.filterKey === 'bus' ? `На трансфере: ${cell.count}` : cell.count > 0 ? `Учеников: ${cell.count}${'test' in cell && cell.test ? ' · тестовый трансфер' : ''}${/^\d+$/.test(cell.filterKey) ? ' · ПКМ — сменить тип транспорта' : ''}` : undefined}
     />
   );
 

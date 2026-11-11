@@ -1,7 +1,10 @@
+import { schoolStaff } from './SchoolKpiChip';
+import { useQuery } from '@tanstack/react-query';
+import { Briefcase, BusFront, CalendarDays } from 'lucide-react';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
 import ManagerPeriodBar from './ManagerPeriodBar';
-import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
+import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay, countRequestsBySchool } from './NewRequestsDashboard';
 import { requestStage, isRequestOnBoard } from './requestWorkflow';
 
 /** Красные счётчики над днями: сколько новых («—») заявок в каждом дне. */
@@ -20,9 +23,9 @@ import { ManagerSearch } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import { useEffect, useMemo, useState } from 'react';
-import { FamilyListRow, FamilySearchHit } from '../../services/crmV2Service';
-import { useLogisticsTable } from '../../hooks/useCrmQueries';
-import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, isSchoolAllowed } from './constants';
+import { FamilyListRow, FamilySearchHit, fetchExpiredDriverIds } from '../../services/crmV2Service';
+import { useDriversTable, useEmployees, useLogisticsTable } from '../../hooks/useCrmQueries';
+import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
@@ -36,9 +39,13 @@ interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
   onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilySearchHit) => void;
   onDrivers: () => void;
-  view: 'requests' | 'table' | 'map';
+  view: 'requests' | 'table' | 'map' | 'drivers';
+  driversContent?: React.ReactNode;
+  driversSearch?: React.ReactNode;
   onViewChange: (view: 'requests' | 'table' | 'map') => void;
   allowedSchools?: string[];
+  splitView?: boolean;
+  groupSummary?: React.ReactNode;
   onSidebarWidthChange?: (width: number) => void;
 }
 
@@ -130,7 +137,66 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
   });
 }
 
-export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers }: LogisticsOverviewProps) {
+export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKey }: {
+  value: import('./LogisticsTabs').LogisticsTab;
+  onChange: (value: import('./LogisticsTabs').LogisticsTab) => void;
+  allowedSchools?: string[];
+  schoolKey?: string;
+}) {
+  const { data: rows } = useLogisticsTable();
+  const { data: drivers } = useDriversTable();
+  const inScope = (key: string) => !SCHOOL_TIER_2_KEYS.includes(key)
+    && isSchoolAllowed(key, allowedSchools) && (!schoolKey || schoolKey === 'ALL' || schoolKey === key);
+  const schoolRows = (rows ?? []).filter(row => inScope(row.branchFilter));
+  const totals = transferStats(schoolRows);
+  const requests = Array.from(countRequestsBySchool(schoolRows, 'ALL').values());
+  const newCount = requests.reduce((sum, row) => sum + row.newRequests, 0);
+  const assigned = new Map((drivers ?? []).filter(driver => driver.status === 'active' && !driver.previousAssignment
+    && driver.transfers.some(transfer => inScope(getBranchFilter(transfer.branchShort, transfer.branchCode))))
+    .map(driver => [driver.driverId, driver]));
+  const ids = Array.from(assigned.keys()).sort();
+  const expired = useQuery({
+    queryKey: ['logistics2-expired-driver-ids', ids],
+    queryFn: () => fetchExpiredDriverIds(ids),
+    enabled: ids.length > 0,
+    staleTime: 60_000,
+  });
+  const temporaryCount = Array.from(assigned.values()).filter(driver => /^Временный водитель №\d+$/.test(driver.fullName.trim())).length;
+  const hasSchool = !!schoolKey && schoolKey !== 'ALL';
+  const { data: employees } = useEmployees({ enabled: hasSchool });
+  const staff = hasSchool && schoolKey ? schoolStaff(employees ?? [], schoolKey) : null;
+
+  return <>
+  <LogisticsTabs cards showMap={hasSchool && value !== 'drivers'} value={value} onChange={onChange} summaries={{
+    table: [
+      { label: 'Средний', average: true, value: rows ? totals.microbusAverage.toFixed(1) : '—' },
+      { label: 'Микроавтобусы', value: rows ? totals.microbusCount : '—' },
+      { label: 'Легковые', value: rows ? totals.lightVehicleCount : '—' },
+    ],
+    requests: [
+      { label: 'Новые', value: rows ? newCount : '—', alert: newCount > 0 },
+      { label: 'В работе', value: rows ? requests.reduce((sum, row) => sum + row.inWork, 0) : '—' },
+    ],
+    drivers: [
+      { label: 'Активные', value: drivers ? ids.length : '—' },
+      { label: 'Документы Х', value: drivers && !ids.length ? 0 : expired.data?.length ?? '—', alert: !!expired.data?.length },
+      { label: 'Временные', value: drivers ? temporaryCount : '—' },
+    ],
+  }} />
+  {staff && <dl className="manager-school-staff">
+    <div>
+      <dt><Briefcase size={14} aria-hidden="true" /> Менеджер</dt>
+      <dd>{staff.managers.map(person => person.fullName).join(', ') || '—'}</dd>
+    </div>
+    <div>
+      <dt><BusFront size={14} aria-hidden="true" /> Логист</dt>
+      <dd>{staff.logists.map(person => person.fullName).join(', ') || '—'}</dd>
+    </div>
+  </dl>}
+  </>;
+}
+
+export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers, splitView = false, groupSummary, driversContent, driversSearch }: LogisticsOverviewProps) {
   const { data: allRows = null } = useLogisticsTable();
   const rows = useMemo(
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
@@ -144,8 +210,8 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
   useEffect(() => {
-    onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
-  }, [onSidebarWidthChange, sidebarHidden]);
+    if (!splitView) onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
+  }, [onSidebarWidthChange, sidebarHidden, splitView]);
 
   const testMarks = useTestTransfers();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- testMarks: пересчёт при смене тестовых отметок
@@ -194,6 +260,49 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
 
   if (rows === null) {
     return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-2)' }}>Загрузка...</div>;
+  }
+
+  if (splitView) {
+  const requestCounts = requestDayCounts(rows.filter(row => !SCHOOL_TIER_2_KEYS.includes(row.branchFilter)));
+  const periods = [{ key: 'ALL', label: 'Все' }, ...REQUEST_DAY_PERIODS];
+  return (
+    <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
+      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar manager-overview-toolbar--wide">
+          {view === 'requests' && <div className="manager-period-tiles" role="group" aria-label="Возраст заявки">
+            {periods.map(period => {
+              const count = period.key === 'ALL' ? totals.newRequests : requestCounts[period.key] ?? 0;
+              return <button key={period.key} type="button" aria-pressed={requestDay === period.key} onClick={() => setRequestDay(period.key)}>
+                <CalendarDays size={16} aria-hidden="true" />
+                <span>{period.key === 'ALL' ? 'Все' : period.key === '11' ? '10+ дн.' : period.label + ' дн.'}</span>
+                <strong className={count > 0 ? 'manager-period-count-alert' : undefined}>{count}</strong>
+              </button>;
+            })}
+          </div>}
+          <div className="manager-overview-search">{view === 'drivers' ? driversSearch : <ManagerSearch rows={rows} onOpenFamily={onOpenFamily} />}</div>
+          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')} /></div>
+        </DashboardTopPanel>
+        <div className={`manager-workspace manager-overview-body${groupSummary ? ' manager-overview-body--with-groups' : ''}`}>
+          <div className="manager-overview-sidebar"><LogisticsSummaryTabs allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
+          <div className="manager-workspace-content">
+        {view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
+          columns={[
+            { key: 'microbusAverage', label: 'Средний по МКР', total: totals.microbusAverage.toFixed(1), color: KPI_COLORS.microbusAverage },
+            { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
+            { key: 'lightVehicleCount', label: 'Легковые', total: totals.lightVehicleCount, color: KPI_COLORS.lightVehicleCount }
+          ]}
+          rows={displayRows.map(row => ({ ...row, values: { ...row.data, microbusAverage: row.data.microbusAverage.toFixed(1) } }))}
+          sortKey={sortState.key}
+          ascending={sortState.dir === 'asc'}
+          onSort={key => handleSort(key as SortKey)}
+          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        />}
+          </div>
+          {groupSummary && <div className="manager-overview-group-summary">{groupSummary}</div>}
+        </div>
+      </div>
+    </div>
+  );
   }
 
   return (

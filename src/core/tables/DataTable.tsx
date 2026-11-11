@@ -70,6 +70,7 @@ export interface FilterRule {
 
 
 export interface DataTableProps<T = any> {
+  headerIcons?: Readonly<Record<string, React.ReactNode>>;
   columns: ColumnDef<T>[];
   data: T[];
   rowKey: keyof T;
@@ -101,6 +102,9 @@ export interface DataTableProps<T = any> {
   groupByKey?: keyof T;
   calcBar?: React.ReactNode; // внешний вычислитель (для вставки наверху)
   toolbarExtra?: React.ReactNode;
+  toolbarAfterDownload?: React.ReactNode;
+  centerPagination?: boolean;
+  initialSort?: SortConfig;
   toolbarRightExtra?: React.ReactNode;
   hideToolbar?: boolean;
   canManageProperties?: boolean;
@@ -395,6 +399,7 @@ async function saveColumnSettings(storageKey: string, settings: SavedColumns): P
 
 export function DataTable<T extends Record<string, any>>({
   columns: initialColumns,
+  headerIcons,
   data,
   rowKey,
   onRowClick,
@@ -421,6 +426,9 @@ export function DataTable<T extends Record<string, any>>({
   groupColorKey: _groupColorKey,
   groupByKey,
   toolbarExtra,
+  toolbarAfterDownload,
+  centerPagination = false,
+  initialSort,
   toolbarRightExtra,
   hideToolbar = false,
   canManageProperties = true,
@@ -499,7 +507,7 @@ export function DataTable<T extends Record<string, any>>({
     persistCols(next);
   }, [persistCols]);
 
-  const [sorts, setSorts] = useState<SortConfig[]>([]);
+  const [sorts, setSorts] = useState<SortConfig[]>(() => initialSort ? [initialSort] : []);
   const [filters, setFilters] = useState<FilterRule[]>(() => readSavedFilters(storageKey));
   const filtersKeyRef = useRef(storageKey);
   useEffect(() => {
@@ -874,7 +882,7 @@ export function DataTable<T extends Record<string, any>>({
         <button type="button" className="dt-btn" onClick={() => { setRepeatedKey(null); setPage(1); }}>Сбросить</button>
       </div>}
       {/* ── TOOLBAR ── */}
-      {!hideToolbar && <div className="dt-toolbar" onClick={e => e.stopPropagation()}>
+      {!hideToolbar && <div className={centerPagination ? "dt-toolbar dt-toolbar--centered" : "dt-toolbar"} onClick={e => e.stopPropagation()}>
         <div className="dt-toolbar-left">
           {toolbarExtra}
 
@@ -895,24 +903,28 @@ export function DataTable<T extends Record<string, any>>({
         </div>
 
         <div className="dt-toolbar-right">
-          {selected.size > 0 && (
-            <span className="dt-selected-info">Выбрано: {selected.size}</span>
-          )}
-          {(selected.size > 0 && onRowDelete && bulkDelete) && (
-            <button className="dt-btn dt-btn--danger" onClick={() => {
-              processedData.filter(r => selected.has(r[rowKey])).forEach(r => onRowDelete(r));
-              setSelected(new Set());
-            }}>
-              Удалить выбранные
-            </button>
-          )}
           <div className="dt-pagination">
             <button className="dt-page-btn" disabled={pageSafe <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>‹</button>
             <span className="dt-page-text">{pageSafe} / {totalPages}{canLoadMore ? '+' : ''}</span>
             <button className="dt-page-btn" disabled={(pageSafe >= totalPages && !canLoadMore) || loadingMoreRows} title={pageSafe >= totalPages && canLoadMore ? 'Загрузить следующие записи' : undefined} onClick={goNextPage}>{loadingMoreRows ? '…' : '›'}</button>
           </div>
-          <TableDownloadButton onDownload={exportExcel}/>
-          {toolbarRightExtra}
+          <div className="dt-toolbar-actions" style={centerPagination ? undefined : { display: 'contents' }}>
+            {selected.size > 0 && (
+              <span className="dt-selected-info">Выбрано: {selected.size}</span>
+            )}
+            {(selected.size > 0 && onRowDelete && bulkDelete) && (
+              <button className="dt-btn dt-btn--danger" onClick={() => {
+                processedData.filter(r => selected.has(r[rowKey])).forEach(r => onRowDelete(r));
+                setSelected(new Set());
+              }}>
+                Удалить выбранные
+              </button>
+            )}
+            {centerPagination && toolbarRightExtra}
+            <TableDownloadButton onDownload={exportExcel}/>
+            {!centerPagination && toolbarRightExtra}
+            {toolbarAfterDownload}
+          </div>
         </div>
       </div>}
 
@@ -1082,6 +1094,7 @@ export function DataTable<T extends Record<string, any>>({
 
                 {visibleCols.map(col => {
                   const sortEntry = sorts.find(s => s.key === col.key);
+                  const headerIcon = headerIcons?.[col.key];
                   return (
                     <th
                       key={col.key}
@@ -1097,10 +1110,10 @@ export function DataTable<T extends Record<string, any>>({
                           e.stopPropagation();
                           toggleColumnSort(col.key);
                         }}
-                        title="ЛКМ: сортировка. ПКМ: фильтр"
+                        title={headerIcon ? `${col.label} · ЛКМ: сортировка. ПКМ: фильтр` : "ЛКМ: сортировка. ПКМ: фильтр"}
                         style={{ cursor: 'pointer', userSelect: 'none', width: '100%' }}
                       >
-                        <span className="dt-th-label">{col.label}</span>
+                        <span className="dt-th-label" aria-label={headerIcon ? col.label : undefined}>{headerIcon ?? col.label}</span>
                         {sortEntry && <span className="dt-sort-indicator">{sortEntry.dir === 'asc' ? '↑' : '↓'}</span>}
 
                       </div>

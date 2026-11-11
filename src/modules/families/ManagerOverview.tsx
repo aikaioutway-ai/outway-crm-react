@@ -1,15 +1,20 @@
+import { EmployeeCardModal } from '../employees/EmployeesPage';
+import { QK, queryClient } from '../../services/queryClient';
+import { createPortal } from 'react-dom';
+import type { Employee } from '../../types';
 import { requestStage } from './requestWorkflow';
-import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
+import NewRequestsDashboard, { countRequestsBySchool, REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
 import { managerFinancialStats } from './managerFinancialStats';
 import SchoolDashboardTable from './SchoolDashboardTable';
-import DirectorySchoolDashboard from './DirectorySchoolDashboard';
+import DirectorySchoolDashboard, { computeDirectoryStats } from './DirectorySchoolDashboard';
 import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { List, Plus, Search, X } from 'lucide-react';
+import { Briefcase, BusFront, CalendarDays, List, Plus, Search, X } from 'lucide-react';
 import { FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
-import { currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
+import { schoolStaff } from './SchoolKpiChip';
+import { useEmployees, useMonthlyChargeStats, useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
+import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
 import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -41,6 +46,14 @@ export interface SchoolStat {
 type SortKey = 'debtorsCount' | 'boarded' | 'uncharged' | 'school' | 'childrenCount' | 'newRequests' | 'charged' | 'paid' | 'debtSum' | 'balance';
 
 interface ManagerOverviewProps {
+  splitView?: boolean;
+  detailSchoolKey?: string;
+  employeeCardAccess?: { sessionToken?: string; roles: Employee['role'][] | null };
+  onBackToOverview?: () => void;
+  detailTransferFilter?: string;
+  renderTransfers?: (period: string) => React.ReactNode;
+  groupSummary?: React.ReactNode;
+  renderSchool?: (period: string, day: string, directoryPeriod: string, onDebtTotals: (amount: number, count: number) => void) => React.ReactNode;
   mode: ManagerMode;
   canViewAccruals?: boolean;
   onModeChange: (mode: ManagerMode) => void;
@@ -291,12 +304,34 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0' }: ManagerOverviewProps) {
+export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers, groupSummary }: ManagerOverviewProps) {
+  const detailSchool = detailSchoolKey && detailSchoolKey !== 'ALL'
+    && isSchoolAllowed(detailSchoolKey, allowedSchools, schoolTier)
+    ? SCHOOL_TABS.find(school => school.key === detailSchoolKey)
+    : undefined;
+  const { data: employees } = useEmployees({ enabled: !!detailSchool });
+  const staff = detailSchool ? schoolStaff(employees ?? [], detailSchool.key) : null;
+  const [staffCard, setStaffCard] = useState<Employee | null>(null);
+  const selectedStaff = staffCard?.schoolKeys.includes(detailSchool?.key ?? '') ? staffCard : null;
+  const canOpenFullCard = selectedStaff && employeeCardAccess
+    && (!employeeCardAccess.roles || employeeCardAccess.roles.includes(selectedStaff.role));
+  const staffNames = (people: Employee[]) => people.length ? people.map(person => (
+    <button key={person.id} type="button" className="manager-staff-name" onClick={() => setStaffCard(person)}>
+      {person.fullName}
+    </button>
+  )) : '—';
+
+  const scopedSchools = useMemo(() => detailSchoolKey && detailSchoolKey !== 'ALL' ? [detailSchoolKey] : allowedSchools, [detailSchoolKey, allowedSchools]);
+  const [tableDebt, setTableDebt] = useState<{ amount: number; count: number }>();
+  const syncTableDebt = React.useCallback((amount: number, count: number) => {
+    setTableDebt(current => current?.amount === amount && current.count === count ? current : { amount, count });
+  }, []);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [showNewFamily, setShowNewFamily] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [requestDay, setRequestDay] = useState('ALL');
   const [periodKey, setPeriodKey] = useState(currentPayrollPeriodKey);
+  const [directoryPeriod, setDirectoryPeriod] = useState('ALL');
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
 
@@ -304,25 +339,26 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
   const branchStatsQuery = useBranchStats();
   // Справочник берёт цифры из базы; таблица семей с деньгами нужна только финансовым вкладкам.
   const directoryQuery = useSchoolDirectoryStats();
-  const familiesQuery = useFamiliesTable({ enabled: mode !== 'directory' });
+  const familiesQuery = useFamiliesTable({ enabled: splitView || mode !== 'directory' });
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
-    () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier)) ?? null,
-    [allowedSchools, rows, schoolTier],
+    () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier) && isSchoolAllowed(row.branchFilter, scopedSchools, schoolTier)) ?? null,
+    [allowedSchools, scopedSchools, rows, schoolTier],
   );
   const loadError = branchStatsQuery.isError;
 
   useEffect(() => {
+    if (renderSchool) return;
     onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
-  }, [onSidebarWidthChange, sidebarHidden]);
+  }, [onSidebarWidthChange, sidebarHidden, renderSchool]);
 
-  const periodQuery = usePeriodChargeStats(periodKey, { enabled: mode === 'charges' || mode === 'accruals' });
+  const periodQuery = usePeriodChargeStats(periodKey, { enabled: !!renderSchool || mode === 'charges' || mode === 'accruals' });
   const periodStats = periodQuery.data ?? EMPTY_PERIOD_STATS;
 
   const stats = useMemo(
     () => computeSchoolStatsFromBranches(branchStatsQuery.data ?? [], schoolTier)
-      .filter(stat => isSchoolAllowed(stat.key, allowedSchools, schoolTier)),
-    [allowedSchools, branchStatsQuery.data, schoolTier],
+      .filter(stat => isSchoolAllowed(stat.key, allowedSchools, schoolTier) && isSchoolAllowed(stat.key, scopedSchools, schoolTier)),
+    [allowedSchools, scopedSchools, branchStatsQuery.data, schoolTier],
   );
 
   const requestDayCounts = useMemo(() => {
@@ -333,6 +369,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
     for (const row of accessibleRows ?? []) {
       if (!schoolKeys.has(row.branchFilter) || seen.has(row.rowId) || !isNewUnassignedRow(row) || requestStage(row) !== 'new') continue;
       seen.add(row.rowId);
+      counts.ALL = (counts.ALL ?? 0) + 1;
       for (const period of REQUEST_DAY_PERIODS) {
         if (requestMatchesDay(row.childCreatedAt, period.key, now)) counts[period.key] = (counts[period.key] ?? 0) + 1;
       }
@@ -354,17 +391,120 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
     balance: acc.balance + s.balance,
   }), { debtorsCount: 0, boarded: 0, uncharged: 0, childrenCount: 0, newRequests: 0, charged: 0, paid: 0, debtSum: 0, balance: 0 }), [displayStats]);
 
+  const monthlyQueries = useMonthlyChargeStats(splitView && (mode === 'charges' || mode === 'accruals')
+    ? ALL_PERIODS.map(period => period.key) : []);
+  const seasonTotals = stats.reduce((sum, school) => ({
+    debt: sum.debt + school.debtSum,
+    charged: sum.charged + school.charged,
+  }), { debt: 0, charged: 0 });
+  const directoryCounts: Record<string, number> = { ALL: 0 };
+  const seenChildren = new Set<string>();
+  const monthKeys = new Map(ALL_PERIODS.map(period => [`${period.year}-${String(period.month).padStart(2, '0')}`, period.key]));
+  const directoryRows = (accessibleRows ?? []).filter(row => {
+    if (!stats.some(school => school.key === row.branchFilter) || seenChildren.has(row.rowId)) return false;
+    seenChildren.add(row.rowId);
+    return true;
+  });
+  for (const row of directoryRows) {
+    directoryCounts.ALL++;
+    const key = monthKeys.get(row.childCreatedAt?.slice(0, 7) ?? '');
+    if (key) directoryCounts[key] = (directoryCounts[key] ?? 0) + 1;
+  }
+
+  const financialValue = (value: number) => `${money(value)} сом`;
+  const allCharges = usePeriodChargeStats('ALL', { enabled: !!splitView && canViewAccruals });
+  const summaries = useMemo<React.ComponentProps<typeof ManagerModeTabs>['summaries']>(() => {
+    if (!splitView) return undefined;
+    const directory = computeDirectoryStats(directoryQuery.data ?? [], scopedSchools, schoolTier)
+      .filter(school => isSchoolAllowed(school.key, allowedSchools, schoolTier));
+    const summaryRows = (accessibleRows ?? []).filter(row => {
+      if (!renderSchool || !detailTransferFilter || mode === 'requests') return true;
+      if (detailTransferFilter === 'new') return isNewUnassignedRow(row);
+      if (detailTransferFilter === 'rejected') return row.status === 'rejected';
+      if (detailTransferFilter === 'bus') return row.status !== 'rejected' && Boolean(row.transferNumber);
+      if (detailTransferFilter === 'empty') return !row.transferNumber;
+      return row.transferNumber === detailTransferFilter;
+    });
+    const filteredDirectory = !!renderSchool && (!!detailTransferFilter || mode === 'directory' && directoryPeriod !== 'ALL');
+    const directoryPeriodData = ALL_PERIODS.find(period => period.key === directoryPeriod);
+    const directoryMonth = directoryPeriodData && `${directoryPeriodData.year}-${String(directoryPeriodData.month).padStart(2, '0')}`;
+    const directoryRows = summaryRows.filter(row => !row.rowId.endsWith('_empty') &&
+      (mode !== 'directory' || !directoryMonth || row.childCreatedAt?.startsWith(directoryMonth)));
+    const requests = countRequestsBySchool(summaryRows, mode === 'requests' ? requestDay : 'ALL');
+    const requestTotals = stats.reduce((sum, school) => {
+      const count = requests.get(school.key);
+      return { newRequests: sum.newRequests + (count?.newRequests ?? 0), inWork: sum.inWork + (count?.inWork ?? 0) };
+    }, { newRequests: 0, inWork: 0 });
+    const financial = accessibleRows
+      ? managerFinancialStats(stats, summaryRows, renderSchool ? periodStats : allCharges.data ?? [], !renderSchool || periodKey === 'ALL')
+      : null;
+    const filteredFinancial = renderSchool && periodQuery.data && accessibleRows
+      ? managerFinancialStats(stats, summaryRows, periodStats, false)
+      : null;
+    const usePeriodTotals = !!renderSchool && (periodKey !== 'ALL' || !!detailTransferFilter);
+    const debt = mode === 'charges' && renderSchool && tableDebt ? tableDebt.amount
+      : usePeriodTotals ? filteredFinancial?.reduce((sum, school) => sum + school.debtSum, 0) : seasonTotals.debt;
+    const charged = usePeriodTotals
+      ? filteredFinancial?.reduce((sum, school) => sum + school.charged, 0) : seasonTotals.charged;
+    const count = (value: number | undefined) => value?.toLocaleString('ru-RU') ?? '—';
+    return {
+      directory: [
+        { label: 'Заявки', value: count(filteredDirectory ? accessibleRows ? directoryRows.length : undefined : directoryQuery.data && directory.reduce((sum, school) => sum + school.applications, 0)) },
+        { label: 'Посажены', tone: 'positive', value: count(filteredDirectory ? accessibleRows ? directoryRows.filter(row => row.status === 'boarded').length : undefined : directoryQuery.data && directory.reduce((sum, school) => sum + school.boarded, 0)) },
+        { label: 'Отказы', tone: 'alert', value: count(filteredDirectory ? accessibleRows ? directoryRows.filter(row => row.status === 'rejected').length : undefined : directoryQuery.data && directory.reduce((sum, school) => sum + school.rejected, 0)) },
+      ],
+      charges: [
+        { label: 'Долг', tone: 'alert', value: debt === undefined ? '—' : financialValue(debt) },
+        { label: 'Должники', value: count(renderSchool && mode === 'charges' && tableDebt ? tableDebt.count : financial?.reduce((sum, school) => sum + (school.debtorsCount ?? 0), 0)) },
+      ],
+      requests: [
+        { label: 'Новые', tone: 'alert', value: count(accessibleRows ? requestTotals.newRequests : undefined) },
+        { label: 'В работе', value: count(accessibleRows ? requestTotals.inWork : undefined) },
+      ],
+      accruals: [
+        { label: 'Начислено', value: charged === undefined ? '—' : financialValue(charged) },
+        { label: 'Без начислений', tone: 'alert', value: count((renderSchool ? periodQuery.data : allCharges.data) ? financial?.reduce((sum, school) => sum + (school.uncharged ?? 0), 0) : undefined) },
+      ],
+    };
+  }, [splitView, directoryQuery.data, allowedSchools, scopedSchools, schoolTier, accessibleRows, stats, allCharges.data, seasonTotals.debt, seasonTotals.charged, renderSchool, detailTransferFilter, mode, directoryPeriod, requestDay, periodKey, periodStats, periodQuery.data, tableDebt]);
+  const selectedPeriod = mode === 'requests' ? requestDay : mode === 'directory' ? directoryPeriod : periodKey;
+  const periods = mode === 'requests' ? REQUEST_DAY_PERIODS : ALL_PERIODS;
+  const metrics = [{ key: 'ALL', label: 'Все периоды', month: 0, year: 0 }, ...periods]
+    .filter(period => mode !== 'directory' || period.key !== 'deposit')
+    .map(period => {
+      let metric = '—';
+      if (mode === 'requests' || mode === 'directory') {
+        const counts = mode === 'requests' ? requestDayCounts : directoryCounts;
+        if (accessibleRows) metric = (counts[period.key] ?? 0).toLocaleString('ru-RU');
+      } else if (period.key === 'ALL') {
+        metric = financialValue(mode === 'charges' ? seasonTotals.debt : seasonTotals.charged);
+      } else {
+        const query = monthlyQueries[ALL_PERIODS.indexOf(period)];
+        if (query?.data && accessibleRows) {
+          const field = mode === 'charges' ? 'debtSum' : 'charged';
+          metric = financialValue(managerFinancialStats(stats, accessibleRows, query.data, false)
+            .reduce((sum, school) => sum + school[field], 0));
+        }
+      }
+      return { ...period, metric };
+    });
+
+  const sortByDebt = splitView && mode === 'charges';
+  const [debtSortDirection, setDebtSortDirection] = useState<'asc' | 'desc'>('desc');
+  const activeSortKey = sortByDebt ? 'debtSum' : sortState.key;
+  const activeSortDirection = sortByDebt ? debtSortDirection : sortState.dir;
+
   const displayRows = useMemo(() => buildGroupedRows(
     displayStats,
     expandedGroups,
     ['debtorsCount', 'boarded', 'uncharged', 'childrenCount', 'newRequests', 'charged', 'paid', 'pendingCount', 'pendingSum', 'debtSum', 'balance'],
     (a, b) => {
-      const av = sortState.key === 'school' ? a.label : a.data[sortState.key];
-      const bv = sortState.key === 'school' ? b.label : b.data[sortState.key];
+      const av = activeSortKey === 'school' ? a.label : a.data[activeSortKey];
+      const bv = activeSortKey === 'school' ? b.label : b.data[activeSortKey];
       const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
-      return sortState.dir === 'asc' ? cmp : -cmp;
+      return activeSortDirection === 'asc' ? cmp : -cmp;
     },
-  ), [displayStats, expandedGroups, sortState]);
+  ), [displayStats, expandedGroups, activeSortKey, activeSortDirection]);
 
   const handleSort = (key: SortKey) => {
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
@@ -384,26 +524,90 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar">
-          <ManagerModeTabs showRequests canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
-          <div className="manager-overview-period">
-            {mode === 'requests' ? <ManagerPeriodBar periodKey={requestDay} onPeriodKeyChange={setRequestDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" periodCounts={requestDayCounts} useLabels periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} /> : mode !== 'directory' && <ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
-          </div>
+        <DashboardTopPanel className={`dashboard-control-row manager-overview-toolbar${splitView ? ' manager-overview-toolbar--wide' : ''}${renderTransfers ? ' manager-overview-toolbar--transfers' : ''}`}>
+          {!splitView && <ManagerModeTabs showRequests canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />}
+          {splitView ? (
+            <div className={mode === 'requests' ? 'manager-period-tiles' : 'manager-period-tiles manager-period-tiles--months'} role="group" aria-label={mode === 'requests' ? 'Возраст заявки' : 'Период'}>
+              {metrics.map(period => (
+                <button key={period.key} type="button" aria-pressed={period.key === selectedPeriod}
+                  title={mode === 'requests' ? (period.key === 'ALL' ? 'Все заявки' : `День ${period.label}`) : period.label}
+                  onClick={() => (mode === 'requests' ? setRequestDay : mode === 'directory' ? setDirectoryPeriod : setPeriodKey)(period.key)}>
+                  <CalendarDays size={16} aria-hidden="true" />
+                  <span>{period.key === 'ALL' ? 'Все' : mode === 'requests' ? `${period.label} дн.` : period.key === 'deposit' ? period.label : period.label.slice(0, 3)}</span>
+                  <strong className={mode === 'requests' && (requestDayCounts[period.key] ?? 0) > 0 ? 'manager-period-count-alert' : undefined}>{period.metric}</strong>
+                </button>
+              ))}
+            </div>
+          ) : <div className="manager-overview-period">
+            {mode === 'requests' ? <ManagerPeriodBar calendar={splitView} calendarLabel="Возраст заявки" periodKey={requestDay} onPeriodKeyChange={setRequestDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" periodCounts={requestDayCounts} useLabels periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} /> : (mode !== 'directory' || splitView) && <ManagerPeriodBar calendar={splitView} periodKey={periodKey} onPeriodKeyChange={setPeriodKey} />}
+          </div>}
+          {renderTransfers && <div className="manager-toolbar-transfers">{renderTransfers(periodKey)}</div>}
           <div className="manager-overview-search"><ManagerSearch onOpenFamily={onOpenFamily} allowedSchools={allowedSchools} schoolTier={schoolTier} /></div>
-          <div className="overview-icon-actions">
-            <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />
+          {(!renderSchool || mode === 'requests') && <div className="overview-icon-actions">
+            {!renderTransfers && <HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />}
             <button type="button" className="overview-icon-button overview-icon-button--primary" title="Новый заказ" aria-label="Новый заказ" onClick={() => setShowNewFamily(true)}><Plus size={18} aria-hidden="true"/></button>
             <button type="button" className="overview-icon-button" title="Все записи" aria-label="Все записи" onClick={() => onSelectSchool('ALL')}><List size={18} aria-hidden="true"/></button>
-          </div>
+          </div>}
         </DashboardTopPanel>
 
-        {mode === 'requests' ? (familiesQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка заявок…</div> : familiesQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить заявки. <button onClick={() => void familiesQuery.refetch()}>Повторить</button></div> : <NewRequestsDashboard rows={accessibleRows ?? []} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} />) : mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
-        <SchoolDashboardTable commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
+        <div className={splitView ? `manager-workspace manager-overview-body${renderSchool ? ' manager-overview-body--school' : ''}${groupSummary ? ' manager-overview-body--with-groups' : ''}` : undefined} style={splitView ? undefined : { display: 'contents' }}>
+          {splitView && (
+            <div className="manager-overview-sidebar">
+              {detailSchool && (
+                <button type="button" className="manager-school-brand" title="Все школы" aria-label={`${detailSchool.label}: все школы`} onClick={onBackToOverview}>
+                  <SchoolAvatar logo={detailSchool.logo} label={detailSchool.label} color="var(--accent)" size={64} radius={14} fontSize={16} />
+                </button>
+              )}
+              <ManagerModeTabs cards summaries={summaries} showRequests canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
+              {selectedStaff && createPortal(canOpenFullCard ? (
+                <EmployeeCardModal
+                  key={selectedStaff.id}
+                  employee={selectedStaff}
+                  restrictedRole={employeeCardAccess.roles}
+                  sessionToken={employeeCardAccess.sessionToken}
+                  onClose={() => setStaffCard(null)}
+                  onChanged={employee => {
+                    setStaffCard(employee.schoolKeys.includes(detailSchool?.key ?? '') ? employee : null);
+                    void queryClient.invalidateQueries({ queryKey: QK.employees });
+                  }}
+                  onDeleted={() => {
+                    setStaffCard(null);
+                    void queryClient.invalidateQueries({ queryKey: QK.employees });
+                  }}
+                />
+              ) : (
+                <dialog className="manager-staff-contact" aria-label="Карточка сотрудника"
+                  ref={dialog => { if (dialog && !dialog.open) dialog.showModal(); }}
+                  onClose={() => setStaffCard(null)}>
+                  <form method="dialog">
+                    <button type="submit" className="overview-icon-button" aria-label="Закрыть"><X size={16} /></button>
+                  </form>
+                  <h2>{selectedStaff.fullName}</h2>
+                  <p>{selectedStaff.position || (selectedStaff.role === 'manager' ? 'Менеджер' : 'Логист')} · {detailSchool?.label}</p>
+                </dialog>
+              ), document.body)}
+              {staff && (
+                <dl className="manager-school-staff">
+                  <div>
+                    <dt><Briefcase size={14} aria-hidden="true" /> Менеджер</dt>
+                    <dd>{staffNames(staff.managers)}</dd>
+                  </div>
+                  <div>
+                    <dt><BusFront size={14} aria-hidden="true" /> Логист</dt>
+                    <dd>{staffNames(staff.logists)}</dd>
+                  </div>
+                </dl>
+              )}
+            </div>
+          )}
+          <div className={splitView ? 'manager-workspace-content' : undefined} style={splitView ? undefined : { display: 'contents' }}>
+        {renderSchool ? renderSchool(periodKey, requestDay, directoryPeriod, syncTableDebt) : mode === 'requests' ? (familiesQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка заявок…</div> : familiesQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить заявки. <button onClick={() => void familiesQuery.refetch()}>Повторить</button></div> : <NewRequestsDashboard splitView={splitView} rows={accessibleRows ?? []} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} />) : mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard periodRows={splitView && directoryPeriod !== 'ALL' && accessibleRows ? directoryRows.filter(row => monthKeys.get(row.childCreatedAt?.slice(0, 7) ?? '') === directoryPeriod) : undefined} splitView={splitView} branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
+        <SchoolDashboardTable splitView={splitView} commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },
             ...(mode === 'accruals' ? [
               { key: 'boarded', label: 'Посажены', total: totals.boarded, color: KPI_COLORS.childrenCount },
-            ] : [
+            ] : splitView ? [] : [
               { key: 'debtorsCount', label: 'Должников', total: totals.debtorsCount, color: KPI_COLORS.newRequests },
             ]),
             { key: 'charged', label: 'Начислено', total: money(totals.charged), color: KPI_COLORS.charged },
@@ -412,18 +616,27 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
             ] : [
             { key: 'paid', label: 'Оплачено', total: money(totals.paid), color: KPI_COLORS.paid },
             { key: 'debtSum', label: 'Сумма долга', total: money(totals.debtSum), color: KPI_COLORS.debtSum },
+            ...(splitView ? [
+              { key: 'debtorsCount', label: 'Должников', total: totals.debtorsCount, color: KPI_COLORS.newRequests },
+            ] : []),
             { key: 'balance', label: 'Баланс', total: totals.balance.toLocaleString('ru-RU'), color: KPI_COLORS.balance },
             ]),
-          ]}
+          ].filter(column => !splitView || (mode === 'accruals'
+            ? column.key === 'charged' || column.key === 'uncharged'
+            : column.key === 'debtorsCount' || column.key === 'debtSum'))}
           rows={displayRows.map(row => ({ ...row, values: { debtorsCount: row.data.debtorsCount ?? 0, boarded: row.data.boarded ?? 0, uncharged: row.data.uncharged ?? 0, newRequests: row.data.newRequests, charged: money(row.data.charged), paid: money(row.data.paid), debtSum: money(row.data.debtSum), balance: row.data.balance.toLocaleString('ru-RU') } }))}
-          sortKey={sortState.key}
-          ascending={sortState.dir === 'asc'}
-          onSort={key => handleSort(key as SortKey)}
+          sortKey={activeSortKey}
+          ascending={activeSortDirection === 'asc'}
+          onSort={sortByDebt ? () => setDebtSortDirection(direction => direction === 'desc' ? 'asc' : 'desc') : key => handleSort(key as SortKey)}
           onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
         />
         )}
+          </div>
+          {groupSummary && <div className="manager-overview-group-summary">{groupSummary}</div>}
+        </div>
       </div>
 
+      {!renderSchool && <>
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />
 
       <SchoolDockSidebar
@@ -432,6 +645,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
         onHiddenChange={setSidebarHidden}
         onSelect={onSelectSchool}
       />
+      </>}
       {showNewFamily && <NewFamilyModal schoolTier={schoolTier} onClose={() => setShowNewFamily(false)} />}
       </div>
     </div>

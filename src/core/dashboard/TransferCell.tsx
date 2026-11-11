@@ -1,3 +1,4 @@
+import { BusFront } from 'lucide-react';
 import React from 'react';
 
 export const VEHICLE_COLOR: Record<string, string> = {
@@ -26,7 +27,7 @@ interface TransferCellProps {
 }
 
 // Служебные ячейки ряда подписываем словами, а не символами.
-const SPECIAL_LABEL: Record<string, string> = { '—': 'Без №', '×': 'Х', '≡': 'Все' };
+const SPECIAL_LABEL: Record<string, string> = { '—': 'Без №', '×': 'Х', '≡': 'Все', 'bus': 'Бус' };
 
 export default function TransferCell({
   label,
@@ -40,6 +41,7 @@ export default function TransferCell({
   onContextMenu,
 }: TransferCellProps) {
   const special = SPECIAL_LABEL[label];
+  const isBus = label === 'bus';
   const accent = alert && value > 0 ? ALERT_COLOR : color;
   const className = [
     'ow-transfer-cell',
@@ -55,11 +57,12 @@ export default function TransferCell({
       onClick={onClick}
       onContextMenu={onContextMenu}
       title={title ?? (special ? `${special}: ${value}` : `Трансфер №${label}`)}
+      aria-label={isBus ? title ?? special : undefined}
       aria-pressed={selected}
       style={{ ['--cell-color' as string]: accent } as React.CSSProperties}
     >
-      <span className="ow-transfer-cell-count">{active && value > 0 ? value : ''}</span>
-      <span className="ow-transfer-cell-label">{special ?? label}</span>
+      <span className="ow-transfer-cell-count">{isBus || (active && value > 0) ? value : ''}</span>
+      <span className="ow-transfer-cell-label">{isBus ? <BusFront size={16} aria-hidden="true" /> : special ?? label}</span>
     </button>
   );
 }

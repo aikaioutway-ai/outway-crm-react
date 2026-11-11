@@ -196,9 +196,12 @@ export function useV2Branches(): UseQueryResult<V2BranchOption[]> {
 /** Начисления/оплаты/долг по детям за период ('ALL' — за всё время). Один кеш на
  * обзор Менеджера, полосу трансферов и полосу цифр школы. */
 export function usePeriodChargeStats(periodKey: string, options?: { enabled?: boolean }): UseQueryResult<PeriodChargeStats[]> {
-  return useQuery({
+  return useQuery({ ...periodChargeStatsOptions(periodKey), enabled: options?.enabled ?? true });
+}
+
+function periodChargeStatsOptions(periodKey: string) {
+  return {
     queryKey: QK.periodChargeStats(periodKey),
-    enabled: options?.enabled ?? true,
     queryFn: () => {
       if (periodKey === 'ALL') return fetchChargesForPeriod(null, null, null, true);
       const period = ALL_PERIODS.find(p => p.key === periodKey);
@@ -206,7 +209,11 @@ export function usePeriodChargeStats(periodKey: string, options?: { enabled?: bo
       const deposit = period.key === 'deposit';
       return fetchChargesForPeriod(deposit ? null : period.month, deposit ? null : period.year, deposit ? 'deposit' : null);
     },
-  });
+  };
+}
+
+export function useMonthlyChargeStats(periodKeys: string[]) {
+  return useQueries({ queries: periodKeys.map(periodChargeStatsOptions) });
 }
 
 export function useSchoolTransferStats(schoolKey: string, options?: { enabled?: boolean }): UseQueryResult<Record<string, SchoolTransferGroupStat>> {

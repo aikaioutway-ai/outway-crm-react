@@ -830,3 +830,18 @@
 @media (max-width: 480px) { .logistics-client-types { grid-template-columns: 1fr; } .spending-module .logistics-client-types > button { flex-direction: row; min-height: 76px; padding: 12px; justify-content: flex-start; } .logistics-client-types > button > svg { display: block; margin-left: auto; } .office-status-filter > span { display: none; } }
 @media (prefers-reduced-motion: reduce) { .office-toggle-track > span { transition: none; } }
 .spending-module .payment-composer.payment-composer-compact .expense-selection-panel label.logistics-client-search { display: flex; align-items: center; gap: 10px; }
+
+.spending-module.spending-split-view .spending-categories-only .spending-categories {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  overflow: visible;
+}
+.spending-module.spending-split-view .spending-categories-only .spending-categories > button {
+  grid-column: auto;
+  grid-row: auto;
+}
+@media (max-width: 760px) {
+  .spending-module.spending-split-view .spending-categories-only .spending-categories {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

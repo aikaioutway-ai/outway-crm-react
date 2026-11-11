@@ -25,7 +25,7 @@ export function DashboardSearch({ value, onChange, placeholder = 'Поиск: и
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  width?: number;
+  width?: number | '100%';
 }) {
   return (
     <label className="dashboard-search" style={{ width }}>

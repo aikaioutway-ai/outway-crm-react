@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { SchoolDirectoryBranchStat } from '../../services/crmV2Service';
+import { FamilyListRow, SchoolDirectoryBranchStat } from '../../services/crmV2Service';
 import { getBranchFilter, isSchoolAllowed, schoolTabsForTier } from './constants';
 import type { SchoolTier } from './SchoolTierTabs';
 import SchoolDashboardTable from './SchoolDashboardTable';
@@ -30,16 +30,25 @@ const columns = [
 ] as const;
 type SortKey = typeof columns[number][0];
 
-export default function DirectorySchoolDashboard({ branches, allowedSchools, schoolTier = '1.0', onSelectSchool }: { branches: SchoolDirectoryBranchStat[]; allowedSchools?: string[]; schoolTier?: SchoolTier; onSelectSchool: (key: string) => void }) {
+export default function DirectorySchoolDashboard({ branches, allowedSchools, schoolTier = '1.0', onSelectSchool, splitView, periodRows }: { periodRows?: FamilyListRow[]; splitView?: boolean; branches: SchoolDirectoryBranchStat[]; allowedSchools?: string[]; schoolTier?: SchoolTier; onSelectSchool: (key: string) => void }) {
   const [sort, setSort] = useState<{ key: SortKey; asc: boolean }>({ key: 'label', asc: true });
   const stats = useMemo(() => computeDirectoryStats(branches, allowedSchools, schoolTier), [branches, allowedSchools, schoolTier]);
-  const sorted = [...stats].sort((a, b) => {
+  const displayedStats = periodRows ? stats.map(school => {
+    const rows = periodRows.filter(row => row.branchFilter === school.key);
+    return {
+      ...school,
+      applications: rows.length,
+      boarded: rows.filter(row => row.status === 'boarded').length,
+      rejected: rows.filter(row => row.status === 'rejected').length,
+    };
+  }) : stats;
+  const sorted = [...displayedStats].sort((a, b) => {
     const av = a[sort.key], bv = b[sort.key];
     const comparison = typeof av === 'string' ? av.localeCompare(String(bv)) : Number(av) - Number(bv);
     return sort.asc ? comparison : -comparison;
   });
-  return <SchoolDashboardTable commentScope="families/DirectorySchoolDashboard:overview"
-    columns={columns.map(([key, label]) => ({ key, label, color: DIRECTORY_COLORS[key], total: key === 'label' ? stats.length : stats.reduce((sum, school) => sum + school[key], 0) }))}
+  return <SchoolDashboardTable splitView={splitView} commentScope="families/DirectorySchoolDashboard:overview"
+    columns={(splitView ? [['applications', 'Заявки'], ['boarded', 'Посажены'], ['rejected', 'Отказы']] as const : columns).map(([key, label]) => ({ key, label, color: DIRECTORY_COLORS[key], total: key === 'label' ? stats.length : displayedStats.reduce((sum, school) => sum + school[key], 0) }))}
     rows={sorted.map(school => ({ key: school.key, label: school.label, logo: school.logo, values: { applications: school.applications, newRequests: school.newRequests, boarded: school.boarded, rejected: school.rejected } }))}
     sortKey={sort.key}
     ascending={sort.asc}

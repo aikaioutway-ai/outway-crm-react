@@ -40,6 +40,8 @@ interface LogisticsMapViewProps {
   sessionToken?: string;
   onSelectSchool: (key: string) => void;
   allowedSchools?: string[];
+  expandable?: boolean;
+  expandedToolbar?: React.ReactNode;
   onSidebarWidthChange?: (width: number) => void;
 }
 
@@ -136,7 +138,7 @@ function buildBalloonBody(address: string, group: PointRow[]): string {
   return `${escapeHtml(address)}${childBlocks}`;
 }
 
-export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, sessionToken, onSelectSchool, onSidebarWidthChange, allowedSchools }: LogisticsMapViewProps) {
+export default function LogisticsMapView({ schoolKey, transferFilter, search = '', userRole, userName, sessionToken, onSelectSchool, onSidebarWidthChange, allowedSchools, expandable = false, expandedToolbar }: LogisticsMapViewProps) {
   const { data: rows = null } = useLogisticsTable();
   const [branches, setBranches] = useState<V2BranchOption[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -162,6 +164,15 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
   const [transfersZoneId, setTransfersZoneId] = useState<string | null>(null);
   const [previewKeys, setPreviewKeys] = useState<string[]>([]);
   const [expandedZoneSchools, setExpandedZoneSchools] = useState<string[]>([]);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setExpanded(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [expanded]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<any>(null);
   const ymapsRef = useRef<any>(null);
@@ -226,7 +237,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
         mapRef.current = new ymaps.Map(containerRef.current, {
           center: BISHKEK_CENTER,
           zoom: 11,
-          controls: ['zoomControl', 'fullscreenControl'],
+          controls: expandable ? ['zoomControl'] : ['zoomControl', 'fullscreenControl'],
         });
         const overlayRoot = document.createElement('div');
         overlayRoot.dataset.routeZoneOverlay = 'true';
@@ -645,7 +656,7 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
       schoolPlacemarkRef.current = null;
     }
 
-    const isSpecificTransfer = Boolean(transferFilter) && transferFilter !== 'empty' && transferFilter !== 'rejected';
+    const isSpecificTransfer = /^\d+$/.test(transferFilter);
 
     const nextKeys = new Set<string>();
     addressGroups.forEach(group => {
@@ -908,10 +919,20 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
   }
 
   return (
-    <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
-      <div style={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', paddingTop: 10 }}>
-        <div style={{ flex: 1, minHeight: 0, borderRadius: 16, overflow: 'hidden', background: '#fff', position: 'relative', border: '1px solid #E1E8EA' }}>
-          <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative' }} />
+    <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex' }}>
+      <div style={{ flex: 1, minWidth: 0, minHeight: 0, display: 'flex', flexDirection: 'column', paddingTop: expandable ? 0 : 10 }}>
+        <div style={{ flex: 1, minWidth: 0, minHeight: 0, borderRadius: 16, overflow: 'hidden', background: '#fff', position: expanded ? 'fixed' : 'relative', inset: expanded ? 0 : undefined, zIndex: expanded ? 2000 : undefined, border: '1px solid #E1E8EA' }}>
+          <div ref={containerRef} style={{ width: '100%', height: '100%', position: 'relative', isolation: expandable ? 'isolate' : undefined }} />
+          {expandable && <button type="button" className="ow-btn" aria-pressed={expanded}
+            style={{ position: 'absolute', top: 12, right: 12, zIndex: 26 }}
+            onClick={() => setExpanded(value => !value)}>
+            {expanded ? 'Свернуть карту' : 'На весь экран'}
+          </button>}
+          {expanded && expandedToolbar && (
+            <div className="logistics-map-transfer-overlay" aria-label="Фильтры трансферов" role="group">
+              {expandedToolbar}
+            </div>
+          )}
           {zoneOverlayRoot && createPortal((
           <div style={{ position: 'absolute', top: 12, left: 12, zIndex: 25, pointerEvents: 'auto' }}>
             <button

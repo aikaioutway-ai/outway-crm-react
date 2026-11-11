@@ -154,6 +154,7 @@ export function matchesLogisticsMapFilter(row: Pick<ChildRow, 'status' | 'transf
   if (row.status === 'rejected') return false;
   // «Без трансфера» на карте — те же дети, что в счётчике и таблице: все без трансфера или на тестовом.
   if (transferFilter === 'empty') return !row.transferNumber || Boolean(row.isTestTransfer);
+  if (transferFilter === 'bus') return Boolean(row.transferNumber) && !row.isTestTransfer;
   return !transferFilter || row.transferNumber === transferFilter;
 }
 
@@ -181,4 +182,9 @@ export function optimisticTransferPatch(
   if (choice === '!' || choice === '?') return { status: 'new', transferNumber: null, transferMark: choice === '!' ? 'in_work' : 'waiting', stopNumber: null, ...commentPatch };
   if (typeof choice === 'number') return { status: 'boarded', transferNumber: String(choice), transferMark: null, ...commentPatch };
   return { status: row.status === 'rejected' ? 'new' : row.status, transferNumber: null, transferMark: null, ...commentPatch };
+}
+
+export function microbusAverageTone(value: string | number) {
+  const average = Number(value);
+  return average < 16 ? 'alert' : average > 17 ? 'positive' : undefined;
 }

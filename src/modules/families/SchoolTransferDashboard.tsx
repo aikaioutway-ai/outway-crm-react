@@ -11,6 +11,7 @@ import { isNewUnassignedRow } from './familiesRowHelpers';
 
 interface SchoolTransferDashboardProps {
   schoolKey: string;
+  showBusFilter?: boolean;
   topPadding?: number;
   mode?: ManagerMode;
   periodKey?: string;
@@ -45,7 +46,7 @@ function childCountOf(rows: FamilyListRow[]): number {
   return rows.length;
 }
 
-export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools, schoolTier = '1.0' }: SchoolTransferDashboardProps) {
+export default function SchoolTransferDashboard({ mode = 'directory', periodKey = 'ALL', topPadding = 10, showBusFilter = false, schoolKey, rightReserveWidth = 0, selectedKey = '', onSelect, allowedSchools, schoolTier = '1.0' }: SchoolTransferDashboardProps) {
   // В «Справочнике» плашки считает база; таблица семей с деньгами нужна только финансовым вкладкам.
   const isDirectory = mode === 'directory';
   const { data: familyRows } = useFamiliesTable({ enabled: !isDirectory });
@@ -92,6 +93,11 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
   const statusCells = [
     { filterKey: 'new', label: '?', ...groupOf('new', () => allSchoolRows.filter(isNewUnassignedRow)), tone: STATUS_CELL_TONE.new },
     { filterKey: 'rejected', label: '×', ...groupOf('rejected', () => allSchoolRows.filter(r => r.status === 'rejected')), tone: STATUS_CELL_TONE.rejected },
+    ...(showBusFilter ? [{
+      filterKey: 'bus', label: 'bus',
+      childCount: transferCells.reduce((count, cell) => count + cell.childCount, 0),
+      debtSum: 0, tone: STATUS_CELL_TONE.all,
+    }] : []),
     // «Все» — рабочие дети без отказников: отказники видны только по своей фишке.
     { filterKey: '', label: '≡', ...groupOf('all', () => schoolRows), tone: STATUS_CELL_TONE.all },
   ];
@@ -124,7 +130,7 @@ export default function SchoolTransferDashboard({ mode = 'directory', periodKey 
           selected={selectedKey === cell.filterKey}
           onClick={() => onSelect?.(selectedKey === cell.filterKey ? '' : cell.filterKey)}
           onContextMenu={event=>showTaskContextMenu(event,/^\d+$/.test(cell.filterKey)?{type:'transfer',id:'',schoolKey,transferNumber:Number(cell.filterKey),label:`Трансфер № ${cell.filterKey}`} : ['empty','new','rejected'].includes(cell.filterKey)?{type:'group',id:`${schoolKey}:${cell.filterKey==='rejected'?'rejected':'new'}`,schoolKey,group:cell.filterKey==='rejected'?'rejected':'new',label:cell.filterKey==='rejected'?'Отказные заявки':'Новые заявки'}:{type:'school',id:schoolKey,schoolKey,label:schoolKey})}
-          title={cell.childCount > 0 ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')}${isTransfer && mode !== 'directory' ? ` · ${badgeLabel}: ${cell.unboardedCount}` : ''}` : undefined}
+          title={cell.filterKey === 'bus' ? `На трансфере: ${cell.childCount}` : cell.childCount > 0 ? `${cell.childCount} детей · долг ${cell.debtSum.toLocaleString('ru-RU')}${isTransfer && mode !== 'directory' ? ` · ${badgeLabel}: ${cell.unboardedCount}` : ''}` : undefined}
         />;
       })}
       </TransferBarPages>

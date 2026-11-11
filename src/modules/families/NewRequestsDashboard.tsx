@@ -37,7 +37,8 @@ export function countRequestsBySchool(rows: FamilyListRow[], day: string, now = 
   return counts;
 }
 
-export default function NewRequestsDashboard({ rows, schools, day, onSelectSchool }: {
+export default function NewRequestsDashboard({ rows, schools, day, onSelectSchool, splitView }: {
+  splitView?: boolean;
   rows: FamilyListRow[]; schools: { key: string; label: string; color: string; logo?: string }[]; day: string; onSelectSchool: (key: string) => void;
 }) {
   const [sort, setSort] = useState<{ key: string; ascending: boolean }>({ key: 'newRequests', ascending: false });
@@ -50,14 +51,14 @@ export default function NewRequestsDashboard({ rows, schools, day, onSelectSchoo
     return sort.ascending ? comparison : -comparison;
   });
   const total = (key: CountKey) => stats.reduce((sum, row) => sum + row.values[key], 0);
-  return <SchoolDashboardTable commentScope="families/ManagerOverview:requests" commentContext={day}
+  return <SchoolDashboardTable splitView={splitView} commentScope="families/ManagerOverview:requests" commentContext={day}
     columns={[
       { key: 'school', label: 'Школа', total: schools.length, color: '#64748B' },
-      { key: 'newRequests', label: 'Новые (—)', total: total('newRequests'), color: '#378ADD' },
-      { key: 'inWork', label: 'В работе (!)', total: total('inWork'), color: '#2563EB' },
-      { key: 'waiting', label: 'Ожидание (?)', total: total('waiting'), color: '#B45309' },
+      { key: 'newRequests', label: splitView ? 'Новые' : 'Новые (—)', total: total('newRequests'), color: '#378ADD' },
+      { key: 'inWork', label: splitView ? 'В работе' : 'В работе (!)', total: total('inWork'), color: '#2563EB' },
+      { key: 'waiting', label: splitView ? 'Ожидание' : 'Ожидание (?)', total: total('waiting'), color: '#B45309' },
       { key: 'overdue', label: 'Просрочено', total: total('overdue'), color: '#DC2626' },
-    ]} rows={sorted} sortKey={sort.key} ascending={sort.ascending}
+    ].filter(column => !splitView || column.key === 'newRequests' || column.key === 'inWork')} rows={sorted} sortKey={sort.key} ascending={sort.ascending}
     onSort={key => setSort(previous => ({ key, ascending: previous.key === key ? !previous.ascending : key === 'school' }))}
     onSelect={onSelectSchool} />;
 }

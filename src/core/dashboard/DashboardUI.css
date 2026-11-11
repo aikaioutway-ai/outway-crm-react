@@ -579,6 +579,7 @@
 .manager-overview-period > div { height: 36px !important; padding: 3px !important; border-radius: 8px !important; }
 .manager-overview-period button { height: 28px !important; }
 .manager-overview-search { min-width: 0; }
+.manager-overview-search > .dashboard-search { min-width: 0; height: 36px; border-radius: 8px; }
 .manager-overview-search > div { width: 100% !important; height: 36px !important; margin: 0 !important; }
 .manager-overview-search > div > div:first-child { height: 36px !important; border-radius: 8px !important; }
 .overview-icon-actions { display: flex; align-items: center; gap: 8px; }
@@ -613,3 +614,519 @@
 .salary-overview-toolbar .dashboard-search { height: 36px; }
 .salary-overview-toolbar .expense-cancel { height: 36px; box-sizing: border-box; }
 .b2b-finance-month-page-head > .overview-icon-button { margin-left: auto; order: 3; }
+
+.manager-calendar-period {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.manager-calendar-period svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.manager-calendar-period select {
+  min-width: 0;
+  min-height: 32px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.manager-workspace {
+  display: grid;
+  grid-template-columns: clamp(160px, 15vw, 230px) minmax(0, 1fr);
+  gap: 18px;
+  flex: 1;
+  min-height: 0;
+  padding: 0 16px;
+}
+
+.manager-workspace-content {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.manager-mode-cards {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.manager-mode-card {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 64px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  font: inherit;
+  font-weight: 650;
+  text-align: left;
+  cursor: pointer;
+}
+
+.manager-mode-card svg { flex: none; }
+.manager-mode-card:hover { border-color: var(--accent); }
+.manager-mode-card[aria-selected="true"] {
+  background: var(--accent-l);
+  border-color: var(--accent);
+  box-shadow: inset 3px 0 var(--accent);
+}
+
+@media (max-width: 700px) {
+  .manager-workspace { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); gap: 10px; padding: 0 8px; }
+  .manager-mode-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .manager-mode-card { min-height: 44px; padding: 8px; }
+}
+
+.manager-overview-toolbar--wide {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.manager-overview-toolbar--wide .manager-overview-search,
+.manager-overview-toolbar--wide .overview-icon-actions {
+  grid-row: 2;
+  grid-column: auto;
+}
+
+.manager-period-tiles {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(82px, 1fr));
+  gap: 6px;
+}
+
+.manager-period-tiles button {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  padding: 8px 4px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.manager-period-tiles button svg { color: var(--accent); }
+.manager-period-tiles button strong { font-variant-numeric: tabular-nums; }
+.manager-period-tiles button[aria-pressed="true"] {
+  background: var(--accent-l);
+  border-color: var(--accent);
+}
+
+.manager-overview-body { padding: 0; }
+.manager-overview-body .manager-metric-layout { padding: 0 0 12px; }
+.manager-mode-card { min-height: 88px; }
+.manager-mode-card strong { display: block; margin-top: 6px; font-size: 17px; }
+
+@media (max-width: 700px) {
+  .manager-overview-body { grid-template-rows: auto minmax(0, 1fr); }
+  .manager-mode-card { min-height: 64px; }
+}
+
+.manager-period-count-alert { color: var(--danger); }
+
+.manager-overview-body {
+  flex: 0 1 auto;
+  overflow: auto;
+}
+
+.manager-overview-body .manager-metric-layout { padding: 0; }
+.manager-overview-body .manager-mode-cards {
+  align-content: stretch;
+  grid-auto-rows: 1fr;
+}
+
+.manager-mode-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px 10px;
+}
+
+.manager-mode-metrics { grid-column: 1 / -1; }
+
+.manager-mode-metric {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 6px;
+  margin-top: 5px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.manager-mode-card .manager-mode-metric strong {
+  margin: 0;
+  color: var(--text);
+  font-size: inherit;
+  white-space: nowrap;
+}
+
+@media (max-width: 700px) {
+  .manager-overview-body .manager-mode-cards { grid-auto-rows: auto; }
+}
+
+.manager-mode-title {
+  display: block;
+  font-size: 17px;
+  font-weight: 750;
+  line-height: 1.2;
+}
+
+.manager-mode-card .manager-mode-metric strong {
+  color: var(--accent-h);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.manager-mode-card .manager-mode-metric strong[data-tone="positive"] { color: #06734d; }
+.manager-mode-card .manager-mode-metric strong[data-tone="alert"] { color: var(--danger); }
+.manager-mode-card .manager-mode-metric strong[data-tone="warning"] { color: #92400e; }
+
+.manager-overview-body--school {
+  flex: 1;
+}
+
+.manager-overview-body--school .families-scroll-content {
+  --families-content-top-padding: 0px;
+}
+
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards {
+  flex: none;
+  align-content: start;
+  grid-auto-rows: auto;
+}
+
+.manager-overview-body .manager-mode-card {
+  align-content: start;
+  min-height: 0;
+  padding: 12px;
+}
+
+.manager-overview-body .manager-mode-card > svg {
+  box-sizing: content-box;
+  padding: 6px;
+  border-radius: 8px;
+  color: var(--accent-h);
+  background: var(--accent-l);
+}
+
+.manager-overview-body .manager-mode-card[aria-selected="true"] > svg {
+  color: #fff;
+  background: var(--accent-h);
+}
+
+.manager-overview-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.manager-overview-sidebar .manager-mode-cards { flex: 1; }
+
+.manager-school-brand {
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface, #fff);
+}
+
+.manager-overview-toolbar--transfers {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 22%) auto;
+}
+
+.manager-toolbar-transfers {
+  grid-row: 2;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.manager-toolbar-transfers .ow-transfer-cell { min-width: 36px; }
+
+@media (max-width: 850px) {
+  .manager-overview-toolbar--transfers { grid-template-columns: minmax(0, 1fr) auto; }
+  .manager-toolbar-transfers { grid-column: 1 / -1; }
+  .manager-overview-toolbar--transfers .manager-overview-search,
+  .manager-overview-toolbar--transfers .overview-icon-actions { grid-row: 3; }
+}
+
+.manager-period-tiles--months button[aria-pressed="false"] {
+  color: var(--text-2);
+}
+
+.manager-period-tiles--months button[aria-pressed="true"] {
+  background: var(--accent-h);
+  border-color: var(--accent-h);
+  color: #fff;
+}
+
+.manager-period-tiles--months button[aria-pressed="true"] svg {
+  color: inherit;
+}
+
+.manager-overview-body--school .dt-td,
+.manager-overview-body--school .dt-td span,
+.manager-overview-body--school .dt-td .dt-phone {
+  font-size: 10px !important;
+}
+
+.manager-overview-body--school .dt-td button span {
+  font-size: inherit !important;
+}
+
+.manager-overview-body--school .dt-th,
+.manager-overview-body--school .dt-th .dt-th-label {
+  font-size: 11px !important;
+}
+
+.accrual-calendar-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+}
+
+.accrual-calendar-heading svg { flex: none; }
+
+.payment-heading-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.unpaid-period-filters {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.unpaid-period-filters button {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+}
+
+.unpaid-period-filters button:first-child { margin-inline-end: 5px; }
+.unpaid-period-filters button:hover { border-color: var(--border); }
+.unpaid-period-filters button[aria-pressed="true"] { border-color: var(--danger); }
+
+.manager-mode-card { position: relative; }
+
+.manager-mode-card:has(.manager-mode-count) .manager-mode-title {
+  padding-inline-end: 24px;
+}
+
+.manager-mode-count {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+  min-width: 18px;
+  padding: 0 4px;
+  border-radius: 10px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  line-height: 18px;
+  text-align: center;
+}
+
+.unpaid-period-totals {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-inline-start: 8px;
+  border-inline-start: 1px solid var(--border);
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.unpaid-period-totals strong {
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+}
+
+button.manager-school-brand {
+  cursor: pointer;
+}
+
+.manager-overview-toolbar--wide:not(:has(.overview-icon-actions)) .manager-overview-search {
+  grid-column-end: -1;
+}
+
+.manager-overview-toolbar--transfers:not(:has(.overview-icon-actions)) {
+  grid-template-columns: minmax(0, 1fr) minmax(245px, 22%);
+}
+
+@media (max-width: 1100px) {
+  .manager-overview-toolbar--transfers:not(:has(.overview-icon-actions)) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .manager-overview-toolbar--transfers:not(:has(.overview-icon-actions)) .manager-overview-search {
+    grid-row: 3;
+    grid-column: 1 / -1;
+  }
+}
+
+.manager-school-staff {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface);
+}
+
+.manager-school-staff dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.manager-school-staff dd {
+  margin: 3px 0 0 20px;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.manager-staff-name {
+  display: block;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent);
+  text-align: left;
+  font: inherit;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.manager-staff-name:hover { text-decoration: underline; }
+
+.manager-staff-contact {
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  color: var(--text);
+  background: var(--surface);
+}
+
+.manager-staff-contact form { float: right; margin-left: 12px; }
+.manager-staff-contact::backdrop { background: rgb(23 34 47 / 24%); }
+
+.logistics-school-content {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.logistics-map-transfer-overlay {
+  position: absolute;
+  z-index: 26;
+  top: 56px;
+  left: 50%;
+  width: min(1000px, calc(100% - 88px));
+  transform: translateX(-50%);
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgb(255 255 255 / 82%);
+  box-shadow: 0 3px 14px rgb(0 0 0 / 12%);
+}
+
+.logistics-map-transfer-overlay > div {
+  padding-top: 0 !important;
+}
+
+.logistics-map-transfer-overlay .ow-transfer-cell {
+  min-width: 34px;
+}
+
+.logistics-map-transfer-overlay > div {
+  overflow-x: auto;
+}
+
+.manager-overview-group-summary {
+  grid-column: 1 / -1;
+  min-width: 0;
+  padding-block: 8px 12px;
+}
+
+.manager-overview-body.manager-overview-body--with-groups {
+  flex: 0 0 auto;
+  align-content: start;
+  grid-template-rows: auto auto;
+  overflow: visible;
+}
+
+.cashier2-period-panel { margin-bottom: 12px; }
+.cashier2-reconciliation-tiles {
+  display: grid;
+  align-items: stretch;
+}
+.cashier2-reconciliation-tiles button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--surface-2);
+}
+.cashier2-unmatched {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface);
+}
+.spending-split-layout.spending-categories-only { display: block; }
+.spending-workspace[hidden] { display: none; }
+
+.cashier2-search-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  margin-top: 8px;
+}
+.cashier2-search-row > .dashboard-search { min-width: 0; }
+
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards.cashier2-mode-cards {
+  grid-auto-rows: 1fr;
+}

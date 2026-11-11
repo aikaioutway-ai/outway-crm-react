@@ -60,3 +60,19 @@
 .summary-school-tooltip { position: absolute; top: calc(100% + 8px); right: 0; z-index: 20; width: max-content; max-width: 260px; padding: 8px 12px; border-radius: 8px; background: #172b36; color: #fff; font-size: 12px; font-weight: 400; line-height: 1.45; box-shadow: 0 4px 14px #142b3930; pointer-events: none; opacity: 0; visibility: hidden; }
 .summary-school-logo:hover .summary-school-tooltip,
 .summary-school-logo:focus .summary-school-tooltip { opacity: 1; visibility: visible; }
+
+.summary-tiles-embedded .summary-tiles { gap: 12px; }
+.summary-tiles-embedded .summary-tile { padding: 12px 14px; }
+.summary-tiles-embedded .summary-tile h2 { font-size: 16px; }
+.summary-tiles-embedded .summary-tile-team { margin: 4px 0 8px; line-height: 1.35; }
+.summary-tiles-embedded .summary-tile-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px 10px; }
+.summary-tiles-embedded .summary-tile-metrics div { gap: 2px; }
+.summary-tiles-embedded .summary-tile-metrics strong { font-size: 16px; }
+.summary-tiles-embedded .summary-tile-footer { display: none; }
+
+@media (max-width: 700px) {
+  .summary-tiles-embedded .summary-tile-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.summary-tile-metrics strong[data-tone="alert"] { color: var(--danger); }
+.summary-tile-metrics strong[data-tone="positive"] { color: #06734d; }

@@ -1,7 +1,10 @@
 import React from 'react';
+import { CalendarDays } from 'lucide-react';
 import { ALL_PERIODS } from './constants';
 
 interface ManagerPeriodBarProps {
+  calendar?: boolean;
+  calendarLabel?: string;
   periodKey: string;
   onPeriodKeyChange: (key: string) => void;
   periods?: ReadonlyArray<{ key: string; month: number; year: number; label: string }>;
@@ -15,6 +18,8 @@ interface ManagerPeriodBarProps {
 }
 
 export default function ManagerPeriodBar({
+  calendar,
+  calendarLabel = 'Период',
   periodKey,
   onPeriodKeyChange,
   periods = ALL_PERIODS,
@@ -26,6 +31,23 @@ export default function ManagerPeriodBar({
   periodTitle,
   onPeriodContextMenu,
 }: ManagerPeriodBarProps) {
+  if (calendar) {
+    return (
+      <label className="manager-calendar-period">
+        <CalendarDays size={17} aria-hidden="true" />
+        <span>{calendarLabel}</span>
+        <select value={periodKey} onChange={event => onPeriodKeyChange(event.target.value)}>
+          {showAll && <option value="ALL">{allLabel ?? 'Все периоды'}</option>}
+          {periods.map(period => (
+            <option key={period.key} value={period.key}>
+              {periodTitle?.(period) ?? period.label}{periodCounts ? ` (${periodCounts[period.key] ?? 0})` : ''}
+            </option>
+          ))}
+        </select>
+      </label>
+    );
+  }
+
   const specialButtonStyle = (active: boolean): React.CSSProperties => ({
     width: 36,
     height: 28,

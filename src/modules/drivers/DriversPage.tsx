@@ -2,6 +2,7 @@ import { UserRole } from '../../types';
 import FamiliesPage from '../families/FamiliesPage';
 
 interface DriversPageProps {
+  embedded?: boolean;
   initialOpenDriverId?: string;
   userRole?: UserRole;
   userName?: string;
@@ -13,9 +14,10 @@ interface DriversPageProps {
   onSchoolsSidebarWidthChange?: (width: number) => void;
 }
 
-export default function DriversPage({ userRole, userName, authToken, allowedSchools, schoolKey, externalQuickTransfer, initialSearch, onSchoolsSidebarWidthChange, initialOpenDriverId }: DriversPageProps) {
+export default function DriversPage({ userRole, userName, authToken, allowedSchools, schoolKey, externalQuickTransfer, initialSearch, onSchoolsSidebarWidthChange, initialOpenDriverId, embedded }: DriversPageProps) {
   return (
     <FamiliesPage
+      centeredDriverToolbar={embedded}
       initialOpenDriverId={initialOpenDriverId}
       mode="logistics"
       settingsScope="drivers"

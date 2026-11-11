@@ -1,3 +1,6 @@
+import { useQuery } from '@tanstack/react-query';
+import { fetchSpendingEntries } from '../../services/spendingService';
+import { useCashierReconciliationSummary } from './CashierReconciliation';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import CashierViewTabs, { CashierView } from './CashierViewTabs';
 import SchoolDashboardTable from './SchoolDashboardTable';
@@ -18,6 +21,7 @@ import ManagerPeriodBar from './ManagerPeriodBar';
 type SortKey = 'school' | 'paymentsAmount' | 'pendingCount' | 'pendingAmount' | 'confirmedCount' | 'confirmedAmount' | 'qrAmount' | 'cashAmount' | 'refundsCount' | 'refundsAmount' | 'refundsPendingAmount' | 'refundsConfirmedAmount';
 
 interface CashierOverviewProps {
+  splitView?: boolean;
   view: CashierView;
   onViewChange: (view: CashierView) => void;
   onSpending?: () => void;
@@ -211,13 +215,69 @@ function CashierPaymentSearch({ rows, onOpenPaymentFamily }: {
   );
 }
 
-export default function CashierOverview({ view, onViewChange, onSpending, onReconciliation, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
-  const { data: rows = null } = usePaymentsTable();
-  const { data: refundRows = [] } = useRefundsTable();
+export function CashierPaymentSummaryTabs({ periodKey, schoolKey, allowedSchools, sessionToken, showPersonal, ...tabs }: React.ComponentProps<typeof CashierViewTabs> & {
+  periodKey: string;
+  schoolKey: string | null;
+  sessionToken?: string;
+  showPersonal: boolean;
+  allowedSchools?: string[];
+}) {
+  const { data: payments } = usePaymentsTable();
+  const { data: refunds } = useRefundsTable();
+  const schools = SCHOOL_TABS.filter(school => school.key !== 'ALL' && isSchoolAllowed(school.key, allowedSchools)
+    && (schoolKey && schoolKey !== 'ALL' ? school.key === schoolKey : !SCHOOL_TIER_2_KEYS.includes(school.key)));
+  const rows = payments?.filter(row => matchesPeriod(row, periodKey) && schools.some(school => rowMatchesSchool(row, school)));
+  const refundRows = refunds?.filter(row => refundMatchesPeriod(row, periodKey)
+    && schools.some(school => refundMatchesSchool(row, school)) && (row.status === 'pending' || row.status === 'confirmed'));
+  const summarize = (items?: { amount: number }[]) => ({
+    amount: items ? money(items.reduce((sum, row) => sum + row.amount, 0)) + ' сом' : '—',
+    count: items ? items.length.toLocaleString('ru-RU') : '—',
+  });
+  const spending = useQuery({
+    queryKey: ['cashier-summary-spending', sessionToken],
+    queryFn: () => fetchSpendingEntries(sessionToken!),
+    enabled: Boolean(tabs.onSpending && sessionToken),
+  });
+  const periods = CASHIER_PERIODS.filter(period => periodKey === 'ALL' || period.key === periodKey);
+  const expenses = (spending.data as { date: string; category: string; amount: number }[] | undefined)?.filter(row => periods.some(period =>
+    row.date.startsWith(`${period.year}-${String(period.month).padStart(2, '0')}`)));
+  const expenseTotal = (matches: (category: string) => boolean) =>
+    expenses ? money(expenses.reduce((sum, row) => sum + (matches(row.category) ? row.amount : 0), 0)) + ' сом' : '—';
+  const reconciliation = useCashierReconciliationSummary(sessionToken, !!tabs.onReconciliation);
+  const extraMetrics = {
+    spending: [
+      { label: 'Школы', value: expenseTotal(category => category !== 'Logistics' && category !== 'Личное') },
+      { label: 'Логистика', value: expenseTotal(category => category === 'Logistics') },
+      ...(showPersonal ? [{ label: 'Личное', value: expenseTotal(category => category === 'Личное') }] : []),
+    ],
+    reconciliation: [
+      { label: 'Совпали', value: reconciliation?.['1'] ?? '—' },
+      { label: 'Частично', value: reconciliation?.['2'] ?? '—' },
+      { label: 'Дубли', value: reconciliation?.['Д'] ?? '—' },
+    ],
+  };
+  return <CashierViewTabs {...tabs} cards extraMetrics={extraMetrics} summaries={{
+    pending: summarize(rows?.filter(isPending)),
+    confirmed: summarize(rows?.filter(isConfirmed)),
+    refunds: summarize(refundRows),
+  }} />;
+}
+
+export function CashierOverviewSearch({ allowedSchools, onSelectSchool, onOpenPaymentFamily }: Pick<CashierOverviewProps, 'allowedSchools' | 'onSelectSchool' | 'onOpenPaymentFamily'>) {
+  const { data: rows } = usePaymentsTable();
   const searchablePayments = useMemo(
     () => (rows ?? []).filter(row => isSchoolAllowed(getBranchFilter(row.branchShort, row.branchShort), allowedSchools)),
     [allowedSchools, rows],
   );
+  return <>
+    <div className="manager-overview-search"><CashierPaymentSearch rows={searchablePayments} onOpenPaymentFamily={onOpenPaymentFamily} /></div>
+    <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')} /></div>
+  </>;
+}
+
+export default function CashierOverview({ splitView, view, onViewChange, onSpending, onReconciliation, periodKey, onPeriodKeyChange, onSelectSchool, onOpenPaymentFamily, allowedSchools, onSidebarWidthChange }: CashierOverviewProps) {
+  const { data: rows = null } = usePaymentsTable();
+  const { data: refundRows = [] } = useRefundsTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -304,22 +364,21 @@ export default function CashierOverview({ view, onViewChange, onSpending, onReco
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <DashboardTopPanel className="dashboard-control-row cashier-control-row overview-control-row">
-          <CashierViewTabs value={view} onChange={onViewChange} onSpending={onSpending} onReconciliation={onReconciliation} />
-          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+        {!splitView && <DashboardTopPanel className="dashboard-control-row cashier-control-row overview-control-row">
+          {!splitView && <CashierViewTabs value={view} onChange={onViewChange} onSpending={onSpending} onReconciliation={onReconciliation} />}
+          {!splitView && <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
             <ManagerPeriodBar
               periodKey={periodKey}
               onPeriodKeyChange={onPeriodKeyChange}
               periods={CASHIER_PERIODS}
             />
-          </div>
-          <CashierPaymentSearch rows={searchablePayments} onOpenPaymentFamily={onOpenPaymentFamily} />
-          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
-        </DashboardTopPanel>
+          </div>}
+          <CashierOverviewSearch allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} onOpenPaymentFamily={onOpenPaymentFamily} />
+        </DashboardTopPanel>}
 
-        <SchoolDashboardTable commentScope="families/CashierOverview:overview" commentContext={`${view}:${periodKey}`}
+        <SchoolDashboardTable splitView={splitView} compactTotals={splitView} commentScope="families/CashierOverview:overview" commentContext={`${view}:${periodKey}`}
           columns={[
-            { key: 'school', label: 'Школа', total: stats.length, color: KPI_COLORS.school },
+            ...(!splitView ? [{ key: 'school', label: 'Школа', total: stats.length, color: KPI_COLORS.school }] : []),
             ...(view === 'pending' ? [
               { key: 'pendingCount', label: 'К-во на проверке', total: totals.pendingCount, color: KPI_COLORS.pendingCount },
               { key: 'pendingAmount', label: 'Сумма на проверке', total: money(totals.pendingAmount), color: KPI_COLORS.pendingAmount },
@@ -345,6 +404,7 @@ export default function CashierOverview({ view, onViewChange, onSpending, onReco
         />
       </div>
 
+      {!splitView && <>
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />
 
       <SchoolDockSidebar
@@ -353,6 +413,7 @@ export default function CashierOverview({ view, onViewChange, onSpending, onReco
         onHiddenChange={setSidebarHidden}
         onSelect={onSelectSchool}
       />
+      </>}
     </div>
   );
 }

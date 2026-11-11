@@ -40,8 +40,9 @@ function readEntries(key: string): Entry[] {
   return raw;
 }
 
-export default function SpendingModule({ userId, role, sessionToken, onOpenClient, periodKey: controlledPeriodKey, onPeriodKeyChange, embedded = false, searchQuery = '', columnsOpen, onColumnsOpenChange }: { columnsOpen?: boolean; onColumnsOpenChange?: (open: boolean) => void; searchQuery?: string; periodKey?: string; onPeriodKeyChange?: (key: string) => void; embedded?: boolean; userId: string; role: UserRole; sessionToken?: string; onOpenClient?: (familyId: string) => Promise<void> }) {
+export default function SpendingModule({ userId, role, sessionToken, onOpenClient, periodKey: controlledPeriodKey, onPeriodKeyChange, embedded = false, categoriesFirst = false, searchQuery = '', columnsOpen, onColumnsOpenChange }: { columnsOpen?: boolean; onColumnsOpenChange?: (open: boolean) => void; searchQuery?: string; periodKey?: string; onPeriodKeyChange?: (key: string) => void; embedded?: boolean; categoriesFirst?: boolean; userId: string; role: UserRole; sessionToken?: string; onOpenClient?: (familyId: string) => Promise<void> }) {
   const workspace = useRef<HTMLDivElement>(null);
+  const [showCategoryDetails, setShowCategoryDetails] = useState(!categoriesFirst);
   const categoryBar = useRef<HTMLDivElement>(null);
   const scrollToCategories = () => categoryBar.current?.scrollIntoView?.({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
   const scrollToWorkspace = () => requestAnimationFrame(() => workspace.current?.scrollIntoView?.({ behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }));
@@ -145,6 +146,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
         await saveSpendingEntries(sessionToken, changed);
         for (const row of removed) await deleteSpendingEntry(sessionToken, row.id);
         setRows(await fetchSpendingEntries(sessionToken));
+        void queryClient.invalidateQueries({ queryKey: ['cashier-summary-spending', sessionToken] });
         setError('');
         void queryClient.invalidateQueries({ queryKey: ['driverPayments'] });
         void queryClient.invalidateQueries({ queryKey: ['employeePaymentHistory'] });
@@ -173,6 +175,7 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
       setRows(current => current.map(row => row.id === entry.id ? entry : row));
       try {
         await saveSpendingEntries(token, [entry]);
+        void queryClient.invalidateQueries({ queryKey: ['cashier-summary-spending', token] });
         setError('');
         if (entry.driverId) void queryClient.invalidateQueries({ queryKey: ['driverPayments'] });
         if (entry.employeeId) void queryClient.invalidateQueries({ queryKey: ['employeePaymentHistory'] });
@@ -232,8 +235,8 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
   return <section className={`spending-module spending-split-view${embedded ? ' is-embedded' : ''}${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
     {!embedded && <header className="spending-header"><div><span className="spending-eyebrow">УПРАВЛЕНИЕ РАСХОДАМИ</span><h1>Расходы</h1></div><div className="spending-finance-periods"><ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} /></div></header>}
     {error && <p role="alert" className="spending-error">{error}{loadFailed && <button type="button" onClick={() => setReloadKey(value => value + 1)}>Повторить загрузку</button>}</p>}{busy && <p role="status">Обработка расходов…</p>}
-    <div className="spending-split-layout"><div className="spending-categories" ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { if (draft && !draft.id) { changeDraftCategory(key, draft); setExpenseScrollRequest(value => value + 1); } else if (allRecords) { setCategory(key); setDraft(null); setSchoolFilter(null); setRecordsScrollRequest(value => value + 1); } else { setCategory(key); setSchoolFilter(null); setDraft(null); scrollToWorkspace(); } }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={openEveryCategory}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
-    <div className="spending-workspace" ref={workspace}>
+    <div className={showCategoryDetails || normalizedSearch ? "spending-split-layout" : "spending-split-layout spending-categories-only"}><div className={showCategoryDetails || normalizedSearch ? "spending-categories" : "spending-categories manager-school-grid manager-metric-panel"} ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { setShowCategoryDetails(true); if (draft && !draft.id) { changeDraftCategory(key, draft); setExpenseScrollRequest(value => value + 1); } else if (allRecords) { setCategory(key); setDraft(null); setSchoolFilter(null); setRecordsScrollRequest(value => value + 1); } else { setCategory(key); setSchoolFilter(null); setDraft(null); scrollToWorkspace(); } }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={() => { setShowCategoryDetails(true); openEveryCategory(); }}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
+    <div className="spending-workspace" hidden={!showCategoryDetails && !normalizedSearch} ref={workspace}>
 
 
     {<div className={`spending-register${!allRecords && category !== 'ALL' && !schoolFilter && !normalizedSearch ? ' spending-register-schools' : ''}`}>{overviewVisible && <div className="spending-register-heading"><h2>{category}</h2><div className="spending-overview-tools"><button type="button" className="overview-icon-button spending-sort-button" aria-label={amountSort === 'desc' ? 'Сортировать сумму по возрастанию' : 'Сортировать сумму по убыванию'} title={amountSort === 'desc' ? 'По сумме: по убыванию. Нажмите для возрастания' : 'Сортировать по сумме: по убыванию'} onClick={() => setAmountSort(value => value === 'desc' ? 'asc' : 'desc')}>{amountSort === 'asc' ? <ArrowUpNarrowWide size={18} /> : <ArrowDownWideNarrow size={18} />}</button>{registerActions}</div></div>}
