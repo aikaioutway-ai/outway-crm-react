@@ -1097,23 +1097,53 @@ button.manager-school-brand {
 }
 
 .cashier2-period-panel { margin-bottom: 12px; }
-.cashier2-reconciliation-tiles {
-  display: grid;
-  align-items: stretch;
+.manager-school-grid.cashier2-reconciliation-tiles {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
-.cashier2-reconciliation-tiles button[aria-pressed="true"] {
-  border-color: var(--accent);
-  background: var(--surface-2);
+.manager-school-grid.cashier2-reconciliation-tiles > button {
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  gap: 14px;
+  min-height: clamp(160px, 15vw, 220px);
+  padding: clamp(12px, 2vw, 24px);
+  text-align: left;
 }
-.cashier2-unmatched {
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: 4px;
-  padding: 8px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: var(--surface);
+.cashier2-reconciliation-tiles .manager-school-identity {
+  flex-direction: row;
+  align-items: center;
+  font-size: 18px;
+  font-weight: 700;
+}
+.cashier2-reconciliation-tiles .manager-school-identity svg {
+  flex-shrink: 0;
+}
+.cashier2-reconciliation-tiles .manager-mode-metric {
+  align-items: baseline;
+  font-size: 15px;
+}
+.cashier2-reconciliation-tiles > button strong {
+  color: var(--text);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 760px) {
+  .manager-school-grid.cashier2-reconciliation-tiles {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.reconcile-detail-toolbar {
+  flex-wrap: wrap;
+}
+.reconcile-detail-groups.ow-seg {
+  flex-wrap: wrap;
+  max-width: 100%;
+}
+.manager-workspace:has(> .manager-workspace-content > .reconcile-group-open) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+.manager-workspace:has(> .manager-workspace-content > .reconcile-group-open) > .manager-overview-sidebar {
+  display: none;
 }
 .spending-split-layout.spending-categories-only { display: block; }
 .spending-workspace[hidden] { display: none; }

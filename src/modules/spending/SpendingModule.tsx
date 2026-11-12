@@ -232,9 +232,19 @@ export default function SpendingModule({ userId, role, sessionToken, onOpenClien
 
   </div>;
   const registerActions = viewActions(false);
-  return <section className={`spending-module spending-split-view${embedded ? ' is-embedded' : ''}${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
+  const categoryIsOpen = categoriesFirst && showCategoryDetails;
+  const returnToCategoryGrid = () => {
+    setDraft(null);
+    setSchoolFilter(null);
+    setAllRecords(false);
+    setShowCategoryDetails(false);
+  };
+  return <section className={`spending-module spending-split-view${embedded ? ' is-embedded' : ''}${categoryIsOpen ? ' spending-category-open' : ''}${pickerOpen ? ' has-picker' : ''}`} aria-label="Расходы">
     {!embedded && <header className="spending-header"><div><span className="spending-eyebrow">УПРАВЛЕНИЕ РАСХОДАМИ</span><h1>Расходы</h1></div><div className="spending-finance-periods"><ManagerPeriodBar periodKey={periodKey} onPeriodKeyChange={setPeriodKey} periods={CASHIER_PERIODS} /></div></header>}
     {error && <p role="alert" className="spending-error">{error}{loadFailed && <button type="button" onClick={() => setReloadKey(value => value + 1)}>Повторить загрузку</button>}</p>}{busy && <p role="status">Обработка расходов…</p>}
+    {categoryIsOpen && <div className="spending-category-navigation">
+      <button type="button" className="ow-btn ow-btn--ghost" onClick={returnToCategoryGrid}>К категориям</button>
+    </div>}
     <div className={showCategoryDetails || normalizedSearch ? "spending-split-layout" : "spending-split-layout spending-categories-only"}><div className={showCategoryDetails || normalizedSearch ? "spending-categories" : "spending-categories manager-school-grid manager-metric-panel"} ref={categoryBar}>{categories.map(key => <button key={key} className={key === 'Личное' ? 'spending-personal-tile' : undefined} aria-pressed={category === key} onClick={() => { setShowCategoryDetails(true); if (draft && !draft.id) { changeDraftCategory(key, draft); setExpenseScrollRequest(value => value + 1); } else if (allRecords) { setCategory(key); setDraft(null); setSchoolFilter(null); setRecordsScrollRequest(value => value + 1); } else { setCategory(key); setSchoolFilter(null); setDraft(null); scrollToWorkspace(); } }}><span className="spending-category-name">{key}</span><span className="spending-category-description">{descriptions[key]}</span><strong>{money(periodRows.filter(row => row.category === key).reduce((sum, row) => sum + row.amount, 0))}</strong><small>{periodRows.filter(row => row.category === key).length} операций</small></button>)}<button className={`spending-total-tile${personalAllowed ? '' : ' is-expanded'}`} aria-pressed={category === 'ALL'} onClick={() => { setShowCategoryDetails(true); openEveryCategory(); }}><span className="spending-category-name">Все</span><span className="spending-category-description">Все расходы за период</span><strong>{busy || loadFailed || initial.error ? '—' : money(periodTotal)}</strong><small>{periodRows.length} операций</small></button></div>
     <div className="spending-workspace" hidden={!showCategoryDetails && !normalizedSearch} ref={workspace}>
 

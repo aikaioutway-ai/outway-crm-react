@@ -834,14 +834,43 @@
 .spending-module.spending-split-view .spending-categories-only .spending-categories {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  overflow: visible;
+  overflow: auto;
+}
+.spending-module.spending-split-view .spending-categories-only {
+  grid-template-columns: minmax(0, 1fr);
 }
 .spending-module.spending-split-view .spending-categories-only .spending-categories > button {
   grid-column: auto;
   grid-row: auto;
+  min-height: clamp(104px, 15vw, 190px);
+  justify-content: center;
+  margin-top: 0;
+}
+.spending-module.spending-split-view .spending-categories-only .spending-category-name {
+  font-size: 18px;
+}
+.spending-module.spending-split-view .spending-categories-only .spending-categories strong {
+  font-size: 20px;
+  white-space: normal;
+}
+.spending-module.spending-split-view .spending-categories-only .spending-categories small {
+  font-size: 15px;
 }
 @media (max-width: 760px) {
   .spending-module.spending-split-view .spending-categories-only .spending-categories {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+.manager-workspace:has(> .manager-workspace-content > .spending-category-open) {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+}
+
+.manager-workspace:has(> .manager-workspace-content > .spending-category-open) > .manager-overview-sidebar {
+  display: none;
+}
+
+.spending-category-navigation {
+  margin-bottom: 12px;
 }

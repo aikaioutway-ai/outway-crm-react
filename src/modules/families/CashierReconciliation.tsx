@@ -58,8 +58,8 @@ const groups = [
   { key: '1', title: 'Совпали', label: 'Совпали: код чека и сумма совпали с выпиской', Icon: CircleCheckBig },
   { key: '2', title: 'Частично', label: 'Частично: код совпал, а сумма нет, или совпали только сумма и дата', Icon: CircleAlert },
   { key: 'Д', title: 'Дубли', label: 'Дубли: один чек привязан к нескольким платежам CRM', Icon: Copy },
-  { key: 'Х', title: 'Нет в CRM', label: 'Нет в CRM: поступление в выписке без платежа в CRM', Icon: NotInCrmIcon },
   { key: 'missing', title: 'Нет в выписке', label: 'Нет в выписке: платёж переводом есть в CRM, а в выписке его нет', Icon: NotInStatementIcon },
+  { key: 'Х', title: 'Нет в CRM', label: 'Нет в CRM: поступление в выписке без платежа в CRM', Icon: NotInCrmIcon },
 ] as const;
 const statuses = [
   { key: 'На проверке', label: 'На проверке' },
@@ -151,6 +151,8 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
   const sourceDialog = useRef<HTMLDialogElement>(null);
   const filesDialog = useRef<HTMLDialogElement>(null);
   const [group, setGroup] = useState<Group>('1');
+  const [groupOpen, setGroupOpen] = useState(false);
+  const showResultGrid = resultTiles && !groupOpen;
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ index: number; descending: boolean } | null>(null);
   const [error, setError] = useState('');
@@ -276,14 +278,18 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
 
   const statementOnly = group === 'Х';
   const crmOnly = group === 'missing';
-  const statusCounts = { '1': [0, 0], '2': [0, 0], 'Д': [0, 0] };
-  if (resultTiles) {
+  const statusCounts = { '1': [0, 0], '2': [0, 0], missing: [0, 0] };
+  if (showResultGrid) {
     for (const row of results) {
-      if (row.group === 'Х') continue;
+      if (row.group === 'Х' || row.group === 'Д') continue;
       for (const payment of row.candidates) {
         if (payment.status === 'На проверке') statusCounts[row.group][0]++;
         if (payment.status === 'Подтверждено') statusCounts[row.group][1]++;
       }
+    }
+    for (const payment of missingPayments) {
+      if (payment.status === 'На проверке') statusCounts.missing[0]++;
+      if (payment.status === 'Подтверждено') statusCounts.missing[1]++;
     }
   }
   const tableHeaders = statementOnly ? unmatchedHeaders : crmOnly ? missingHeaders : headers;
@@ -351,29 +357,16 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     ['Оборот Кт', source ? String(source.amount) : ''],
   ]);
 
-  return <section className="reconcile-page" aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
-    {resultTiles && <div className="manager-metric-panel manager-school-grid cashier2-reconciliation-tiles" role="group" aria-label="Результаты сверки">
-      {groups.slice(0, 3).map(({ key, title, Icon }) => {
-        if (key === 'Х' || key === 'missing') return null;
-        const [pending, confirmed] = statusCounts[key];
-        return <button key={key} type="button" aria-pressed={group === key}
-          onClick={() => { setGroup(key); resetView(); }}>
-          <span className="manager-school-identity"><Icon size={20} aria-hidden="true" /><span>{title}</span></span>
-          <span className="cashier2-category-metrics">
-            <span className="manager-mode-metric"><span>На проверке</span><strong>{pending}</strong></span>
-            <span className="manager-mode-metric"><span>Подтверждено</span><strong>{confirmed}</strong></span>
-          </span>
-        </button>;
-      })}
-      <div className="cashier2-unmatched">
-        <strong>Без пары</strong>
-        {groups.slice(3).map(({ key, title }) => <button key={key} type="button" className="ow-btn ow-btn--ghost"
-          aria-pressed={group === key} onClick={() => { setGroup(key); resetView(); }}>{title} {counts[key]}</button>)}
-      </div>
-    </div>}
-    <DashboardTopPanel className="dashboard-control-row">
+  return <section className={`reconcile-page${resultTiles && groupOpen ? ' reconcile-group-open' : ''}`} aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
+    <DashboardTopPanel className={`dashboard-control-row${resultTiles && groupOpen ? ' reconcile-detail-toolbar' : ''}`}>
+      {resultTiles && groupOpen && <button className="ow-btn ow-btn--ghost" type="button" onClick={() => { setGroupOpen(false); resetView(); }}>
+        К группам
+      </button>}
       <div style={{ flex: 1 }}>
-        <strong>Сверка платежей</strong>
+        {resultTiles && groupOpen ? <div className="ow-seg reconcile-detail-groups" role="group" aria-label="Группы сверки">
+          {groups.map(({ key, title }) => <button key={key} className="ow-seg-btn" type="button"
+            aria-pressed={group === key} onClick={() => { setGroup(key); resetView(); }}>{title}</button>)}
+        </div> : <strong>Сверка платежей</strong>}
         {history.length > 0 && <div style={{ color: 'var(--text-2)', fontSize: 12 }}>
           {entries.length} поступлений
           {paymentsQuery.isFetching && !busy && ' · обновляем статусы…'}
@@ -446,7 +439,18 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     </p>}
     {loading && <p>Загружаем выписки…</p>}
     {!history.length && !busy && <p>Загрузите выписки АйКай Мбанк в формате .xlsx — можно несколько файлов сразу.</p>}
-    {!!results.length && <div className="dt-root">
+    {showResultGrid && <div className="manager-metric-panel manager-school-grid cashier2-reconciliation-tiles" role="group" aria-label="Результаты сверки">
+      {groups.map(({ key, title, label, Icon }) => (
+        <button key={key} type="button" title={label} onClick={() => { setGroup(key); resetView(); setGroupOpen(true); }}>
+          <span className="manager-school-identity"><Icon size={20} aria-hidden="true" /><span>{title}</span></span>
+          {key === 'Х' || key === 'Д' ? <strong>{counts[key]}</strong> : <span>
+            <span className="manager-mode-metric"><span>На проверке</span><strong>{statusCounts[key][0]}</strong></span>
+            <span className="manager-mode-metric"><span>Подтверждено</span><strong>{statusCounts[key][1]}</strong></span>
+          </span>}
+        </button>
+      ))}
+    </div>}
+    {!showResultGrid && (results.length > 0 || (resultTiles && history.length > 0)) && <div className="dt-root">
       <div className="dt-toolbar" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 8, padding: '6px 10px' }}>
         <div className="reconcile-open-statement">
           <strong>{groups.find(item => item.key === group)?.label}</strong>

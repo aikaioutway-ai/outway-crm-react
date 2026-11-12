@@ -380,18 +380,20 @@ export default function CashierOverview({ splitView, view, onViewChange, onSpend
           columns={[
             ...(!splitView ? [{ key: 'school', label: 'Школа', total: stats.length, color: KPI_COLORS.school }] : []),
             ...(view === 'pending' ? [
-              { key: 'pendingCount', label: 'К-во на проверке', total: totals.pendingCount, color: KPI_COLORS.pendingCount },
-              { key: 'pendingAmount', label: 'Сумма на проверке', total: money(totals.pendingAmount), color: KPI_COLORS.pendingAmount },
+              { key: 'pendingCount', label: splitView ? 'Количество' : 'К-во на проверке', total: totals.pendingCount, color: KPI_COLORS.pendingCount },
+              { key: 'pendingAmount', label: splitView ? 'Сумма' : 'Сумма на проверке', total: money(totals.pendingAmount), color: KPI_COLORS.pendingAmount },
             ] : view === 'confirmed' ? [
-              { key: 'confirmedCount', label: 'К-во', total: totals.confirmedCount, color: KPI_COLORS.confirmedCount },
-              { key: 'confirmedAmount', label: 'Подтверждено', total: money(totals.confirmedAmount), color: KPI_COLORS.confirmedAmount },
+              { key: 'confirmedCount', label: splitView ? 'Количество' : 'К-во', total: totals.confirmedCount, color: KPI_COLORS.confirmedCount },
+              { key: 'confirmedAmount', label: splitView ? 'Сумма' : 'Подтверждено', total: money(totals.confirmedAmount), color: KPI_COLORS.confirmedAmount },
             ] : [
-              { key: 'refundsCount', label: 'К-во', total: totals.refundsCount, color: KPI_COLORS.refundsCount },
-              { key: 'refundsAmount', label: 'Возвраты', total: money(totals.refundsAmount), color: KPI_COLORS.refundsAmount },
-              { key: 'refundsPendingAmount', label: 'На проверке', total: money(totals.refundsPendingAmount), color: '#7C3AED' },
-              { key: 'refundsConfirmedAmount', label: 'Подтверждено', total: money(totals.refundsConfirmedAmount), color: 'var(--success)' },
+              { key: 'refundsCount', label: splitView ? 'Количество' : 'К-во', total: totals.refundsCount, color: KPI_COLORS.refundsCount },
+              { key: 'refundsAmount', label: splitView ? 'Сумма' : 'Возвраты', total: money(totals.refundsAmount), color: KPI_COLORS.refundsAmount },
+              ...(!splitView ? [
+                { key: 'refundsPendingAmount', label: 'На проверке', total: money(totals.refundsPendingAmount), color: '#7C3AED' },
+                { key: 'refundsConfirmedAmount', label: 'Подтверждено', total: money(totals.refundsConfirmedAmount), color: 'var(--success)' },
+              ] : []),
             ]),
-            ...(view !== 'refunds' ? [
+            ...(!splitView && view !== 'refunds' ? [
               { key: 'qrAmount', label: 'QR', total: money(totals.qrAmount), color: KPI_COLORS.qrAmount },
               { key: 'cashAmount', label: 'Наличные', total: money(totals.cashAmount), color: KPI_COLORS.cashAmount },
             ] : []),
