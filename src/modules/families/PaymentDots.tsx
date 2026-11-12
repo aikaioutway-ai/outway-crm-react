@@ -16,7 +16,7 @@ const STATE_COLOR: Record<ChargeState, string> = {
   none: 'transparent',
 };
 
-const dotStyle = (state: ChargeState): React.CSSProperties => ({
+export const dotStyle = (state: ChargeState): React.CSSProperties => ({
   width: 9,
   height: 9,
   borderRadius: '50%',

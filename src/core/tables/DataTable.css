@@ -1435,3 +1435,20 @@ select.dt-cell-input {
 .filterable-table { position: relative; }
 .native-table-export { position: absolute; top: 6px; right: 8px; z-index: 1; padding: 0; width: auto; }
 .filterable-table > thead > tr > th:last-child { padding-right: 48px; }
+
+.dt-toolbar--centered {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+}
+.dt-toolbar--centered .dt-toolbar-right { display: contents; }
+.dt-toolbar--centered .dt-toolbar-left { grid-column: 1; grid-row: 1; }
+.dt-toolbar--centered .dt-pagination { grid-column: 2; grid-row: 1; }
+.dt-toolbar--centered .dt-toolbar-actions {
+  grid-column: 3;
+  grid-row: 1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}

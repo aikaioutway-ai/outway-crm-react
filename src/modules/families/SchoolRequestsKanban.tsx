@@ -38,7 +38,8 @@ function patchCachedRow(rowId: string, patch: Partial<FamilyListRow>) {
   }
 }
 
-export default function SchoolRequestsKanban({ schoolKey, allowedSchools, schoolTier, onOpen, actorName, canEdit = false }: {
+export default function SchoolRequestsKanban({ schoolKey, allowedSchools, schoolTier, onOpen, actorName, externalDay, canEdit = false }: {
+  externalDay?: string;
   schoolKey: string; allowedSchools?: string[]; schoolTier: SchoolTier; onOpen: (row: FamilyListRow) => void; actorName?: string;
   /** Переносить карточки могут только логисты и админ; остальные смотрят. */
   canEdit?: boolean;
@@ -46,7 +47,8 @@ export default function SchoolRequestsKanban({ schoolKey, allowedSchools, school
   // Без денег: доске нужны только дети, трансферы и комментарии.
   const query = useLogisticsTable();
   const [onlyOverdue, setOnlyOverdue] = useState(false);
-  const [day, setDay] = useState('ALL');
+  const [localDay, setDay] = useState('ALL');
+  const day = externalDay ?? localDay;
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState<Set<string>>(new Set());
   const [dragOver, setDragOver] = useState<RequestStage | null>(null);
@@ -140,7 +142,7 @@ export default function SchoolRequestsKanban({ schoolKey, allowedSchools, school
         <span className="request-card-school">{row.branchShort || row.branchFilter}</span>
         <TransferNumberBadge number={transferChoiceValue(row.status, row.transferNumber, row.transferMark) || null} note={note} />
       </div>
-      <div className="request-card-title">{name}{row.childClass && <span className="request-card-class"> · {row.childClass}</span>}</div>
+      <div className="request-card-title">{name}</div>
       <div className="request-card-line"><MapPin size={13} aria-hidden="true" /><span>{row.streetAddress || 'Адрес не указан'}</span></div>
       <div className="request-card-line"><Phone size={13} aria-hidden="true" />{row.phone
         ? <a href={`tel:${row.phone.replace(/[^+\d]/g, '')}`} onClick={event => event.stopPropagation()}>{row.phone}</a>
@@ -166,15 +168,17 @@ export default function SchoolRequestsKanban({ schoolKey, allowedSchools, school
   const school = schoolKey === 'ALL' ? undefined : schoolTabsForTier(schoolTier).find(item => item.key === schoolKey);
 
   return <div className="requests-workspace">
-    <DashboardTopPanel><div className="requests-toolbar">
-      {school && <div className="requests-school"><SchoolKpiChip small schoolKey={school.key} logo={school.logo} label={school.label} color="var(--text-2)" /></div>}
-      <ManagerPeriodBar periodKey={day} onPeriodKeyChange={setDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" useLabels periodCounts={counts} periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} />
-      <button type="button" className={`requests-overdue-toggle${onlyOverdue ? ' requests-overdue-toggle--on' : ''}`} aria-pressed={onlyOverdue} disabled={!overdueCount && !onlyOverdue}
-        title="Красные: больше 2 дней в «Новых», 3 в «В работе», 5 в «Ожидании»" onClick={() => setOnlyOverdue(value => !value)}>
-        Просрочено <b>{overdueCount}</b>
-      </button>
-      <input className="requests-search" type="search" aria-label="Поиск заявок" placeholder="Ребёнок, родитель, телефон, адрес" value={search} onChange={event => setSearch(event.target.value)} />
-    </div></DashboardTopPanel>
+    {externalDay === undefined && (
+      <DashboardTopPanel><div className="requests-toolbar">
+        {school && <div className="requests-school"><SchoolKpiChip small schoolKey={school.key} logo={school.logo} label={school.label} color="var(--text-2)" /></div>}
+        <ManagerPeriodBar periodKey={day} onPeriodKeyChange={setDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" useLabels periodCounts={counts} periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} />
+        <button type="button" className={`requests-overdue-toggle${onlyOverdue ? ' requests-overdue-toggle--on' : ''}`} aria-pressed={onlyOverdue} disabled={!overdueCount && !onlyOverdue}
+          title="Красные: больше 2 дней в «Новых», 3 в «В работе», 5 в «Ожидании»" onClick={() => setOnlyOverdue(value => !value)}>
+          Просрочено <b>{overdueCount}</b>
+        </button>
+        <input className="requests-search" type="search" aria-label="Поиск заявок" placeholder="Ребёнок, родитель, телефон, адрес" value={search} onChange={event => setSearch(event.target.value)} />
+      </div></DashboardTopPanel>
+    )}
     {!canEdit && <p className="requests-readonly">Только просмотр: переносить заявки могут логисты.</p>}
     {query.isPending ? <p role="status">Загрузка заявок…</p> : query.isError ? <div role="alert">Не удалось загрузить заявки. <button onClick={() => void query.refetch()}>Повторить</button></div> : <div className={`requests-kanban${dragging ? ' requests-kanban--dragging' : ''}`}>
       {REQUEST_STAGES.map(stage => {

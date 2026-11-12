@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, CircleCheckBig, Copy, FileText, Landmark, Pencil, Upload, X, type LucideIcon } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { usePaymentsTable, useReconciliationPayments } from '../../hooks/useCrmQueries';
 import { QK } from '../../services/queryClient';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
@@ -115,7 +115,26 @@ function duplicateOfConfirmed(row: Result, payment: ReconciliationPayment) {
   return row.group === 'Д' && row.candidates.some(item => item.id !== payment.id && item.status === 'Подтверждено');
 }
 
-export default function CashierReconciliation({ userId, userName, userRole, sessionToken, onOpenFamily }: {
+export function useCashierReconciliationSummary(sessionToken?: string, enabled = false) {
+  const statements = useQuery({
+    queryKey: ['cashier-summary-statements', sessionToken],
+    queryFn: () => fetchBankStatements(sessionToken),
+    enabled: enabled && !!sessionToken,
+  });
+  const entries = useMemo(() => mergeStatements(statements.data ?? []), [statements.data]);
+  const range = useMemo(() => entries.length ? paymentRange(entries) : null, [entries]);
+  const payments = useReconciliationPayments(range);
+  const counts = { '1': 0, '2': 0, 'Д': 0 };
+  if (!statements.data || (range && !payments.data)) return null;
+  for (const row of reconcileBankStatement(entries, payments.data ?? [])) {
+    if (row.group === 'Х') continue;
+    counts[row.group] += row.candidates.filter(payment => payment.status === 'На проверке').length;
+  }
+  return counts;
+}
+
+export default function CashierReconciliation({ userId, userName, userRole, sessionToken, onOpenFamily, resultTiles }: {
+  resultTiles?: boolean;
   userId: string; userName?: string; userRole?: string; sessionToken?: string;
   onOpenFamily?: (familyId: string) => Promise<void> | void;
 }) {
@@ -165,7 +184,10 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
         for (const statement of legacy) await saveBankStatement(statement, sessionToken);
         if (legacy.length) clearLegacyStatements(legacyKey);
         const saved = await fetchBankStatements(sessionToken);
-        if (!cancelled) setHistory(saved);
+        if (!cancelled) {
+          setHistory(saved);
+          queryClient.setQueryData(['cashier-summary-statements', sessionToken], saved);
+        }
       } catch (err) {
         if (!cancelled) setError(err instanceof Error ? err.message : 'Не удалось загрузить выписки.');
       } finally {
@@ -173,7 +195,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
       }
     })();
     return () => { cancelled = true; };
-  }, [legacyKey, sessionToken]);
+  }, [legacyKey, sessionToken, queryClient]);
 
   function resetView() {
     setPage(1);
@@ -191,6 +213,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     for (const file of files) {
       try {
         const next = await saveBankStatement({ name: file.name, uploadedMonth, ...await readBankStatement(file) }, sessionToken);
+        void queryClient.invalidateQueries({ queryKey: ['cashier-summary-statements', sessionToken] });
         setHistory(current => [next, ...current.filter(item => item.id !== next.id)]);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Не удалось прочитать выписку.';
@@ -207,6 +230,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     setError('');
     try {
       await deleteBankStatement(item.id, sessionToken);
+      void queryClient.invalidateQueries({ queryKey: ['cashier-summary-statements', sessionToken] });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Не удалось удалить выписку.');
       return;
@@ -252,6 +276,16 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
 
   const statementOnly = group === 'Х';
   const crmOnly = group === 'missing';
+  const statusCounts = { '1': [0, 0], '2': [0, 0], 'Д': [0, 0] };
+  if (resultTiles) {
+    for (const row of results) {
+      if (row.group === 'Х') continue;
+      for (const payment of row.candidates) {
+        if (payment.status === 'На проверке') statusCounts[row.group][0]++;
+        if (payment.status === 'Подтверждено') statusCounts[row.group][1]++;
+      }
+    }
+  }
   const tableHeaders = statementOnly ? unmatchedHeaders : crmOnly ? missingHeaders : headers;
   const widths = statementOnly ? unmatchedWidths : crmOnly ? missingWidths : columnWidths;
   // Строки с платежом показываем по статусу платежа; поступления без платежа (Х) статуса не имеют.
@@ -318,6 +352,25 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
   ]);
 
   return <section className="reconcile-page" aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
+    {resultTiles && <div className="manager-metric-panel manager-school-grid cashier2-reconciliation-tiles" role="group" aria-label="Результаты сверки">
+      {groups.slice(0, 3).map(({ key, title, Icon }) => {
+        if (key === 'Х' || key === 'missing') return null;
+        const [pending, confirmed] = statusCounts[key];
+        return <button key={key} type="button" aria-pressed={group === key}
+          onClick={() => { setGroup(key); resetView(); }}>
+          <span className="manager-school-identity"><Icon size={20} aria-hidden="true" /><span>{title}</span></span>
+          <span className="cashier2-category-metrics">
+            <span className="manager-mode-metric"><span>На проверке</span><strong>{pending}</strong></span>
+            <span className="manager-mode-metric"><span>Подтверждено</span><strong>{confirmed}</strong></span>
+          </span>
+        </button>;
+      })}
+      <div className="cashier2-unmatched">
+        <strong>Без пары</strong>
+        {groups.slice(3).map(({ key, title }) => <button key={key} type="button" className="ow-btn ow-btn--ghost"
+          aria-pressed={group === key} onClick={() => { setGroup(key); resetView(); }}>{title} {counts[key]}</button>)}
+      </div>
+    </div>}
     <DashboardTopPanel className="dashboard-control-row">
       <div style={{ flex: 1 }}>
         <strong>Сверка платежей</strong>
@@ -326,11 +379,11 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
           {paymentsQuery.isFetching && !busy && ' · обновляем статусы…'}
         </div>}
       </div>
-      <div className="ow-seg reconcile-groups" role="group" aria-label="Результат сверки">
+      {!resultTiles && <div className="ow-seg reconcile-groups" role="group" aria-label="Результат сверки">
         {groups.map(({ key, title, label, Icon }) => <button key={key} className="ow-seg-btn reconcile-group-btn" type="button" title={label}
           aria-label={`${title}: ${counts[key]}`} aria-pressed={group === key}
           onClick={() => { setGroup(key); resetView(); }}><Icon size={16} aria-hidden="true" /><span>{counts[key]}</span></button>)}
-      </div>
+      </div>}
       <button className="ow-btn ow-btn--ghost" type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
         <Upload size={16} aria-hidden="true" /> Загрузить выписки
       </button>

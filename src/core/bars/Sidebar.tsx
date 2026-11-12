@@ -1,10 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { BarChart3, ListTodo, MessageCircle, Users, School, Wallet, Route, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
+import { BarChart3, ListTodo, MessageCircle, Users, LayoutGrid, School, Wallet, Route, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
 
-export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'b2b' | 'settings' | 'tasks' | 'messages' | 'schools2' | 'summary' | 'spending';
+export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'b2b' | 'settings' | 'tasks' | 'messages' | 'schools2' | 'summary' | 'spending' | 'manager2' | 'logistics2' | 'cashier2';
 
 interface SidebarProps {
   active: NavSection;
@@ -25,12 +25,15 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'summary',   label: 'Сводка',     icon: <BarChart3 size={18} /> },
   { key: 'families',  label: 'Менеджер',   icon: <Users size={18} /> },
   { key: 'schools2',  label: 'Школы 2.0',  icon: <School size={18} />, expandedOnly: true },
-  { key: 'logistics', label: 'Логистика',  icon: <Route size={18} /> },
+  { key: 'logistics', label: 'Логистика', icon: <Route size={18} /> },
   { key: 'cashier',   label: 'Кассир',     icon: <Wallet size={18} /> },
   { key: 'tasks', label: 'Задачи', icon: <ListTodo size={18} /> },
   { key: 'messages', label: 'Сообщения', icon: <MessageCircle size={18} /> },
   { key: 'employees',  label: 'Сотрудники', icon: <UserCog size={18} /> },
   { key: 'b2b',        label: 'B2B',       icon: <B2BIcon size={19} /> },
+  { key: 'manager2', label: 'Менеджер 2.0', icon: <LayoutGrid size={18} /> },
+  { key: 'logistics2', label: 'Логистика 2.0', icon: <Route size={18} /> },
+  { key: 'cashier2', label: 'Кассир 2.0', icon: <Wallet size={18} /> },
 ];
 
 export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
@@ -47,7 +50,8 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
   if (canAccessSpending(role, userId)) sections = [...sections, 'spending'];
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
-  sections = sections.flatMap(section => section === 'families' ? ['families', 'schools2'] : [section]);
+  sections = sections.flatMap(section => section === 'families' ? ['families', 'manager2', 'schools2'] : section === 'logistics' ? ['logistics', 'logistics2'] : section === 'cashier' ? ['cashier', 'cashier2'] : [section]);
+  if (userId !== OWNER_EMPLOYEE_ID) sections = sections.filter(section => section !== 'manager2' && section !== 'logistics2' && section !== 'cashier2');
   // «Сообщения» — у всех сотрудников: уведомления и переписка «Все» / отдел.
   return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks', 'messages'] : [...sections, 'tasks', 'messages'];
 }

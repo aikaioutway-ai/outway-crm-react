@@ -1,0 +1,222 @@
+.manager-metric-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+  padding: 24px;
+}
+
+.manager-metric-panel {
+  min-height: 0;
+  overflow: auto;
+}
+
+.manager-metric-panel,
+.manager-school-grid > button {
+  color: var(--text);
+  background: var(--surface, #fff);
+  border: 1px solid var(--border, #d6dde7);
+  border-radius: 10px;
+}
+
+.manager-metric-layout button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+
+.manager-metric-panel > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 18px;
+  border-bottom: 1px solid var(--border, #d6dde7);
+}
+
+.manager-metric-panel h2 {
+  margin: 0;
+  font-size: 18px;
+}
+
+.manager-school-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  padding: 18px;
+}
+
+.manager-school-grid > button {
+  display: grid;
+  gap: 6px;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+  min-height: 114px;
+  padding: 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.manager-school-grid > button:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.manager-school-grid > button:disabled {
+  cursor: default;
+  opacity: .65;
+}
+
+.manager-school-grid > .is-child {
+  border-style: dashed;
+}
+
+.manager-metric-empty {
+  padding: 18px;
+  color: var(--text-2);
+}
+
+@media (max-width: 760px) {
+  .manager-metric-layout {
+    padding: 0;
+  }
+
+}
+
+.manager-metric-value {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.manager-metric-value svg {
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.manager-school-identity,
+.manager-school-metrics {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.manager-school-identity {
+  align-items: flex-start;
+  text-align: left;
+}
+
+.manager-school-metrics {
+  align-items: flex-end;
+}
+
+.manager-metric-panel h2 {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px 14px;
+}
+
+@media (max-width: 760px) {
+  .manager-school-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.manager-metric-value.is-adverse,
+.manager-metric-value.is-adverse svg {
+  color: var(--danger, #b3261e);
+}
+
+.manager-debt-chart {
+  padding: 16px 18px;
+  border-top: 1px solid var(--border, #d6dde7);
+}
+
+.manager-debt-chart h3 {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+
+.manager-debt-bars {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+}
+
+.manager-debt-bars button {
+  flex: 1 0 100px;
+  display: grid;
+  gap: 6px;
+  padding: 6px;
+  font: inherit;
+  font-size: 12px;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.manager-debt-bars button[aria-pressed="true"] {
+  border-color: var(--accent);
+  background: var(--bg);
+}
+
+.manager-debt-bars button:disabled {
+  cursor: default;
+}
+
+.manager-debt-track {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  height: 94px;
+  border-bottom: 1px solid var(--border, #d6dde7);
+}
+
+.manager-debt-track > span {
+  width: min(58px, 70%);
+  background: var(--danger, #b3261e);
+  border-radius: 5px 5px 0 0;
+  opacity: .75;
+}
+
+.manager-debt-bars button[aria-pressed="true"] .manager-debt-track > span {
+  opacity: 1;
+}
+
+.manager-metric-panel > header.manager-metric-compact-totals {
+  gap: 12px;
+}
+
+.manager-metric-compact-totals h2 {
+  justify-content: flex-start;
+  font-size: 14px;
+}
+
+.manager-metric-compact-totals h2 .manager-metric-value {
+  padding: 5px 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.manager-metric-compact-totals > button {
+  flex-shrink: 0;
+}
+
+.manager-school-metrics .logistics-average,
+.manager-mode-metric.logistics-average {
+  margin-bottom: 6px;
+}
+
+.manager-metric-value.logistics-average strong[data-tone="alert"] {
+  color: var(--danger, #b3261e);
+}
+
+.manager-metric-value.logistics-average strong[data-tone="positive"] {
+  color: #06734d;
+}
+
+.manager-mode-card .manager-mode-metric.logistics-average strong[data-tone="neutral"] {
+  color: var(--text);
+}

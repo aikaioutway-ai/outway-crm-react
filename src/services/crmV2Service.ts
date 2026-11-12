@@ -1805,6 +1805,22 @@ export async function createV2Driver(input: NewV2DriverInput): Promise<string> {
   }
 }
 
+export async function fetchExpiredDriverIds(driverIds: string[]): Promise<string[]> {
+  const today = new Intl.DateTimeFormat('sv-SE', { timeZone: 'Asia/Bishkek' }).format(new Date());
+  const batches = [];
+  for (let start = 0; start < driverIds.length; start += 100) {
+    batches.push(supabase.from('v2_driver_documents').select('driver_id')
+      .in('driver_id', driverIds.slice(start, start + 100)).lt('expires_at', today));
+  }
+  const results = await Promise.all(batches);
+  const ids = new Set<string>();
+  for (const { data, error } of results) {
+    if (error) throw new Error(error.message);
+    for (const row of data ?? []) ids.add(row.driver_id);
+  }
+  return Array.from(ids);
+}
+
 export async function fetchV2DriverDocuments(driverId: string): Promise<V2DriverDocumentRow[]> {
   const { data, error } = await supabase
     .from('v2_driver_documents')

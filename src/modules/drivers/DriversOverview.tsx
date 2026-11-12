@@ -1,12 +1,13 @@
+import { useQuery } from '@tanstack/react-query';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import { driverMatchesSchool, isVisibleDriver } from './driverSchoolVisibility';
 import LogisticsTabs, { LogisticsTab } from '../families/LogisticsTabs';
 import HiddenSchoolsList from '../families/HiddenSchoolsList';
 import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import { useEffect, useMemo, useState } from 'react';
-import { V2DriverTableRow } from '../../services/crmV2Service';
+import { fetchExpiredDriverIds, V2DriverTableRow } from '../../services/crmV2Service';
 import { useDriversTable } from '../../hooks/useCrmQueries';
-import { isSchoolAllowed, SCHOOL_DIRECTORY, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
+import { getBranchFilter, isSchoolAllowed, SCHOOL_DIRECTORY, SCHOOL_TABS, SCHOOL_TIER_2_KEYS } from '../families/constants';
 import { DashboardSearch, DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from '../families/SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from '../families/schoolGrouping';
@@ -26,6 +27,7 @@ export function isReserveDriver(driver: V2DriverTableRow): boolean {
 type SortKey = 'school' | 'activeCount' | 'inactiveCount' | 'microbusCount' | 'minivanCount' | 'sedanCount' | 'incompleteDocumentsCount';
 
 interface DriversOverviewProps {
+  embedded?: boolean;
   onSelectSchool: (key: string) => void;
   search?: string;
   onSearchChange: (value: string) => void;
@@ -114,7 +116,7 @@ function computeDriverStats(rows: V2DriverTableRow[], allowedSchools: string[] |
   ];
 }
 
-export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools, search = '', onSearchChange, onTabChange }: DriversOverviewProps) {
+export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, allowedSchools, search = '', onSearchChange, onTabChange, embedded = false }: DriversOverviewProps) {
   const { data: rows = null } = useDriversTable();
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
@@ -163,9 +165,56 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
     setSortState(prev => prev.key === key ? { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: key === 'school' ? 'asc' : 'desc' });
   };
 
+  const assigned = new Map((embedded ? rows ?? [] : []).filter(driver =>
+    driver.status === 'active' && !driver.previousAssignment && driver.transfers.some(transfer => {
+      const key = getBranchFilter(transfer.branchShort, transfer.branchCode);
+      return isSchoolAllowed(key, allowedSchools);
+    })
+  ).map(driver => [driver.driverId, driver]));
+  const ids = Array.from(assigned.keys()).sort();
+  const expired = useQuery({
+    queryKey: ['logistics2-expired-driver-ids', ids],
+    queryFn: () => fetchExpiredDriverIds(ids),
+    enabled: ids.length > 0,
+    staleTime: 60_000,
+  });
+
+  const counts = (schoolKey?: string) => {
+    const drivers = Array.from(assigned.values()).filter(driver => !schoolKey || driverMatchesSchool(driver, schoolKey));
+    return {
+      activeCount: drivers.length,
+      expiredCount: expired.data ? drivers.filter(driver => expired.data?.includes(driver.driverId)).length : drivers.length ? '—' : 0,
+      temporaryCount: drivers.filter(driver => /^Временный водитель №\d+$/.test(driver.fullName.trim())).length,
+    };
+  };
+
   if (rows === null) {
     return <div style={{ padding: 24, textAlign: 'center', fontSize: 13, color: 'var(--text-2)' }}>Загрузка...</div>;
   }
+
+  const driverTotals = counts();
+  const schoolTable = <SchoolDashboardTable splitView={embedded} compactTotals={embedded} commentScope="drivers/DriversOverview:overview"
+          columns={embedded ? [
+            { key: 'activeCount', label: 'Активные', total: driverTotals.activeCount, color: KPI_COLORS.activeCount },
+            { key: 'expiredCount', label: 'Документы Х', total: driverTotals.expiredCount, color: 'var(--danger)' },
+            { key: 'temporaryCount', label: 'Временные', total: driverTotals.temporaryCount, color: 'var(--accent)' },
+          ] : [
+            { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
+            { key: 'activeCount', label: 'Активные', total: totals.activeCount, color: KPI_COLORS.activeCount },
+            { key: 'inactiveCount', label: 'Неактивные', total: totals.inactiveCount, color: KPI_COLORS.inactiveCount },
+            { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
+            { key: 'minivanCount', label: 'Минивэны', total: totals.minivanCount, color: KPI_COLORS.minivanCount },
+            { key: 'sedanCount', label: 'Седаны', total: totals.sedanCount, color: KPI_COLORS.sedanCount },
+            { key: 'incompleteDocumentsCount', label: 'Документы', total: totals.incompleteDocumentsCount, color: KPI_COLORS.incompleteDocumentsCount }
+          ]}
+          rows={displayRows.filter(row => (!embedded || row.key !== DRIVER_RESERVE_KEY) && row.label.toLowerCase().includes(search.trim().toLowerCase())).map(row => ({ ...row, values: embedded ? counts(row.key) : { ...row.data } }))}
+          sortKey={sortState.key}
+          ascending={sortState.dir === 'asc'}
+          onSort={key => handleSort(key as SortKey)}
+          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        />;
+
+  if (embedded) return schoolTable;
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
@@ -177,22 +226,7 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
           <DashboardSearch value={search} onChange={onSearchChange} placeholder="Поиск школы…" />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        <SchoolDashboardTable commentScope="drivers/DriversOverview:overview"
-          columns={[
-            { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
-            { key: 'activeCount', label: 'Активные', total: totals.activeCount, color: KPI_COLORS.activeCount },
-            { key: 'inactiveCount', label: 'Неактивные', total: totals.inactiveCount, color: KPI_COLORS.inactiveCount },
-            { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
-            { key: 'minivanCount', label: 'Минивэны', total: totals.minivanCount, color: KPI_COLORS.minivanCount },
-            { key: 'sedanCount', label: 'Седаны', total: totals.sedanCount, color: KPI_COLORS.sedanCount },
-            { key: 'incompleteDocumentsCount', label: 'Документы', total: totals.incompleteDocumentsCount, color: KPI_COLORS.incompleteDocumentsCount }
-          ]}
-          rows={displayRows.filter(row => row.label.toLowerCase().includes(search.trim().toLowerCase())).map(row => ({ ...row, values: { ...row.data } }))}
-          sortKey={sortState.key}
-          ascending={sortState.dir === 'asc'}
-          onSort={key => handleSort(key as SortKey)}
-          onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
-        />
+        {schoolTable}
       </div>
 
       <div aria-hidden="true" style={{ width: sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH, flexShrink: 0, transition: 'width .18s ease' }} />

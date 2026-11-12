@@ -7,9 +7,9 @@ import { withSchoolColumn } from '../../core/tables/withSchoolColumn';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
 import { useQueries, useQuery, type UseQueryResult } from '@tanstack/react-query';
-import PaymentDots from './PaymentDots';
+import PaymentDots, { dotStyle } from './PaymentDots';
 import { useRememberedScroll } from '../../hooks/useRememberedScroll';
-import { paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
+import { MONTH_NAMES, paymentDotPeriods, periodKey, type ChildPaymentDots } from './paymentDotsModel';
 import { driverMatchesSchool, isVisibleDriver } from '../drivers/driverSchoolVisibility';
 import DriverPaymentsPanel from '../drivers/DriverPaymentsPanel';
 import TaskButton from '../tasks/TaskButton';
@@ -39,7 +39,7 @@ import PaymentDecisionModal from './PaymentDecisionModal';
 import { DataTable, ColumnDef } from '../../core/tables/DataTable';
 import NotionSelect from '../../core/selects/NotionSelect';
 import '../../core/tables/DataTable.css';
-import { Check, ChevronDown, ChevronUp, Copy, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
+import { ArrowDownLeft, CalendarDays, CalendarCheck, Phone, MapPin, BusFront, School, Wallet, Receipt, CircleAlert, Clock, CreditCard, Calculator, Tag, Check, ChevronDown, ChevronUp, Copy, Plus, X, Save, Paperclip, Pencil, Trash2, UserRound } from 'lucide-react';
 import { formatClassName, formatName, formatPhone, phoneMatchesQuery } from '../../utils/format';
 import { ALL_PERIODS, CASHIER_PERIODS, currentPayrollPeriodKey, currentCashierPeriodKey } from './constants';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH, type SchoolDockItem } from './SchoolDockSidebar';
@@ -180,6 +180,7 @@ interface FamiliesPageProps {
   onAdminFiltersClose?: () => void;
   columnsOpen?: boolean;
   onColumnsOpenChange?: (v: boolean) => void;
+  centeredDriverToolbar?: boolean;
   hideTransferBars?: boolean;
   onSchoolKeyChange?: (key: string) => void;
   customTopContent?: React.ReactNode;
@@ -189,6 +190,10 @@ interface FamiliesPageProps {
   externalQuickTransfer?: string;
   externalQuickChildStatus?: string;
   externalPeriodKey?: string;
+  managerTableTask?: React.ReactNode;
+  managerTableAllRecords?: React.ReactNode;
+  directoryPeriodKey?: string;
+  onDebtTotals?: (amount: number, count: number) => void;
   initialOpenFamilyId?: string | null;
   initialSearch?: string;
   initialSearchChildId?: string;
@@ -745,7 +750,23 @@ function writeLastAccrualCopy(value: LastAccrualCopy | null): void {
   }
 }
 
-export default function FamiliesPage({ mode = 'requests', accrualsView = false, canEditBoardingDate = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0' }: FamiliesPageProps) {
+const schoolTableHeaderIcons = Object.fromEntries(Object.entries({
+  childName: UserRound, parentName: UserRound, contactName: UserRound,
+  phone: Phone, secondPhone: Phone, contactPhone: Phone,
+  address: MapPin, streetAddress: MapPin, branchShort: School, childClass: School,
+  childCreatedAt: CalendarDays, transferAssignedAt: CalendarCheck, transferNumber: BusFront,
+  monthlyPrice: Tag, discountAmount: Tag, balance: Wallet, balanceSum: Wallet,
+  childDebtAmount: CircleAlert, debtAmount: CircleAlert, debtSum: CircleAlert,
+  pendingPayment: Clock, pendingAmount: Clock, pendingSum: Clock,
+  totalCharged: Calculator, chargedSum: Calculator,
+  totalPaid: Receipt, paidSum: Receipt, paymentStatus: CreditCard,
+}).map(([key, Icon]) => [key, <Icon size={15} color={Icon === CircleAlert ? 'var(--danger)' : undefined} aria-hidden="true" />]));
+
+function accrualCalendarHeader(label: string) {
+  return <span className="accrual-calendar-heading" aria-hidden="true"><CalendarDays size={15} />{label}</span>;
+}
+
+export default function FamiliesPage({ mode = 'requests', accrualsView = false, canEditBoardingDate = false, userRole = 'admin', userName = 'CRM', authToken = '', allowedSchools, settingsScope, initialQuickFilter, adminFiltersOpen, onAdminFiltersClose, columnsOpen, onColumnsOpenChange, hideTransferBars = false, centeredDriverToolbar, onSchoolKeyChange, customTopContent, customTableContent, extraSchoolDockItems = [], onSchoolsSidebarWidthChange, externalQuickTransfer, externalQuickChildStatus, externalPeriodKey, directoryPeriodKey, managerTableTask, managerTableAllRecords, onDebtTotals, initialOpenFamilyId, initialOpenDriverId, initialSearch, initialSearchChildId, onInitialFamilyOpened, cashierView = 'pending', schoolTier = '1.0' }: FamiliesPageProps) {
   // В разделе «Школы 2.0» таблица работает только со школами 2.0.
   const schoolTabs = useMemo(() => schoolTabsForTier(schoolTier), [schoolTier]);
   const hasAdminAccess = userRole === 'admin' || userRole === 'gen_director';
@@ -969,6 +990,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     setDashboardMetricByMode(prev => ({ ...prev, [mode]: metric }));
   };
 
+  const busFilterActive = externalQuickTransfer === 'bus';
   useEffect(() => {
     // «Заявки»/«Справочник» берут данные из useFamiliesPage (постранично) —
     // полная загрузка тут не нужна и раньше приводила к двойному фетчу
@@ -976,12 +998,12 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     // загрузка запускается лениво, если mode позже сменится на режим,
     // которому всё ещё нужен весь rows (Кассир/Логистика/Начисления/...).
     // Исключение: при фильтре в заголовке таблицы им нужен весь список (берётся из общего кэша).
-    if ((isRequestsModule || mode === 'directory') && !tableFiltersActive) return;
+    if ((isRequestsModule || mode === 'directory') && !tableFiltersActive && !busFilterActive && (!isDirectoryMode || !directoryPeriodKey || directoryPeriodKey === 'ALL')) return;
     load(!familiesRowsCache, false);
     // This transition loader deliberately follows the active module only. `load`
     // reads the latest cache and filters when the effect runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRequestsModule, mode, tableFiltersActive]);
+  }, [isDirectoryMode, isRequestsModule, mode, tableFiltersActive, directoryPeriodKey, busFilterActive]);
 
   useEffect(() => {
     if (!isDirectoryMode) return;
@@ -1831,7 +1853,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   // остальные режимы пока используют полную выборку для своих таблиц и
   // связанных карточек редактирования.
   const usesServerPages = isRequestsModule || isDirectoryMode;
-  const isPagedMode = usesServerPages && !tableFiltersActive;
+  const directoryMonth = isDirectoryMode && ALL_PERIODS.find(period => period.key === directoryPeriodKey);
+  const directoryMonthPrefix = directoryMonth ? `${directoryMonth.year}-${String(directoryMonth.month).padStart(2, '0')}` : undefined;
+  const isPagedMode = usesServerPages && !tableFiltersActive && !directoryMonthPrefix && !busFilterActive;
   const branchStatsForPaging = useBranchStats();
   const [familiesPageNumber, setFamiliesPageNumber] = useState(0);
   const FAMILIES_PAGE_SIZE = 100;
@@ -1864,7 +1888,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   const pagedHasTransfer = quickTransfer === 'empty' || quickChildStatus === 'new'
     ? false
     : (quickChildStatus === 'transfered' ? true : null);
-  const pagedTransferNumber = quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive'
+  const pagedTransferNumber = quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'inactive' && quickTransfer !== 'bus'
     ? Number(quickTransfer) : null;
 
   const familiesPageParams = useMemo(() => ({
@@ -1981,6 +2005,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
   }, [isChargesMode, chargesPeriodKey, periodStats]);
 
   const filtered = useMemo(() => modeRows.filter(r => {
+    if (directoryMonthPrefix && !r.childCreatedAt?.startsWith(directoryMonthPrefix)) return false;
     // В постраничных режимах школа и поиск уже применены серверным RPC.
     // Повторные клиентские проверки могли скрыть найденную строку из-за
     // различий в нормализации филиала, имени или телефона.
@@ -2020,13 +2045,14 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     }
     if (mode === 'cashier' && r.pendingPayment <= 0) return false;
     if (quickTransfer === 'empty' && r.transferNumber) return false;
-    if (quickTransfer && quickTransfer !== 'empty' && r.transferNumber !== quickTransfer) return false;
+    if (quickTransfer === 'bus' && (r.status === 'rejected' || !r.transferNumber || (mode === 'logistics' && r.isTestTransfer))) return false;
+    if (quickTransfer && quickTransfer !== 'empty' && quickTransfer !== 'bus' && r.transferNumber !== quickTransfer) return false;
     if (quickChildStatus === 'transfered' && !r.transferNumber) return false;
     if (quickChildStatus === 'new' && !isNewUnassignedRow(r)) return false;
     if (quickChildStatus && quickChildStatus !== 'new' && quickChildStatus !== 'transfered' && r.status !== quickChildStatus) return false;
     return true;
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [accrualsView, dashboardMetric, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer, periodStatsByChild, periodStatsFiltered]);
+  }), [accrualsView, dashboardMetric, directoryMonthPrefix, isPagedMode, matchesSchool, matchesSearch, mode, modeRows, quickChildStatus, quickTransfer, periodStatsByChild, periodStatsFiltered]);
 
   const filteredSorted = useMemo(() => {
     if (isDirectoryMode) {
@@ -2087,6 +2113,41 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     })),
     combine: combinePaymentDots,
   });
+
+  const showUnpaidPeriodFilters = directoryPeriodKey !== undefined && isChargesMode && !accrualsView;
+  const [unpaidPeriods, setUnpaidPeriods] = useState<string[]>([]);
+  const unpaidPeriodOptions = [
+    { key: 'deposit', label: 'Депозит' },
+    ...PAYMENT_DOTS_PERIODS.map(period => ({
+      key: periodKey(period),
+      label: `${MONTH_NAMES[period.month - 1]} ${period.year}`,
+    })),
+  ];
+  const visiblePaymentRows = useMemo(() => {
+    if (!showUnpaidPeriodFilters || !unpaidPeriods.length) return filteredSorted;
+    return filteredSorted.filter(row => {
+      const dots = paymentDotsByChild[row.rowId];
+      return dots && unpaidPeriods.every(key => {
+        const status = key === 'deposit' ? dots.deposit : dots.months[key];
+        return status === undefined || status === 'none' || status === 'unpaid';
+      });
+    });
+  }, [filteredSorted, paymentDotsByChild, showUnpaidPeriodFilters, unpaidPeriods]);
+
+  const filteredDebtTotals = { amount: 0, count: 0 };
+  if (showUnpaidPeriodFilters) {
+    for (const row of visiblePaymentRows) {
+      const debt = rowDebt(row);
+      if (debt > 0) {
+        filteredDebtTotals.amount += debt;
+        filteredDebtTotals.count += 1;
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (showUnpaidPeriodFilters) onDebtTotals?.(filteredDebtTotals.amount, filteredDebtTotals.count);
+  }, [showUnpaidPeriodFilters, onDebtTotals, filteredDebtTotals.amount, filteredDebtTotals.count]);
 
   // Кассиру и в «Оплатах» — точки всей семьи у имени родителя: видно, за какие месяцы долг.
   const familyDotChunks = useMemo(() => {
@@ -3115,7 +3176,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
       {/* ── ОСНОВНОЙ КОНТЕНТ ── */}
       <div
         ref={contentScrollRef}
-        className="no-scrollbar"
+        className="families-scroll-content no-scrollbar"
         onClick={() => {
           if (!schoolsBarCollapsed) setSchoolsBarCollapsed(true);
           if (transferTypeMenu) setTransferTypeMenu(null);
@@ -3126,7 +3187,7 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
           display: 'flex',
           flexDirection: 'column',
           gap: 8,
-          padding: customTopContent ? '0 0 8px' : '8px 0',
+          padding: customTopContent ? '0 0 8px' : 'var(--families-content-top-padding, 8px) 0 8px',
           position: 'relative',
           zIndex: 1,
           ...(customTableContent
@@ -3387,6 +3448,8 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             <DataTable<V2DriverTableRow>
               getTaskTarget={row=>({type:'driver',id:row.driverId,label:row.fullName})}
               key="drivers_table"
+              centerPagination={centeredDriverToolbar}
+              initialSort={centeredDriverToolbar ? { key: 'transferNumbers', dir: 'asc' } : undefined}
               columns={activeTab === 'ALL' ? withSchoolColumn(DRIVER_COLUMNS, row => row.branchShorts.join(', ')) : DRIVER_COLUMNS}
               data={filteredDriverRows}
               rowKey="rowId"
@@ -3500,10 +3563,20 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
             />
           ) : (
             <DataTable<ChildRow>
+              headerIcons={directoryPeriodKey !== undefined ? {
+                ...schoolTableHeaderIcons,
+                openCard: <span className="payment-heading-icon" aria-hidden="true">
+                  <Wallet size={15} />
+                  <ArrowDownLeft size={11} color="#06734d" />
+                </span>,
+                accrual_deposit: accrualCalendarHeader('D'),
+                accrual_previous: accrualCalendarHeader(String(previousAccrualMonth).padStart(2, '0')),
+                accrual_current: accrualCalendarHeader(String(accrualPeriod.month).padStart(2, '0')),
+              } : undefined}
               getTaskTarget={row=>!row.rowId.endsWith('_empty') ? {type:'child',id:row.rowId,label:row.childName,familyId:row.familyId,schoolKey:row.branchFilter} : {type:'family',id:row.familyId,label:row.parentName}}
               key={`families_table_${accrualsView ? 'accruals' : mode}`}
               columns={activeTab === 'ALL' ? withSchoolColumn(tableColumns, row => row.branchShort) : tableColumns}
-              data={filteredSorted}
+              data={visiblePaymentRows}
               rowKey="rowId"
               groupByKey="familyId"
               selectable={canEditAccruals}
@@ -3557,6 +3630,27 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
               hideToolbar={tableBarsCollapsed}
               toolbarExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                  {showUnpaidPeriodFilters && (
+                    <>
+                    <div className="unpaid-period-filters" role="group" aria-label="Без оплаты по периодам">
+                      {unpaidPeriodOptions.map(({ key, label }) => {
+                        const selected = unpaidPeriods.includes(key);
+                        const title = `Без оплаты: ${label}`;
+                        return (
+                          <button key={key} type="button" aria-label={title} title={title} aria-pressed={selected}
+                            onClick={() => setUnpaidPeriods(current => current.includes(key)
+                              ? current.filter(period => period !== key) : [...current, key])}>
+                            <span style={dotStyle(selected ? 'unpaid' : 'none')} aria-hidden="true" />
+                          </button>
+                        );
+                      })}
+                    </div>
+                      {unpaidPeriods.length > 0 && <span className="unpaid-period-totals" aria-live="polite">
+                        <span>Долг <strong>{money(filteredDebtTotals.amount)} сом</strong></span>
+                        <span>Должников <strong>{filteredDebtTotals.count.toLocaleString('ru-RU')}</strong></span>
+                      </span>}
+                    </>
+                  )}
                   {canEditAccruals && (
                     <button
                       type="button"
@@ -3604,8 +3698,11 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
 
                 </div>
               )}
+              centerPagination={directoryPeriodKey !== undefined || !!managerTableAllRecords}
+              toolbarAfterDownload={managerTableAllRecords}
               toolbarRightExtra={(
                 <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {managerTableTask}
                   {isDirectoryMode && (
                     <>
                       <button

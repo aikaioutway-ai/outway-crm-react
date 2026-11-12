@@ -1,3 +1,4 @@
+import { restrictedRoleFor } from './modules/employees/EmployeesPage';
 import SchoolRequestsKanban from './modules/families/SchoolRequestsKanban';
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
@@ -6,15 +7,15 @@ import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft } from 'lucide-react';
-import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, NavSection } from './core/bars/Sidebar';
+import { CalendarDays, ChevronLeft } from 'lucide-react';
+import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, NavSection, OWNER_EMPLOYEE_ID } from './core/bars/Sidebar';
 import { setCrmActor } from './services/crmActor';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
-import CashierOverview from './modules/families/CashierOverview';
+import CashierOverview, { CashierOverviewSearch, CashierPaymentSummaryTabs } from './modules/families/CashierOverview';
 import CashierSchoolKpiStrip from './modules/families/CashierSchoolKpiStrip';
 import CashierSchoolTransferDashboard from './modules/families/CashierSchoolTransferDashboard';
 import CashierRefundsTable from './modules/families/CashierRefundsTable';
-import LogisticsOverview from './modules/families/LogisticsOverview';
+import LogisticsOverview, { LogisticsSummaryTabs } from './modules/families/LogisticsOverview';
 import LogisticsSchoolKpiStrip from './modules/families/LogisticsSchoolKpiStrip';
 import LogisticsSchoolTransferDashboard from './modules/families/LogisticsSchoolTransferDashboard';
 import LogisticsMapView from './modules/families/LogisticsMapView';
@@ -44,7 +45,7 @@ import { queryClient, QK } from './services/queryClient';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { OPEN_TARGET_EVENT, TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
-import { DashboardSearch, DashboardTopPanel } from './core/dashboard/DashboardUI';
+import { DashboardSearch, DashboardTopPanel, SchoolAvatar } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
 import { scheduleRealtimeFamiliesRefresh, watchRealtimeRefreshOnReturn } from './services/crmV2Service';
 import { isTabletDevice, useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
@@ -157,10 +158,15 @@ export default function App() {
   const [cashierWorkspace, setCashierWorkspace] = useState<'payments' | 'spending' | 'reconciliation'>('payments');
   useEffect(() => { if (section === 'spending') { setSection('cashier'); setCashierWorkspace('spending'); } }, [section]);
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
+  const [logistics2SchoolKey, setLogistics2SchoolKey] = useState<string | null>(null);
   const [logisticsTransferFilter, setLogisticsTransferFilter] = useState('');
+  const [logistics2TransferFilter, setLogistics2TransferFilter] = useState('');
   const [logisticsSearch, setLogisticsSearch] = useState('');
+  const [logistics2Search, setLogistics2Search] = useState('');
   // Модули менеджера и логиста открываются на «Справочнике».
   const [logisticsView, setLogisticsView] = useState<'requests' | 'table' | 'map'>('table');
+  const [logistics2DriverSearch, setLogistics2DriverSearch] = useState('');
+  const [logistics2View, setLogistics2View] = useState<'requests' | 'table' | 'map' | 'drivers'>('table');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
@@ -176,11 +182,13 @@ export default function App() {
   }, [canViewManagerAccruals]);
   const [managerSearchChild, setManagerSearchChild] = useState<{ id: string; query: string } | null>(null);
   const [logisticsSearchChild, setLogisticsSearchChild] = useState<{ id: string; query: string } | null>(null);
+  const [logistics2SearchChild, setLogistics2SearchChild] = useState<{ id: string; query: string } | null>(null);
   const [managerTransferFilter, setManagerTransferFilter] = useState('');
   const [managerOpenFamilySearch, setManagerOpenFamilySearch] = useState('');
   const [managerPeriodKey, setManagerPeriodKey] = useState(currentPayrollPeriodKey);
   // «Школы 2.0» — тот же модуль «Менеджер», но только со школами 2.0.
-  const isManagerSection = section === 'families' || section === 'schools2';
+  const isManager2 = section === 'manager2';
+  const isManagerSection = section === 'families' || section === 'schools2' || isManager2;
   const managerTier = section === 'schools2' ? '2.0' : '1.0';
   const managerSectionFor = (schoolKey: string): NavSection => isSchoolVisible(schoolKey) ? 'families' : 'schools2';
   const canAccessManagerSchool = (schoolKey: string) => isSchoolAllowed(schoolKey, currentUser?.schoolKeys, managerTier);
@@ -264,6 +272,20 @@ export default function App() {
     setLogisticsTransferFilter(row.status === 'rejected' ? 'rejected' : row.transferNumber || 'empty');
     setLogisticsView('table');
     setLogisticsSchoolKey(schoolKey);
+  };
+  const handleLogistics2SelectSchool = (schoolKey: string) => {
+    if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    if (schoolKey === 'ALL') setLogistics2View('table');
+    if (schoolKey === 'ALL') setLogistics2TransferFilter('');
+    setLogistics2SchoolKey(schoolKey);
+  };
+  const handleLogistics2OpenFamily = (schoolKey: string, _familyId: string, searchQuery: string, row: FamilySearchHit) => {
+    if (!isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
+    setLogistics2Search(searchQuery);
+    setLogistics2SearchChild({ id: row.rowId, query: searchQuery });
+    setLogistics2TransferFilter(row.status === 'rejected' ? 'rejected' : row.transferNumber || 'empty');
+    setLogistics2View('table');
+    setLogistics2SchoolKey(schoolKey);
   };
   const handleCashierSelectSchool = (schoolKey: string) => {
     if (schoolKey !== 'ALL' && !isSchoolAllowed(schoolKey, currentUser?.schoolKeys)) return;
@@ -411,9 +433,10 @@ export default function App() {
 
   const extraTabs = (_hasFamiliesPage: boolean) => currentUser ? (
     <div className="ow-user">
-      {isManagerSection && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
-      {section === 'cashier' && cashierWorkspace === 'payments' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
+      {isManagerSection && !isManager2 && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
+      {(section === 'cashier' || section === 'cashier2') && cashierWorkspace === 'payments' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
       {section === 'logistics' && logisticsSchoolKey && <AllRecordsButton onClick={()=>handleLogisticsSelectSchool('ALL')}/>}
+      {section === 'logistics2' && logistics2SchoolKey && logistics2View !== 'table' && <AllRecordsButton onClick={()=>handleLogistics2SelectSchool('ALL')}/>}
       {section === 'drivers' && driversSchoolKey && <AllRecordsButton onClick={()=>{setDriversSchoolKey('ALL');setDriversTransferFilter('');}}/>}
       <div className="ow-user-meta">
         {currentUser.position && <div className="ow-user-role">{currentUser.position}</div>}
@@ -439,8 +462,8 @@ export default function App() {
     taskNavigation.current = null;
   }, [taskNavigationVersion]);
 
-  const taskSchool = isManagerSection ? managerSchoolKey : section === 'logistics' ? logisticsSchoolKey : section === 'drivers' ? driversSchoolKey : null;
-  const taskTransfer = isManagerSection ? managerTransferFilter : section === 'logistics' ? logisticsTransferFilter : section === 'drivers' ? driversTransferFilter : '';
+  const taskSchool = isManagerSection ? managerSchoolKey : section === 'logistics2' ? logistics2SchoolKey : section === 'logistics' ? logisticsSchoolKey : section === 'drivers' ? driversSchoolKey : null;
+  const taskTransfer = isManagerSection ? managerTransferFilter : section === 'logistics2' ? logistics2TransferFilter : section === 'logistics' ? logisticsTransferFilter : section === 'drivers' ? driversTransferFilter : '';
   const contextTaskTarget: TaskTarget | null = taskSchool ? (/^\d+$/.test(taskTransfer)
     ? {type:'transfer',id:'',schoolKey:taskSchool,transferNumber:Number(taskTransfer),label:`${taskSchool} · Трансфер № ${taskTransfer}`}
     : {type:'school',id:taskSchool,label:SCHOOL_DIRECTORY.find(s=>s.key===taskSchool)?.label ?? taskSchool,schoolKey:taskSchool}) : null;
@@ -494,11 +517,73 @@ export default function App() {
     );
   }
 
+  const renderManagerSchool = (schoolKey: string, period: string, day?: string, directoryPeriod?: string, onDebtTotals?: (amount: number, count: number) => void) => (
+    managerSchoolMode === 'requests' ? <SchoolRequestsKanban externalDay={day} key={schoolKey} schoolKey={schoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
+    <>
+      {!isManager2 && (<DashboardTopPanel>
+        {!isManager2 && managerSchoolMode !== 'directory' && (
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+              <ManagerPeriodBar calendar={isManager2} periodKey={period} onPeriodKeyChange={setManagerPeriodKey} />
+            </div>
+            <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
+          </div>
+        )}
+        {!isManager2 && schoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={schoolKey} periodKey={period} selectedKey={managerTransferFilter} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
+        {managerSchoolMode !== 'directory' ? (
+          schoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={period} schoolKey={schoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingTop: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              {schoolKey !== 'ALL' && <SchoolTransferDashboard topPadding={0} mode={managerSchoolMode} periodKey={period} schoolKey={schoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
+            </div>
+            <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
+          </div>
+        )}
+      </DashboardTopPanel>)}
+      <FamiliesPage
+        mode={managerSchoolMode === 'accruals' ? 'charges' : managerSchoolMode}
+        accrualsView={managerSchoolMode === 'accruals'}
+        canEditBoardingDate={canViewManagerAccruals}
+        userRole={currentUserRole}
+        userName={currentUser?.name}
+        authToken={currentUser?.sessionToken}
+        allowedSchools={currentUser?.schoolKeys}
+        initialQuickFilter={{ activeTab: schoolKey }}
+        onSchoolKeyChange={handleManagerSelectSchool}
+        schoolTier={managerTier}
+        adminFiltersOpen={adminFiltersOpen}
+        onAdminFiltersClose={() => setAdminFiltersOpen(false)}
+        columnsOpen={columnsOpen}
+        onColumnsOpenChange={setColumnsOpen}
+        onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+        hideTransferBars
+        externalQuickTransfer={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? '' : managerTransferFilter}
+        externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
+        directoryPeriodKey={directoryPeriod}
+        managerTableTask={isManager2 && contextTaskTarget ? <TaskButton target={contextTaskTarget} compact /> : undefined}
+        managerTableAllRecords={isManager2 ? <AllRecordsButton onClick={() => handleManagerSelectSchool('ALL')} /> : undefined}
+        onDebtTotals={onDebtTotals}
+        externalPeriodKey={managerSchoolMode !== 'directory' ? period : undefined}
+        initialSearch={managerOpenFamilySearch}
+        initialSearchChildId={managerSearchChild?.query === managerOpenFamilySearch ? managerSearchChild.id : undefined}
+      />
+    </>
+    )
+  );
+
   return (
     <div style={{ display: 'flex', height: '100%', background: 'var(--bg)' }}>
       <Sidebar
         active={section === 'drivers' ? 'logistics' : section}
-        onChange={setSection}
+        onChange={next => {
+          if (next === 'manager2' && !isManager2) {
+            setManagerSchoolKey(null);
+            setManagerOpenFamilySearch('');
+            setManagerTransferFilter('');
+          }
+          setSection(next);
+        }}
         badges={badges}
         userRole={currentUserRole}
         userId={currentUser.id}
@@ -517,14 +602,14 @@ export default function App() {
         <Suspense fallback={<SectionLoading />}>
         {section === 'b2b' ? (
           <B2BModule userRole={currentUserRole} userName={currentUser.name} sessionToken={currentUser.sessionToken} />
-        ) : section === 'cashier' ? (
+        ) : (section === 'cashier' || section === 'cashier2') ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
-                {sectionLabel('Кассир')}<span style={{ color: 'var(--text-2)', fontSize: 14, marginLeft: 8 }}>{cashierWorkspace === 'reconciliation' ? '' : cashierWorkspace === 'spending' ? 'Расходы' : cashierView === 'pending' ? 'На проверке' : cashierView === 'confirmed' ? 'Подтверждённые' : 'Возвраты'}</span>
+                {sectionLabel(section === 'cashier2' ? 'Кассир 2.0' : 'Кассир')}<span style={{ color: 'var(--text-2)', fontSize: 14, marginLeft: 8 }}>{cashierWorkspace === 'reconciliation' ? '' : cashierWorkspace === 'spending' ? 'Расходы' : cashierView === 'pending' ? 'На проверке' : cashierView === 'confirmed' ? 'Подтверждённые' : 'Возвраты'}</span>
 
 
-                {cashierWorkspace === 'payments' && cashierSchoolKey && (
+                {section === 'cashier' && cashierWorkspace === 'payments' && cashierSchoolKey && (
                   <>
                     <button onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
                       <ChevronLeft size={16} aria-hidden="true" />Все школы
@@ -536,38 +621,75 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
+            {section === 'cashier2' && cashierWorkspace !== 'reconciliation' && (
+              <DashboardTopPanel className="cashier2-period-panel">
+                <div className="manager-period-tiles" role="group" aria-label="Период кассира">
+                  {[{ key: 'ALL', label: 'Все', short: 'Все' }, ...CASHIER_PERIODS.map(period => ({
+                    ...period, short: period.label.split(' ')[0].slice(0, 3),
+                  }))].map(period => (
+                    <button key={period.key} type="button" title={period.label} aria-pressed={cashierPeriodKey === period.key}
+                      onClick={() => setCashierPeriodKey(period.key)}>
+                      <CalendarDays size={16} aria-hidden="true" />
+                      <span>{period.short}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className="cashier2-search-row">
+                  {cashierWorkspace === 'spending' ? (
+                    <DashboardSearch width="100%" value={spendingSearch} onChange={setSpendingSearch} />
+                  ) : cashierSchoolKey ? (
+                    <DashboardSearch width="100%" value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
+                  ) : (
+                    <CashierOverviewSearch allowedSchools={currentUser?.schoolKeys} onSelectSchool={handleCashierSelectSchool}
+                      onOpenPaymentFamily={handleCashierOpenFamily} />
+                  )}
+                </div>
+              </DashboardTopPanel>
+            )}
+            <div className={section === 'cashier2' ? 'manager-workspace manager-overview-body manager-overview-body--school' : undefined}
+              style={section === 'cashier' ? { display: 'contents' } : { flex: 1, minHeight: 0 }}>
+              {section === 'cashier2' && <div className="manager-overview-sidebar">
+                {cashierWorkspace === 'payments' && cashierSchoolKey && <button type="button" className="ow-btn ow-btn--ghost"
+                  onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }}>Все школы</button>}
+                <CashierPaymentSummaryTabs sessionToken={currentUser?.sessionToken} showPersonal={currentUser?.id === OWNER_EMPLOYEE_ID || currentUserRole === 'gen_director'} periodKey={cashierPeriodKey} schoolKey={cashierSchoolKey} allowedSchools={currentUser?.schoolKeys} value={cashierWorkspace === 'payments' ? cashierView : cashierWorkspace}
+                  onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }}
+                  onReconciliation={canReconcilePayments ? openReconciliation : undefined}
+                  onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
+              </div>}
+              <div className={section === 'cashier2' ? 'manager-workspace-content' : undefined}
+                style={section === 'cashier' ? { display: 'contents' } : { display: 'flex', flexDirection: 'column' }}>
             {cashierWorkspace === 'reconciliation' && canReconcilePayments ? (
               <>
-                <DashboardTopPanel className="dashboard-control-row">
+                {section === 'cashier' && <DashboardTopPanel className="dashboard-control-row">
                   <CashierViewTabs value="reconciliation" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }}
                     onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
                     onReconciliation={openReconciliation} />
                   <div style={{ flex: 1, minWidth: 0 }} />
-                </DashboardTopPanel>
-                <CashierReconciliation key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken}
+                </DashboardTopPanel>}
+                <CashierReconciliation resultTiles={section === 'cashier2'} key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken}
                   onOpenFamily={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab('children'); setTaskFamily(family); }} />
               </>
             ) : cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
-              <><DashboardTopPanel className="dashboard-control-row"><CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} /><div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div><DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel><SpendingModule columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab(undefined); setTaskFamily(family); }} /></>
+              <>{section === 'cashier' && <DashboardTopPanel className="dashboard-control-row">{section === 'cashier' && <CashierViewTabs onReconciliation={canReconcilePayments ? openReconciliation : undefined} value="spending" onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }} onSpending={() => setCashierWorkspace('spending')} />}{section === 'cashier' && <div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} /></div>}<DashboardSearch value={spendingSearch} onChange={setSpendingSearch} /></DashboardTopPanel>}<SpendingModule categoriesFirst={section === 'cashier2'} columnsOpen={columnsOpen} onColumnsOpenChange={setColumnsOpen} searchQuery={spendingSearch} embedded periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} key={currentUser?.id} userId={currentUser?.id || 'unknown'} role={currentUserRole} sessionToken={currentUser?.sessionToken} onOpenClient={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab(undefined); setTaskFamily(family); }} /></>
             ) : cashierSchoolKey ? (
               <>
               {cashierView === 'refunds' ? (
-                <DashboardTopPanel>
+                section === 'cashier' && <DashboardTopPanel>
                   <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                      <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />
+                      {section === 'cashier' && <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />}
                     </div>
                     <DashboardSearch value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
                   </div>
                 </DashboardTopPanel>
               ) : (
                 <DashboardTopPanel>
-                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
+                  {section === 'cashier' && (                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
                       <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                        <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />
+                        {section === 'cashier' && <ManagerPeriodBar periodKey={cashierPeriodKey} onPeriodKeyChange={setCashierPeriodKey} periods={CASHIER_PERIODS} />}
                       </div>
                       <DashboardSearch value={cashierOpenFamilySearch} onChange={setCashierOpenFamilySearch} />
-                    </div>
+                    </div>)}
                   {cashierSchoolKey !== 'ALL' && <CashierSchoolKpiStrip
                     view={cashierView}
                     schoolKey={cashierSchoolKey}
@@ -617,6 +739,7 @@ export default function App() {
               </>
             ) : (
               <CashierOverview
+                splitView={section === 'cashier2'}
                 onReconciliation={canReconcilePayments ? openReconciliation : undefined}
                 onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined}
                 view={cashierView}
@@ -629,6 +752,8 @@ export default function App() {
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             )}
+              </div>
+            </div>
           </div>
         ) : section === 'logistics' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
@@ -721,70 +846,153 @@ export default function App() {
               />
             )}
           </div>
-        ) : isManagerSection ? (
+        ) : section === 'logistics2' ? (
           <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
             <div style={tabRowStyle}>
               <div style={tabBarStyle}>
-                {sectionLabel(managerTier === '2.0' ? 'Школы 2.0' : 'Менеджер')}
-                {managerSchoolKey && (
-                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
+                {sectionLabel('Логистика 2.0')}
+                {logistics2View !== 'table' && contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
+                {logistics2SchoolKey === 'ALL' && (
+                  <button type="button" onClick={() => { setLogistics2SchoolKey(null); setLogistics2Search(''); }} className="ow-btn ow-btn--ghost">
                     <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
-                {managerSchoolKey && <ManagerModeTabs showRequests canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
-                {contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
-            {managerSchoolKey ? (managerSchoolMode === 'requests' ? <SchoolRequestsKanban key={managerSchoolKey} schoolKey={managerSchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
+            {logistics2SchoolKey && (logistics2SchoolKey === 'ALL' || isSchoolAllowed(logistics2SchoolKey, currentUser?.schoolKeys)) ? (
               <>
-                <DashboardTopPanel>
-                  {managerSchoolMode !== 'directory' && (
-                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10 }}>
-                      <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-                        <ManagerPeriodBar periodKey={managerPeriodKey} onPeriodKeyChange={setManagerPeriodKey} />
-                      </div>
-                      <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
-                    </div>
+              {logistics2View !== 'requests' && logistics2View !== 'drivers' && (
+              <DashboardTopPanel>
+                <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {logistics2SchoolKey !== 'ALL' && <LogisticsSchoolTransferDashboard showBusFilter schoolKey={logistics2SchoolKey} selectedKey={logistics2TransferFilter} onSelect={setLogistics2TransferFilter} />}
+                  </div>
+                  <div style={{ paddingTop: 10 }}><DashboardSearch value={logistics2Search} onChange={setLogistics2Search} placeholder="Имя, телефон, ребёнок, адрес..." /></div>
+                </div>
+              </DashboardTopPanel>
+              )}
+              <div className="manager-workspace manager-overview-body manager-overview-body--school">
+                <div className="manager-overview-sidebar">
+                  {schoolTabsForTier('1.0').filter(school => school.key === logistics2SchoolKey && school.key !== 'ALL').map(school => (
+                    <button key={school.key} type="button" className="manager-school-brand" title="Все школы" aria-label={school.label + ': все школы'} onClick={() => { setLogistics2SchoolKey(null); setLogistics2Search(''); setLogistics2TransferFilter(''); }}>
+                      <SchoolAvatar logo={school.logo} label={school.label} color="var(--accent)" size={64} />
+                    </button>
+                  ))}
+                  <LogisticsSummaryTabs schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys}
+                    value={logistics2View} onChange={setLogistics2View} />
+                </div>
+                <div className="manager-workspace-content logistics-school-content">
+              {logistics2View === 'drivers' ? (
+                <DriversPage embedded schoolKey={logistics2SchoolKey ?? 'ALL'} userRole={currentUserRole}
+                  userName={currentUser?.name} authToken={currentUser?.sessionToken} allowedSchools={currentUser?.schoolKeys}
+                  />
+              ) : logistics2View === 'requests' ? (
+              <SchoolRequestsKanban key={logistics2SchoolKey} schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier="1.0" actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} />
+            ) : (
+              <>
+
+              {logistics2View === 'map' ? (
+                <LogisticsMapView
+                  expandable
+                  expandedToolbar={logistics2SchoolKey !== 'ALL' && (
+                    <LogisticsSchoolTransferDashboard showBusFilter schoolKey={logistics2SchoolKey}
+                      selectedKey={logistics2TransferFilter} onSelect={setLogistics2TransferFilter} />
                   )}
-                  {managerSchoolKey !== 'ALL' && <SchoolKpiStrip mode={managerSchoolMode} schoolKey={managerSchoolKey} periodKey={managerPeriodKey} selectedKey={managerTransferFilter} rightReserveWidth={schoolSidebarReserveWidth} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
-                  {managerSchoolMode !== 'directory' ? (
-                    managerSchoolKey !== 'ALL' && <SchoolTransferDashboard mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} rightReserveWidth={schoolSidebarReserveWidth} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
-                  ) : (
-                    <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingTop: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        {managerSchoolKey !== 'ALL' && <SchoolTransferDashboard topPadding={0} mode={managerSchoolMode} periodKey={managerPeriodKey} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />}
-                      </div>
-                      <DashboardSearch value={managerOpenFamilySearch} onChange={setManagerOpenFamilySearch} />
-                    </div>
-                  )}
-                </DashboardTopPanel>
+                  schoolKey={logistics2SchoolKey}
+                  transferFilter={logistics2TransferFilter}
+                  search={logistics2Search}
+                  userRole={currentUserRole}
+                  userName={currentUser?.name}
+                  sessionToken={currentUser?.sessionToken}
+                  onSelectSchool={handleLogistics2SelectSchool}
+                  allowedSchools={currentUser?.schoolKeys}
+                  onSidebarWidthChange={setSchoolSidebarReserveWidth}
+                />
+              ) : (
                 <FamiliesPage
-                  mode={managerSchoolMode === 'accruals' ? 'charges' : managerSchoolMode}
-                  accrualsView={managerSchoolMode === 'accruals'}
+                  mode="logistics"
                   canEditBoardingDate={canViewManagerAccruals}
                   userRole={currentUserRole}
                   userName={currentUser?.name}
                   authToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
-                  initialQuickFilter={{ activeTab: managerSchoolKey }}
-                  onSchoolKeyChange={handleManagerSelectSchool}
-                  schoolTier={managerTier}
+                  initialQuickFilter={{ activeTab: logistics2SchoolKey }}
+                  onSchoolKeyChange={handleLogistics2SelectSchool}
                   adminFiltersOpen={adminFiltersOpen}
                   onAdminFiltersClose={() => setAdminFiltersOpen(false)}
                   columnsOpen={columnsOpen}
                   onColumnsOpenChange={setColumnsOpen}
                   onSchoolsSidebarWidthChange={setSchoolSidebarReserveWidth}
+                  managerTableTask={contextTaskTarget ? <TaskButton target={contextTaskTarget} compact /> : undefined}
+                  managerTableAllRecords={<AllRecordsButton onClick={() => handleLogistics2SelectSchool('ALL')} />}
                   hideTransferBars
-                  externalQuickTransfer={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? '' : managerTransferFilter}
-                  externalQuickChildStatus={managerTransferFilter === 'new' || managerTransferFilter === 'rejected' ? managerTransferFilter : ''}
-                  externalPeriodKey={managerSchoolMode !== 'directory' ? managerPeriodKey : undefined}
-                  initialSearch={managerOpenFamilySearch}
-                  initialSearchChildId={managerSearchChild?.query === managerOpenFamilySearch ? managerSearchChild.id : undefined}
+                  externalQuickTransfer={logistics2TransferFilter === 'rejected' ? '' : logistics2TransferFilter}
+                  externalQuickChildStatus={logistics2TransferFilter === 'rejected' ? 'rejected' : ''}
+                  initialSearch={logistics2Search}
+                  initialSearchChildId={logistics2SearchChild?.query === logistics2Search ? logistics2SearchChild.id : undefined}
                 />
+              )}
               </>
-            )) : (
+              )}
+                </div>
+              </div>
+              </>
+            ) : (
+              <LogisticsOverview splitView
+                groupSummary={canAccessSection(currentUserRole, 'summary', currentUser?.id)
+                  ? <SummaryModule allowedSchools={currentUser?.schoolKeys} />
+                  : undefined}
+                onDrivers={() => setLogistics2View('drivers')}
+                driversSearch={<DashboardSearch width="100%" value={logistics2DriverSearch} onChange={setLogistics2DriverSearch} placeholder="Поиск школы…" />}
+                driversContent={logistics2View === 'drivers' ? (
+                  <DriversOverview embedded allowedSchools={currentUser?.schoolKeys} search={logistics2DriverSearch}
+                    onSearchChange={setLogistics2DriverSearch} onTabChange={setLogistics2View}
+                    onSelectSchool={key => {
+                      setLogistics2DriverSearch('');
+                      handleLogistics2SelectSchool(key);
+                    }} />
+                ) : undefined}
+                view={logistics2View}
+                onViewChange={setLogistics2View}
+                onOpenFamily={handleLogistics2OpenFamily}
+                onSelectSchool={handleLogistics2SelectSchool}
+                allowedSchools={currentUser?.schoolKeys}
+              />
+            )}
+          </div>
+        ) : isManagerSection ? (
+          <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'visible', gap: 0 }}>
+            <div style={tabRowStyle}>
+              <div style={tabBarStyle}>
+                {sectionLabel(isManager2 ? 'Менеджер 2.0' : managerTier === '2.0' ? 'Школы 2.0' : 'Менеджер')}
+                {managerSchoolKey && (!isManager2 || managerSchoolKey === 'ALL') && (
+                  <button onClick={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }} className="ow-btn ow-btn--ghost">
+                    <ChevronLeft size={16} aria-hidden="true" />Все школы
+                  </button>
+                )}
+                {managerSchoolKey && !isManager2 && <ManagerModeTabs showRequests canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
+                {!isManager2 && contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
+                {extraTabs(true)}
+              </div>
+            </div>
+            {managerSchoolKey && !isManager2 ? renderManagerSchool(managerSchoolKey, managerPeriodKey) : (
               <ManagerOverview
+                key={section}
+                employeeCardAccess={canAccessSection(currentUserRole, 'employees', currentUser?.id)
+                  ? { roles: restrictedRoleFor(currentUserRole), sessionToken: currentUser?.sessionToken }
+                  : undefined}
+                onBackToOverview={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }}
+                groupSummary={isManager2 && !managerSchoolKey && canAccessSection(currentUserRole, 'summary', currentUser?.id)
+                  ? <SummaryModule allowedSchools={currentUser?.schoolKeys} />
+                  : undefined}
+                detailTransferFilter={managerTransferFilter}
+                detailSchoolKey={isManager2 ? managerSchoolKey ?? undefined : undefined}
+                renderSchool={isManager2 && managerSchoolKey ? (period, day, directoryPeriod, onDebtTotals) => renderManagerSchool(managerSchoolKey, period, day, directoryPeriod, onDebtTotals) : undefined}
+                renderTransfers={isManager2 && managerSchoolKey && managerSchoolKey !== 'ALL' && managerSchoolMode !== 'requests'
+                  ? period => <SchoolTransferDashboard showBusFilter topPadding={0} mode={managerSchoolMode} periodKey={period} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
+                  : undefined}
+                splitView={isManager2}
                 canViewAccruals={canViewManagerAccruals}
                 mode={managerSchoolMode}
                 onModeChange={setManagerSchoolMode}
