@@ -363,7 +363,7 @@ export default function CashierOverview({ splitView, view, onViewChange, onSpend
 
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-      <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ flex: 1, minHeight: 0, paddingBottom: splitView ? 0 : 10, display: 'flex', flexDirection: 'column', gap: 12 }}>
         {!splitView && <DashboardTopPanel className="dashboard-control-row cashier-control-row overview-control-row">
           {!splitView && <CashierViewTabs value={view} onChange={onViewChange} onSpending={onSpending} onReconciliation={onReconciliation} />}
           {!splitView && <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>

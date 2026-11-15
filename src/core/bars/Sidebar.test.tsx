@@ -5,7 +5,7 @@ test('cashier works with spending; the old Finance section is gone for everyone'
   expect(canAccessSpending('cashier')).toBe(true);
   expect(canAccessSection('cashier', 'families', 'cashier')).toBe(true);
   expect(canAccessSection('cashier', 'b2b', 'cashier')).toBe(true);
-  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'families', 'schools2', 'b2b', 'spending', 'tasks', 'messages']);
+  expect(getAllowedSections('cashier', 'cashier')).toEqual(['cashier', 'cashier2', 'families', 'manager2', 'schools2', 'b2b', 'spending', 'tasks', 'messages']);
 });
 
 test('spending stays limited to admin, general director, cashier and the owner', () => {
@@ -88,12 +88,20 @@ test('the 2.0 switch sends Manager, Logistics and Cashier to their 2.0 sections 
   expect(localStorage.getItem('ow-sidebar-v2:emp-admin')).toBe('1');
 });
 
-test('staff without 2.0 access get no switch and keep the regular sections', () => {
-  localStorage.setItem('ow-sidebar-v2:director', '1');
+test('staff can switch versions after expanding the menu, within their role', () => {
+  localStorage.removeItem('ow-sidebar-v2:manager');
   const onChange = jest.fn();
-  render(<Sidebar active="summary" userRole="director" userId="director" onChange={onChange} />);
-  for (let i = 0; i < 5; i += 1) fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  const { rerender } = render(<Sidebar active="families" userRole="manager" userId="manager" onChange={onChange} />);
   expect(screen.queryByRole('switch')).toBeNull();
-  fireEvent.click(screen.getByTitle('Кассир'));
-  expect(onChange).toHaveBeenCalledWith('cashier');
+  for (let i = 0; i < 5; i += 1) fireEvent.click(screen.getByLabelText('Развернуть меню'));
+
+  fireEvent.click(screen.getByRole('switch'));
+  expect(onChange).toHaveBeenLastCalledWith('manager2');
+  expect(screen.queryByTitle('Кассир')).toBeNull();
+  expect(screen.queryByTitle('Логистика')).toBeNull();
+  expect(localStorage.getItem('ow-sidebar-v2:manager')).toBe('1');
+
+  rerender(<Sidebar active="manager2" userRole="manager" userId="manager" onChange={onChange} />);
+  fireEvent.click(screen.getByRole('switch'));
+  expect(onChange).toHaveBeenLastCalledWith('families');
 });

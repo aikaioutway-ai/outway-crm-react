@@ -1096,6 +1096,15 @@ button.manager-school-brand {
 }
 .cashier2-search-row > .dashboard-search { min-width: 0; }
 
+.cashier2-overview { align-content: start; }
+
+@media (min-width: 701px) {
+  .cashier2-overview.manager-overview-body--school .manager-overview-sidebar .cashier2-mode-cards {
+    flex: 1;
+    align-content: stretch;
+  }
+}
+
 .manager-overview-body .cashier2-mode-cards .manager-mode-card {
   padding-block: 8px;
   row-gap: 4px;

@@ -636,7 +636,9 @@ export default function App() {
                 </div>
               </DashboardTopPanel>
             )}
-            <div className={cashierSplitView ? 'manager-workspace manager-overview-body manager-overview-body--school' : undefined}
+            <div className={cashierSplitView
+              ? `manager-workspace manager-overview-body manager-overview-body--school${cashierWorkspace === 'payments' && !cashierSchoolKey ? ' cashier2-overview' : ''}`
+              : undefined}
               style={cashierSplitView ? { flex: 1, minHeight: 0 } : { display: 'contents' }}>
               {cashierSplitView && <div className="manager-overview-sidebar">
                 {cashierWorkspace === 'payments' && cashierSchoolKey && <button type="button" className="ow-btn ow-btn--ghost"

@@ -66,7 +66,6 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'manager2', 'schools2'] : section === 'logistics' ? ['logistics', 'logistics2'] : section === 'cashier' ? ['cashier', 'cashier2'] : [section]);
-  if (userId !== OWNER_EMPLOYEE_ID) sections = sections.filter(section => section !== 'manager2' && section !== 'logistics2' && section !== 'cashier2');
   // «Сообщения» — у всех сотрудников: уведомления и переписка «Все» / отдел.
   return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks', 'messages'] : [...sections, 'tasks', 'messages'];
 }
