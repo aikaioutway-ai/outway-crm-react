@@ -16,6 +16,7 @@ interface Props {
   periodKey: string;
   searchQuery?: string;
   confirmedBy?: string;
+  onOpenFamily?: (familyId: string) => void;
 }
 
 function refundDate(row: RefundTableRow): Date | null {
@@ -40,7 +41,7 @@ function matchesSchool(row: RefundTableRow, schoolKey: string): boolean {
   return branch === tab.key.toLowerCase() || branch === tab.label.toLowerCase();
 }
 
-export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery = '', confirmedBy, allowedSchools }: Props) {
+export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery = '', confirmedBy, allowedSchools, onOpenFamily }: Props) {
   const { data: rows = [], isLoading } = useRefundsTable();
   const [editingId, setEditingId] = useState<string | null>(null);
   const [paymentMethodById, setPaymentMethodById] = useState<Record<string, 'cash' | 'cashless'>>({});
@@ -172,6 +173,7 @@ export default function CashierRefundsTable({ schoolKey, periodKey, searchQuery 
       columns={schoolKey === 'ALL' ? withSchoolColumn(columns, row => row.branchShort) : columns}
       data={filteredRows}
       rowKey="id"
+      onRowClick={onOpenFamily && (row => onOpenFamily(row.familyId))}
       storageKey="cashier_refunds_table_v1"
       loading={isLoading}
       emptyText="Возвратов нет"

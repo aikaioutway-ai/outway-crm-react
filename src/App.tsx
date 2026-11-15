@@ -118,7 +118,7 @@ export default function App() {
   const [taskNavigationVersion, setTaskNavigationVersion] = useState(0);
   const [taskChildId, setTaskChildId] = useState('');
   // Сверка открывает карточку семьи сразу на вкладке «Дети».
-  const [taskFamilyTab, setTaskFamilyTab] = useState<'children' | undefined>();
+  const [taskFamilyTab, setTaskFamilyTab] = useState<'children' | 'refunds' | undefined>();
   const [taskDriverId, setTaskDriverId] = useState('');
 
 
@@ -712,6 +712,17 @@ export default function App() {
                   periodKey={cashierPeriodKey}
                   searchQuery={cashierOpenFamilySearch}
                   confirmedBy={currentUser?.name}
+                  onOpenFamily={async familyId => {
+                    try {
+                      const family = await fetchV2Family(familyId);
+                      if (!family) throw new Error('Карточка семьи недоступна');
+                      setTaskChildId('');
+                      setTaskFamilyTab('refunds');
+                      setTaskFamily(family);
+                    } catch (error) {
+                      window.alert(error instanceof Error ? error.message : 'Не удалось открыть карточку семьи');
+                    }
+                  }}
                 />
               ) : (
                 <FamiliesPage
