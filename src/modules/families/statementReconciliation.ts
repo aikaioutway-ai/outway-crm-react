@@ -1,39 +1,10 @@
-import type { FamilyPayment } from '../../types';
-import { normalizeReceiptCode } from '../../services/receiptOcrResult';
+import { codes, type StatementEntry } from '../../../supabase/functions/_shared/statementMatching';
+
+export { entryKey, mergeStatements, paymentRange, reconcileBankStatement } from '../../../supabase/functions/_shared/statementMatching';
+export type { MatchPayment, StatementEntry } from '../../../supabase/functions/_shared/statementMatching';
 
 function cellText(cell: import('exceljs').Cell): string {
   return cell.value == null ? '' : cell.text.trim();
-}
-
-// ID операций в строке выписки: у клиента Мбанка — MBIZ_S_<ID>/QR_452 <ID>,
-// у клиента другого банка — ID операции его банка и QR_130 <ID>. Сравниваем по самим ID, без префиксов.
-function codes(text: string) {
-  return Array.from(new Set(Array.from(text.matchAll(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi),
-    ([code]) => code.toLowerCase().replace(/-/g, ''))));
-}
-
-function entryCodes(entry: StatementEntry) {
-  const purpose = entry.source?.find(cell => cell.label === 'Назначение платежа')?.value;
-  // Выписки, сохранённые до этого правила, хранят коды с префиксом mbiz_s_/qr_452.
-  return purpose ? codes(purpose) : entry.codes.map(code => code.replace(/^(?:mbiz_s_|qr_452)/, ''));
-}
-
-// Дата оплаты в чеке — это дата операции. После подтверждения кассир ставит дату поступления,
-// а она по умолчанию равна дате проводки в выписке, поэтому подходят обе.
-function sameDate(entry: StatementEntry, payment: FamilyPayment) {
-  return [entry.operationDate ?? entry.postingDate, entry.postingDate].includes(payment.actualPaymentDate ?? payment.paymentDate);
-}
-
-function minutes(time?: string) {
-  const [hours, mins, seconds = 0] = time?.split(':').map(Number) ?? [];
-  return hours == null || mins == null ? null : hours * 60 + mins + seconds / 60;
-}
-
-// Чек показывает время с точностью до минуты, а часы банков расходятся на минуту-две.
-function sameTime(entry: StatementEntry, payment: FamilyPayment) {
-  const entryTime = minutes(entry.time);
-  const receiptTime = minutes(payment.receiptTime);
-  return entryTime != null && receiptTime != null && Math.abs(entryTime - receiptTime) <= 3;
 }
 
 export async function readBankStatement(file: File) {
@@ -49,7 +20,7 @@ export async function readBankStatement(file: File) {
     throw new Error('Проверьте формат выписки Мбанка.');
   }
   const labels = Array.from({ length: 11 }, (_, index) => cellText(columns.getCell(index + 1)));
-  const entries = [];
+  const entries: StatementEntry[] = [];
   for (let number = header + 1; number <= sheet.rowCount; number++) {
     const row = sheet.getRow(number);
     const document = cellText(row.getCell(1));
@@ -78,96 +49,4 @@ export async function readBankStatement(file: File) {
   } : undefined };
 }
 
-type ImportedEntry = Awaited<ReturnType<typeof readBankStatement>>['entries'][number];
-export type StatementEntry = Omit<ImportedEntry, 'source'> & Partial<Pick<ImportedEntry, 'source'>>;
 
-// Повторно загруженные выписки пересекаются (например, 7–10 и 10–15 число): одинаковые строки берём один раз.
-export function mergeStatements(statements: Array<{ entries: StatementEntry[] }>): StatementEntry[] {
-  const seen = new Set<string>();
-  const merged: StatementEntry[] = [];
-  for (const statement of statements) {
-    for (const entry of statement.entries) {
-      const purpose = entry.source?.find(cell => cell.label === 'Назначение платежа')?.value ?? entry.codes.join(',');
-      const key = [entry.document.replace(/\s+/g, ' '), entry.postingDate, entry.amount, purpose].join('|');
-      if (seen.has(key)) continue;
-      seen.add(key);
-      merged.push({ ...entry, number: merged.length + 1 });
-    }
-  }
-  return merged;
-}
-
-// 1 — есть: код и сумма совпали; 2 — частично: код совпал, а сумма нет, или совпали только сумма и дата;
-// Д — дубли: один и тот же чек привязан к нескольким платежам CRM, подтверждать можно только один; Х — нет.
-export function reconcileBankStatement<T extends FamilyPayment>(entries: StatementEntry[], payments: T[]) {
-  const byCode = new Map<string, Array<{ payment: T; codes: string[] }>>();
-  for (const payment of payments) {
-    const item = { payment, codes: codes(normalizeReceiptCode(payment.receiptCode) ?? payment.receiptCode ?? '') };
-    for (const code of item.codes) byCode.set(code, [...(byCode.get(code) ?? []), item]);
-  }
-  const byAmount = new Map<number, T[]>();
-  for (const payment of payments) byAmount.set(payment.amount, [...(byAmount.get(payment.amount) ?? []), payment]);
-  const statementCodes = entries.map(entryCodes);
-  const exact = statementCodes.map(list => Array.from(new Set(list.flatMap(code => byCode.get(code) ?? []))));
-  const claimed = new Set(exact.flatMap(matches => matches.map(({ payment }) => payment.id)));
-  // Сумма и дата: каждый платёж CRM достаётся только одной строке выписки, иначе один и тот же чек
-  // повторяется во всех поступлениях с той же суммой за день. Сначала пары, где совпало время чека
-  // (ближайшее первым), потом остальные: дата операции важнее даты проводки, затем ближе по времени.
-  const pairs: Array<{ index: number; payment: T; rank: number; distance: number }> = [];
-  entries.forEach((entry, index) => {
-    if (exact[index].length) return;
-    for (const payment of byAmount.get(entry.amount) ?? []) {
-      if (claimed.has(payment.id) || !sameDate(entry, payment)) continue;
-      const entryTime = minutes(entry.time);
-      const receiptTime = minutes(payment.receiptTime);
-      const gap = entryTime != null && receiptTime != null ? Math.abs(entryTime - receiptTime) : Infinity;
-      const operationDay = (payment.actualPaymentDate ?? payment.paymentDate) === (entry.operationDate ?? entry.postingDate);
-      pairs.push({ index, payment, rank: sameTime(entry, payment) ? 0 : operationDay ? 1 : 2, distance: gap });
-    }
-  });
-  pairs.sort((a, b) => a.rank - b.rank || a.distance - b.distance || a.index - b.index);
-  const byAmountAndDate = new Map<number, T>();
-  const taken = new Set<string>();
-  const owner = new Map<string, number>();
-  const locked = new Set<number>();
-  for (const pair of pairs) {
-    if (byAmountAndDate.has(pair.index) || taken.has(pair.payment.id)) continue;
-    byAmountAndDate.set(pair.index, pair.payment);
-    taken.add(pair.payment.id);
-    owner.set(pair.payment.id, pair.index);
-    if (pair.rank === 0) locked.add(pair.index);
-  }
-  // Строка без пары может забрать платёж у соседней, если той достанется другой подходящий платёж:
-  // так в пары попадает как можно больше поступлений. Пары с совпавшим временем не переставляем.
-  const options = new Map<number, T[]>();
-  for (const pair of pairs) options.set(pair.index, [...(options.get(pair.index) ?? []), pair.payment]);
-  const reassign = (index: number, seen: Set<string>): boolean => {
-    for (const payment of options.get(index) ?? []) {
-      if (seen.has(payment.id)) continue;
-      seen.add(payment.id);
-      const current = owner.get(payment.id);
-      if (current === undefined || (!locked.has(current) && reassign(current, seen))) {
-        owner.set(payment.id, index);
-        byAmountAndDate.set(index, payment);
-        return true;
-      }
-    }
-    return false;
-  };
-  for (const index of Array.from(options.keys())) if (!byAmountAndDate.has(index)) reassign(index, new Set());
-  return entries.map((entry, index) => {
-    const matches = exact[index];
-    const sameAmount = matches.filter(({ payment }) => payment.amount === entry.amount);
-    const matching = sameAmount.length ? sameAmount : matches;
-    if (matching.length) {
-      return {
-        entry, group: matching.length > 1 ? 'Д' as const : sameAmount.length ? '1' as const : '2' as const,
-        candidates: matching.map(({ payment }) => payment),
-        matchingCodes: statementCodes[index].filter(code => matching.some(item => item.codes.includes(code))),
-      };
-    }
-    const paired = byAmountAndDate.get(index);
-    const candidates = paired ? [paired] : [];
-    return { entry, group: candidates.length ? '2' as const : 'Х' as const, candidates, matchingCodes: [] as string[] };
-  });
-}

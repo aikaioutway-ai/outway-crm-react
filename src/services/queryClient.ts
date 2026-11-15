@@ -29,9 +29,10 @@ export const QK = {
   transfersDashboard: ['transfersDashboard'] as const,
   paymentsTable: ['paymentsTable'] as const,
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
-  reconciliationPayments: (from: string, to: string) => ['reconciliationPayments', from, to] as const,
   reconciliationGaps: (from: string, to: string) => ['reconciliationGaps', from, to] as const,
-  bankStatements: (sessionToken: string) => ['bankStatements', sessionToken] as const,
+  reconciliationSummary: (sessionToken: string) => ['reconciliationSummary', sessionToken] as const,
+  reconciliationGroup: (sessionToken: string, runAt: string, group: string, status: string) =>
+    ['reconciliationGroup', sessionToken, runAt, group, status] as const,
   refundsTable: ['refundsTable'] as const,
   employees: ['employees'] as const,
   payrollEntries: (periodMonth: number, periodYear: number) => ['payrollEntries', periodMonth, periodYear] as const,

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CircleAlert, CircleCheckBig, Copy, FileText, Landmark, Pencil, Upload, X, type LucideIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useBankStatements, usePaymentsTable, useReconciliationGaps, useReconciliationPayments } from '../../hooks/useCrmQueries';
+import { usePaymentsTable, useReconciliationGaps, useReconciliationGroup, useReconciliationSummary } from '../../hooks/useCrmQueries';
 import { QK } from '../../services/queryClient';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import { currentReconciliationMonth } from './constants';
@@ -9,19 +9,20 @@ import PaymentDecisionModal, { type PaymentDecision } from './PaymentDecisionMod
 import './cashierReconciliation.css';
 import ReceiptModal from './ReceiptModal';
 import FilterableTable from '../../core/tables/FilterableTable';
-import { applyPaymentDecision, fetchFamilyPayment, type fetchReconciliationPayments } from '../../services/financeService';
-import { mergeStatements, readBankStatement, reconcileBankStatement, type StatementEntry } from './statementReconciliation';
-import { deleteBankStatement, saveBankStatement, type BankStatement } from '../../services/bankStatementService';
+import { applyPaymentDecision, fetchFamilyPayment } from '../../services/financeService';
+import { readBankStatement, type StatementEntry } from './statementReconciliation';
+import {
+  deleteBankStatement, runReconciliation, saveBankStatement,
+  type BankStatementFile, type BankStatementUpload, type ReconciliationPayment, type ReconciliationRow,
+} from '../../services/bankStatementService';
 
-type ReconciliationPayment = Awaited<ReturnType<typeof fetchReconciliationPayments>>[number];
-type Result = ReturnType<typeof reconcileBankStatement<ReconciliationPayment>>[number];
-type Statement = BankStatement;
+type Result = ReconciliationRow;
 
-function readLegacyStatements(key: string): Statement[] {
+function readLegacyStatements(key: string): BankStatementUpload[] {
   try {
     const saved = JSON.parse(localStorage.getItem(key) ?? sessionStorage.getItem(key) ?? 'null');
     const list = Array.isArray(saved) ? saved : saved?.entries?.length ? [saved] : [];
-    return list.filter((item: Statement) => item?.name && Array.isArray(item.entries) && item.entries.length);
+    return list.filter((item: BankStatementUpload) => item?.name && Array.isArray(item.entries) && item.entries.length);
   } catch {
     return [];
   }
@@ -36,11 +37,6 @@ function clearLegacyStatements(key: string) {
   }
 }
 
-function statementRange(statement: Statement) {
-  if (statement.range) return statement.range;
-  const dates = statement.entries.map(entry => entry.postingDate).sort();
-  return { from: dates[0], to: dates[dates.length - 1] };
-}
 
 // Иконка с красным крестиком в углу: лист — нет в CRM, банк — нет в выписке.
 function missingIcon(Base: LucideIcon) {
@@ -105,9 +101,10 @@ function paymentDate(date: string) {
   return date.split('-').reverse().join('.');
 }
 
-function paymentRange(entries: StatementEntry[]) {
-  const dates = entries.flatMap(entry => [entry.operationDate ?? entry.postingDate, entry.postingDate]).sort();
-  return { from: dates[0], to: dates[dates.length - 1] };
+const STATUS_PARAM = { 'На проверке': 'pending', 'Подтверждено': 'confirmed' } as const;
+
+function updatedAt(value: string) {
+  return new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 }
 
 // Платёж из одной строки выписки уже подтверждён — остальные платежи с этим же чеком подтверждать нельзя.
@@ -115,18 +112,11 @@ function duplicateOfConfirmed(row: Result, payment: ReconciliationPayment) {
   return row.group === 'Д' && row.candidates.some(item => item.id !== payment.id && item.status === 'Подтверждено');
 }
 
+// Чеки на проверке по группам сверки — для плиток обзора кассира.
 export function useCashierReconciliationSummary(sessionToken?: string, enabled = false) {
-  const statements = useBankStatements(sessionToken, enabled);
-  const entries = useMemo(() => mergeStatements(statements.data ?? []), [statements.data]);
-  const range = useMemo(() => entries.length ? paymentRange(entries) : null, [entries]);
-  const payments = useReconciliationPayments(range);
-  const counts = { '1': 0, '2': 0, 'Д': 0 };
-  if (!statements.data || (range && !payments.data)) return null;
-  for (const row of reconcileBankStatement(entries, payments.data ?? [])) {
-    if (row.group === 'Х') continue;
-    counts[row.group] += row.candidates.filter(payment => payment.status === 'На проверке').length;
-  }
-  return counts;
+  const { data } = useReconciliationSummary(sessionToken, enabled);
+  if (!data) return null;
+  return { '1': data.counts['1'].pending, '2': data.counts['2'].pending, 'Д': data.counts['Д'].pending };
 }
 
 export default function CashierReconciliation({ userId, userName, userRole, sessionToken, onOpenFamily, resultTiles }: {
@@ -136,10 +126,10 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
 }) {
   // Старые выписки лежали только в браузере: при открытии переносим их в базу.
   const legacyKey = `cashier-reconciliation:v1:${userId}`;
-  const statementsQuery = useBankStatements(sessionToken);
-  const history = useMemo(() => statementsQuery.data ?? [], [statementsQuery.data]);
-  const loading = statementsQuery.isPending && Boolean(sessionToken);
-  const statementsKey = QK.bankStatements(sessionToken ?? '');
+  const summaryQuery = useReconciliationSummary(sessionToken);
+  const summary = summaryQuery.data;
+  const history: BankStatementFile[] = useMemo(() => summary?.statements ?? [], [summary]);
+  const loading = summaryQuery.isPending && Boolean(sessionToken);
   const [status, setStatus] = useState<PaymentStatus>('На проверке');
   const [expandedComment, setExpandedComment] = useState<string | null>(null);
   const [receipt, setReceipt] = useState<{ url: string; id: string; parent: string } | null>(null);
@@ -156,25 +146,23 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
   const queryClient = useQueryClient();
-  // Все загруженные выписки сверяются как одна, за весь период сразу.
-  const allEntries = useMemo(() => mergeStatements(history), [history]);
-  const entries = allEntries;
-  const range = useMemo(() => entries.length ? paymentRange(entries) : null, [entries]);
-  const paymentsQuery = useReconciliationPayments(range);
+  // Все загруженные выписки сверяются как одна, за весь период сразу — это делает сервер.
+  const entriesCount = summary?.run?.entries ?? 0;
+  const range = summary?.run?.range ?? null;
   const gapsQuery = useReconciliationGaps(range);
-  const results: Result[] = useMemo(() => entries.length && paymentsQuery.data
-    ? reconcileBankStatement(entries, paymentsQuery.data) : [], [entries, paymentsQuery.data]);
+  // Строки грузим только для открытой группы и выбранного статуса.
+  const statusParam = group === 'Д' || group === 'Х' ? null : STATUS_PARAM[status];
+  const groupQuery = useReconciliationGroup(sessionToken, summary?.run?.finishedAt, group, statusParam,
+    !resultTiles || groupOpen);
+  const groupKey = QK.reconciliationGroup(sessionToken ?? '', summary?.run?.finishedAt ?? '', group, statusParam ?? '');
+  const results: Result[] = groupQuery.data?.rows ?? [];
   // «Нет в выписке»: платежи CRM за те же даты, которые не нашлись ни в одной строке выписки.
-  const missingPayments = useMemo<ReconciliationPayment[]>(() => {
-    if (!results.length || !paymentsQuery.data) return [];
-    const matched = new Set(results.flatMap(row => row.candidates.map(payment => payment.id)));
-    return (paymentsQuery.data as ReconciliationPayment[]).filter(payment => !matched.has(payment.id));
-  }, [results, paymentsQuery.data]);
+  const missingPayments: ReconciliationPayment[] = groupQuery.data?.payments ?? [];
   // Школу платежа берём из общей таблицы платежей кассира (она уже в кэше).
   const paymentsTable = usePaymentsTable({ enabled: group === 'missing' });
   const schoolByPayment = useMemo(() => new Map((paymentsTable.data ?? []).map(row => [row.id, row.branchShort])),
     [paymentsTable.data]);
-  const busy = loading || reading || (entries.length > 0 && paymentsQuery.isPending);
+  const busy = loading || reading || (groupQuery.isPending && groupQuery.fetchStatus === 'fetching');
   const fileInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -184,7 +172,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
       try {
         for (const statement of legacy) await saveBankStatement(statement, sessionToken);
         clearLegacyStatements(legacyKey);
-        void queryClient.invalidateQueries({ queryKey: QK.bankStatements(sessionToken ?? '') });
+        void queryClient.invalidateQueries({ queryKey: QK.reconciliationSummary(sessionToken ?? '') });
       } catch (err) {
         setError(err instanceof Error ? err.message : 'Не удалось перенести старые выписки.');
       }
@@ -206,19 +194,19 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     const failed: string[] = [];
     for (const file of files) {
       try {
-        const next = await saveBankStatement({ name: file.name, uploadedMonth, ...await readBankStatement(file) }, sessionToken);
-        queryClient.setQueryData<Statement[]>(statementsKey, (current?: Statement[]) => [next, ...(current ?? []).filter(item => item.id !== next.id)]);
+        await saveBankStatement({ name: file.name, uploadedMonth, ...await readBankStatement(file) }, sessionToken);
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Не удалось прочитать выписку.';
         failed.push(files.length > 1 ? `${file.name}: ${message}` : message);
       }
     }
+    await queryClient.invalidateQueries({ queryKey: QK.reconciliationSummary(sessionToken ?? '') });
     resetView();
     setError(failed.join('\n'));
     setReading(false);
   }
 
-  async function deleteStatement(item: Statement) {
+  async function deleteStatement(item: BankStatementFile) {
     if (!item.id || !window.confirm(`Удалить выписку ${item.name} для всех сотрудников?`)) return;
     setError('');
     try {
@@ -227,7 +215,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
       setError(err instanceof Error ? err.message : 'Не удалось удалить выписку.');
       return;
     }
-    queryClient.setQueryData<Statement[]>(statementsKey, (current?: Statement[]) => (current ?? []).filter(saved => saved.id !== item.id));
+    void queryClient.invalidateQueries({ queryKey: QK.reconciliationSummary(sessionToken ?? '') });
     resetView();
   }
 
@@ -259,37 +247,37 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
       return 'Платёж уже изменился в CRM. Закройте окно — сверка обновится.';
     }
     await applyPaymentDecision(fresh, decision, values, { name: userName, sessionToken });
-    // Сразу меняем строку в сверке; остальные разделы CRM обновятся сами.
-    if (range) queryClient.setQueryData<ReconciliationPayment[]>(QK.reconciliationPayments(range.from, range.to), (list: ReconciliationPayment[] | undefined) =>
-      decision === 'confirm'
-        ? list?.map(item => item.id === payment.id ? { ...item, status: 'Подтверждено', actualPaymentDate: values.date, cashierComment: values.comment } : item)
-        : list?.filter(item => item.id !== payment.id));
+    // Сразу меняем строку на экране, а сервер пересчитывает сверку в фоне.
+    const changed = (item: ReconciliationPayment): ReconciliationPayment | null => item.id !== payment.id ? item
+      : decision === 'confirm' ? { ...item, status: 'Подтверждено', actualPaymentDate: values.date, cashierComment: values.comment } : null;
+    const keep = (list: ReconciliationPayment[]) => list.map(changed).filter((value): value is ReconciliationPayment => value !== null);
+    type GroupData = { rows: Result[]; payments: ReconciliationPayment[] };
+    queryClient.setQueryData<GroupData>(groupKey, (current?: GroupData) => current && {
+      rows: current.rows.map((item: Result) => ({ ...item, candidates: keep(item.candidates) })),
+      payments: keep(current.payments),
+    });
+    void runReconciliation(sessionToken)
+      .then(() => queryClient.invalidateQueries({ queryKey: QK.reconciliationSummary(sessionToken ?? '') }))
+      .catch(() => undefined);
   }
 
   const statementOnly = group === 'Х';
   const crmOnly = group === 'missing';
-  const statusCounts = { '1': [0, 0], '2': [0, 0], missing: [0, 0] };
-  if (showResultGrid) {
-    for (const row of results) {
-      if (row.group === 'Х' || row.group === 'Д') continue;
-      for (const payment of row.candidates) {
-        if (payment.status === 'На проверке') statusCounts[row.group][0]++;
-        if (payment.status === 'Подтверждено') statusCounts[row.group][1]++;
-      }
-    }
-    for (const payment of missingPayments) {
-      if (payment.status === 'На проверке') statusCounts.missing[0]++;
-      if (payment.status === 'Подтверждено') statusCounts.missing[1]++;
-    }
-  }
+  // Счётчики групп считает сервер — без загрузки строк.
+  const serverCounts = summary?.counts;
+  const statusCount = (key: '1' | '2' | 'missing') => [serverCounts?.[key].pending ?? 0, serverCounts?.[key].confirmed ?? 0];
+  const statusCounts = { '1': statusCount('1'), '2': statusCount('2'), missing: statusCount('missing') };
   const tableHeaders = statementOnly ? unmatchedHeaders : crmOnly ? missingHeaders : headers;
   const widths = statementOnly ? unmatchedWidths : crmOnly ? missingWidths : columnWidths;
   // Строки с платежом показываем по статусу платежа; поступления без платежа (Х) статуса не имеют.
   // Дубли показываем все сразу, независимо от статуса: так видно, какой из них уже подтверждён.
   const rowsFor = (row: Result) => row.group === 'Х' ? [undefined]
     : row.group === 'Д' ? row.candidates : row.candidates.filter(payment => payment.status === status);
-  const counts: Record<Group, number> = { 1: 0, 2: 0, Д: 0, Х: 0, missing: 0 };
-  for (const row of results) counts[row.group] += rowsFor(row).length;
+  const statusIndex = status === 'На проверке' ? 0 : 1;
+  const counts: Record<Group, number> = {
+    1: statusCounts['1'][statusIndex], 2: statusCounts['2'][statusIndex], missing: statusCounts.missing[statusIndex],
+    Д: serverCounts?.['Д'].rows ?? 0, Х: serverCounts?.['Х'].rows ?? 0,
+  };
   const missingRows = missingPayments.filter(payment => payment.status === status).map(payment => {
     const parent = payment.parentName || payment.familyId;
     const crmDate = payment.actualPaymentDate ?? payment.paymentDate;
@@ -298,7 +286,6 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     const shortCode = crmCodes[crmCodes.length - 1]?.slice(-8);
     return { payment, parent, crmDate, school, shortCode, sortValues: [school, parent, payment.amount, shortCode, crmDate, payment.status] };
   });
-  counts.missing = missingRows.length;
   if (sort && crmOnly) missingRows.sort((a, b) => {
     const left = a.sortValues[sort.index];
     const right = b.sortValues[sort.index];
@@ -334,7 +321,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     const order = typeof left === 'number' && typeof right === 'number' ? left - right : collator.compare(String(left), String(right));
     return sort.descending ? -order : order;
   });
-  const ranges = history.map(statementRange);
+  const ranges = history.map(item => item.range);
   const allRange = ranges.length ? { from: ranges.map(item => item.from).sort()[0], to: ranges.map(item => item.to).sort().reverse()[0] } : null;
   const rowTotal = crmOnly ? missingRows.length : visibleRows.length;
   const pageCount = Math.max(1, Math.ceil(rowTotal / PAGE_SIZE));
@@ -358,8 +345,9 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
             aria-pressed={group === key} onClick={() => { setGroup(key); resetView(); }}>{title}</button>)}
         </div> : <strong>Сверка платежей</strong>}
         {history.length > 0 && <div style={{ color: 'var(--text-2)', fontSize: 12 }}>
-          {entries.length} поступлений
-          {paymentsQuery.isFetching && !busy && ' · обновляем статусы…'}
+          {entriesCount} поступлений
+          {summary?.run && ` · сверено ${updatedAt(summary.run.finishedAt)}`}
+          {(groupQuery.isFetching || summaryQuery.isFetching) && !busy && ' · обновляем…'}
         </div>}
       </div>
       {!resultTiles && <div className="ow-seg reconcile-groups" role="group" aria-label="Результат сверки">
@@ -379,7 +367,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     {history.length > 0 && allRange && <div className="reconcile-history">
       <button type="button" disabled={busy} onClick={() => filesDialog.current?.showModal()}>
         <strong>Выписки: {paymentDate(allRange.from)} — {paymentDate(allRange.to)}</strong>
-        <span>{history.length} {history.length === 1 ? 'файл' : history.length < 5 ? 'файла' : 'файлов'} · {allEntries.length} поступлений без повторов</span>
+        <span>{history.length} {history.length === 1 ? 'файл' : history.length < 5 ? 'файла' : 'файлов'} · {entriesCount} поступлений без повторов</span>
       </button>
       {gapsQuery.data && (gapsQuery.data.cash > 0 || gapsQuery.data.outsideStatements > 0) && <span className="reconcile-gaps"
         title="Эти чеки на проверке есть у кассира, но сверить их с выпиской нельзя">
@@ -393,10 +381,10 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
       <h3>Загруженные выписки</h3>
       <p className="reconcile-files-hint">Строки, которые есть в нескольких выписках, учитываются один раз.</p>
       <ul className="reconcile-files">
-        {history.map((item, index) => {
-          const { from, to } = statementRange(item);
-          return <li key={index}>
-            <div><strong>{item.name}</strong><span>{paymentDate(from)} — {paymentDate(to)} · {item.entries.length} поступлений</span></div>
+        {history.map(item => {
+          const { from, to } = item.range;
+          return <li key={item.id}>
+            <div><strong>{item.name}</strong><span>{paymentDate(from)} — {paymentDate(to)} · {item.newEntries} новых поступлений</span></div>
             <button type="button" className="ow-btn ow-btn--ghost" aria-label={`Удалить выписку ${item.name}`}
               disabled={busy} onClick={() => void deleteStatement(item)}><X size={14} aria-hidden="true" /> Удалить</button>
           </li>;
@@ -429,14 +417,14 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     </dialog>
     {busy && <p role="status">Сверяем поступления…</p>}
     {error && <p role="alert" style={{ whiteSpace: 'pre-line' }}>{error}</p>}
-    {paymentsQuery.isError && <p role="alert">
-      Не удалось загрузить платежи CRM для сверки{results.length ? ', показан прошлый результат' : ''}.{' '}
-      <button type="button" className="reconcile-link" onClick={() => void paymentsQuery.refetch()}>Повторить</button>
+    {groupQuery.isError && <p role="alert">
+      Не удалось загрузить строки сверки{results.length ? ', показан прошлый результат' : ''}.{' '}
+      <button type="button" className="reconcile-link" onClick={() => void groupQuery.refetch()}>Повторить</button>
     </p>}
     {loading && <p>Загружаем выписки…</p>}
-    {statementsQuery.isError && <p role="alert">
-      Не удалось загрузить выписки.{' '}
-      <button type="button" className="reconcile-link" onClick={() => void statementsQuery.refetch()}>Повторить</button>
+    {summaryQuery.isError && <p role="alert">
+      Не удалось загрузить сверку.{' '}
+      <button type="button" className="reconcile-link" onClick={() => void summaryQuery.refetch()}>Повторить</button>
     </p>}
     {!history.length && !busy && <p>Загрузите выписки АйКай Мбанк в формате .xlsx — можно несколько файлов сразу.</p>}
     {showResultGrid && <div className="manager-metric-panel manager-school-grid cashier2-reconciliation-tiles" role="group" aria-label="Результаты сверки">
@@ -450,7 +438,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
         </button>
       ))}
     </div>}
-    {!showResultGrid && (results.length > 0 || (resultTiles && history.length > 0)) && <div className="dt-root">
+    {!showResultGrid && history.length > 0 && summary?.run && <div className="dt-root">
       <div className="dt-toolbar" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 8, padding: '6px 10px' }}>
         <div className="reconcile-open-statement">
           <strong>{groups.find(item => item.key === group)?.label}</strong>

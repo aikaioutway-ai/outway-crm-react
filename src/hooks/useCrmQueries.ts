@@ -1,6 +1,6 @@
 import { EmployeeAdvance, fetchAllEmployeeAdvances } from '../services/employeeService';
-import { fetchReconciliationGaps, fetchReconciliationPayments } from '../services/financeService';
-import { fetchBankStatements, type BankStatement } from '../services/bankStatementService';
+import { fetchReconciliationGaps } from '../services/financeService';
+import { fetchReconciliationGroup, fetchReconciliationSummary, type ReconciliationGroup } from '../services/bankStatementService';
 import { useQueries, useQuery, UseQueryResult, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchV2FamiliesTable,
@@ -136,28 +136,30 @@ export function usePaymentsTable(options?: { enabled?: boolean }): UseQueryResul
   });
 }
 
-// Сверка показывает прошлый результат сразу, а статусы платежей и новые чеки подтягивает в фоне:
-// при каждом открытии и раз в 10 минут, пока экран открыт.
-export function useReconciliationPayments(range: { from: string; to: string } | null) {
+// Сверку считает сервер в фоне (после загрузки выписки, решения кассира и раз в 5 минут).
+// Экран берёт готовые счётчики и проверяет, не появился ли новый пересчёт.
+export function useReconciliationSummary(sessionToken: string | undefined, enabled = true) {
   return useQuery({
-    queryKey: QK.reconciliationPayments(range?.from ?? '', range?.to ?? ''),
-    queryFn: () => fetchReconciliationPayments(range!.from, range!.to),
-    enabled: Boolean(range),
-    staleTime: 0,
-    refetchInterval: 10 * 60 * 1000,
+    queryKey: QK.reconciliationSummary(sessionToken ?? ''),
+    queryFn: () => fetchReconciliationSummary(sessionToken),
+    enabled: enabled && Boolean(sessionToken),
+    staleTime: 60 * 1000,
+    refetchInterval: 5 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
   });
 }
 
-// Выписки меняются только при загрузке/удалении файла, поэтому не скачиваем их заново
-// при каждом открытии сверки. Загрузка другого сотрудника станет видна в течение 15 минут.
-export function useBankStatements(sessionToken: string | undefined, enabled = true): UseQueryResult<BankStatement[]> {
+// Строки одной группы. Время пересчёта входит в ключ: новый пересчёт — новые строки,
+// пока сверка не пересчитана, повторно ничего не скачиваем.
+export function useReconciliationGroup(sessionToken: string | undefined, runAt: string | undefined,
+  group: ReconciliationGroup, status: 'pending' | 'confirmed' | null, enabled = true) {
   return useQuery({
-    queryKey: QK.bankStatements(sessionToken ?? ''),
-    queryFn: () => fetchBankStatements(sessionToken),
-    enabled: enabled && Boolean(sessionToken),
-    staleTime: 15 * 60 * 1000,
-    gcTime: 60 * 60 * 1000,
+    queryKey: QK.reconciliationGroup(sessionToken ?? '', runAt ?? '', group, status ?? ''),
+    queryFn: () => fetchReconciliationGroup(sessionToken, group, status),
+    enabled: enabled && Boolean(sessionToken && runAt),
+    staleTime: Infinity,
+    gcTime: 30 * 60 * 1000,
+    placeholderData: keepPreviousData,
   });
 }
 
