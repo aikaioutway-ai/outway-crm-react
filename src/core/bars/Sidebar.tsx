@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { BarChart3, ListTodo, MessageCircle, Users, LayoutGrid, School, Wallet, Route, UserCog, Car, ChevronLeft, ChevronRight, LogOut, SlidersHorizontal, Columns3 } from 'lucide-react';
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
@@ -35,6 +35,21 @@ const NAV: { key: NavSection; label: string; icon: React.ReactNode; expandedOnly
   { key: 'logistics2', label: 'Логистика 2.0', icon: <Route size={18} /> },
   { key: 'cashier2', label: 'Кассир 2.0', icon: <Wallet size={18} /> },
 ];
+
+// Переключатель «2.0»: эти пункты меню открывают свои версии 2.0 вместо обычных разделов.
+const V2_COUNTERPART: Partial<Record<NavSection, NavSection>> = { families: 'manager2', logistics: 'logistics2', cashier: 'cashier2' };
+const V2_SECTIONS = new Set(Object.values(V2_COUNTERPART));
+// Сотрудник, не являющийся владельцем, раскрывает меню только после стольких кликов подряд.
+const EXPAND_CLICKS_FOR_STAFF = 5;
+const EXPAND_CLICK_STREAK_MS = 1500;
+
+const v2StorageKey = (userId?: string) => `ow-sidebar-v2:${userId ?? 'anon'}`;
+function readV2Enabled(userId?: string): boolean {
+  try { return localStorage.getItem(v2StorageKey(userId)) === '1'; } catch { return false; }
+}
+function writeV2Enabled(userId: string | undefined, value: boolean) {
+  try { localStorage.setItem(v2StorageKey(userId), value ? '1' : '0'); } catch { /* удобство, без хранилища просто не запоминается */ }
+}
 
 export function getAllowedSections(role: UserRole, userId?: string): NavSection[] {
   let sections: NavSection[];
@@ -85,7 +100,39 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
       setCollapsedBySection(prev => ({ ...prev, [active]: true }));
     }
   }, [active, collapseSignal]);
-  const navItems = NAV.filter(item => canAccessSection(userRole, item.key, userId) && !(collapsed && item.expandedOnly));
+  const isOwner = userId === OWNER_EMPLOYEE_ID;
+  const expandClicks = useRef<{ count: number; at: number }>({ count: 0, at: 0 });
+  const handleToggleClick = () => {
+    if (!collapsed || isOwner) { setCollapsed(!collapsed); return; }
+    const now = Date.now();
+    const count = now - expandClicks.current.at <= EXPAND_CLICK_STREAK_MS ? expandClicks.current.count + 1 : 1;
+    expandClicks.current = { count: count >= EXPAND_CLICKS_FOR_STAFF ? 0 : count, at: now };
+    if (count >= EXPAND_CLICKS_FOR_STAFF) setCollapsed(false);
+  };
+
+  const allowed = getAllowedSections(userRole, userId);
+  const v2Available = Object.values(V2_COUNTERPART).some(section => allowed.includes(section));
+  const [v2Stored, setV2Stored] = useState(() => readV2Enabled(userId));
+  useEffect(() => { setV2Stored(readV2Enabled(userId)); }, [userId]);
+  const v2Enabled = v2Available && v2Stored;
+  const targetFor = (key: NavSection): NavSection => {
+    const counterpart = V2_COUNTERPART[key];
+    return v2Enabled && counterpart && allowed.includes(counterpart) ? counterpart : key;
+  };
+  const toggleV2 = () => {
+    const next = !v2Stored;
+    setV2Stored(next);
+    writeV2Enabled(userId, next);
+    // Открытый сейчас раздел сразу переключается на свою версию.
+    const pair = (Object.entries(V2_COUNTERPART) as [NavSection, NavSection][]).find(([base, v2]) => active === (next ? base : v2));
+    if (pair) {
+      const target = next ? pair[1] : pair[0];
+      if (allowed.includes(target)) onChange(target);
+    }
+  };
+
+  // Отдельные пункты «… 2.0» заменены переключателем.
+  const navItems = NAV.filter(item => allowed.includes(item.key) && !V2_SECTIONS.has(item.key) && !(collapsed && item.expandedOnly));
   const tools = [
     { label: 'Фильтры', icon: <SlidersHorizontal size={17} />, onClick: onFiltersClick, active: filtersActive },
     { label: 'Колонки', icon: <Columns3 size={17} />, onClick: onColumnsClick, active: columnsActive },
@@ -98,7 +145,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
         <button
           type="button"
           className="ow-sidebar-toggle"
-          onClick={() => setCollapsed(!collapsed)}
+          onClick={handleToggleClick}
           title={collapsed ? 'Развернуть' : 'Свернуть'}
           aria-label={collapsed ? 'Развернуть меню' : 'Свернуть меню'}
         >
@@ -107,16 +154,27 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
       </div>
 
       <nav className="ow-sidebar-nav" aria-label="Разделы">
-        {!collapsed && <div className="ow-sidebar-caption">Разделы</div>}
+        {!collapsed && (
+          <div className="ow-sidebar-caption-row">
+            <div className="ow-sidebar-caption">Разделы</div>
+            {v2Available && (
+              <button type="button" role="switch" aria-checked={v2Enabled} className={`ow-v2-switch${v2Enabled ? ' is-on' : ''}`} onClick={toggleV2} title="Менеджер, Логистика и Кассир в версии 2.0">
+                <span className="ow-v2-switch-label">2.0</span>
+                <span className="ow-v2-switch-track"><span className="ow-v2-switch-thumb" /></span>
+              </button>
+            )}
+          </div>
+        )}
         {navItems.map(n => {
-          const isActive = active === n.key;
+          const target = targetFor(n.key);
+          const isActive = active === n.key || active === V2_COUNTERPART[n.key];
           const badge = badges[n.key] ?? 0;
           return (
             <button
               key={n.key}
               type="button"
               className={`ow-nav-item${isActive ? ' is-active' : ''}`}
-              onClick={() => onChange(n.key)}
+              onClick={() => onChange(target)}
               title={n.label}
               aria-label={n.label}
               aria-current={isActive ? 'page' : undefined}

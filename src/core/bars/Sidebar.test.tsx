@@ -44,7 +44,7 @@ test('Schools 2.0 is shown only in the expanded Sidebar', () => {
   render(<Sidebar active="families" userRole="manager" userId="manager" onChange={onChange} />);
   expect(screen.queryByTitle('Школы 2.0')).toBeNull();
 
-  fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  for (let i = 0; i < 5; i += 1) fireEvent.click(screen.getByLabelText('Развернуть меню'));
   fireEvent.click(screen.getByTitle('Школы 2.0'));
 
   expect(onChange).toHaveBeenCalledWith('schools2');
@@ -58,4 +58,42 @@ test('spending is available to the same roles as finance', () => {
   expect(getAllowedSections('cashier', 'cashier')).toContain('spending');
   expect(getAllowedSections('director', 'director')).not.toContain('spending');
   expect(getAllowedSections('manager', 'manager')).not.toContain('spending');
+});
+
+test('only the owner expands the Sidebar with one click; staff need five clicks in a row', () => {
+  const { unmount } = render(<Sidebar active="families" userRole="admin" userId="emp-admin" onChange={jest.fn()} />);
+  fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  expect(screen.getByLabelText('Свернуть меню')).toBeTruthy();
+  unmount();
+
+  render(<Sidebar active="families" userRole="director" userId="director" onChange={jest.fn()} />);
+  for (let i = 0; i < 4; i += 1) fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  expect(screen.queryByLabelText('Свернуть меню')).toBeNull();
+  fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  expect(screen.getByLabelText('Свернуть меню')).toBeTruthy();
+});
+
+test('the 2.0 switch sends Manager, Logistics and Cashier to their 2.0 sections for the owner', () => {
+  localStorage.clear();
+  const onChange = jest.fn();
+  render(<Sidebar active="summary" userRole="admin" userId="emp-admin" onChange={onChange} />);
+  fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  expect(screen.queryByTitle('Кассир 2.0')).toBeNull();
+
+  fireEvent.click(screen.getByRole('switch'));
+  fireEvent.click(screen.getByTitle('Менеджер'));
+  fireEvent.click(screen.getByTitle('Логистика'));
+  fireEvent.click(screen.getByTitle('Кассир'));
+  expect(onChange.mock.calls.map(call => call[0])).toEqual(['manager2', 'logistics2', 'cashier2']);
+  expect(localStorage.getItem('ow-sidebar-v2:emp-admin')).toBe('1');
+});
+
+test('staff without 2.0 access get no switch and keep the regular sections', () => {
+  localStorage.setItem('ow-sidebar-v2:director', '1');
+  const onChange = jest.fn();
+  render(<Sidebar active="summary" userRole="director" userId="director" onChange={onChange} />);
+  for (let i = 0; i < 5; i += 1) fireEvent.click(screen.getByLabelText('Развернуть меню'));
+  expect(screen.queryByRole('switch')).toBeNull();
+  fireEvent.click(screen.getByTitle('Кассир'));
+  expect(onChange).toHaveBeenCalledWith('cashier');
 });

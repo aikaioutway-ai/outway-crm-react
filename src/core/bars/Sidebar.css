@@ -55,6 +55,45 @@
   text-transform: uppercase;
 }
 
+.ow-sidebar-caption-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ow-sidebar-caption-row .ow-sidebar-caption { flex: 1; }
+.ow-v2-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 6px 6px 0;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ow-v2-switch:hover { color: var(--text); }
+.ow-v2-switch.is-on { color: var(--accent); }
+.ow-v2-switch-track {
+  position: relative;
+  width: 26px;
+  height: 14px;
+  border-radius: 7px;
+  background: var(--border);
+  transition: background .12s ease;
+}
+.ow-v2-switch.is-on .ow-v2-switch-track { background: var(--accent); }
+.ow-v2-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--surface);
+  transition: transform .12s ease;
+}
+.ow-v2-switch.is-on .ow-v2-switch-thumb { transform: translateX(12px); }
+
 .ow-sidebar-section {
   flex-shrink: 0;
   padding: 8px 10px;
