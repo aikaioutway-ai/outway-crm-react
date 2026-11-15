@@ -84,22 +84,33 @@ export function canAccessSpending(role: UserRole | undefined, userId?: string): 
   return userId === OWNER_EMPLOYEE_ID || role === 'admin' || role === 'gen_director' || role === 'cashier';
 }
 
+function sectionForVersion(section: NavSection, allowed: NavSection[], v2Enabled: boolean): NavSection {
+  const counterpart = V2_COUNTERPART[section];
+  return v2Enabled && counterpart && allowed.includes(counterpart) ? counterpart : section;
+}
+
+export function getInitialSection(role: UserRole, userId?: string): NavSection {
+  const allowed = getAllowedSections(role, userId);
+  return sectionForVersion(allowed[0], allowed, readV2Enabled(userId));
+}
+
 export function canAccessSection(role: UserRole, section: NavSection, userId?: string): boolean {
   return getAllowedSections(role, userId).includes(section);
 }
 
 export default function Sidebar({ active, onChange, badges = {}, userRole, userId, onLogout, collapseSignal = 0, onFiltersClick, onColumnsClick, filtersActive, columnsActive }: SidebarProps) {
   const [collapsedBySection, setCollapsedBySection] = useState<Partial<Record<NavSection, boolean>>>({});
-  const collapsed = collapsedBySection[active] ?? true;
+  const sidebarSection = NAV.find(item => V2_COUNTERPART[item.key] === active)?.key ?? active;
+  const collapsed = collapsedBySection[sidebarSection] ?? true;
   const setCollapsed = (next: boolean) => {
-    setCollapsedBySection(prev => ({ ...prev, [active]: next }));
+    setCollapsedBySection(prev => ({ ...prev, [sidebarSection]: next }));
   };
 
   useEffect(() => {
     if (collapseSignal > 0) {
-      setCollapsedBySection(prev => ({ ...prev, [active]: true }));
+      setCollapsedBySection(prev => ({ ...prev, [sidebarSection]: true }));
     }
-  }, [active, collapseSignal]);
+  }, [sidebarSection, collapseSignal]);
   const isOwner = userId === OWNER_EMPLOYEE_ID;
   const expandClicks = useRef<{ count: number; at: number }>({ count: 0, at: 0 });
   const handleToggleClick = () => {
@@ -115,10 +126,6 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
   const [v2Stored, setV2Stored] = useState(() => readV2Enabled(userId));
   useEffect(() => { setV2Stored(readV2Enabled(userId)); }, [userId]);
   const v2Enabled = v2Available && v2Stored;
-  const targetFor = (key: NavSection): NavSection => {
-    const counterpart = V2_COUNTERPART[key];
-    return v2Enabled && counterpart && allowed.includes(counterpart) ? counterpart : key;
-  };
   const toggleV2 = () => {
     const next = !v2Stored;
     setV2Stored(next);
@@ -166,9 +173,9 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
           </div>
         )}
         {navItems.map(n => {
-          const target = targetFor(n.key);
+          const target = sectionForVersion(n.key, allowed, v2Enabled);
           const isActive = active === n.key || active === V2_COUNTERPART[n.key];
-          const badge = badges[n.key] ?? 0;
+          const badge = n.key === 'tasks' || n.key === 'messages' ? badges[n.key] ?? 0 : 0;
           return (
             <button
               key={n.key}
@@ -182,7 +189,7 @@ export default function Sidebar({ active, onChange, badges = {}, userRole, userI
               <span className="ow-nav-icon">{n.icon}</span>
               {!collapsed && <span className="ow-nav-label">{n.label}</span>}
               {badge > 0 && (
-                <span className={`ow-nav-badge${n.key === 'tasks' || n.key === 'families' || n.key === 'logistics' || n.key === 'messages' ? ' is-alert' : ''}`} title={n.key === 'families' || n.key === 'logistics' ? 'Просроченные новые заявки' : n.key === 'messages' ? 'Непрочитанные сообщения' : undefined}>{badge > 99 ? '99+' : badge}</span>
+                <span className="ow-nav-badge is-alert" title={n.key === 'messages' ? 'Непрочитанные сообщения' : undefined}>{badge > 99 ? '99+' : badge}</span>
               )}
             </button>
           );

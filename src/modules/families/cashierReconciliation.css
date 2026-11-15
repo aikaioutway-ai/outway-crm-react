@@ -1,18 +1,17 @@
-.reconcile-history { display: flex; flex-wrap: wrap; gap: 8px; }
-.reconcile-history button {
-  display: grid;
-  gap: 4px;
-  padding: 9px 12px;
-  text-align: left;
-  background: #fff;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  color: var(--text);
-  cursor: pointer;
+.reconcile-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+  padding-block: 10px;
 }
-.reconcile-history button[aria-pressed="true"] { border-color: var(--accent); }
-.reconcile-history span { color: var(--text-2); }
-.reconcile-history .reconcile-gaps { align-self: center; font-size: 12px; }
+.reconcile-period { flex: 1 0 auto; }
+.reconcile-toolbar .reconcile-toolbar-button {
+  align-self: stretch;
+  justify-content: center;
+  height: auto;
+  min-height: 36px;
+}
+.reconcile-toolbar .reconcile-files-button { aspect-ratio: 1; padding: 0; }
+.reconcile-files-dialog > button { margin-bottom: 10px; }
 .reconcile-table .dt-tr:nth-child(odd) { background: #fff; }
 .reconcile-table .dt-tr:nth-child(even) { background: #f4f7f8; }
 .reconcile-table .dt-tr:hover { background: var(--dt-hover); }
@@ -61,6 +60,10 @@
 .reconcile-groups .ow-seg-btn[aria-pressed="true"] {
   background: var(--accent);
   color: #fff;
+}
+
+.reconcile-toolbar .reconcile-groups {
+  height: auto;
 }
 
 .reconcile-groups .reconcile-group-btn {

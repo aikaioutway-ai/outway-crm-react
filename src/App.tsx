@@ -6,9 +6,9 @@ import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
 import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft } from 'lucide-react';
-import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, NavSection, OWNER_EMPLOYEE_ID } from './core/bars/Sidebar';
+import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, getInitialSection, NavSection, OWNER_EMPLOYEE_ID } from './core/bars/Sidebar';
 import { setCrmActor } from './services/crmActor';
 import ManagerOverview, { ManagerSearch } from './modules/families/ManagerOverview';
 import CashierOverview, { CashierOverviewSearch, CashierPaymentSummaryTabs } from './modules/families/CashierOverview';
@@ -37,10 +37,9 @@ import {
 } from './services/employeeSession';
 import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayrollPeriodKey, isSchoolAllowed, isSchoolVisible, schoolTabsForTier } from './modules/families/constants';
 import { Family, UserRole } from './types';
-import { FamilySearchHit, fetchOverdueRequestCount, fetchV2Family } from './services/crmV2Service';
+import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
 import useIncomingMessageSound from './modules/messages/useIncomingMessageSound';
 import { onMessageComposer, requestOverdueNotification, useMessageChannels } from './services/messageService';
-import { useQuery } from '@tanstack/react-query';
 import { queryClient, QK } from './services/queryClient';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { OPEN_TARGET_EVENT, TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
@@ -147,7 +146,7 @@ export default function App() {
     return () => { active=false;window.removeEventListener(TASK_COMPOSER_EVENT, compose);window.removeEventListener(TASK_VIEW_EVENT, view); };
   }, [currentUser,isMobileViewport,forceDesktop]);
   useDesktopViewport((isMobileViewport && forceDesktop && !!currentUser) || isTabletDevice());
-  const [section, setSection] = useState<NavSection>(() => getAllowedSections(currentUserRole, currentUser?.id)[0]);
+  const [section, setSection] = useState<NavSection>(() => getInitialSection(currentUserRole, currentUser?.id));
   const [sidebarCollapseSignal, setSidebarCollapseSignal] = useState(0);
   const [cashierSchoolKey, setCashierSchoolKey] = useState<string | null>(null);
   const [cashierPeriodKey, setCashierPeriodKey] = useState(currentCashierPeriodKey);
@@ -156,6 +155,7 @@ export default function App() {
   const [cashierView, setCashierView] = useState<'pending' | 'confirmed' | 'refunds'>('pending');
   const [spendingSearch, setSpendingSearch] = useState('');
   const [cashierWorkspace, setCashierWorkspace] = useState<'payments' | 'spending' | 'reconciliation'>('payments');
+  const cashierSplitView = section === 'cashier2' && cashierWorkspace !== 'reconciliation';
   useEffect(() => { if (section === 'spending') { setSection('cashier'); setCashierWorkspace('spending'); } }, [section]);
   const [logisticsSchoolKey, setLogisticsSchoolKey] = useState<string | null>(null);
   const [logistics2SchoolKey, setLogistics2SchoolKey] = useState<string | null>(null);
@@ -227,16 +227,6 @@ export default function App() {
   useEffect(() => onMessageComposer(target => setMessageTarget({ target })), []);
   // Канбан заявок меняют только логисты и админ, остальные смотрят.
   const notifiesOverdueRequests = currentUserRole === 'senior_logist' || currentUserRole === 'director' || currentUserRole === 'gen_director' || currentUserRole === 'admin';
-  // Те же школы, что в сводке «Новые заявки»: уровень 1.0 и доступные сотруднику.
-  const overdueSchoolKeys = useMemo(() => new Set(schoolTabsForTier('1.0').map(tab => tab.key).filter(key => key !== 'ALL' && isSchoolAllowed(key, currentUser?.schoolKeys))), [currentUser?.schoolKeys]);
-  const overdueRequestsQuery = useQuery({
-    queryKey: ['overdueRequestCount', Array.from(overdueSchoolKeys).sort().join(',')],
-    queryFn: () => fetchOverdueRequestCount(overdueSchoolKeys),
-    enabled: !!currentUser && notifiesOverdueRequests,
-    refetchInterval: 5 * 60 * 1000,
-    staleTime: 60 * 1000,
-  });
-  const overdueRequestCount = notifiesOverdueRequests ? overdueRequestsQuery.data ?? 0 : 0;
   // Непрочитанные сообщения — счётчик на пункте «Сообщения».
   const messageChannels = useMessageChannels(currentUser?.sessionToken);
   useIncomingMessageSound(messageChannels.data, currentUser?.id, currentUser?.name);
@@ -311,7 +301,7 @@ export default function App() {
     localStorage.setItem(SESSION_KEY, JSON.stringify(user));
     localStorage.setItem('outway_user_role', user.role);
     setCurrentUser(user);
-    setSection(getAllowedSections(user.role, user.id)[0]);
+    setSection(getInitialSection(user.role, user.id));
     return true;
   };
 
@@ -355,7 +345,7 @@ export default function App() {
 
   useEffect(() => {
     if (!canAccessSection(currentUserRole, section, currentUser?.id)) {
-      setSection(getAllowedSections(currentUserRole, currentUser?.id)[0]);
+      setSection(getInitialSection(currentUserRole, currentUser?.id));
     }
     setAdminFiltersOpen(false);
     setColumnsOpen(false);
@@ -412,7 +402,7 @@ export default function App() {
   // В сайдбаре виден только счётчик задач (значок Логистики скрыт),
   // поэтому полную таблицу семей на старте не грузим.
   // Уведомление о красных заявках — начальнику логистики, директору, гендиректору и админу.
-  const badges: Partial<Record<NavSection, number>> = { tasks: taskBadge, families: overdueRequestCount, logistics: overdueRequestCount, messages: unreadMessageCount };
+  const badges: Partial<Record<NavSection, number>> = { tasks: taskBadge, messages: unreadMessageCount };
 
   const tabBarStyle: React.CSSProperties = {
     display: 'flex',
@@ -621,7 +611,7 @@ export default function App() {
                 {extraTabs(true)}
               </div>
             </div>
-            {section === 'cashier2' && cashierWorkspace !== 'reconciliation' && (
+            {cashierSplitView && (
               <DashboardTopPanel className="cashier2-period-panel">
                 <div className="manager-period-tiles" role="group" aria-label="Период кассира">
                   {[{ key: 'ALL', label: 'Все', short: 'Все' }, ...CASHIER_PERIODS.map(period => ({
@@ -646,9 +636,9 @@ export default function App() {
                 </div>
               </DashboardTopPanel>
             )}
-            <div className={section === 'cashier2' ? 'manager-workspace manager-overview-body manager-overview-body--school' : undefined}
-              style={section === 'cashier' ? { display: 'contents' } : { flex: 1, minHeight: 0 }}>
-              {section === 'cashier2' && <div className="manager-overview-sidebar">
+            <div className={cashierSplitView ? 'manager-workspace manager-overview-body manager-overview-body--school' : undefined}
+              style={cashierSplitView ? { flex: 1, minHeight: 0 } : { display: 'contents' }}>
+              {cashierSplitView && <div className="manager-overview-sidebar">
                 {cashierWorkspace === 'payments' && cashierSchoolKey && <button type="button" className="ow-btn ow-btn--ghost"
                   onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }}>Все школы</button>}
                 <CashierPaymentSummaryTabs sessionToken={currentUser?.sessionToken} showPersonal={currentUser?.id === OWNER_EMPLOYEE_ID || currentUserRole === 'gen_director'} periodKey={cashierPeriodKey} schoolKey={cashierSchoolKey} allowedSchools={currentUser?.schoolKeys} value={cashierWorkspace === 'payments' ? cashierView : cashierWorkspace}
@@ -656,8 +646,8 @@ export default function App() {
                   onReconciliation={canReconcilePayments ? openReconciliation : undefined}
                   onSpending={canAccessSpending(currentUserRole, currentUser?.id) ? () => setCashierWorkspace('spending') : undefined} />
               </div>}
-              <div className={section === 'cashier2' ? 'manager-workspace-content' : undefined}
-                style={section === 'cashier' ? { display: 'contents' } : { display: 'flex', flexDirection: 'column' }}>
+              <div className={cashierSplitView ? 'manager-workspace-content' : undefined}
+                style={cashierSplitView ? { display: 'flex', flexDirection: 'column' } : { display: 'contents' }}>
             {cashierWorkspace === 'reconciliation' && canReconcilePayments ? (
               <>
                 {section === 'cashier' && <DashboardTopPanel className="dashboard-control-row">
@@ -666,7 +656,13 @@ export default function App() {
                     onReconciliation={openReconciliation} />
                   <div style={{ flex: 1, minWidth: 0 }} />
                 </DashboardTopPanel>}
-                <CashierReconciliation resultTiles={section === 'cashier2'} key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken}
+                <CashierReconciliation key={currentUser?.id} userId={currentUser?.id ?? ''} userName={currentUser?.name} userRole={currentUserRole} sessionToken={currentUser?.sessionToken}
+                  onBack={() => {
+                    setCashierSchoolKey(null);
+                    setCashierOpenFamilySearch('');
+                    setCashierTransferFilter('');
+                    setCashierWorkspace('payments');
+                  }}
                   onOpenFamily={async familyId => { const family = await fetchV2Family(familyId); if (!family) throw new Error('Клиент не найден'); setTaskChildId(''); setTaskFamilyTab('children'); setTaskFamily(family); }} />
               </>
             ) : cashierWorkspace === 'spending' && canAccessSpending(currentUserRole, currentUser?.id) ? (
@@ -940,9 +936,6 @@ export default function App() {
               </>
             ) : (
               <LogisticsOverview splitView
-                groupSummary={canAccessSection(currentUserRole, 'summary', currentUser?.id)
-                  ? <SummaryModule allowedSchools={currentUser?.schoolKeys} />
-                  : undefined}
                 onDrivers={() => setLogistics2View('drivers')}
                 driversSearch={<DashboardSearch width="100%" value={logistics2DriverSearch} onChange={setLogistics2DriverSearch} placeholder="Поиск школы…" />}
                 driversContent={logistics2View === 'drivers' ? (
@@ -983,9 +976,6 @@ export default function App() {
                   ? { roles: restrictedRoleFor(currentUserRole), sessionToken: currentUser?.sessionToken }
                   : undefined}
                 onBackToOverview={() => { setManagerSchoolKey(null); setManagerOpenFamilySearch(''); }}
-                groupSummary={isManager2 && !managerSchoolKey && canAccessSection(currentUserRole, 'summary', currentUser?.id)
-                  ? <SummaryModule allowedSchools={currentUser?.schoolKeys} />
-                  : undefined}
                 detailTransferFilter={managerTransferFilter}
                 detailSchoolKey={isManager2 ? managerSchoolKey ?? undefined : undefined}
                 renderSchool={isManager2 && managerSchoolKey ? (period, day, directoryPeriod, onDebtTotals) => renderManagerSchool(managerSchoolKey, period, day, directoryPeriod, onDebtTotals) : undefined}

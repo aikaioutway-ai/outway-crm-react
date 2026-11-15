@@ -1083,68 +1083,7 @@ button.manager-school-brand {
   overflow-x: auto;
 }
 
-.manager-overview-group-summary {
-  grid-column: 1 / -1;
-  min-width: 0;
-  padding-block: 8px 12px;
-}
-
-.manager-overview-body.manager-overview-body--with-groups {
-  flex: 0 0 auto;
-  align-content: start;
-  grid-template-rows: auto auto;
-  overflow: visible;
-}
-
 .cashier2-period-panel { margin-bottom: 12px; }
-.manager-school-grid.cashier2-reconciliation-tiles {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.manager-school-grid.cashier2-reconciliation-tiles > button {
-  grid-template-columns: minmax(0, 1fr);
-  align-content: center;
-  gap: 14px;
-  min-height: clamp(160px, 15vw, 220px);
-  padding: clamp(12px, 2vw, 24px);
-  text-align: left;
-}
-.cashier2-reconciliation-tiles .manager-school-identity {
-  flex-direction: row;
-  align-items: center;
-  font-size: 18px;
-  font-weight: 700;
-}
-.cashier2-reconciliation-tiles .manager-school-identity svg {
-  flex-shrink: 0;
-}
-.cashier2-reconciliation-tiles .manager-mode-metric {
-  align-items: baseline;
-  font-size: 15px;
-}
-.cashier2-reconciliation-tiles > button strong {
-  color: var(--text);
-  font-size: 20px;
-  font-variant-numeric: tabular-nums;
-}
-@media (max-width: 760px) {
-  .manager-school-grid.cashier2-reconciliation-tiles {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-.reconcile-detail-toolbar {
-  flex-wrap: wrap;
-}
-.reconcile-detail-groups.ow-seg {
-  flex-wrap: wrap;
-  max-width: 100%;
-}
-.manager-workspace:has(> .manager-workspace-content > .reconcile-group-open) {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr);
-}
-.manager-workspace:has(> .manager-workspace-content > .reconcile-group-open) > .manager-overview-sidebar {
-  display: none;
-}
 .spending-split-layout.spending-categories-only { display: block; }
 .spending-workspace[hidden] { display: none; }
 
@@ -1157,6 +1096,11 @@ button.manager-school-brand {
 }
 .cashier2-search-row > .dashboard-search { min-width: 0; }
 
-.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards.cashier2-mode-cards {
-  grid-auto-rows: 1fr;
+.manager-overview-body .cashier2-mode-cards .manager-mode-card {
+  padding-block: 8px;
+  row-gap: 4px;
+}
+
+.cashier2-mode-cards .manager-mode-metric {
+  margin-top: 3px;
 }

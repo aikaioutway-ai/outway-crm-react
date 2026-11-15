@@ -45,7 +45,6 @@ interface LogisticsOverviewProps {
   onViewChange: (view: 'requests' | 'table' | 'map') => void;
   allowedSchools?: string[];
   splitView?: boolean;
-  groupSummary?: React.ReactNode;
   onSidebarWidthChange?: (width: number) => void;
 }
 
@@ -196,7 +195,7 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
   </>;
 }
 
-export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers, splitView = false, groupSummary, driversContent, driversSearch }: LogisticsOverviewProps) {
+export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers, splitView = false, driversContent, driversSearch }: LogisticsOverviewProps) {
   const { data: allRows = null } = useLogisticsTable();
   const rows = useMemo(
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
@@ -282,7 +281,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <div className="manager-overview-search">{view === 'drivers' ? driversSearch : <ManagerSearch rows={rows} onOpenFamily={onOpenFamily} />}</div>
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')} /></div>
         </DashboardTopPanel>
-        <div className={`manager-workspace manager-overview-body${groupSummary ? ' manager-overview-body--with-groups' : ''}`}>
+        <div className="manager-workspace manager-overview-body">
           <div className="manager-overview-sidebar"><LogisticsSummaryTabs allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
           <div className="manager-workspace-content">
         {view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
@@ -298,7 +297,6 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           onSelect={key => displayRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
         />}
           </div>
-          {groupSummary && <div className="manager-overview-group-summary">{groupSummary}</div>}
         </div>
       </div>
     </div>

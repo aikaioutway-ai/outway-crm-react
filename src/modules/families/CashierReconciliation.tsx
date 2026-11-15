@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CircleAlert, CircleCheckBig, Copy, FileText, Landmark, Pencil, Upload, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, CircleAlert, CircleCheckBig, Copy, FileText, Landmark, Pencil, Upload, X, type LucideIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { usePaymentsTable, useReconciliationGaps, useReconciliationGroup, useReconciliationSummary } from '../../hooks/useCrmQueries';
+import { usePaymentsTable, useReconciliationGroup, useReconciliationSummary } from '../../hooks/useCrmQueries';
 import { QK } from '../../services/queryClient';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import { currentReconciliationMonth } from './constants';
@@ -103,10 +103,6 @@ function paymentDate(date: string) {
 
 const STATUS_PARAM = { 'На проверке': 'pending', 'Подтверждено': 'confirmed' } as const;
 
-function updatedAt(value: string) {
-  return new Date(value).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-}
-
 // Платёж из одной строки выписки уже подтверждён — остальные платежи с этим же чеком подтверждать нельзя.
 function duplicateOfConfirmed(row: Result, payment: ReconciliationPayment) {
   return row.group === 'Д' && row.candidates.some(item => item.id !== payment.id && item.status === 'Подтверждено');
@@ -119,9 +115,9 @@ export function useCashierReconciliationSummary(sessionToken?: string, enabled =
   return { '1': data.counts['1'].pending, '2': data.counts['2'].pending, 'Д': data.counts['Д'].pending };
 }
 
-export default function CashierReconciliation({ userId, userName, userRole, sessionToken, onOpenFamily, resultTiles }: {
-  resultTiles?: boolean;
+export default function CashierReconciliation({ userId, userName, userRole, sessionToken, onBack, onOpenFamily }: {
   userId: string; userName?: string; userRole?: string; sessionToken?: string;
+  onBack: () => void;
   onOpenFamily?: (familyId: string) => Promise<void> | void;
 }) {
   // Старые выписки лежали только в браузере: при открытии переносим их в базу.
@@ -139,21 +135,16 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
   const sourceDialog = useRef<HTMLDialogElement>(null);
   const filesDialog = useRef<HTMLDialogElement>(null);
   const [group, setGroup] = useState<Group>('1');
-  const [groupOpen, setGroupOpen] = useState(false);
-  const showResultGrid = resultTiles && !groupOpen;
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ index: number; descending: boolean } | null>(null);
   const [error, setError] = useState('');
   const [reading, setReading] = useState(false);
   const queryClient = useQueryClient();
   // Все загруженные выписки сверяются как одна, за весь период сразу — это делает сервер.
-  const entriesCount = summary?.run?.entries ?? 0;
-  const range = summary?.run?.range ?? null;
-  const gapsQuery = useReconciliationGaps(range);
   // Строки грузим только для открытой группы и выбранного статуса.
   const statusParam = group === 'Д' || group === 'Х' ? null : STATUS_PARAM[status];
   const groupQuery = useReconciliationGroup(sessionToken, summary?.run?.finishedAt, group, statusParam,
-    !resultTiles || groupOpen);
+    true);
   const groupKey = QK.reconciliationGroup(sessionToken ?? '', summary?.run?.finishedAt ?? '', group, statusParam ?? '');
   const results: Result[] = groupQuery.data?.rows ?? [];
   // «Нет в выписке»: платежи CRM за те же даты, которые не нашлись ни в одной строке выписки.
@@ -334,27 +325,27 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     ['Оборот Кт', source ? String(source.amount) : ''],
   ]);
 
-  return <section className={`reconcile-page${resultTiles && groupOpen ? ' reconcile-group-open' : ''}`} aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
-    <DashboardTopPanel className={`dashboard-control-row${resultTiles && groupOpen ? ' reconcile-detail-toolbar' : ''}`}>
-      {resultTiles && groupOpen && <button className="ow-btn ow-btn--ghost" type="button" onClick={() => { setGroupOpen(false); resetView(); }}>
-        К группам
-      </button>}
-      <div style={{ flex: 1 }}>
-        {resultTiles && groupOpen ? <div className="ow-seg reconcile-detail-groups" role="group" aria-label="Группы сверки">
-          {groups.map(({ key, title }) => <button key={key} className="ow-seg-btn" type="button"
-            aria-pressed={group === key} onClick={() => { setGroup(key); resetView(); }}>{title}</button>)}
-        </div> : <strong>Сверка платежей</strong>}
-        {history.length > 0 && <div style={{ color: 'var(--text-2)', fontSize: 12 }}>
-          {entriesCount} поступлений
-          {summary?.run && ` · сверено ${updatedAt(summary.run.finishedAt)}`}
-          {(groupQuery.isFetching || summaryQuery.isFetching) && !busy && ' · обновляем…'}
-        </div>}
-      </div>
-      {!resultTiles && <div className="ow-seg reconcile-groups" role="group" aria-label="Результат сверки">
+  return <section className="reconcile-page" aria-label="Сверка платежей" style={{ display: 'grid', gap: 12, minHeight: 0, overflow: 'auto', alignContent: 'start' }}>
+    <DashboardTopPanel className="dashboard-control-row reconcile-toolbar">
+      <button className="ow-btn reconcile-toolbar-button" type="button" onClick={onBack}>
+        <ChevronLeft size={16} aria-hidden="true" /> Назад
+      </button>
+      <span className="reconcile-period">
+        {allRange ? `Выписки: с ${paymentDate(allRange.from)} по ${paymentDate(allRange.to)}` : loading ? 'Загружаем выписки…' : 'Выписки не загружены'}
+      </span>
+      <div className="ow-seg reconcile-groups" role="group" aria-label="Результат сверки">
         {groups.map(({ key, title, label, Icon }) => <button key={key} className="ow-seg-btn reconcile-group-btn" type="button" title={label}
           aria-label={`${title}: ${counts[key]}`} aria-pressed={group === key}
           onClick={() => { setGroup(key); resetView(); }}><Icon size={16} aria-hidden="true" /><span>{counts[key]}</span></button>)}
-      </div>}
+      </div>
+      <button className="ow-btn reconcile-toolbar-button reconcile-files-button" type="button" title="Управление выписками"
+        aria-label="Управление выписками" aria-haspopup="dialog" onClick={() => filesDialog.current?.showModal()}>
+        <FileText size={16} aria-hidden="true" />
+      </button>
+    </DashboardTopPanel>
+    <dialog ref={filesDialog} className="reconcile-source reconcile-files-dialog" aria-label="Загруженные выписки" onClick={closeOnBackdrop}>
+      <form method="dialog"><button className="ow-btn ow-btn--ghost" type="submit">Закрыть</button></form>
+      <h3>Загруженные выписки</h3>
       <button className="ow-btn ow-btn--ghost" type="button" disabled={busy} onClick={() => fileInput.current?.click()}>
         <Upload size={16} aria-hidden="true" /> Загрузить выписки
       </button>
@@ -363,22 +354,9 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
         event.currentTarget.value = '';
         if (files.length) void upload(files);
       }} />
-    </DashboardTopPanel>
-    {history.length > 0 && allRange && <div className="reconcile-history">
-      <button type="button" disabled={busy} onClick={() => filesDialog.current?.showModal()}>
-        <strong>Выписки: {paymentDate(allRange.from)} — {paymentDate(allRange.to)}</strong>
-        <span>{history.length} {history.length === 1 ? 'файл' : history.length < 5 ? 'файла' : 'файлов'} · {entriesCount} поступлений без повторов</span>
-      </button>
-      {gapsQuery.data && (gapsQuery.data.cash > 0 || gapsQuery.data.outsideStatements > 0) && <span className="reconcile-gaps"
-        title="Эти чеки на проверке есть у кассира, но сверить их с выпиской нельзя">
-        Не участвуют в сверке:{gapsQuery.data.cash > 0 && ` ${gapsQuery.data.cash} наличными`}
-        {gapsQuery.data.cash > 0 && gapsQuery.data.outsideStatements > 0 && ' ·'}
-        {gapsQuery.data.outsideStatements > 0 && ` ${gapsQuery.data.outsideStatements} переводом вне дат выписок — загрузите свежую выписку`}
-      </span>}
-    </div>}
-    <dialog ref={filesDialog} className="reconcile-source reconcile-files-dialog" aria-label="Загруженные выписки" onClick={closeOnBackdrop}>
-      <form method="dialog"><button className="ow-btn ow-btn--ghost" type="submit">Закрыть</button></form>
-      <h3>Загруженные выписки</h3>
+      {busy && <p role="status">Сверяем поступления…</p>}
+      {error && <p role="alert" style={{ whiteSpace: 'pre-line' }}>{error}</p>}
+      {!loading && history.length === 0 && <p>Выписки ещё не загружены.</p>}
       <p className="reconcile-files-hint">Строки, которые есть в нескольких выписках, учитываются один раз.</p>
       <ul className="reconcile-files">
         {history.map(item => {
@@ -426,19 +404,8 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
       Не удалось загрузить сверку.{' '}
       <button type="button" className="reconcile-link" onClick={() => void summaryQuery.refetch()}>Повторить</button>
     </p>}
-    {!history.length && !busy && <p>Загрузите выписки АйКай Мбанк в формате .xlsx — можно несколько файлов сразу.</p>}
-    {showResultGrid && <div className="manager-metric-panel manager-school-grid cashier2-reconciliation-tiles" role="group" aria-label="Результаты сверки">
-      {groups.map(({ key, title, label, Icon }) => (
-        <button key={key} type="button" title={label} onClick={() => { setGroup(key); resetView(); setGroupOpen(true); }}>
-          <span className="manager-school-identity"><Icon size={20} aria-hidden="true" /><span>{title}</span></span>
-          {key === 'Х' || key === 'Д' ? <strong>{counts[key]}</strong> : <span>
-            <span className="manager-mode-metric"><span>На проверке</span><strong>{statusCounts[key][0]}</strong></span>
-            <span className="manager-mode-metric"><span>Подтверждено</span><strong>{statusCounts[key][1]}</strong></span>
-          </span>}
-        </button>
-      ))}
-    </div>}
-    {!showResultGrid && history.length > 0 && summary?.run && <div className="dt-root">
+    {!history.length && !busy && <p>Откройте «Управление выписками», чтобы загрузить файлы АйКай Мбанк в формате .xlsx.</p>}
+    {history.length > 0 && summary?.run && <div className="dt-root">
       <div className="dt-toolbar" style={{ justifyContent: 'flex-end', alignItems: 'center', gap: 8, padding: '6px 10px' }}>
         <div className="reconcile-open-statement">
           <strong>{groups.find(item => item.key === group)?.label}</strong>

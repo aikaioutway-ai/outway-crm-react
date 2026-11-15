@@ -52,7 +52,6 @@ interface ManagerOverviewProps {
   onBackToOverview?: () => void;
   detailTransferFilter?: string;
   renderTransfers?: (period: string) => React.ReactNode;
-  groupSummary?: React.ReactNode;
   renderSchool?: (period: string, day: string, directoryPeriod: string, onDebtTotals: (amount: number, count: number) => void) => React.ReactNode;
   mode: ManagerMode;
   canViewAccruals?: boolean;
@@ -304,7 +303,7 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers, groupSummary }: ManagerOverviewProps) {
+export default function ManagerOverview({ mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers }: ManagerOverviewProps) {
   const detailSchool = detailSchoolKey && detailSchoolKey !== 'ALL'
     && isSchoolAllowed(detailSchoolKey, allowedSchools, schoolTier)
     ? SCHOOL_TABS.find(school => school.key === detailSchoolKey)
@@ -550,7 +549,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
           </div>}
         </DashboardTopPanel>
 
-        <div className={splitView ? `manager-workspace manager-overview-body${renderSchool ? ' manager-overview-body--school' : ''}${groupSummary ? ' manager-overview-body--with-groups' : ''}` : undefined} style={splitView ? undefined : { display: 'contents' }}>
+        <div className={splitView ? `manager-workspace manager-overview-body${renderSchool ? ' manager-overview-body--school' : ''}` : undefined} style={splitView ? undefined : { display: 'contents' }}>
           {splitView && (
             <div className="manager-overview-sidebar">
               {detailSchool && (
@@ -632,7 +631,6 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
         />
         )}
           </div>
-          {groupSummary && <div className="manager-overview-group-summary">{groupSummary}</div>}
         </div>
       </div>
 
