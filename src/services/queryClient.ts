@@ -30,6 +30,8 @@ export const QK = {
   paymentsTable: ['paymentsTable'] as const,
   cashierPaymentsTable: ['cashierPaymentsTable'] as const,
   reconciliationPayments: (from: string, to: string) => ['reconciliationPayments', from, to] as const,
+  reconciliationGaps: (from: string, to: string) => ['reconciliationGaps', from, to] as const,
+  bankStatements: (sessionToken: string) => ['bankStatements', sessionToken] as const,
   refundsTable: ['refundsTable'] as const,
   employees: ['employees'] as const,
   payrollEntries: (periodMonth: number, periodYear: number) => ['payrollEntries', periodMonth, periodYear] as const,

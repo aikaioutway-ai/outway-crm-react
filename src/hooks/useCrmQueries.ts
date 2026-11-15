@@ -1,5 +1,6 @@
 import { EmployeeAdvance, fetchAllEmployeeAdvances } from '../services/employeeService';
-import { fetchReconciliationPayments } from '../services/financeService';
+import { fetchReconciliationGaps, fetchReconciliationPayments } from '../services/financeService';
+import { fetchBankStatements, type BankStatement } from '../services/bankStatementService';
 import { useQueries, useQuery, UseQueryResult, keepPreviousData } from '@tanstack/react-query';
 import {
   fetchV2FamiliesTable,
@@ -145,6 +146,28 @@ export function useReconciliationPayments(range: { from: string; to: string } | 
     staleTime: 0,
     refetchInterval: 10 * 60 * 1000,
     gcTime: 60 * 60 * 1000,
+  });
+}
+
+// Выписки меняются только при загрузке/удалении файла, поэтому не скачиваем их заново
+// при каждом открытии сверки. Загрузка другого сотрудника станет видна в течение 15 минут.
+export function useBankStatements(sessionToken: string | undefined, enabled = true): UseQueryResult<BankStatement[]> {
+  return useQuery({
+    queryKey: QK.bankStatements(sessionToken ?? ''),
+    queryFn: () => fetchBankStatements(sessionToken),
+    enabled: enabled && Boolean(sessionToken),
+    staleTime: 15 * 60 * 1000,
+    gcTime: 60 * 60 * 1000,
+  });
+}
+
+export function useReconciliationGaps(range: { from: string; to: string } | null) {
+  return useQuery({
+    queryKey: QK.reconciliationGaps(range?.from ?? '', range?.to ?? ''),
+    queryFn: () => fetchReconciliationGaps(range!.from, range!.to),
+    enabled: Boolean(range),
+    staleTime: 0,
+    refetchInterval: 10 * 60 * 1000,
   });
 }
 

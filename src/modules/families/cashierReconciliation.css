@@ -12,6 +12,7 @@
 }
 .reconcile-history button[aria-pressed="true"] { border-color: var(--accent); }
 .reconcile-history span { color: var(--text-2); }
+.reconcile-history .reconcile-gaps { align-self: center; font-size: 12px; }
 .reconcile-table .dt-tr:nth-child(odd) { background: #fff; }
 .reconcile-table .dt-tr:nth-child(even) { background: #f4f7f8; }
 .reconcile-table .dt-tr:hover { background: var(--dt-hover); }

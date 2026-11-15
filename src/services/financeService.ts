@@ -624,6 +624,21 @@ export async function rejectFamilyRefund(refund: Refund, reason: string, reviewe
   invalidateFinanceCache();
 }
 
+// Чеки на проверке, которые сверка с выпиской не покажет: наличные (их нет в банке)
+// и переводы с датой вне периода загруженных выписок. Только подсчёт, без загрузки строк.
+export async function fetchReconciliationGaps(from: string, to: string): Promise<{ cash: number; outsideStatements: number }> {
+  const pending = () => supabase.from('v2_payments').select('id', { count: 'exact', head: true }).eq('status', 'pending');
+  const [cash, transfers, inRange] = await Promise.all([
+    pending().eq('payment_method', 'cash'),
+    pending().eq('payment_method', 'transfer'),
+    pending().eq('payment_method', 'transfer')
+      .or(`and(payment_date.gte.${from},payment_date.lte.${to}),and(actual_payment_date.gte.${from},actual_payment_date.lte.${to})`),
+  ]);
+  const failed = cash.error ?? transfers.error ?? inRange.error;
+  if (failed) throw new Error(failed.message);
+  return { cash: cash.count ?? 0, outsideStatements: Math.max(0, (transfers.count ?? 0) - (inRange.count ?? 0)) };
+}
+
 export async function fetchReconciliationPayments(from: string, to: string): Promise<Array<FamilyPayment & { parentName?: string }>> {
   const payments: FamilyPayment[] = [];
   for (let offset = 0; ; offset += 500) {
