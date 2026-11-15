@@ -214,10 +214,14 @@ export default function TabFinance({
                     <input
                       type="file"
                       accept="image/*,.pdf"
-                      onChange={e => handleOcrFile(e.target.files?.[0] ?? null, (amount, date) => {
-                        if (amount) setPaymentAmount(String(amount));
-                        if (date) setPaymentDate(date);
-                      })}
+                      onChange={e => {
+                        // Банковский чек = безналичная оплата: иначе платёж не попадёт в сверку с выпиской.
+                        if (e.target.files?.[0]) setPaymentType('transfer');
+                        handleOcrFile(e.target.files?.[0] ?? null, (amount, date) => {
+                          if (amount) setPaymentAmount(String(amount));
+                          if (date) setPaymentDate(date);
+                        });
+                      }}
                       style={{ display: 'none' }}
                     />
                   </label>

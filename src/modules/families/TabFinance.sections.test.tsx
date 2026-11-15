@@ -95,3 +95,14 @@ test('payments and refunds share one list, newest first, with refunds negative',
   const refund = screen.getByText(/^−2.527/), payment = screen.getByText(/6 500/);
   expect(refund.compareDocumentPosition(payment) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
+
+test('attaching a bank receipt switches the payment method to transfer', () => {
+  Object.assign(URL, { createObjectURL: () => 'blob:receipt', revokeObjectURL: () => undefined });
+  const { container } = render(<TabFinance {...props} mode="payments" />);
+  const method = screen.getByLabelText('Способ оплаты');
+  fireEvent.change(method, { target: { value: 'cash' } });
+  expect(method).toHaveValue('cash');
+  const file = new File(['x'], 'receipt.jpg', { type: 'image/jpeg' });
+  fireEvent.change(container.querySelector('input[type="file"]')!, { target: { files: [file] } });
+  expect(method).toHaveValue('transfer');
+});
