@@ -50,7 +50,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
             </button>
           </th>;
         })}</tr></thead>
-        <tbody>{filteredRows.map(row => <tr data-comment-row={row.key} key={row.key} className={row.isChild ? 'is-child' : undefined} onContextMenu={event=>{const school=SCHOOL_TABS.find(item=>item.key===row.key && item.key!=='ALL');showTaskContextMenu(event,school?{type:'school',id:school.key,label:school.label,schoolKey:school.key}:{type:'general',id:'',label:'Общая задача'});}}>{columns.map((column, index) => <td data-comment-column={column.key} key={column.key} onClick={index === 0 && !row.disabled ? () => onSelect(row.key) : undefined} className={index === 0 ? 'is-name' : undefined}>
+        <tbody>{filteredRows.map(row => <tr data-comment-row={row.key} key={row.key} className={row.isChild ? 'is-child' : undefined} onContextMenu={event=>{const school=SCHOOL_TABS.find(item=>item.key===row.key && item.key!=='ALL');showTaskContextMenu(event,school?{type:'school',id:school.key,label:school.label,schoolKey:school.key}:{type:'general',id:'',label:'Общая задача'});}}>{columns.map((column, index) => <td data-comment-column={column.key} data-tone={column.key === 'microbusAverage' ? microbusAverageTone(row.values[column.key]) : undefined} key={column.key} onClick={index === 0 && !row.disabled ? () => onSelect(row.key) : undefined} className={index === 0 ? 'is-name' : undefined}>
           {index === 0
             ? <button type="button" disabled={row.disabled} onClick={event => { event.stopPropagation(); onSelect(row.key); }} aria-expanded={row.isGroup ? !!row.expanded : undefined}>
                 {row.icon}{showAvatars && <SchoolAvatar logo={row.logo} label={row.label} color="var(--accent)" />}

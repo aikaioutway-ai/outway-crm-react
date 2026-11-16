@@ -10,7 +10,7 @@ jest.mock('../../services/supabase', () => ({ supabase: {} }));
 
 const child = (id: string, school: string, transfer: string, vehicle: string, debt = 0, status = 'active') => ({
   rowId: id, familyId: `family-${id}`, branchFilter: school, transferNumber: transfer,
-  vehicleType: vehicle, childDebtAmount: debt, status,
+  vehicleType: vehicle, childDebtAmount: debt, debtAmount: debt, pendingPaymentCount: 0, status,
 } as FamilyListRow);
 
 beforeEach(() => {
@@ -30,10 +30,10 @@ test('group tiles open a separate school dialog', () => {
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });
 
-test('group counts use weighted bus average, distinguish schools and deduplicate child debts', () => {
+test('group counts use weighted bus average, distinguish schools and deduplicate family debts', () => {
   const rows = [
     child('a', 'TIS', '1', 'microbus', 100),
-    child('b', 'TIS', '1', 'microbus', 200),
+    { ...child('b', 'TIS', '1', 'microbus', 100), familyId: 'family-a' },
     child('c', 'EPS', '1', 'microbus'),
     child('d', 'EPS', '2', 'sedan', 300),
     child('e', 'EPS', '', '', 0, 'new'),
@@ -41,7 +41,7 @@ test('group counts use weighted bus average, distinguish schools and deduplicate
   ];
   expect(groupStats([...rows, rows[0]])).toMatchObject({
     microbusCount: 2, microbusAverage: 1.5, lightVehicleCount: 1,
-    newRequests: 1, debtorsCount: 3, debtSum: 600,
+    newRequests: 1, debtorsCount: 2, debtSum: 400,
   });
 });
 
@@ -60,4 +60,20 @@ test('summary page does not show the new requests list', () => {
   render(<SummaryModule onOpenChild={jest.fn()} />);
   expect(screen.queryByRole('heading', { name: 'Новые заявки' })).not.toBeInTheDocument();
   expect(screen.queryByText('Ребёнок А')).not.toBeInTheDocument();
+});
+
+test('a total metric opens a two-column breakdown with only schools that have data', () => {
+  HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
+  (useFamiliesTable as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [
+    child('a', 'TIS', '', '', 0, 'new'),
+    child('b', 'EPS', '1', 'microbus'),
+  ] });
+
+  render(<SummaryModule onOpenChild={jest.fn()} />);
+  fireEvent.click(screen.getByRole('button', { name: /Новые заявки/ }));
+
+  const breakdown = within(screen.getByRole('dialog', { name: 'Новые заявки' }));
+  expect(breakdown.getAllByRole('columnheader')).toHaveLength(2);
+  expect(breakdown.getByText('TIS')).toBeInTheDocument();
+  expect(breakdown.queryByText('EPS')).not.toBeInTheDocument();
 });

@@ -12,13 +12,16 @@ export const SUMMARY_GROUPS = [
 
 export function groupStats(rows: FamilyListRow[]) {
   const unique = Array.from(new Map(rows.map(row => [row.rowId, row])).values());
+  const pendingByFamily = new Map(unique.map(row => [row.familyId, row.pendingPaymentCount]));
   const active = unique.filter(row => row.status !== 'rejected');
-  const debtors = active.filter(row => row.childDebtAmount > 0);
+  const families = new Map(active.map(row => [row.familyId, row.debtAmount]));
+  const debts = Array.from(families.values()).filter(debt => debt > 0);
   return {
     ...transferStats(unique),
     newRequests: unique.filter(row => isNewUnassignedRow(row) && requestStage(row) === 'new').length,
-    debtorsCount: debtors.length,
-    debtSum: debtors.reduce((sum, row) => sum + row.childDebtAmount, 0),
+    pendingChecks: Array.from(pendingByFamily.values()).reduce((sum, count) => sum + count, 0),
+    debtorsCount: debts.length,
+    debtSum: debts.reduce((sum, debt) => sum + debt, 0),
   };
 }
 

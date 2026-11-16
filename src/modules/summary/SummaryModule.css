@@ -55,3 +55,142 @@
 
 .summary-tile-metrics strong[data-tone="alert"] { color: var(--danger); }
 .summary-tile-metrics strong[data-tone="positive"] { color: #06734d; }
+
+.summary-total {
+  margin-bottom: 20px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: var(--shadow-xs);
+}
+
+.summary-total h2 {
+  margin: 0 0 20px;
+  font-size: 22px;
+}
+
+.summary-total .summary-tile-metrics {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 136px), 1fr));
+}
+
+.summary-total .summary-tile-metrics > button + button {
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid var(--border);
+  box-shadow: inset 1px 0 rgb(255 255 255 / 85%);
+}
+
+.summary-total .summary-tile-metrics strong {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 700px) {
+  .summary-total .summary-tile-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .summary-total .summary-tile-metrics > button:nth-child(odd) {
+    padding-inline-start: 0;
+    border-inline-start: 0;
+    box-shadow: none;
+  }
+}
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .summary-tiles-page .summary-tile {
+    position: relative;
+    transition: transform 180ms ease-out, box-shadow .15s, border-color .15s;
+  }
+
+  .summary-tiles-page .summary-tile:hover {
+    z-index: 1;
+    transform: translateY(-6px) scale(1.06);
+    box-shadow: 0 12px 28px #20334426;
+  }
+
+  .summary-total .summary-tile-metrics > button > :is(span, strong) {
+    transform-origin: left center;
+    transition: transform 180ms ease-out;
+  }
+
+  .summary-total .summary-tile-metrics > button:hover > span {
+    transform: translateY(-4px);
+  }
+
+  .summary-total .summary-tile-metrics > button:hover > strong {
+    transform: translateY(-2px) scale(1.20);
+  }
+
+  .summary-total .summary-tile-metrics > button:is(:has(+ button:hover), :hover + button) > strong {
+    transform: translateY(-1px) scale(1.03);
+  }
+}
+
+.summary-total-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.summary-total-metric:focus-visible {
+  outline: 2px solid #157f84;
+  outline-offset: 3px;
+}
+
+.summary-dialog-metric {
+  width: min(680px, calc(100vw - 24px));
+  background: var(--surface);
+}
+
+.summary-dialog-with-debt { width: min(800px, calc(100vw - 24px)); }
+.summary-dialog-metric .ow-school-table { min-width: 0; }
+.summary-dialog-metric th:first-child {
+  /* The shared table sets a width inline for its wider dashboards. */
+  width: 67% !important;
+}
+
+.summary-dialog-with-debt th:first-child { width: 52% !important; }
+.summary-dialog-metric .ow-school-table-name {
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.4;
+}
+
+.summary-dialog-metric .ow-school-table th:not(:first-child) > button { align-items: flex-end; }
+.summary-dialog-metric .ow-school-table-label { white-space: normal; }
+.summary-dialog-metric .ow-school-table td:not(:first-child) {
+  text-align: end;
+  font-weight: 600;
+}
+
+.summary-dialog-with-debt .ow-school-table td:last-child,
+.summary-dialog-with-debt .ow-school-table th:last-child .ow-school-table-total {
+  color: var(--danger);
+}
+
+@media (max-width: 540px) {
+  .summary-dialog-with-debt th:first-child { width: 44% !important; }
+  .summary-dialog-with-debt .ow-school-table :is(th > button, td, td.is-name > button) {
+    padding-inline: 8px;
+  }
+  .summary-dialog-with-debt .ow-school-table-total { font-size: 15px; }
+}
+
+.summary-dialog-metric .ow-school-table th:not(:first-child) .ow-school-table-total {
+  color: var(--col-color);
+}
+
+.summary-dialog-metric td[data-comment-column="microbusCount"] { color: #6953a5; }
+.summary-dialog-metric td[data-comment-column="lightVehicleCount"] { color: #0f766e; }
+.summary-dialog-metric td[data-comment-column="newRequests"],
+.summary-dialog-metric td[data-comment-column="pendingChecks"],
+.summary-dialog-metric td[data-comment-column="debtorsCount"],
+.summary-dialog-metric td[data-comment-column="debtSum"],
+.summary-dialog-metric td[data-tone="alert"] { color: var(--danger); }
+.summary-dialog-metric td[data-tone="positive"] { color: #06734d; }
