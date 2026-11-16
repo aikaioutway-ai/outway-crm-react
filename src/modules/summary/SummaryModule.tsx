@@ -11,6 +11,7 @@ import { groupStats, SUMMARY_GROUPS, SUMMARY_SCHOOL_NAMES } from './summaryGroup
 interface Props {
   sessionToken?: string;
   allowedSchools?: string[];
+  showGroupTotals?: boolean;
   onOpenChild?: (familyId: string, childId: string) => void;
 }
 
@@ -33,7 +34,7 @@ const totalMetrics: Metric[] = [
 ];
 const values = (stats: Stats) => ({ ...stats, microbusAverage: stats.microbusAverage.toFixed(1), debtSum: money(Math.round(stats.debtSum)) });
 
-export default function SummaryModule({ onOpenChild, allowedSchools }: Props) {
+export default function SummaryModule({ onOpenChild, allowedSchools, showGroupTotals = false }: Props) {
   const query = useFamiliesTable();
   useTestTransfers();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -50,7 +51,7 @@ export default function SummaryModule({ onOpenChild, allowedSchools }: Props) {
   const totalStats = groupStats(totalRows);
   const totalValues = values(totalStats);
   const selected = groups.find(group => group.key === selectedKey);
-  const selectedMetric = totalMetrics.find(metric => metric.key === metricKey);
+  const selectedMetric = showGroupTotals ? totalMetrics.find(metric => metric.key === metricKey) : undefined;
   const dialogOpen = Boolean(selected || selectedMetric);
   useEffect(() => {
     if (dialogOpen && !dialog.current?.open) dialog.current?.showModal();
@@ -74,8 +75,8 @@ export default function SummaryModule({ onOpenChild, allowedSchools }: Props) {
   if (query.isError) return <div role="alert" style={{ padding: 24 }}>Не удалось загрузить сводку. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => { void query.refetch(); }}>Повторить</button></div>;
 
   return <div className={onOpenChild ? "summary-tiles-page" : "summary-tiles-embedded"}>
-    {onOpenChild && groups.length > 0 && <section className="summary-total" aria-labelledby="summary-total-title">
-      <h2 id="summary-total-title">Итого по группам</h2>
+    {onOpenChild && showGroupTotals && groups.length > 0 && <section className="summary-total" aria-labelledby="summary-total-title">
+      <h2 id="summary-total-title">Общая сводка</h2>
       <div className="summary-tile-metrics">
         {totalMetrics.map(({ key, label }) => <button type="button" key={key} className="summary-total-metric"
           aria-haspopup="dialog" onClick={() => {

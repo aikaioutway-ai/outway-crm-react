@@ -1073,6 +1073,7 @@ export default function App() {
               </div>
             </div>
             <SummaryModule
+              showGroupTotals={currentUserRole === 'admin' || currentUserRole === 'gen_director' || currentUserRole === 'director' || currentUserRole === 'senior_logist'}
               sessionToken={currentUser?.sessionToken}
               onOpenChild={async (familyId, childId) => {
                 try {

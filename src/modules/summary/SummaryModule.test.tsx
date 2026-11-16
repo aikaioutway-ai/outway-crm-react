@@ -22,6 +22,7 @@ test('group tiles open a separate school dialog', () => {
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); this.dispatchEvent(new Event('close')); };
   render(<SummaryModule onOpenChild={jest.fn()} />);
   expect(screen.getAllByRole('button', { name: /Открыть Группа/ })).toHaveLength(3);
+  expect(screen.queryByRole('heading', { name: 'Общая сводка' })).not.toBeInTheDocument();
   fireEvent.click(screen.getByRole('button', { name: 'Открыть Группа №1' }));
   expect(screen.getByRole('dialog', { name: 'Группа №1' })).toBeInTheDocument();
   expect(within(screen.getByRole('dialog')).getByText('TIS')).toBeInTheDocument();
@@ -69,7 +70,7 @@ test('a total metric opens a two-column breakdown with only schools that have da
     child('b', 'EPS', '1', 'microbus'),
   ] });
 
-  render(<SummaryModule onOpenChild={jest.fn()} />);
+  render(<SummaryModule showGroupTotals onOpenChild={jest.fn()} />);
   fireEvent.click(screen.getByRole('button', { name: /Новые заявки/ }));
 
   const breakdown = within(screen.getByRole('dialog', { name: 'Новые заявки' }));
