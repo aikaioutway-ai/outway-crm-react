@@ -4,7 +4,7 @@ import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import type { FamilyListRow } from '../../services/crmV2Service';
 import { groupStats, SUMMARY_GROUPS } from './summaryGroups';
 
-jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn() }));
+jest.mock('../../hooks/useCrmQueries', () => ({ useFamiliesTable: jest.fn(), useMonthlyChargeStats: () => [] }));
 jest.mock('../families/testTransfers', () => ({ useTestTransfers: jest.fn(), isInTestTransfer: () => false }));
 jest.mock('../../services/supabase', () => ({ supabase: {} }));
 

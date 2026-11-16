@@ -195,3 +195,141 @@
 .summary-dialog-metric td[data-comment-column="debtSum"],
 .summary-dialog-metric td[data-tone="alert"] { color: var(--danger); }
 .summary-dialog-metric td[data-tone="positive"] { color: #06734d; }
+
+.summary-debt-chart {
+  margin-top: 20px;
+  padding: 20px 24px;
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  background: var(--surface);
+  box-shadow: var(--shadow-xs);
+}
+
+.summary-debt-chart header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary-debt-chart header span { color: var(--text-2); font-size: 13px; }
+.summary-debt-scroll { overflow-x: auto; }
+
+.summary-debt-bars {
+  display: grid;
+  grid-template-columns: repeat(9, minmax(104px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 30px 0 0;
+  list-style: none;
+  text-align: center;
+}
+
+.summary-debt-bars li > span {
+  display: block;
+  margin-top: 10px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.summary-debt-track {
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  height: 116px;
+  border-bottom: 1px solid var(--border);
+}
+
+.summary-debt-column { position: relative; width: min(56%, 54px); }
+.summary-debt-column strong {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  color: var(--danger);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-debt-fill {
+  display: block;
+  height: 100%;
+  border-radius: 7px 7px 0 0;
+  background: linear-gradient(to top, var(--danger), color-mix(in srgb, var(--danger) 64%, var(--surface)));
+}
+
+.summary-debt-bars li:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+.summary-debt-tooltip {
+  position: fixed;
+  z-index: 100;
+  box-sizing: border-box;
+  width: min(290px, calc(100vw - 24px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: color-mix(in srgb, var(--surface) 90%, transparent);
+  backdrop-filter: blur(12px);
+  color: var(--text);
+  box-shadow: 0 8px 24px #20334426;
+  pointer-events: none;
+  font-size: 12px;
+}
+
+.summary-debt-tooltip ul { list-style: none; margin: 8px 0 0; padding: 0; }
+.summary-debt-tooltip li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 3px 0;
+}
+.summary-debt-tooltip li span:last-child {
+  color: var(--danger);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.summary-debt-chart header { flex-wrap: wrap; }
+.summary-chart-switcher { display: flex; flex-wrap: wrap; gap: 4px; }
+.summary-chart-switcher button { display: inline-grid; place-items: center; min-width: 44px; min-height: 44px; }
+.summary-chart-switcher button[aria-pressed="true"] {
+  background: var(--surface-2);
+  color: var(--accent);
+  box-shadow: inset 0 -2px var(--accent);
+}
+
+.summary-debt-chart, .summary-debt-tooltip { --chart-color: var(--danger); }
+.summary-debt-chart[data-metric="charged"], .summary-debt-tooltip[data-metric="charged"] { --chart-color: #2563b8; }
+.summary-debt-chart[data-metric="pending"], .summary-debt-tooltip[data-metric="pending"] { --chart-color: #06734d; }
+.summary-debt-column strong, .summary-debt-tooltip li span:last-child { color: var(--chart-color); }
+.summary-debt-fill {
+  background: linear-gradient(to top, var(--chart-color), color-mix(in srgb, var(--chart-color) 64%, var(--surface)));
+}
+
+.summary-tiles-page .summary-tile { padding-block: 20px; }
+.summary-tiles-page .summary-tile-team { margin-bottom: 18px; }
+.summary-tiles-page .summary-tile-metrics { row-gap: 18px; }
+.summary-tiles-page .summary-tile-footer { margin-top: 20px; padding-top: 14px; }
+
+.summary-chart-total {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-inline-start: auto;
+}
+
+.summary-chart-total strong {
+  color: var(--chart-color);
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.summary-chart-switcher button[data-chart-metric="debt"] { color: var(--danger); }
+.summary-chart-switcher button[data-chart-metric="debt"][aria-pressed="true"] {
+  box-shadow: inset 0 -2px var(--danger);
+}

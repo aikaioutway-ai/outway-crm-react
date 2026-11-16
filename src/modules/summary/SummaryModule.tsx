@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
+import { CircleAlert, Calculator, Wallet } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import './SummaryModule.css';
-import { useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useFamiliesTable, useMonthlyChargeStats } from '../../hooks/useCrmQueries';
 import SchoolDashboardTable from '../families/SchoolDashboardTable';
-import { isSchoolAllowed, SCHOOL_DIRECTORY } from '../families/constants';
+import { ALL_PERIODS, isSchoolAllowed, SCHOOL_DIRECTORY } from '../families/constants';
 import { useTestTransfers } from '../families/testTransfers';
 import { microbusAverageTone } from '../families/familiesRowHelpers';
 import { money } from '../../utils/pricing';
@@ -34,11 +36,24 @@ const totalMetrics: Metric[] = [
 ];
 const values = (stats: Stats) => ({ ...stats, microbusAverage: stats.microbusAverage.toFixed(1), debtSum: money(Math.round(stats.debtSum)) });
 
+const chartMetrics = {
+  debt: { label: 'Долг', title: 'Долг по месяцам', icon: CircleAlert },
+  charged: { label: 'Начисления', title: 'Начисления по месяцам', icon: Calculator },
+  pending: { label: 'Кассир — суммы на проверке', title: 'Суммы на проверке по месяцам', icon: Wallet },
+} as const;
+type ChartMetric = keyof typeof chartMetrics;
+const chartMetricKeys: ChartMetric[] = ['debt', 'charged', 'pending'];
+
+const debtMonths = ALL_PERIODS.filter(period => period.month > 0);
+const debtMonthKeys = debtMonths.map(period => period.key);
+
 export default function SummaryModule({ onOpenChild, allowedSchools, showGroupTotals = false }: Props) {
   const query = useFamiliesTable();
   useTestTransfers();
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [metricKey, setMetricKey] = useState<MetricKey | null>(null);
+  const [debtTooltip, setDebtTooltip] = useState<{ key: string; left: number; bottom: number } | null>(null);
+  const [chartMetric, setChartMetric] = useState<ChartMetric>('debt');
   const dialog = useRef<HTMLDialogElement>(null);
   const [sort, setSort] = useState<{ key: SortKey; ascending: boolean }>({ key: 'school', ascending: true });
   const allRows = query.data ?? [];
@@ -48,6 +63,35 @@ export default function SummaryModule({ onOpenChild, allowedSchools, showGroupTo
   }).filter(group => group.schools.length);
   const visibleSchools = new Set(groups.flatMap(group => group.schools));
   const totalRows = allRows.filter(row => visibleSchools.has(row.branchFilter));
+  const monthlyQueries = useMonthlyChargeStats(onOpenChild && showGroupTotals ? debtMonthKeys : []);
+  const childSchools = new Map(totalRows.filter(row => row.status !== 'rejected').map(row => [row.rowId, row.branchFilter]));
+  const familySchools = new Map(totalRows.map(row => [row.familyId, row.branchFilter]));
+  const monthlyDebt = debtMonths.map((period, index) => {
+    const entries = monthlyQueries[index]?.data;
+    const bySchool = new Map<string, number>();
+    let total = 0;
+    for (const entry of entries ?? []) {
+      const school = entry.childId ? childSchools.get(entry.childId) : familySchools.get(entry.familyId);
+      if (!school) continue;
+      const amount = entry[chartMetric];
+      total += amount;
+      bySchool.set(school, (bySchool.get(school) ?? 0) + amount);
+    }
+    const schools = Array.from(bySchool).filter(([, amount]) => amount !== 0).sort((a, b) => b[1] - a[1]);
+    return { ...period, amount: entries ? total : undefined, schools };
+  });
+  const tooltipMonth = monthlyDebt.find(month => month.key === debtTooltip?.key);
+
+  function showDebtTooltip(key: string, anchor: HTMLElement) {
+    const rect = anchor.getBoundingClientRect();
+    const width = Math.min(290, window.innerWidth - 24);
+    const left = rect.right + 8 + width <= window.innerWidth - 12 ? rect.right + 8 : rect.left - 8 - width;
+    setDebtTooltip({ key, left: Math.max(12, left), bottom: Math.max(12, window.innerHeight - rect.bottom) });
+  }
+  const chartTotal = monthlyDebt.every(month => month.amount !== undefined)
+    ? monthlyDebt.reduce((sum, month) => sum + (month.amount ?? 0), 0)
+    : undefined;
+  const maxMonthlyDebt = Math.max(1, ...monthlyDebt.map(month => month.amount ?? 0));
   const totalStats = groupStats(totalRows);
   const totalValues = values(totalStats);
   const selected = groups.find(group => group.key === selectedKey);
@@ -106,6 +150,59 @@ export default function SummaryModule({ onOpenChild, allowedSchools, showGroupTo
         <span className="summary-tile-footer">Школы и показатели →</span>
       </button>)}
     </div>
+    {onOpenChild && showGroupTotals && groups.length > 0 && <section className="summary-debt-chart" data-metric={chartMetric} aria-label={chartMetrics[chartMetric].title}>
+      <header>
+        <div className="summary-chart-switcher" role="group" aria-label="Показатель графика">
+          {chartMetricKeys.map(key => {
+            const { icon: Icon, label } = chartMetrics[key];
+            return <button type="button" className="ow-btn ow-btn--ghost" key={key}
+              data-chart-metric={key} aria-label={label} title={label} aria-pressed={chartMetric === key} onClick={() => { setDebtTooltip(null); setChartMetric(key); }}>
+              <Icon size={18} aria-hidden="true" />
+            </button>;
+          })}
+        </div>
+        <div className="summary-chart-total">
+          <span>Итого</span>
+          <strong>{chartTotal === undefined ? '—' : `${money(Math.round(chartTotal))} сом`}</strong>
+        </div>
+      </header>
+      {monthlyQueries.some(query => query.isError) && <p role="status">
+        Часть данных не загрузилась. <button type="button" className="ow-btn ow-btn--ghost" onClick={() => {
+          monthlyQueries.filter(query => query.isError).forEach(query => { void query.refetch(); });
+        }}>Повторить</button>
+      </p>}
+      <div className="summary-debt-scroll">
+        <ul className="summary-debt-bars" aria-busy={monthlyQueries.some(query => query.isPending)}>
+          {monthlyDebt.map(month => <li key={month.key}
+            tabIndex={month.schools.length ? 0 : undefined}
+            aria-describedby={debtTooltip?.key === month.key ? 'summary-debt-tooltip' : undefined}
+            onMouseEnter={event => { if (month.schools.length) showDebtTooltip(month.key, event.currentTarget); }}
+            onMouseLeave={event => { if (document.activeElement !== event.currentTarget) setDebtTooltip(null); }}
+            onFocus={event => showDebtTooltip(month.key, event.currentTarget)}
+            onBlur={() => setDebtTooltip(null)}
+            onKeyDown={event => { if (event.key === 'Escape') setDebtTooltip(null); }}>
+            <div className="summary-debt-track">
+              <div className="summary-debt-column" style={{ height: `${(month.amount ?? 0) / maxMonthlyDebt * 100}%` }}>
+                <strong>{month.amount === undefined ? '—' : money(Math.round(month.amount))}</strong>
+                <span className="summary-debt-fill" aria-hidden="true" />
+              </div>
+            </div>
+            <span>{month.label}</span>
+          </li>)}
+        </ul>
+      </div>
+    </section>}
+    {showGroupTotals && debtTooltip && tooltipMonth && createPortal(
+      <aside id="summary-debt-tooltip" className="summary-debt-tooltip" data-metric={chartMetric} role="tooltip"
+        style={{ left: debtTooltip.left, bottom: debtTooltip.bottom }}>
+        <strong>{tooltipMonth.label}</strong>
+        <ul>
+          {tooltipMonth.schools.map(([school, amount]) => <li key={school}>
+            <span>{SCHOOL_DIRECTORY.find(item => item.key === school)?.label ?? school}</span>
+            <span>{money(Math.round(amount))} сом</span>
+          </li>)}
+        </ul>
+      </aside>, document.body)}
     {dialogOpen && <dialog ref={dialog} className={selectedMetric ? `summary-dialog summary-dialog-metric${showPendingDebt ? ' summary-dialog-with-debt' : ''}` : 'summary-dialog'} onClose={() => { setSelectedKey(null); setMetricKey(null); }} onClick={event => { if (event.target === event.currentTarget) { const bounds = event.currentTarget.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close(); } }} aria-labelledby="summary-dialog-title">
       <header className="summary-dialog-header"><div><h2 id="summary-dialog-title">{selectedMetric?.label ?? selected?.label}</h2>{selected && <p>Менеджер: {selected.manager} · Логист: {selected.logistics}</p>}</div><button autoFocus type="button" className="ow-btn ow-btn--ghost" onClick={() => dialog.current?.close()}>Закрыть</button></header>
       {schools.length === 0 && selectedMetric ? <p>Нет школ с данными по этому показателю.</p> : <SchoolDashboardTable
