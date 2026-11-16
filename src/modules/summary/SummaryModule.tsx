@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import './SummaryModule.css';
-import SummaryNewRequests from './SummaryNewRequests';
 import { useFamiliesTable } from '../../hooks/useCrmQueries';
 import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import { isSchoolAllowed, SCHOOL_DIRECTORY } from '../families/constants';
@@ -72,7 +71,6 @@ export default function SummaryModule({ onOpenChild, allowedSchools }: Props) {
         <span className="summary-tile-footer">Школы и показатели →</span>
       </button>)}
     </div>
-    {onOpenChild && <SummaryNewRequests rows={allRows} onOpenChild={onOpenChild} />}
     {selected && <dialog ref={dialog} className="summary-dialog" onClose={() => setSelectedKey(null)} onClick={event => { if (event.target === event.currentTarget) { const bounds = event.currentTarget.getBoundingClientRect(); if (event.clientX < bounds.left || event.clientX > bounds.right || event.clientY < bounds.top || event.clientY > bounds.bottom) event.currentTarget.close(); } }} aria-labelledby="summary-dialog-title">
       <header className="summary-dialog-header"><div><h2 id="summary-dialog-title">{selected.label}</h2><p>Менеджер: {selected.manager} · Логист: {selected.logistics}</p></div><button autoFocus type="button" className="ow-btn ow-btn--ghost" onClick={() => dialog.current?.close()}>Закрыть</button></header>
       <SchoolDashboardTable

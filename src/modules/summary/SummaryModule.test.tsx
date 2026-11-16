@@ -21,7 +21,6 @@ test('group tiles open a separate school dialog', () => {
   HTMLDialogElement.prototype.showModal = function () { this.setAttribute('open', ''); };
   HTMLDialogElement.prototype.close = function () { this.removeAttribute('open'); this.dispatchEvent(new Event('close')); };
   render(<SummaryModule onOpenChild={jest.fn()} />);
-  expect(screen.getByRole('table')).toBeInTheDocument();
   expect(screen.getAllByRole('button', { name: /Открыть Группа/ })).toHaveLength(3);
   fireEvent.click(screen.getByRole('button', { name: 'Открыть Группа №1' }));
   expect(screen.getByRole('dialog', { name: 'Группа №1' })).toBeInTheDocument();
@@ -54,22 +53,11 @@ test('every directory school belongs to exactly one group, with ABL exceptions p
   expect(SUMMARY_GROUPS[2].schools).toContain('AES');
 });
 
-
-test('school bar filters new requests and opens the child card', () => {
-  const onOpen = jest.fn();
+test('summary page does not show the new requests list', () => {
   (useFamiliesTable as jest.Mock).mockReturnValue({ isPending: false, isError: false, data: [
     { ...child('a', 'TIS', '', '', 0, 'new'), childName: 'Ребёнок А' },
-    { ...child('b', 'EPS', '', '', 0, 'new'), childName: 'Ребёнок Б' },
-    { ...child('c', 'TIS', '', '', 0, 'new'), childName: 'В работе', transferMark: 'in_work' },
   ] });
-  render(<SummaryModule onOpenChild={onOpen} />);
-  expect(screen.getByText('Ребёнок А')).toBeInTheDocument();
-  expect(screen.getByText('Ребёнок Б')).toBeInTheDocument();
-  expect(screen.queryByText('В работе')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByTitle('TIS · 1 новых заявок'));
-  expect(screen.queryByText('Ребёнок Б')).not.toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Ребёнок А' }));
-  expect(onOpen).toHaveBeenCalledWith('family-a', 'a');
-  fireEvent.click(screen.getByTitle('Все школы · 2 новых заявок'));
-  expect(screen.getByText('Ребёнок Б')).toBeInTheDocument();
+  render(<SummaryModule onOpenChild={jest.fn()} />);
+  expect(screen.queryByRole('heading', { name: 'Новые заявки' })).not.toBeInTheDocument();
+  expect(screen.queryByText('Ребёнок А')).not.toBeInTheDocument();
 });
