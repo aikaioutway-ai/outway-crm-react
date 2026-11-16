@@ -30,27 +30,6 @@
   margin: auto;
 }
 
-.summary-requests { margin-top: 28px; }
-.summary-requests-heading { display: flex; align-items: center; gap: 12px; margin-bottom: 16px; }
-.summary-requests-heading h2 { margin: 0; font-size: 18px; }
-.summary-requests-heading > span { color: var(--accent); background: var(--surface); padding: 4px 10px; border-radius: 8px; font-size: 14px; }
-.summary-school-bar { display: flex; gap: 8px; overflow-x: auto; padding: 4px 2px 16px; }
-.summary-school-bar .ow-transfer-cell { flex: 0 0 74px; min-width: 74px; }
-.summary-requests-table-wrap { overflow: auto; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); max-height: 520px; }
-.summary-requests-table { width: 100%; min-width: 720px; border-collapse: collapse; text-align: left; font-size: 13px; }
-.summary-requests-table th { position: sticky; top: 0; background: var(--surface-2); color: var(--text-2); font-weight: 500; }
-.summary-requests-table th, .summary-requests-table td { padding: 14px 16px; border-bottom: 1px solid var(--border); }
-.summary-requests-table tbody tr:nth-child(even) { background: var(--surface-2); }
-.summary-requests-table td > button { border: 0; background: transparent; color: var(--accent); font: inherit; text-align: left; min-height: 32px; cursor: pointer; }
-.summary-requests-table td > button:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.summary-requests-empty { text-align: center; color: var(--text-2); }
-
-.summary-school-toolbar { display: flex; align-items: flex-start; gap: 16px; }
-.summary-school-toolbar .summary-school-bar { flex: 1; min-width: 0; }
-.summary-requests-search { flex: 0 0 250px; width: 250px; box-sizing: border-box; min-height: 44px; margin-top: 4px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); font: inherit; font-size: 13px; }
-.summary-requests-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-@media (max-width: 900px) { .summary-school-toolbar { flex-wrap: wrap; gap: 0; } .summary-school-toolbar .summary-school-bar { flex-basis: 100%; } .summary-requests-search { flex: 1 1 100%; width: 100%; margin: 0 0 12px; } }
-
 .summary-tile-heading { flex-wrap: wrap; }
 .summary-tile-heading h2 { flex-shrink: 0; }
 .summary-tile-logos { display: flex; flex-wrap: wrap; gap: 5px; margin-left: auto; align-items: center; }
