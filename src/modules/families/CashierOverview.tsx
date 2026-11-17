@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { fetchSpendingEntries } from '../../services/spendingService';
-import { useCashierReconciliationSummary } from './CashierReconciliation';
+import { useCashierReconciliationSummary } from '../../hooks/useCrmQueries';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import CashierViewTabs, { CashierView } from './CashierViewTabs';
 import SchoolDashboardTable from './SchoolDashboardTable';

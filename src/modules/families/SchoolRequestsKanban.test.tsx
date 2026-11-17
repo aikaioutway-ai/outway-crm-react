@@ -4,7 +4,7 @@ import SchoolRequestsKanban from './SchoolRequestsKanban';
 import { updateV2ChildRoute } from '../../services/crmV2Service';
 import { askTransferComment } from '../../core/dashboard/askTransferComment';
 
-const base = { familyId: 'family-1', branchFilter: 'ABL2', branchShort: 'ABL2', parentName: 'Родитель', phone: '+996 555 000 111', streetAddress: 'Ахунбаева 12', transferNumber: null, childCreatedAt: '2026-11-08T10:00:00Z' };
+const base = { familyId: 'family-1', branchFilter: 'ABL2', branchShort: 'ABL2', parentName: 'Родитель', phone: '+996 555 000 111', streetAddress: 'Ахунбаева 12', transferNumber: null, childCreatedAt: new Date().toISOString() }; // «свежая» заявка — от текущей даты, иначе тест со временем сам становится просроченным
 jest.mock('../../hooks/useCrmQueries', () => ({ useLogisticsTable: () => ({ data: [
   { ...base, rowId: 'new-1', childName: 'Новый', status: 'new', transferMark: null },
   { ...base, rowId: 'work-1', childName: 'Вработе', status: 'new', transferMark: 'in_work' },

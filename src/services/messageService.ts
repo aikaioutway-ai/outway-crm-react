@@ -4,6 +4,10 @@ import { queryClient } from './queryClient';
 import { EMPLOYEE_SESSION_EXPIRED_EVENT, isEmployeeSessionExpiredMessage } from './employeeSession';
 import type { TaskTarget } from '../modules/tasks/taskTypes';
 
+/** Чат временно скрыт: им почти не пользуются, а его фоновый опрос каждые 20 с
+ * нагружает базу у каждой открытой вкладки. Чтобы вернуть — поставить true. */
+export const MESSAGES_ENABLED = false;
+
 export interface MessageChannel {
   channel: string;
   title: string;

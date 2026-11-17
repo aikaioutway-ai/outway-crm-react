@@ -109,12 +109,6 @@ function duplicateOfConfirmed(row: Result, payment: ReconciliationPayment) {
 }
 
 // Чеки на проверке по группам сверки — для плиток обзора кассира.
-export function useCashierReconciliationSummary(sessionToken?: string, enabled = false) {
-  const { data } = useReconciliationSummary(sessionToken, enabled);
-  if (!data) return null;
-  return { '1': data.counts['1'].pending, '2': data.counts['2'].pending, 'Д': data.counts['Д'].pending };
-}
-
 export default function CashierReconciliation({ userId, userName, userRole, sessionToken, onBack, onOpenFamily }: {
   userId: string; userName?: string; userRole?: string; sessionToken?: string;
   onBack: () => void;

@@ -3,6 +3,7 @@ import { BarChart3, ListTodo, MessageCircle, Users, LayoutGrid, School, Wallet, 
 import { UserRole } from '../../types';
 import B2BIcon from '../icons/B2BIcon';
 import './Sidebar.css';
+import { MESSAGES_ENABLED } from '../../services/messageService';
 
 export type NavSection = 'families' | 'employees' | 'cashier' | 'logistics' | 'drivers' | 'b2b' | 'settings' | 'tasks' | 'messages' | 'schools2' | 'summary' | 'spending' | 'manager2' | 'logistics2' | 'cashier2';
 
@@ -66,8 +67,9 @@ export function getAllowedSections(role: UserRole, userId?: string): NavSection[
 
   // «Школы 2.0» — тот же модуль «Менеджер» для школ без постоянного контракта, доступ как к «Менеджеру».
   sections = sections.flatMap(section => section === 'families' ? ['families', 'manager2', 'schools2'] : section === 'logistics' ? ['logistics', 'logistics2'] : section === 'cashier' ? ['cashier', 'cashier2'] : [section]);
-  // «Сообщения» — у всех сотрудников: уведомления и переписка «Все» / отдел.
-  return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks', 'messages'] : [...sections, 'tasks', 'messages'];
+  // «Сообщения» — у всех сотрудников: уведомления и переписка «Все» / отдел (пока чат скрыт — ни у кого).
+  const messages: NavSection[] = MESSAGES_ENABLED ? ['messages'] : [];
+  return canAccessSummary(role, userId) ? [...sections, 'summary', 'tasks', ...messages] : [...sections, 'tasks', ...messages];
 }
 
 // Владелец компании (учётная запись администратора).
