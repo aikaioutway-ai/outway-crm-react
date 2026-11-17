@@ -1,4 +1,3 @@
-import { EmployeeCardModal } from '../employees/EmployeesPage';
 import { QK, queryClient } from '../../services/queryClient';
 import { createPortal } from 'react-dom';
 import type { Employee } from '../../types';
@@ -9,7 +8,10 @@ import SchoolDashboardTable from './SchoolDashboardTable';
 import DirectorySchoolDashboard, { computeDirectoryStats } from './DirectorySchoolDashboard';
 import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
 import HiddenSchoolsList from './HiddenSchoolsList';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+
+// Карточка сотрудника нужна редко — грузим её вместе со страницей сотрудников только по клику.
+const EmployeeCardModal = lazy(() => import('../employees/EmployeesPage').then(module => ({ default: module.EmployeeCardModal })));
 import { Briefcase, BusFront, CalendarDays, List, Plus, Search, X } from 'lucide-react';
 import { FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
 import { schoolStaff } from './SchoolKpiChip';
@@ -559,7 +561,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
               )}
               <ManagerModeTabs cards summaries={summaries} showRequests canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
               {selectedStaff && createPortal(canOpenFullCard ? (
-                <EmployeeCardModal
+                <Suspense fallback={null}><EmployeeCardModal
                   key={selectedStaff.id}
                   employee={selectedStaff}
                   restrictedRole={employeeCardAccess.roles}
@@ -573,7 +575,7 @@ export default function ManagerOverview({ mode, canViewAccruals = false, onModeC
                     setStaffCard(null);
                     void queryClient.invalidateQueries({ queryKey: QK.employees });
                   }}
-                />
+                /></Suspense>
               ) : (
                 <dialog className="manager-staff-contact" aria-label="Карточка сотрудника"
                   ref={dialog => { if (dialog && !dialog.open) dialog.showModal(); }}

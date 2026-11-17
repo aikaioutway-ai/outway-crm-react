@@ -9,7 +9,7 @@ import { EmployeeAdvance } from '../../services/employeeService';
 import { driverPaymentPeriodLabel } from '../drivers/driverPayments';
 import { money } from '../../utils/pricing';
 export default function EmployeePaymentHistory({employeeId,sessionToken,advances}:{employeeId?:string;sessionToken?:string;advances:EmployeeAdvance[]}){
-  const query=useQuery<[ExpenseRecord[], SpendingPayments]>({queryKey:['employeePaymentHistory',employeeId,sessionToken],queryFn:()=>Promise.all([fetchSalaryExpenses(sessionToken),fetchSpendingPayments(sessionToken!, {employeeId:employeeId!})]),refetchOnMount:'always',refetchInterval:30000,enabled:Boolean(employeeId && sessionToken)});
+  const query=useQuery<[ExpenseRecord[], SpendingPayments]>({queryKey:['employeePaymentHistory',employeeId,sessionToken],queryFn:()=>Promise.all([fetchSalaryExpenses(sessionToken),fetchSpendingPayments(sessionToken!, {employeeId:employeeId!})]),refetchOnMount:'always',enabled:Boolean(employeeId && sessionToken)});
   if(!employeeId)return <div className="employee-empty">Сначала сохраните сотрудника</div>;
   const salaries:ExpenseRecord[]=query.data?.[0]??[];
   // Копия старой выплаты в «Расходах» — главная версия: старая запись показывается, только пока копии нет.

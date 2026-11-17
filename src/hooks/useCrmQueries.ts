@@ -149,6 +149,14 @@ export function useReconciliationSummary(sessionToken: string | undefined, enabl
   });
 }
 
+/** Счётчики «на проверке» для вкладок кассира. Живёт здесь, а не в CashierReconciliation,
+ * чтобы обзор кассира не тянул страницу сверки в стартовый бандл. */
+export function useCashierReconciliationSummary(sessionToken?: string, enabled = false) {
+  const { data } = useReconciliationSummary(sessionToken, enabled);
+  if (!data) return null;
+  return { '1': data.counts['1'].pending, '2': data.counts['2'].pending, 'Д': data.counts['Д'].pending };
+}
+
 // Строки одной группы. Время пересчёта входит в ключ: новый пересчёт — новые строки,
 // пока сверка не пересчитана, повторно ничего не скачиваем.
 export function useReconciliationGroup(sessionToken: string | undefined, runAt: string | undefined,

@@ -10,7 +10,7 @@ import { SCHOOL_TABS } from '../families/constants';
 import { DriverPaymentRecord, driverPaymentPeriodLabel, driverPaymentTotals } from './driverPayments';
 import './DriverPaymentsPanel.css';
 export default function DriverPaymentsPanel({driverId,sessionToken,view,canDeleteAdvance=false}:{driverId:string;sessionToken?:string;view:'finance'|'history';canDeleteAdvance?:boolean}) {
-  const query=useQuery<DriverPaymentRecord[]>({queryKey:['driverPayments',driverId,sessionToken],queryFn:()=>fetchDriverPaymentHistory(driverId,sessionToken),enabled:Boolean(driverId && sessionToken),refetchOnMount:'always',refetchInterval:30000});
+  const query=useQuery<DriverPaymentRecord[]>({queryKey:['driverPayments',driverId,sessionToken],queryFn:()=>fetchDriverPaymentHistory(driverId,sessionToken),enabled:Boolean(driverId && sessionToken),refetchOnMount:'always'});
   const [deleting,setDeleting]=useState('');
   const [deleteError,setDeleteError]=useState('');
   const rows:DriverPaymentRecord[]=query.data??[];

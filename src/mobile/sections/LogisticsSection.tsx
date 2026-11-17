@@ -1,7 +1,7 @@
 import { isVisibleDriver } from '../../modules/drivers/driverSchoolVisibility';
 import React, { useMemo, useState } from 'react';
 import { Bus, Car, Route, UserPlus, Users, UserX } from 'lucide-react';
-import { useDriversTable, useFamiliesTable } from '../../hooks/useCrmQueries';
+import { useDriversTable, useLogisticsTable } from '../../hooks/useCrmQueries';
 import { isSchoolAllowed, SCHOOL_TIER_2_KEYS } from '../../modules/families/constants';
 import { AuthenticatedUser } from '../../services/employeeService';
 import { FamilyListRow, V2DriverTableRow } from '../../services/crmV2Service';
@@ -114,7 +114,8 @@ const formatAverage = (value: number) => value.toLocaleString('ru-RU', { maximum
 
 export default function LogisticsSection({ user }: { user: AuthenticatedUser }) {
   const nav = useNavPosition();
-  const families = useFamiliesTable();
+  // Логистике деньги не нужны — таблица без балансов, сводок и платежей.
+  const families = useLogisticsTable();
   const drivers = useDriversTable();
   const [homeTab, setHomeTab] = useState<HomeTab>('schools');
   const [query, setQuery] = useState('');

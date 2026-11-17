@@ -1026,7 +1026,9 @@ export default function FamiliesPage({ mode = 'requests', accrualsView = false, 
     let timer: number | undefined;
     const refresh = () => {
       window.clearTimeout(timer);
-      timer = window.setTimeout(() => { void load(false); }, 80);
+      // Без force: после своей правки кэш уже сброшен и загрузится заново,
+      // а после изменений коллег в нём уже лежат точечно обновлённые семьи.
+      timer = window.setTimeout(() => { void load(false, false); }, 80);
     };
     window.addEventListener(FAMILIES_CHANGED_EVENT, refresh);
     return () => {

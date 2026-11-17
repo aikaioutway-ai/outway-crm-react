@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_SPECIAL_OPTIONS, transferChoiceValue, transferCommentPrompt } from './constants';
 import { askTransferComment, formatTransferComment } from '../../core/dashboard/askTransferComment';
 import { createPortal } from 'react-dom';
@@ -26,10 +26,12 @@ import { VEHICLE_COLOR } from '../../core/dashboard/TransferCell';
 import { SCHOOL_TIER_2_KEYS, SCHOOL_TABS, isSchoolAllowed, isSchoolVisible } from './constants';
 import { SCHOOL_COLORS } from './LogisticsOverview';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
-import InlineFamilyCard from './InlineFamilyCard';
 import { ChevronRight, Eye, EyeOff, Route } from 'lucide-react';
 import { addressKey, collectZoneTransfers, rowsForZoneTransfers, schoolLabelFor, zoneTransferKey } from './zoneTransfers';
 import { matchesLogisticsMapFilter } from './familiesRowHelpers';
+
+// Карточка семьи открывается по клику — не держим её в стартовом бандле.
+const InlineFamilyCard = lazy(() => import('./InlineFamilyCard'));
 
 interface LogisticsMapViewProps {
   schoolKey: string;
@@ -1132,13 +1134,15 @@ export default function LogisticsMapView({ schoolKey, transferFilter, search = '
           }}
         >
           <div onClick={event => event.stopPropagation()} style={{ width: 'min(1240px, calc(100vw - 36px))' }}>
-            <InlineFamilyCard
-              family={openFamily}
-              userRole={userRole}
-              userName={userName}
-              sessionToken={sessionToken}
-              onClose={() => setOpenFamily(null)}
-            />
+            <Suspense fallback={null}>
+              <InlineFamilyCard
+                family={openFamily}
+                userRole={userRole}
+                userName={userName}
+                sessionToken={sessionToken}
+                onClose={() => setOpenFamily(null)}
+              />
+            </Suspense>
           </div>
         </div>
       )}

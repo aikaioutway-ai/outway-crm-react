@@ -3,7 +3,7 @@ import { parseTransferChoice, TRANSFER_NUMBER_VALUES, TRANSFER_SPECIAL_OPTIONS, 
 import { askTransferComment, formatTransferComment } from '../core/dashboard/askTransferComment';
 import React, { useState } from 'react';
 import { MapPin } from 'lucide-react';
-import { useFamiliesTable } from '../hooks/useCrmQueries';
+import { useFamiliesTable, useLogisticsTable } from '../hooks/useCrmQueries';
 import { FamilyListRow, updateV2Child, updateV2ChildRoute } from '../services/crmV2Service';
 import { VehicleType } from '../types';
 import { QK, queryClient } from '../services/queryClient';
@@ -28,9 +28,12 @@ function transferOptions(current: string | null) {
 
 function patchRow(childId: string, patch: Partial<FamilyListRow>) {
   // Показываем изменение сразу, не дожидаясь перезагрузки всей таблицы.
-  queryClient.setQueryData<FamilyListRow[]>(QK.familiesTable, (current: FamilyListRow[] | undefined) => current?.map((row: FamilyListRow) => (
-    row.rowId === childId ? { ...row, ...patch } : row
-  )));
+  // Правим обе копии: с финансами (менеджер, кассир) и без (логистика).
+  for (const key of [QK.familiesTable, QK.logisticsTable]) {
+    queryClient.setQueryData<FamilyListRow[]>(key, (current: FamilyListRow[] | undefined) => current?.map((row: FamilyListRow) => (
+      row.rowId === childId ? { ...row, ...patch } : row
+    )));
+  }
 }
 
 export default function FamilySheet({ familyId, onClose, canEditStatus, showFinance, userName }: {
@@ -40,7 +43,10 @@ export default function FamilySheet({ familyId, onClose, canEditStatus, showFina
   showFinance: boolean;
   userName?: string;
 }) {
-  const { data, isLoading } = useFamiliesTable();
+  // Без финансов берём лёгкую таблицу логистики — ту же, что уже загружена у логиста.
+  const financeTable = useFamiliesTable({ enabled: showFinance });
+  const logisticsTable = useLogisticsTable({ enabled: !showFinance });
+  const { data, isLoading } = showFinance ? financeTable : logisticsTable;
   const rows = (data ?? []).filter(row => row.familyId === familyId);
   const family = rows[0];
   const children = rows.filter(row => !row.rowId.endsWith('_empty'));

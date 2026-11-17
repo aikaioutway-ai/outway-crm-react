@@ -1,4 +1,4 @@
-import { restrictedRoleFor } from './modules/employees/EmployeesPage';
+import { restrictedRoleFor } from './modules/employees/employeeRoles';
 import SchoolRequestsKanban from './modules/families/SchoolRequestsKanban';
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
 import TaskContextMenu from './modules/tasks/TaskContextMenu';
@@ -29,6 +29,7 @@ import LoginPage from './modules/auth/LoginPage';
 import {
   AuthenticatedUser,
   authenticateEmployee,
+  getEmployeeById,
 } from './services/employeeService';
 import {
   EMPLOYEE_SESSION_EXPIRED_EVENT,
@@ -39,14 +40,14 @@ import { SCHOOL_DIRECTORY, CASHIER_PERIODS, currentCashierPeriodKey, currentPayr
 import { Family, UserRole } from './types';
 import { FamilySearchHit, fetchV2Family } from './services/crmV2Service';
 import useIncomingMessageSound from './modules/messages/useIncomingMessageSound';
-import { onMessageComposer, requestOverdueNotification, useMessageChannels } from './services/messageService';
+import { MESSAGES_ENABLED, onMessageComposer, requestOverdueNotification, useMessageChannels } from './services/messageService';
 import { queryClient, QK } from './services/queryClient';
 import { callTaskApi, useTaskSummary, useTaskStatistics } from './services/taskService';
 import { OPEN_TARGET_EVENT, TASK_COMPOSER_EVENT, TASK_VIEW_EVENT, TaskTarget } from './modules/tasks/taskTypes';
 import TaskButton from './modules/tasks/TaskButton';
 import { DashboardSearch, DashboardTopPanel, SchoolAvatar } from './core/dashboard/DashboardUI';
 import { supabase } from './services/supabase';
-import { scheduleRealtimeFamiliesRefresh, watchRealtimeRefreshOnReturn } from './services/crmV2Service';
+import { FAMILY_CHANGES_CHANNEL, scheduleRealtimeFamiliesRefresh, watchRealtimeRefreshOnReturn } from './services/crmV2Service';
 import { isTabletDevice, useDesktopViewport, useForceDesktop, useIsMobileViewport } from './mobile/useIsMobile';
 import './index.css';
 
@@ -228,12 +229,13 @@ export default function App() {
   // Канбан заявок меняют только логисты и админ, остальные смотрят.
   const notifiesOverdueRequests = currentUserRole === 'senior_logist' || currentUserRole === 'director' || currentUserRole === 'gen_director' || currentUserRole === 'admin';
   // Непрочитанные сообщения — счётчик на пункте «Сообщения».
-  const messageChannels = useMessageChannels(currentUser?.sessionToken);
+  // Пока чат скрыт, без токена запрос не включается — фонового опроса нет.
+  const messageChannels = useMessageChannels(MESSAGES_ENABLED ? currentUser?.sessionToken : undefined);
   useIncomingMessageSound(messageChannels.data, currentUser?.id, currentUser?.name);
   const unreadMessageCount = (messageChannels.data ?? []).reduce((sum, channel) => sum + channel.unread, 0);
   // Раз в день сводка просрочки в «Уведомления»: создаёт первый из руководства, кто открыл CRM.
   useEffect(() => {
-    if (currentUser?.sessionToken && notifiesOverdueRequests) void requestOverdueNotification(currentUser.sessionToken).catch(() => undefined);
+    if (MESSAGES_ENABLED && currentUser?.sessionToken && notifiesOverdueRequests) void requestOverdueNotification(currentUser.sessionToken).catch(() => undefined);
   }, [currentUser?.sessionToken, notifiesOverdueRequests]);
   const openReconciliation = () => setCashierWorkspace('reconciliation');
   const canReconcilePayments = !currentUser?.schoolKeys?.length || currentUser.schoolKeys.includes('ALL');
@@ -335,11 +337,21 @@ export default function App() {
   useEffect(() => {
     if (!currentUser) return;
     const stopWatching = watchRealtimeRefreshOnReturn();
+    // База сама рассылает короткий сигнал со списком изменённых семей
+    // (триггер на v2_children и v2_transfers). Это не опрашивает WAL каждую
+    // секунду, как postgres_changes, и не тянет всю таблицу семей у каждого.
+    let wasSubscribed = false;
     const channel = supabase
-      .channel('crm-transfer-allocation-sync')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_children' }, scheduleRealtimeFamiliesRefresh)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'v2_transfers' }, scheduleRealtimeFamiliesRefresh)
-      .subscribe();
+      .channel(FAMILY_CHANGES_CHANNEL)
+      .on('broadcast', { event: 'changed' }, ({ payload }) => {
+        const ids = Array.isArray(payload?.family_ids) ? payload.family_ids.map(String) : null;
+        scheduleRealtimeFamiliesRefresh(payload?.all || !ids ? 'all' : ids);
+      })
+      .subscribe(status => {
+        // После обрыва связи сигналы могли потеряться — один раз догоняем всё.
+        if (status === 'SUBSCRIBED' && wasSubscribed) scheduleRealtimeFamiliesRefresh('all');
+        if (status === 'SUBSCRIBED') wasSubscribed = true;
+      });
     return () => { stopWatching(); void supabase.removeChannel(channel); };
   }, [currentUser]);
 
@@ -389,14 +401,12 @@ export default function App() {
   // Обновляем сессию если position ещё не загружен (старый localStorage)
   useEffect(() => {
     if (!currentUser || currentUser.position !== undefined) return;
-    import('./services/employeeService').then(({ getEmployeeById }) => {
-      getEmployeeById(currentUser.id).then(emp => {
-        if (!emp) return;
-        const updated = { ...currentUser, position: emp.position ?? '' };
-        localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
-        setCurrentUser(updated);
-      }).catch(() => {});
-    });
+    getEmployeeById(currentUser.id).then(emp => {
+      if (!emp) return;
+      const updated = { ...currentUser, position: emp.position ?? '' };
+      localStorage.setItem(SESSION_KEY, JSON.stringify(updated));
+      setCurrentUser(updated);
+    }).catch(() => {});
   }, [currentUser]);
 
   // В сайдбаре виден только счётчик задач (значок Логистики скрыт),

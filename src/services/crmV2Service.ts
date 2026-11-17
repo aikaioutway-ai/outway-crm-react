@@ -14,11 +14,12 @@ import {
 } from './transferRepricing';
 
 export const FAMILIES_CHANGED_EVENT = 'outway:families-changed';
+/** Канал Realtime Broadcast, куда база шлёт { family_ids } после изменений детей и трансферов. */
+export const FAMILY_CHANGES_CHANNEL = 'crm-family-changes';
 
-/** Точечный сброс кэша семей/детей после мутации — вызывается вместо
- * полной перезагрузки CRM. React Query сам решит, кому из подписанных
- * компонентов сейчас нужен повторный запрос. */
-export function invalidateFamiliesCache(): void {
+/** Лёгкие сводки (счётчики, KPI, поиск), которые зависят от детей и трансферов.
+ * React Query перезапросит только те, что сейчас открыты на экране. */
+function invalidateFamilyAggregates(): void {
   invalidateCashierFamilyLookup();
   queryClient.invalidateQueries({ queryKey: QK.branchStats });
   queryClient.invalidateQueries({ queryKey: QK.schoolApplicationCounts });
@@ -26,30 +27,91 @@ export function invalidateFamiliesCache(): void {
   queryClient.invalidateQueries({ queryKey: QK.schoolDirectoryStats });
   queryClient.invalidateQueries({ queryKey: ['schoolTransferStats'] });
   queryClient.invalidateQueries({ queryKey: ['familySearch'] });
-  queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
-  queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   queryClient.invalidateQueries({ queryKey: ['familiesPage'] });
   queryClient.invalidateQueries({ queryKey: QK.transfersDashboard });
   queryClient.invalidateQueries({ queryKey: ['overdueRequestCount'] });
+}
+
+/** Точечный сброс кэша семей/детей после мутации — вызывается вместо
+ * полной перезагрузки CRM. React Query сам решит, кому из подписанных
+ * компонентов сейчас нужен повторный запрос. */
+export function invalidateFamiliesCache(): void {
+  invalidateFamilyAggregates();
+  queryClient.invalidateQueries({ queryKey: ['familiesTable'] });
+  queryClient.invalidateQueries({ queryKey: QK.logisticsTable });
   if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
 }
 
-// Изменения коллег приходят по realtime пачками (массовая посадка, перенос
-// маршрута). CRM ждёт паузу и обновляет экран один раз, а фоновая вкладка
-// обновится только когда сотрудник к ней вернётся.
+/** Изменения коллег: перезапрашиваем строки только этих семей и вписываем их
+ * в уже загруженные таблицы, вместо повторной выкачки всех семей. */
+export async function refreshFamiliesInCache(familyIds: string[]): Promise<void> {
+  const ids = Array.from(new Set(familyIds.filter(Boolean)));
+  if (!ids.length) return;
+  const targets = [
+    { key: QK.familiesTable, withFinance: true },
+    { key: QK.logisticsTable, withFinance: false },
+  ].filter(target => queryClient.getQueryData<FamilyListRow[]>(target.key));
+  await Promise.all(targets.map(async target => {
+    const fresh = await fetchV2FamilyRows(ids, target.withFinance);
+    queryClient.setQueryData<FamilyListRow[]>(target.key, (current: FamilyListRow[] | undefined) => current ? mergeFamilyRows(current, ids, fresh) : current);
+  }));
+  invalidateFamilyAggregates();
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event(FAMILIES_CHANGED_EVENT));
+}
+
+/** Заменяет строки указанных семей на свежие, не трогая порядок остальных.
+ * Новые семьи встают в начало (таблица отсортирована от новых к старым),
+ * удалённые — исчезают. */
+export function mergeFamilyRows(current: FamilyListRow[], familyIds: string[], fresh: FamilyListRow[]): FamilyListRow[] {
+  const changed = new Set(familyIds);
+  const freshByFamily = new Map<string, FamilyListRow[]>();
+  fresh.forEach(row => {
+    const list = freshByFamily.get(row.familyId) ?? [];
+    list.push(row);
+    freshByFamily.set(row.familyId, list);
+  });
+  const placed = new Set<string>();
+  const result: FamilyListRow[] = [];
+  current.forEach(row => {
+    if (!changed.has(row.familyId)) { result.push(row); return; }
+    if (placed.has(row.familyId)) return;
+    placed.add(row.familyId);
+    (freshByFamily.get(row.familyId) ?? []).forEach(item => result.push({ ...item, familyIndex: row.familyIndex }));
+  });
+  const minIndex = current.reduce((min, row) => Math.min(min, row.familyIndex), 0);
+  const added = Array.from(freshByFamily.keys()).filter(id => !placed.has(id));
+  const prepended = added.flatMap((id, order) => freshByFamily.get(id)!.map(item => ({ ...item, familyIndex: minIndex - added.length + order })));
+  return [...prepended, ...result];
+}
+
+// Изменения коллег приходят пачками (массовая посадка, перенос маршрута).
+// CRM копит изменённые семьи, ждёт паузу и обновляет экран один раз, а фоновая
+// вкладка обновится только когда сотрудник к ней вернётся.
 export const REALTIME_REFRESH_DELAY_MS = 3000;
+// Если за паузу поменялось много семей, дешевле одна общая загрузка.
+const REALTIME_TARGETED_LIMIT = 40;
 let realtimeRefreshTimer: ReturnType<typeof setTimeout> | undefined;
 let realtimeRefreshPending = false;
+let realtimeRefreshAll = false;
+const realtimePendingFamilies = new Set<string>();
 
 function runPendingRealtimeRefresh(): void {
   if (!realtimeRefreshPending) return;
   if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  const ids = Array.from(realtimePendingFamilies);
+  const all = realtimeRefreshAll || ids.length === 0 || ids.length > REALTIME_TARGETED_LIMIT;
   realtimeRefreshPending = false;
-  invalidateFamiliesCache();
+  realtimeRefreshAll = false;
+  realtimePendingFamilies.clear();
+  if (all) { invalidateFamiliesCache(); return; }
+  void refreshFamiliesInCache(ids).catch(() => invalidateFamiliesCache());
 }
 
-export function scheduleRealtimeFamiliesRefresh(): void {
+/** familyIds — какие семьи поменялись; 'all' или пустой вызов — неизвестно какие. */
+export function scheduleRealtimeFamiliesRefresh(familyIds?: string[] | 'all'): void {
   realtimeRefreshPending = true;
+  if (!familyIds || familyIds === 'all') realtimeRefreshAll = true;
+  else familyIds.forEach(id => realtimePendingFamilies.add(String(id)));
   clearTimeout(realtimeRefreshTimer);
   realtimeRefreshTimer = setTimeout(runPendingRealtimeRefresh, REALTIME_REFRESH_DELAY_MS);
 }
@@ -63,6 +125,8 @@ export function watchRealtimeRefreshOnReturn(): () => void {
     document.removeEventListener('visibilitychange', onVisibility);
     clearTimeout(realtimeRefreshTimer);
     realtimeRefreshPending = false;
+    realtimeRefreshAll = false;
+    realtimePendingFamilies.clear();
   };
 }
 
@@ -676,27 +740,16 @@ export async function fetchV2FamiliesPendingDetails(): Promise<Record<string, an
   return map;
 }
 
-// Семей и детей сейчас 1–3 тысячи: три порции за раз покрывают всю таблицу
-// одним кругом запросов.
-const FAMILIES_TABLE_PARALLEL_PAGES = 3;
-
-const familiesTableInflight: Partial<Record<'withFinance' | 'base', Promise<FamilyListRow[]>>> = {};
-
-export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
-  const cacheKey = withFinance ? 'withFinance' : 'base';
-  if (familiesTableInflight[cacheKey]) return familiesTableInflight[cacheKey]!;
-
-  const request = (async (): Promise<FamilyListRow[]> => {
-  const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
-    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).order('id').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).order('id').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
-    // Без финансов (Логистика) сводки и кошельки не запрашиваются вовсе.
-    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
-    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
-    withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
-    fetchV2Branches(),
-  ]);
-
+/** Собирает строки таблицы семей (по строке на ребёнка) из сырых данных базы.
+ * Общая для полной загрузки и для точечного обновления отдельных семей. */
+function buildFamilyRows(
+  families: any[],
+  children: any[],
+  summaries: any[],
+  wallets: any[],
+  pendingMap: Record<string, any>,
+  branches: V2BranchOption[],
+): FamilyListRow[] {
   const branchById: Record<string, typeof branches[number]> = {};
   branches.forEach(b => { branchById[b.id] = b; });
 
@@ -799,6 +852,62 @@ export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyLi
   });
 
   return rows;
+}
+
+/** Строки только указанных семей — для точечного обновления после изменений коллег. */
+export async function fetchV2FamilyRows(familyIds: string[], withFinance = true): Promise<FamilyListRow[]> {
+  const ids = Array.from(new Set(familyIds));
+  if (!ids.length) return [];
+  // Длинный список id не помещается в URL одного запроса — режем на порции.
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+  const byChunks = async (load: (chunk: string[]) => PromiseLike<{ data: any[] | null; error: any }>) => {
+    const parts = await Promise.all(chunks.map(async chunk => {
+      const { data, error } = await load(chunk);
+      if (error) throw new Error(error.message);
+      return data ?? [];
+    }));
+    return parts.flat();
+  };
+  const [families, children, summaries, wallets, pending, branches] = await Promise.all([
+    byChunks(chunk => supabase.from('v2_families').select('*').in('id', chunk).order('created_at', { ascending: false }).order('id')),
+    byChunks(chunk => supabase.from('v2_children').select(CHILD_SELECT).in('family_id', chunk).order('id')),
+    withFinance ? byChunks(chunk => supabase.from('v2_families_summary').select('*').in('family_id', chunk)) : Promise.resolve([]),
+    withFinance ? byChunks(chunk => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').in('family_id', chunk)) : Promise.resolve([]),
+    withFinance
+      ? byChunks(chunk => supabase.from('v2_payments')
+        .select('id, family_id, amount, status, payment_date, actual_payment_date, payment_method, receipt_url, comment, created_at')
+        .eq('status', 'pending').in('family_id', chunk).order('created_at', { ascending: true }))
+      : Promise.resolve([]),
+    fetchV2Branches(),
+  ]);
+  const pendingMap: Record<string, any> = {};
+  pending.forEach((payment: any) => { if (!pendingMap[payment.family_id]) pendingMap[payment.family_id] = payment; });
+  return buildFamilyRows(families, children, summaries, wallets, pendingMap, branches);
+}
+
+// Семей и детей сейчас 1–3 тысячи: три порции за раз покрывают всю таблицу
+// одним кругом запросов.
+const FAMILIES_TABLE_PARALLEL_PAGES = 3;
+
+const familiesTableInflight: Partial<Record<'withFinance' | 'base', Promise<FamilyListRow[]>>> = {};
+
+export async function fetchV2FamiliesTable(withFinance = true): Promise<FamilyListRow[]> {
+  const cacheKey = withFinance ? 'withFinance' : 'base';
+  if (familiesTableInflight[cacheKey]) return familiesTableInflight[cacheKey]!;
+
+  const request = (async (): Promise<FamilyListRow[]> => {
+  const [families, children, summaries, wallets, pendingMap, branches] = await Promise.all([
+    fetchAllRows<any>((from, to) => supabase.from('v2_families').select('*').order('created_at', { ascending: false }).order('id').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    fetchAllRows<any>((from, to) => supabase.from('v2_children').select(CHILD_SELECT).order('id').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES),
+    // Без финансов (Логистика) сводки и кошельки не запрашиваются вовсе.
+    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_families_summary').select('*').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
+    withFinance ? fetchAllRows<any>((from, to) => supabase.from('v2_family_wallets').select('family_id, main_balance, deposit_balance').range(from, to), FAMILIES_TABLE_PARALLEL_PAGES) : Promise.resolve([]),
+    withFinance ? fetchV2FamiliesPendingDetails() : Promise.resolve({} as Record<string, any>),
+    fetchV2Branches(),
+  ]);
+
+  return buildFamilyRows(families, children, summaries, wallets, pendingMap, branches);
   })();
 
   familiesTableInflight[cacheKey] = request;

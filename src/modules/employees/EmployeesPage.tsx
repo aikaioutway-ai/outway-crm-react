@@ -5,6 +5,7 @@ import { fetchSpendingPayments } from '../../services/spendingService';
 import type { SpendingEntry } from '../spending/SpendingModule';
 import EmployeePaymentHistory from './EmployeePaymentHistory';
 import { EMPLOYEE_DEPARTMENTS } from './employeeDepartments';
+import { restrictedRoleFor } from './employeeRoles';
 import React, { useEffect, useMemo, useState } from 'react';
 import { BriefcaseBusiness, Building2, CalendarDays, FileText, Plus, Save, Search, ShieldCheck, Trash2, WalletCards, X } from 'lucide-react';
 import { ColumnDef, DataTable } from '../../core/tables/DataTable';
@@ -49,13 +50,6 @@ function academicPeriods() {
 }
 function toDraft(employee: Employee): EmployeeDraft { return { id: employee.id, fullName: employee.fullName, login: employee.login, password: '', role: employee.role, position: employee.position, phone1: employee.phone1, phone2: employee.phone2 ?? '', address: employee.address ?? '', schoolKeys: employee.schoolKeys, status: employee.status, startDate: employee.startDate, comment: employee.comment ?? '' }; }
 function roleLabel(role: EmployeeRole) { return ROLE_OPTIONS.find(item => item.value === role)?.label ?? role; }
-/** Директор заводит только менеджеров, нач. логистики — только логистов; остальным ролям раздел вообще недоступен (см. getAllowedSections). */
-export function restrictedRoleFor(viewerRole: UserRole): EmployeeRole[] | null {
-  if (viewerRole === 'cashier') return ['cashier', 'manager', 'logist'];
-  if (viewerRole === 'director') return ['manager'];
-  if (viewerRole === 'senior_logist') return ['logist', 'b2b_manager', 'b2b_logist', 'cashier'];
-  return null;
-}
 function statusLabel(status: EmployeeStatus) { return STATUS_OPTIONS.find(item => item.value === status)?.label ?? status; }
 function schoolLabel(keys: string[]) {
   if (keys.includes('ALL')) return 'Все школы';
