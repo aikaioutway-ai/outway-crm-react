@@ -1113,3 +1113,41 @@ button.manager-school-brand {
 .cashier2-mode-cards .manager-mode-metric {
   margin-top: 3px;
 }
+
+.manager-overview-sidebar .manager-mode-cards:has(> .manager-mode-card[data-logistics-tab="map"]:first-child) {
+  grid-template-rows: auto;
+}
+
+.manager-overview-sidebar .manager-mode-card[data-logistics-tab="map"] {
+  align-content: center;
+  min-height: 44px;
+  padding-block: 8px;
+}
+
+@media (max-width: 760px) {
+  .manager-overview-sidebar .manager-mode-card[data-logistics-tab="map"]:first-child {
+    grid-column: 1 / -1;
+  }
+}
+
+.logistics-school-addresses .ow-school-table { min-width: 400px; }
+.logistics-school-addresses .ow-school-table th {
+  background: var(--surface-2);
+  color: var(--text);
+}
+.logistics-school-addresses th:first-child { width: 22%; }
+.logistics-school-addresses th:last-child { width: 28%; }
+.logistics-school-addresses th > span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  font-weight: 650;
+}
+.logistics-school-addresses th svg { color: var(--accent); flex: none; }
+.logistics-school-addresses td { overflow-wrap: anywhere; }
+
+.manager-overview-sidebar .manager-mode-cards:has(> .manager-mode-card[data-logistics-tab="map"]:last-child) {
+  grid-template-rows: repeat(3, 1fr) auto;
+}

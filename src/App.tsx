@@ -436,7 +436,7 @@ export default function App() {
       {isManagerSection && !isManager2 && managerSchoolKey && <AllRecordsButton onClick={()=>handleManagerSelectSchool('ALL')}/>}
       {(section === 'cashier' || section === 'cashier2') && cashierWorkspace === 'payments' && cashierSchoolKey && <AllRecordsButton onClick={()=>handleCashierSelectSchool('ALL')}/>}
       {section === 'logistics' && logisticsSchoolKey && <AllRecordsButton onClick={()=>handleLogisticsSelectSchool('ALL')}/>}
-      {section === 'logistics2' && logistics2SchoolKey && logistics2View !== 'table' && <AllRecordsButton onClick={()=>handleLogistics2SelectSchool('ALL')}/>}
+      {section === 'logistics2' && logistics2SchoolKey && logistics2View !== 'table' && logistics2View !== 'map' && <AllRecordsButton onClick={()=>handleLogistics2SelectSchool('ALL')}/>}
       {section === 'drivers' && driversSchoolKey && <AllRecordsButton onClick={()=>{setDriversSchoolKey('ALL');setDriversTransferFilter('');}}/>}
       <div className="ow-user-meta">
         {currentUser.position && <div className="ow-user-role">{currentUser.position}</div>}
@@ -899,7 +899,14 @@ export default function App() {
                     </button>
                   ))}
                   <LogisticsSummaryTabs schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys}
-                    value={logistics2View} onChange={setLogistics2View} />
+                    value={logistics2View} onChange={view => {
+                      if (view === 'map' && logistics2SchoolKey === 'ALL') {
+                        setLogistics2SchoolKey(null);
+                        setLogistics2Search('');
+                        setLogistics2TransferFilter('');
+                      }
+                      setLogistics2View(view);
+                    }} />
                 </div>
                 <div className="manager-workspace-content logistics-school-content">
               {logistics2View === 'drivers' ? (

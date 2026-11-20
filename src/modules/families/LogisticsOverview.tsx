@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Briefcase, BusFront, CalendarDays } from 'lucide-react';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
+import LogisticsSchoolAddresses from './LogisticsSchoolAddresses';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay, countRequestsBySchool } from './NewRequestsDashboard';
 import { requestStage, isRequestOnBoard } from './requestWorkflow';
@@ -136,11 +137,12 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
   });
 }
 
-export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKey }: {
+export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKey, showMap = false }: {
   value: import('./LogisticsTabs').LogisticsTab;
   onChange: (value: import('./LogisticsTabs').LogisticsTab) => void;
   allowedSchools?: string[];
   schoolKey?: string;
+  showMap?: boolean;
 }) {
   const { data: rows } = useLogisticsTable();
   const { data: drivers } = useDriversTable();
@@ -166,7 +168,7 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
   const staff = hasSchool && schoolKey ? schoolStaff(employees ?? [], schoolKey) : null;
 
   return <>
-  <LogisticsTabs cards showMap={hasSchool && value !== 'drivers'} value={value} onChange={onChange} summaries={{
+  <LogisticsTabs cards mapLabel={showMap ? "Школы" : undefined} showMap={showMap || (hasSchool && value !== 'drivers')} value={value} onChange={onChange} summaries={{
     table: [
       { label: 'Средний', average: true, value: rows ? totals.microbusAverage.toFixed(1) : '—' },
       { label: 'Микроавтобусы', value: rows ? totals.microbusCount : '—' },
@@ -279,12 +281,12 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
             })}
           </div>}
           <div className="manager-overview-search">{view === 'drivers' ? driversSearch : <ManagerSearch rows={rows} onOpenFamily={onOpenFamily} />}</div>
-          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')} /></div>
+          <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />{view !== 'map' && <AllRecordsButton onClick={() => onSelectSchool('ALL')} />}</div>
         </DashboardTopPanel>
         <div className="manager-workspace manager-overview-body">
-          <div className="manager-overview-sidebar"><LogisticsSummaryTabs allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
+          <div className="manager-overview-sidebar"><LogisticsSummaryTabs showMap allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
           <div className="manager-workspace-content">
-        {view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
+        {view === 'map' ? <LogisticsSchoolAddresses allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
           columns={[
             { key: 'microbusAverage', label: 'Средний по МКР', total: totals.microbusAverage.toFixed(1), color: KPI_COLORS.microbusAverage },
             { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },

@@ -81,3 +81,23 @@ test('gives each CRM payment to only one statement row with the same amount and 
   const paired = reconcileBankStatement(rows, two).flatMap(row => row.candidates.map(item => item.id));
   expect(paired.sort()).toEqual([one.id, 'p2'].sort());
 });
+
+test.each([false, true])('reads statement headers with rich text = %s', async rich => {
+  const ExcelJS = (await import('exceljs')).default;
+  const workbook = new ExcelJS.Workbook();
+  const sheet = workbook.addWorksheet('Выписка');
+  sheet.getCell('A1').value = 'За период с 09.11.2026 по 15.11.2026';
+  const labels = ['Документ', 'Дата операции', '', '', '', '', '', '', 'Оборот Дт', 'Оборот Кт', 'Назначение платежа'];
+  labels.forEach((text, index) => {
+    sheet.getRow(3).getCell(index + 1).value = rich ? { richText: [{ text }] } : text;
+  });
+  sheet.getRow(4).values = ['Плат.пор. № 1', '09.11.2026', '', '', '', '', '', '', 0, 5200, 'Оплата'];
+  sheet.getRow(5).values = ['Плат.пор. № 2', '09.11.2026', '', '', '', '', '', '', 52, 0, 'Комиссия'];
+  const bytes = await workbook.xlsx.writeBuffer();
+  const file = { arrayBuffer: async () => bytes } as File;
+  const { readBankStatement } = await import('./statementReconciliation');
+  const result = await readBankStatement(file);
+  expect(result.range).toEqual({ from: '2026-11-09', to: '2026-11-15' });
+  expect(result.entries).toHaveLength(1);
+  expect(result.entries[0]).toMatchObject({ amount: 5200, postingDate: '2026-11-09' });
+});

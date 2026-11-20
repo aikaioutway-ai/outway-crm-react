@@ -1,6 +1,6 @@
 import { microbusAverageTone } from './familiesRowHelpers';
 import React from 'react';
-import { User, UserPlus, MapIcon } from 'lucide-react';
+import { User, UserPlus, MapIcon, School } from 'lucide-react';
 import DriverIcon from '../../core/icons/DriverIcon';
 export type LogisticsTab = 'requests' | 'table' | 'map' | 'drivers';
 type Metric = { label: string; value: string | number; alert?: boolean; average?: boolean };
@@ -13,20 +13,25 @@ const tabs = [
   ['drivers', 'Водители', DriverIcon],
 ] as const;
 
-export default function LogisticsTabs({ value, onChange, cards = false, showMap = !cards, summaries }: {
+export default function LogisticsTabs({ value, onChange, cards = false, showMap = !cards, mapLabel = "Карта", summaries }: {
   school?: boolean;
   cards?: boolean;
   showMap?: boolean;
+  mapLabel?: string;
   summaries?: Summaries;
   value: LogisticsTab;
   onChange: (value: LogisticsTab) => void;
 }) {
   return <div role="tablist" aria-label="Раздел логистики" className={cards ? 'manager-mode-cards' : 'ow-seg'}>
-    {(cards && showMap ? [tabs[2], tabs[0], tabs[1], tabs[3]] : tabs.filter(([key]) => showMap || key !== 'map')).map(([key, label, Icon]) => {
+    {(cards && showMap
+      ? mapLabel === 'Школы' ? [tabs[0], tabs[1], tabs[3], tabs[2]] : [tabs[2], tabs[0], tabs[1], tabs[3]]
+      : tabs.filter(([key]) => showMap || key !== 'map')).map(([key, defaultLabel, DefaultIcon]) => {
+      const Icon = key === 'map' && mapLabel === 'Школы' ? School : DefaultIcon;
+      const label = key === 'map' ? mapLabel : defaultLabel;
       const metrics = summaries?.[key] ?? [];
       const newCount = key === 'requests' ? Number(metrics[0]?.value ?? 0) : 0;
       return <button key={key} type="button" role="tab" className={cards ? 'manager-mode-card' : 'ow-seg-btn'}
-        aria-label={label} title={label} aria-selected={value === key} onClick={() => onChange(key)}
+        data-logistics-tab={key} aria-label={label} title={label} aria-selected={value === key} onClick={() => onChange(key)}
         style={cards ? undefined : { minWidth: 44, minHeight: 36, display: 'grid', placeItems: 'center' }}>
         <Icon size={18} aria-hidden="true" />
         {cards && <span className="manager-mode-title">{label}</span>}

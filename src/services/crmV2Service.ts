@@ -143,6 +143,7 @@ export interface V2BranchOption {
   code: string;
   shortName: string;
   name: string;
+  address?: string | null;
   latitude?: number | null;
   longitude?: number | null;
 }
@@ -1158,7 +1159,7 @@ export async function fetchV2Branches(): Promise<V2BranchOption[]> {
   if (branchesCache) return branchesCache;
   const { data, error } = await supabase
     .from('v2_school_branches')
-    .select('id, school_id, code, short_name, name, latitude, longitude')
+    .select('id, school_id, code, short_name, name, address, latitude, longitude')
     .eq('active', true)
     .order('code', { ascending: true });
   if (error) throw new Error(error.message);
@@ -1168,6 +1169,7 @@ export async function fetchV2Branches(): Promise<V2BranchOption[]> {
     code: row.code ?? '',
     shortName: row.short_name ?? row.code ?? '',
     name: row.name ?? row.short_name ?? row.code ?? '',
+    address: row.address ?? null,
     latitude: row.latitude ?? null,
     longitude: row.longitude ?? null,
   }));

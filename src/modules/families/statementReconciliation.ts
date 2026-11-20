@@ -10,9 +10,16 @@ function cellText(cell: import('exceljs').Cell): string {
 export async function readBankStatement(file: File) {
   const { default: ExcelJS } = await import('exceljs');
   const workbook = await new ExcelJS.Workbook().xlsx.load(await file.arrayBuffer());
-  const sheet = workbook.worksheets.find(item => item.getColumn(1).values.includes('Документ'));
+  const sheet = workbook.worksheets.find(item => {
+    let found = false;
+    item.eachRow(row => { if (cellText(row.getCell(1)) === 'Документ') found = true; });
+    return found;
+  });
   if (!sheet) throw new Error('Не найден лист выписки Мбанка.');
-  const header = sheet.getColumn(1).values.indexOf('Документ');
+  let header = 0;
+  sheet.eachRow((row, number) => {
+    if (!header && cellText(row.getCell(1)) === 'Документ') header = number;
+  });
   const columns = sheet.getRow(header);
   if (cellText(columns.getCell(2)) !== 'Дата операции' ||
       cellText(columns.getCell(10)) !== 'Оборот Кт' ||

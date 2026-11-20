@@ -21,7 +21,7 @@ export const QK = {
   schoolDirectoryStats: ['schoolDirectoryStats'] as const,
   schoolTransferStats: (branchIds: string[]) => ['schoolTransferStats', branchIds] as const,
   familySearch: (text: string, digits: string) => ['familySearch', text, digits] as const,
-  v2Branches: ['v2Branches'] as const,
+  v2Branches: ['v2Branches', 'withAddress'] as const,
   familiesTable: ['familiesTable'] as const,
   logisticsTable: ['logisticsTable'] as const,
   familiesPage: (filters: Record<string, unknown>) => ['familiesPage', filters] as const,
