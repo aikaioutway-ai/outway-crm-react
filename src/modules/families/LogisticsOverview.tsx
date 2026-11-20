@@ -5,7 +5,7 @@ import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
 import LogisticsSchoolAddresses from './LogisticsSchoolAddresses';
 import { RECONCILIATION_PERIODS, resolveReconciliationPeriod } from './LogisticsReconciliation';
-import { fetchLogisticsReconciliationMonth, ReconciliationMonthData } from '../../services/driverCheckService';
+import { fetchLogisticsReconciliationMonth, reconciliationTransferCounts, ReconciliationMonthData } from '../../services/driverCheckService';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay, countRequestsBySchool } from './NewRequestsDashboard';
 import { requestStage, isRequestOnBoard } from './requestWorkflow';
@@ -28,7 +28,7 @@ import HiddenSchoolsList from './HiddenSchoolsList';
 import { useEffect, useMemo, useState } from 'react';
 import { FamilyListRow, FamilySearchHit, fetchExpiredDriverIds } from '../../services/crmV2Service';
 import { useDriversTable, useEmployees, useLogisticsTable } from '../../hooks/useCrmQueries';
-import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, getBranchFilter, isSchoolAllowed } from './constants';
+import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, currentPayrollPeriodKey, getBranchFilter, isSchoolAllowed } from './constants';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
 import { buildGroupedRows, toggleGroupKey } from './schoolGrouping';
@@ -142,13 +142,28 @@ function computeLogisticsStats(rows: FamilyListRow[], tier: SchoolTier, allowedS
   });
 }
 
-export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKey, showMap = false }: {
+export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKey, showMap = false, sessionToken, reconciliationPeriodKey }: {
   value: import('./LogisticsTabs').LogisticsTab;
   onChange: (value: import('./LogisticsTabs').LogisticsTab) => void;
   allowedSchools?: string[];
   schoolKey?: string;
   showMap?: boolean;
+  sessionToken?: string;
+  reconciliationPeriodKey?: string;
 }) {
+  const period = resolveReconciliationPeriod(reconciliationPeriodKey ?? currentPayrollPeriodKey());
+  const checkQuery = useQuery<ReconciliationMonthData>({
+    queryKey: ['logistics-reconciliation-month', period.year, period.month, schoolKey ?? 'ALL', sessionToken],
+    queryFn: () => fetchLogisticsReconciliationMonth(sessionToken, { year: period.year, month: period.month, schoolKey: schoolKey === 'ALL' ? undefined : schoolKey }),
+    enabled: Boolean(sessionToken),
+    staleTime: 30_000,
+    refetchInterval: 60_000,
+  });
+  const checkCounts = checkQuery.data ? reconciliationTransferCounts({
+    ...checkQuery.data,
+    transfers: checkQuery.data.transfers.filter((transfer: ReconciliationMonthData['transfers'][number]) => !SCHOOL_TIER_2_KEYS.includes(transfer.schoolKey)
+      && isSchoolAllowed(transfer.schoolKey, allowedSchools)),
+  }) : undefined;
   const { data: rows } = useLogisticsTable();
   const { data: drivers } = useDriversTable();
   const inScope = (key: string) => !SCHOOL_TIER_2_KEYS.includes(key)
@@ -182,6 +197,10 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
     requests: [
       { label: 'Новые', value: rows ? newCount : '—', alert: newCount > 0 },
       { label: 'В работе', value: rows ? requests.reduce((sum, row) => sum + row.inWork, 0) : '—' },
+    ],
+    reconciliation: [
+      { label: 'Сделано', value: checkCounts?.completed ?? '—' },
+      { label: 'Не сделано', value: checkCounts?.pending ?? '—', alert: Boolean(checkCounts?.pending) },
     ],
     drivers: [
       { label: 'Активные', value: drivers ? ids.length : '—' },
@@ -221,8 +240,8 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   const setActivePeriodKey = onReconciliationPeriodKeyChange ?? setLocalReconcilePeriod;
   const activePeriod = useMemo(() => resolveReconciliationPeriod(activePeriodKey), [activePeriodKey]);
 
-  const { data: monthRaw } = useQuery<ReconciliationMonthData>({
-    queryKey: ['logistics-reconciliation-month', activePeriod.year, activePeriod.month, 'ALL'],
+  const { data: monthRaw, isPending: monthPending, isError: monthError, refetch: refreshMonth } = useQuery<ReconciliationMonthData>({
+    queryKey: ['logistics-reconciliation-month', activePeriod.year, activePeriod.month, 'ALL', sessionToken],
     queryFn: () => fetchLogisticsReconciliationMonth(sessionToken, { year: activePeriod.year, month: activePeriod.month }),
     enabled: view === 'reconciliation' && Boolean(sessionToken),
     staleTime: 30_000,
@@ -237,28 +256,18 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   // eslint-disable-next-line react-hooks/exhaustive-deps -- testMarks: пересчёт при смене тестовых отметок
   const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier, allowedSchools), [rows, schoolTier, allowedSchools, testMarks]);
   const reconcileStats = useMemo(() => {
-    const marks = monthData?.marksByChild ?? {};
     return SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (schoolTier === '2.0')).map((tab, index) => {
-      const schoolChildren = (rows ?? []).filter(row => row.branchFilter === tab.key && row.status !== 'rejected' && !row.rowId.endsWith('_empty') && !isInTestTransfer(row));
-      let r1 = 0; let r2 = 0; let r3 = 0; let r4 = 0;
-      for (const child of schoolChildren) {
-        const m = marks[child.rowId];
-        if (!m) continue;
-        if (m[1]?.present) r1 += 1;
-        if (m[2]?.present) r2 += 1;
-        if (m[3]?.present) r3 += 1;
-        if (m[4]?.present) r4 += 1;
-      }
+      const counts = monthData ? reconciliationTransferCounts(monthData, tab.key) : { completed: 0, pending: 0 };
       return {
         key: tab.key,
         label: tab.label,
         color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
         logo: tab.logo,
-        childrenCount: schoolChildren.length,
-        r1,
-        r2,
-        r3,
-        r4,
+        childrenCount: counts.completed + counts.pending,
+        r1: counts.completed,
+        r2: counts.pending,
+        r3: 0,
+        r4: 0,
       };
     });
   }, [rows, monthData, schoolTier, allowedSchools]);
@@ -362,14 +371,14 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />{view !== 'map' && <AllRecordsButton onClick={() => onSelectSchool('ALL')} />}</div>
         </DashboardTopPanel>
         <div className="manager-workspace manager-overview-body">
-          <div className="manager-overview-sidebar"><LogisticsSummaryTabs showMap allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
+          <div className="manager-overview-sidebar"><LogisticsSummaryTabs sessionToken={sessionToken} reconciliationPeriodKey={activePeriodKey} showMap allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
           <div className="manager-workspace-content">
-        {view === 'reconciliation' ? <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:reconciliation"
+        {view === 'reconciliation' ? monthPending ? <p role="status">Загрузка сверки…</p> : monthError ? <p role="alert">Не удалось загрузить сверку. <button type="button" onClick={() => void refreshMonth()}>Повторить</button></p> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:reconciliation"
           columns={[
-            { key: 'r1', label: 'Сверка 1', total: reconcileTotals.r1, color: '#15803D' },
-            { key: 'r2', label: 'Сверка 2', total: reconcileTotals.r2, color: '#1D6FA4' },
-            { key: 'r3', label: 'Сверка 3', total: reconcileTotals.r3, color: '#0F766E' },
-            { key: 'r4', label: 'Сверка 4', total: reconcileTotals.r4, color: '#2563EB' },
+            { key: 'r1', label: `Сверка №${monthData?.currentRound ?? '—'} · Сделано`, total: reconcileTotals.r1, color: '#15803D' },
+            { key: 'r2', label: 'Не сделано', total: reconcileTotals.r2, color: '#1D6FA4' },
+
+
           ]}
           rows={reconcileRows.map(row => ({ ...row, values: { childrenCount: row.data.childrenCount, r1: row.data.r1, r2: row.data.r2, r3: row.data.r3, r4: row.data.r4 } }))}
           sortKey={reconcileSort.key}
@@ -408,14 +417,14 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        {view === 'reconciliation' ? <SchoolDashboardTable commentScope="families/LogisticsOverview:reconciliation"
+        {view === 'reconciliation' ? monthPending ? <p role="status">Загрузка сверки…</p> : monthError ? <p role="alert">Не удалось загрузить сверку. <button type="button" onClick={() => void refreshMonth()}>Повторить</button></p> : <SchoolDashboardTable commentScope="families/LogisticsOverview:reconciliation"
           columns={[
             { key: 'school', label: 'Школа', total: reconcileTotals.schools, color: KPI_COLORS.school },
-            { key: 'childrenCount', label: 'Детей', total: reconcileTotals.childrenCount, color: '#64748B' },
-            { key: 'r1', label: 'Сверка 1', total: reconcileTotals.r1, color: '#15803D' },
-            { key: 'r2', label: 'Сверка 2', total: reconcileTotals.r2, color: '#1D6FA4' },
-            { key: 'r3', label: 'Сверка 3', total: reconcileTotals.r3, color: '#0F766E' },
-            { key: 'r4', label: 'Сверка 4', total: reconcileTotals.r4, color: '#2563EB' },
+            { key: 'childrenCount', label: 'Трансферов', total: reconcileTotals.childrenCount, color: '#64748B' },
+            { key: 'r1', label: `Сверка №${monthData?.currentRound ?? '—'} · Сделано`, total: reconcileTotals.r1, color: '#15803D' },
+            { key: 'r2', label: 'Не сделано', total: reconcileTotals.r2, color: '#1D6FA4' },
+
+
           ]}
           rows={reconcileRows.map(row => ({ ...row, values: { childrenCount: row.data.childrenCount, r1: row.data.r1, r2: row.data.r2, r3: row.data.r3, r4: row.data.r4 } }))}
           sortKey={reconcileSort.key}

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import {
   Check,
   ChevronDown,
@@ -8,7 +8,6 @@ import {
   Link2,
   MessageCircle,
   RefreshCw,
-  RotateCcw,
   X,
 } from 'lucide-react';
 import {
@@ -22,7 +21,6 @@ import {
   formatShortRuDate,
   ReconciliationMonthData,
   ReconciliationTransferMeta,
-  rotateTransferDriverToken,
 } from '../../services/driverCheckService';
 import { useLogisticsTable } from '../../hooks/useCrmQueries';
 import { ALL_PERIODS, isSchoolAllowed } from './constants';
@@ -43,6 +41,7 @@ interface LogisticsReconciliationProps {
   search?: string;
   sessionToken?: string;
   allowedSchools?: string[];
+  onTransferSelect?: (key: string) => void;
   onOpenFamily?: (familyId: string, childId: string) => void;
 }
 
@@ -54,12 +53,11 @@ export default function LogisticsReconciliation({
   sessionToken,
   allowedSchools,
   onOpenFamily,
+  onTransferSelect,
 }: LogisticsReconciliationProps) {
-  const queryClient = useQueryClient();
   const { data: logisticsRows, isPending: rowsPending } = useLogisticsTable();
   const [copied, setCopied] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [rotating, setRotating] = useState(false);
   const [linksOpen, setLinksOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -76,7 +74,7 @@ export default function LogisticsReconciliation({
 
   const period = useMemo(() => resolveReconciliationPeriod(periodKey), [periodKey]);
   const scopedSchool = schoolKey && schoolKey !== 'ALL' ? schoolKey : undefined;
-  const queryKey = ['logistics-reconciliation-month', period.year, period.month, scopedSchool ?? 'ALL'] as const;
+  const queryKey = ['logistics-reconciliation-month', period.year, period.month, scopedSchool ?? 'ALL', sessionToken] as const;
 
   const { data: monthRaw, isFetching, isError, error, refetch } = useQuery<ReconciliationMonthData>({
     queryKey,
@@ -150,11 +148,6 @@ export default function LogisticsReconciliation({
 
   const activeLinkUrl = activeTransfer ? buildDriverCheckUrl(activeTransfer.driverLinkToken) : '';
 
-  const handleOpenLink = () => {
-    if (!activeTransfer) return;
-    window.open(`/driver/${activeTransfer.driverLinkToken}`, '_blank', 'noopener,noreferrer');
-  };
-
   const handleCopyLink = async () => {
     if (!activeLinkUrl) return;
     try {
@@ -163,39 +156,6 @@ export default function LogisticsReconciliation({
       window.setTimeout(() => setCopied(false), 2000);
     } catch {
       window.prompt('Скопируйте ссылку трансфера для водителя:', activeLinkUrl);
-    }
-  };
-
-  const handleSendWhatsApp = () => {
-    if (!activeTransfer) return;
-    const text = buildDriverInviteWhatsAppText(activeTransfer);
-    window.open(buildWhatsAppShareUrl(text, activeTransfer.driverPhone), '_blank', 'noopener,noreferrer');
-  };
-
-  const handleRotateLink = async () => {
-    if (!activeTransfer) return;
-    const ok = window.confirm(
-      `Обновить ссылку для «${activeTransfer.schoolLabel} · Трансфер №${activeTransfer.transferNumber}»?\n\nСтарая ссылка сразу перестанет открываться у прежнего водителя.`,
-    );
-    if (!ok) return;
-    setRotating(true);
-    try {
-      const updated = await rotateTransferDriverToken(sessionToken, activeTransfer.transferId);
-      queryClient.setQueryData<ReconciliationMonthData>(queryKey, (prev: ReconciliationMonthData | undefined) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          transfers: prev.transfers.map(item => (
-            item.transferId === updated.transferId
-              ? { ...item, driverLinkToken: updated.driverLinkToken }
-              : item
-          )),
-        };
-      });
-    } catch (err) {
-      window.alert(err instanceof Error ? err.message : 'Не удалось обновить ссылку');
-    } finally {
-      setRotating(false);
     }
   };
 
@@ -208,6 +168,15 @@ export default function LogisticsReconciliation({
     }
     return monthData.transfers;
   }, [monthData, scopedSchool]);
+
+  const initializedSchool = useRef('');
+  useEffect(() => {
+    const key = `${scopedSchool}:${period.key}`;
+    if (!monthData || !scopedSchool || initializedSchool.current === key) return;
+    initializedSchool.current = key;
+    const first = [...schoolTransfers].sort((a, b) => a.transferNumber - b.transferNumber)[0];
+    if (!/^\d+$/.test(transferFilter) && first) onTransferSelect?.(String(first.transferNumber));
+  }, [monthData, scopedSchool, period.key, schoolTransfers, transferFilter, onTransferSelect]);
 
   const handleCopyAnyLink = async (token: string, key: string) => {
     const url = buildDriverCheckUrl(token);
@@ -236,45 +205,11 @@ export default function LogisticsReconciliation({
 
         <div className="lr-bar-actions">
           {activeTransfer ? (
-            <>
-              <button
-                type="button"
-                className="lr-btn lr-btn--primary"
-                onClick={handleOpenLink}
-                title="Открыть страницу водителя для этого трансфера"
-              >
-                <ExternalLink size={14} />
-                Ссылка трансфера №{activeTransfer.transferNumber}
-              </button>
-              <button
-                type="button"
-                className={`lr-btn${copied ? ' lr-btn--copied' : ''}`}
-                onClick={() => void handleCopyLink()}
-                title="Скопировать постоянную ссылку трансфера"
-              >
-                {copied ? <Check size={14} /> : <Copy size={14} />}
-                {copied ? 'Скопировано' : 'Копировать'}
-              </button>
-              <button
-                type="button"
-                className="lr-btn lr-btn--wa"
-                onClick={handleSendWhatsApp}
-                title={activeTransfer.driverPhone ? `Отправить ссылку водителю (${activeTransfer.driverPhone})` : 'Отправить ссылку в WhatsApp'}
-              >
-                <MessageCircle size={14} />
-                WhatsApp
-              </button>
-              <button
-                type="button"
-                className="lr-btn lr-btn--icon"
-                disabled={rotating}
-                onClick={() => void handleRotateLink()}
-                title="Обновить ссылку (если сменился водитель)"
-                aria-label="Обновить ссылку трансфера"
-              >
-                <RotateCcw size={14} className={rotating ? 'lr-spin' : undefined} />
-              </button>
-            </>
+            <button type="button" className={`lr-btn lr-btn--primary${copied ? ' lr-btn--copied' : ''}`}
+              onClick={() => void handleCopyLink()} title="Скопировать ссылку трансфера">
+              {copied ? <Check size={14} /> : <Copy size={14} />}
+              {copied ? 'Скопировано' : `Ссылка трансфера №${activeTransfer.transferNumber}`}
+            </button>
           ) : schoolTransfers.length > 0 ? (
             <div className="lr-dropdown-container" ref={dropdownRef}>
               <button

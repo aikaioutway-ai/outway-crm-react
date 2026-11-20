@@ -1,6 +1,6 @@
 import React from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import LogisticsReconciliation from './LogisticsReconciliation';
 import * as driverCheckService from '../../services/driverCheckService';
 import * as crmQueries from '../../hooks/useCrmQueries';
@@ -91,9 +91,16 @@ describe('LogisticsReconciliation (monthly 4-round table)', () => {
     });
   });
 
+  test('selects the first active transfer when opening a school without a selection', async () => {
+    const select = jest.fn();
+    renderWithQuery(<LogisticsReconciliation schoolKey="TIS" periodKey="11" sessionToken="tok" onTransferSelect={select} />);
+    await waitFor(() => expect(select).toHaveBeenCalledWith('3'));
+  });
+
   test('renders 4 check rounds, transfer link button, and opens family on child click', async () => {
     const onOpenFamily = jest.fn();
-    const openSpy = jest.spyOn(window, 'open').mockImplementation(() => null);
+    const writeText = jest.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText } });
 
     renderWithQuery(
       <LogisticsReconciliation
@@ -112,15 +119,24 @@ describe('LogisticsReconciliation (monthly 4-round table)', () => {
 
     const linkBtn = await screen.findByRole('button', { name: /Ссылка трансфера №3/i });
     fireEvent.click(linkBtn);
-    expect(openSpy).toHaveBeenCalledWith(
-      expect.stringContaining('/driver/a1b2c3d4e5f60718293a4b5c6d7e8f90'),
-      '_blank',
-      'noopener,noreferrer',
-    );
+    expect(writeText).toHaveBeenCalledWith(expect.stringContaining('/driver/a1b2c3d4e5f60718293a4b5c6d7e8f90'));
 
     fireEvent.click(screen.getByRole('button', { name: 'Алия Ахметова' }));
     expect(onOpenFamily).toHaveBeenCalledWith('f1', 'c1');
 
-    openSpy.mockRestore();
+
   });
+});
+
+test('counts completed transfers for the current round independently of child marks', () => {
+  const base = {
+    currentRound: 3, transfers: [
+      { schoolKey: 'TIS', rounds: { 1: { checked: true }, 3: { checked: true } } },
+      { schoolKey: 'TIS', rounds: { 1: { checked: true } } },
+      { schoolKey: 'AES', rounds: { 3: { checked: true } } },
+    ],
+    marksByChild: { child: { 3: { present: true } } },
+  } as unknown as driverCheckService.ReconciliationMonthData;
+  expect(driverCheckService.reconciliationTransferCounts(base, 'TIS')).toEqual({ completed: 1, pending: 1 });
+  expect(driverCheckService.reconciliationTransferCounts(base)).toEqual({ completed: 2, pending: 1 });
 });

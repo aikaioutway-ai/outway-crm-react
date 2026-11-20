@@ -859,6 +859,7 @@ export default function App() {
                   schoolKey={logisticsSchoolKey}
                   periodKey={logisticsReconcilePeriodKey}
                   transferFilter={logisticsTransferFilter}
+                  onTransferSelect={setLogisticsTransferFilter}
                   search={logisticsSearch}
                   sessionToken={currentUser?.sessionToken}
                   allowedSchools={currentUser?.schoolKeys}
@@ -957,7 +958,7 @@ export default function App() {
                       <SchoolAvatar logo={school.logo} label={school.label} color="var(--accent)" size={64} />
                     </button>
                   ))}
-                  <LogisticsSummaryTabs schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys}
+                  <LogisticsSummaryTabs sessionToken={currentUser?.sessionToken} reconciliationPeriodKey={logisticsReconcilePeriodKey} schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys}
                     value={logistics2View} onChange={view => {
                       if (view === 'map' && logistics2SchoolKey === 'ALL') {
                         setLogistics2SchoolKey(null);
@@ -979,6 +980,7 @@ export default function App() {
                 schoolKey={logistics2SchoolKey}
                 periodKey={logisticsReconcilePeriodKey}
                 transferFilter={logistics2TransferFilter}
+                onTransferSelect={setLogistics2TransferFilter}
                 search={logistics2Search}
                 sessionToken={currentUser?.sessionToken}
                 allowedSchools={currentUser?.schoolKeys}

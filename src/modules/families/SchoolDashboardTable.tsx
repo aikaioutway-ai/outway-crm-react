@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { filterRepeatedValues } from '../../core/tables/repeatedValues';
 import '../../core/tables/DataTable.css';
 import './managerMetricGrid.css';
-import { ArrowDown, ArrowUp, ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, ChevronRight, Copy, ListChecks, ClipboardList, UserCheck, UserPlus, Clock, Hourglass, AlertCircle, Users, Wallet, Calculator, UserX, Scale, FileX, CircleHelp, BusFront, CarFront, Route, ScanQrCode, Banknote } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, ChevronRight, Copy, Check, X, ListChecks, ClipboardList, UserCheck, UserPlus, Clock, Hourglass, AlertCircle, Users, Wallet, Calculator, UserX, Scale, FileX, CircleHelp, BusFront, CarFront, Route, ScanQrCode, Banknote } from 'lucide-react';
 import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface Metric { key: string; label: string; total: string | number; }
@@ -106,6 +106,7 @@ function ManagerMetricGrid({ compactTotals, footer, columns, rows, sortKey, asce
 
 
 const METRIC_ICONS: Record<string, typeof ClipboardList> = {
+  r1: Check, r2: X,
   review: Clock, duplicates: Copy, other: FileX, total: ClipboardList,
   applications: ClipboardList, boarded: UserCheck, newRequests: UserPlus,
   inWork: ListChecks, waiting: Hourglass, overdue: Clock, debtorsCount: Users,
@@ -118,13 +119,13 @@ const METRIC_ICONS: Record<string, typeof ClipboardList> = {
   microbusAverage: Users, transferCount: Route, microbusCount: BusFront, lightVehicleCount: CarFront,
 };
 
-const ADVERSE_METRICS = new Set(['debtSum', 'uncharged', 'expiredCount', 'rejected']);
+const ADVERSE_METRICS = new Set(['r2', 'debtSum', 'uncharged', 'expiredCount', 'rejected']);
 
 function MetricValue({ metric, value, showLabel = false }: { metric: Metric; value?: string | number; showLabel?: boolean }) {
   const Icon = METRIC_ICONS[metric.key] ?? CircleHelp;
   const numericValue = typeof value === 'string' ? Number(value.replace(/\s/g, '').replace(',', '.')) : value ?? 0;
   const isAverage = metric.key === 'microbusAverage';
-  const averageTone = isAverage && value !== undefined ? microbusAverageTone(value) : undefined;
+  const averageTone = isAverage && value !== undefined ? microbusAverageTone(value) : metric.key === 'r1' ? 'positive' : metric.key === 'r2' ? 'alert' : undefined;
   const isAdverse = numericValue < 0 || (numericValue > 0 && (ADVERSE_METRICS.has(metric.key) || (showLabel && metric.key === 'newRequests')));
   return (
     <span className={`manager-metric-value${isAdverse ? ' is-adverse' : ''}${isAverage ? ' logistics-average' : ''}`} title={metric.label}>

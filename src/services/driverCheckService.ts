@@ -60,6 +60,12 @@ export interface ReconciliationMonthData {
   marksByChild: Record<string, Partial<Record<CheckRound, ChildRoundMark>>>;
 }
 
+export function reconciliationTransferCounts(data: ReconciliationMonthData, schoolKey?: string) {
+  const transfers = data.transfers.filter(transfer => !schoolKey || schoolKey === 'ALL' || transfer.schoolKey === schoolKey);
+  const completed = transfers.filter(transfer => transfer.rounds[data.currentRound]?.checked).length;
+  return { completed, pending: transfers.length - completed };
+}
+
 const TOKEN_PATTERN = /^[0-9a-f]{16,64}$/i;
 
 export function roundOfIsoDate(isoDate: string): CheckRound {
