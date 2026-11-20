@@ -5,7 +5,7 @@ import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
-import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts, ManagerMode } from './modules/families/ManagerModeTabs';
+import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts, canDeleteIncomingReceipts, ManagerMode } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, getInitialSection, NavSection, OWNER_EMPLOYEE_ID } from './core/bars/Sidebar';
@@ -531,6 +531,7 @@ export default function App() {
       allowedSchools={currentUser?.schoolKeys}
       schoolKey={schoolKey}
       schoolTier={managerTier}
+      canDelete={canDeleteIncomingReceipts(currentUserRole)}
       onSelectSchool={handleManagerSelectSchool}
       onOpenFamily={async familyId => {
         const family = await fetchV2Family(familyId);

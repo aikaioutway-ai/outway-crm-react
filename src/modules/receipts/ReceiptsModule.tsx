@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileText, Pencil, RotateCcw, Search } from 'lucide-react';
+import { FileText, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
 import FilterableTable from '../../core/tables/FilterableTable';
 import { useIncomingReceipts } from '../../hooks/useCrmQueries';
 import { QK } from '../../services/queryClient';
 import {
   canSubmitIncomingReceipt,
+  deleteIncomingReceipt,
   dismissIncomingReceipt,
   fetchIncomingReceiptFileUrl,
   IncomingReceiptFilter,
@@ -63,11 +65,13 @@ function matchHint(receipt: IncomingReceiptRow): string {
 const dateLabel = (value: string | null) => value ? value.split('-').reverse().join('.') : '—';
 const unique = (values: (string | number | null)[]) => Array.from(new Set(values.filter(value => value !== null && value !== ''))).join(', ') || '—';
 
-export default function ReceiptsModule({ sessionToken, userName, allowedSchools, onOpenFamily, scope, title = 'Чеки', toolbar }: {
+export default function ReceiptsModule({ sessionToken, userName, allowedSchools, onOpenFamily, scope, title = 'Чеки', toolbar, canDelete = false }: {
   sessionToken?: string;
   userName?: string;
   allowedSchools?: string[];
   onOpenFamily: (familyId: string) => Promise<void>;
+  /** ПКМ по строке → «Удалить навсегда» (только руководство). */
+  canDelete?: boolean;
   scope?: ReceiptScope;
   /** Заголовок над списком, например «← Трансферы · Трансфер 12». */
   title?: React.ReactNode;
@@ -82,6 +86,17 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
   const [actionError, setActionError] = useState('');
   const [editing, setEditing] = useState<IncomingReceiptRow | null>(null);
   const [preview, setPreview] = useState<{ url: string; pdf: boolean; subtitle: string; other: boolean } | null>(null);
+  const [menu, setMenu] = useState<{ receipt: IncomingReceiptRow; x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (!menu) return;
+    const close = () => setMenu(null);
+    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') close(); };
+    document.addEventListener('click', close);
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', close, true);
+    return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onKey); window.removeEventListener('scroll', close, true); };
+  }, [menu]);
 
   useEffect(() => {
     const timer = window.setTimeout(() => { setSearch(searchInput.trim()); setPage(0); }, 250);
@@ -121,6 +136,19 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
       await refresh();
     }
   });
+
+  const remove = (receipt: IncomingReceiptRow) => {
+    setMenu(null);
+    const what = receipt.kind === 'other' ? 'Файл' : 'Чек';
+    if (!window.confirm(`${what} из группы «${receipt.chatName ?? 'WhatsApp'}» будет удалён навсегда вместе с файлом. Вернуть его будет нельзя. Удалить?`)) return;
+    void run(receipt.id, async () => {
+      try {
+        await deleteIncomingReceipt(sessionToken, receipt.id);
+      } finally {
+        await refresh();
+      }
+    });
+  };
 
   const submit = (receipt: IncomingReceiptRow) => run(receipt.id, async () => {
     try {
@@ -201,7 +229,11 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
             <th>Группа</th><th>Отправитель</th><th>Чек</th><th>Сумма</th><th>Дата</th>
             <th>Комментарий</th><th>Школа</th><th>Трансфер</th><th>Семья / дети</th><th>Действия</th>
           </tr></thead>
-          <tbody>{rows.map(receipt => <tr key={receipt.id}>
+          <tbody>{rows.map(receipt => <tr key={receipt.id} onContextMenu={canDelete && !receipt.paymentId ? event => {
+            event.preventDefault();
+            event.stopPropagation();
+            setMenu({ receipt, x: Math.max(8, Math.min(event.clientX, window.innerWidth - 220)), y: Math.min(event.clientY, window.innerHeight - 60) });
+          } : undefined}>
             <td>{receipt.chatName ?? '—'}</td>
             <td>
               <div>{receipt.senderPhone ? formatPhone(receipt.senderPhone) : 'Номер скрыт'}</div>
@@ -235,6 +267,11 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
       <button type="button" className="ow-btn ow-btn--sm" disabled={(page + 1) * pageSize >= total} onClick={() => setPage(value => value + 1)}>Вперёд</button>
     </footer>}
 
+    {menu && createPortal(<div className="dt-ctx-menu" role="menu" aria-label="Действия с чеком" style={{ position: 'fixed', left: menu.x, top: menu.y, zIndex: 10000 }} onClick={event => event.stopPropagation()}>
+      <button type="button" role="menuitem" className="dt-ctx-item receipts-delete" onClick={() => remove(menu.receipt)}>
+        <Trash2 size={14} aria-hidden="true" /> Удалить навсегда
+      </button>
+    </div>, document.body)}
     {editing && <ReceiptReviewModal receipt={editing} sessionToken={sessionToken} allowedSchools={allowedSchools}
       onClose={() => setEditing(null)} onSaved={() => { setEditing(null); void refresh(); }} />}
     {preview && <ReceiptModal receiptUrl={preview.url} pdf={preview.pdf} title={preview.other ? 'Файл из WhatsApp' : 'Чек из WhatsApp'} subtitle={preview.subtitle} onClose={() => setPreview(null)} />}

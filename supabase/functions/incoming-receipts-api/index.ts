@@ -1,5 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { allowedBranchIds, schoolKey as branchSchoolKey, parseReceiptEdit, RECEIPT_FILTERS, RECEIPT_ROLES, summarizeBySchool, type ReceiptTransferCount } from '../_shared/incomingReceiptsAccess.ts';
+import { allowedBranchIds, canDeleteReceipts, schoolKey as branchSchoolKey, parseReceiptEdit, RECEIPT_FILTERS, RECEIPT_ROLES, summarizeBySchool, type ReceiptTransferCount } from '../_shared/incomingReceiptsAccess.ts';
 import { SCHOOL_TABS } from '../task-api/schools.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -164,6 +164,19 @@ Deno.serve(async request => {
       const { data, error } = await db.from('v2_incoming_receipts').update(patch).eq('id', receipt.id).is('payment_id', null).select('id').maybeSingle();
       if (error) throw error;
       if (!data) throw new UserError('Чек уже отправлен на проверку');
+      return response({ ok: true });
+    }
+
+    if (body.action === 'delete') {
+      // Удаление навсегда: сначала файл, потом запись. Отправленный на проверку чек — уже платёж, его не трогаем.
+      if (!canDeleteReceipts(employee.role)) throw new UserError('Удалять файлы может только руководство');
+      if (receipt.payment_id) throw new UserError('Чек уже отправлен на проверку — его можно отклонить только в карточке семьи');
+      if (receipt.storage_path) {
+        const { error: removeError } = await db.storage.from(BUCKET).remove([receipt.storage_path]);
+        if (removeError) throw removeError;
+      }
+      const { error } = await db.from('v2_incoming_receipts').delete().eq('id', receipt.id).is('payment_id', null);
+      if (error) throw error;
       return response({ ok: true });
     }
 

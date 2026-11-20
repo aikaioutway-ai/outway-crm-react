@@ -12,6 +12,11 @@ export function canAccessManagerReceipts(role: UserRole): boolean {
   return RECEIPT_ROLES.includes(role);
 }
 
+// Удалить файл из «Чеков» навсегда может только руководство (то же правило на сервере).
+export function canDeleteIncomingReceipts(role: UserRole): boolean {
+  return role === 'admin' || role === 'gen_director' || role === 'director';
+}
+
 export type ManagerMode = 'directory' | 'charges' | 'accruals' | 'requests' | 'receipts';
 interface Props { cards?: boolean; summaries?: Partial<Record<ManagerMode, { label: string; value: string; tone?: 'positive' | 'alert' | 'warning' }[]>>; compact?: boolean; showRequests?: boolean; canViewAccruals?: boolean; showReceipts?: boolean; value: ManagerMode; onChange: (mode: ManagerMode) => void; }
 

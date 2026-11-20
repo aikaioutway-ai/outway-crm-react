@@ -53,7 +53,8 @@ function useSort(initial: string) {
  * Вкладка «Чеки» в «Менеджере»: школы → трансферы школы → чеки группы WhatsApp трансфера.
  * schoolKey приходит из общей навигации менеджера (выбранная школа).
  */
-export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools, schoolKey, schoolTier = '1.0', onSelectSchool, onOpenFamily }: {
+export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools, schoolKey, schoolTier = '1.0', onSelectSchool, onOpenFamily, canDelete = false }: {
+  canDelete?: boolean;
   sessionToken?: string;
   userName?: string;
   allowedSchools?: string[];
@@ -75,7 +76,7 @@ export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools
   const [transferId, setTransferId] = useState<string | null>(null);
   const [picking, setPicking] = useState<ReceiptTransferSummary | null>(null);
   const schoolSort = useSort('review');
-  const common = { sessionToken, userName, allowedSchools, onOpenFamily };
+  const common = { sessionToken, userName, allowedSchools, onOpenFamily, canDelete };
 
   const periodSummary = periodKey === 'ALL' ? summary : monthlySummaries[receiptMonths.findIndex(month => month.key === periodKey)];
   const schoolTransfers = useMemo(() => (periodSummary?.data?.transfers ?? []).filter(row => row.schoolKey === schoolKey), [periodSummary?.data, schoolKey]);

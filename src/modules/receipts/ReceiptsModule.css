@@ -134,6 +134,7 @@
   color: var(--surface);
 }
 .receipts-primary:disabled { opacity: .55; cursor: not-allowed; }
+.dt-ctx-item.receipts-delete { display: flex; align-items: center; gap: 6px; color: var(--danger); }
 .receipts-dismiss {
   padding: 0 2px;
   border: 0;

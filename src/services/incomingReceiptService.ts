@@ -155,6 +155,11 @@ export async function dismissIncomingReceipt(sessionToken: string | undefined, i
   await callApi(sessionToken, { action: 'dismiss', id });
 }
 
+/** Удаляет файл и запись навсегда, без 30 дней ожидания. Только руководство. */
+export async function deleteIncomingReceipt(sessionToken: string | undefined, id: string): Promise<void> {
+  await callApi(sessionToken, { action: 'delete', id });
+}
+
 export function canSubmitIncomingReceipt(receipt: IncomingReceiptRow): boolean {
   return receipt.kind === 'review' && receipt.status === 'recognized' && receipt.hasFile
     && Boolean(receipt.familyId && receipt.amount && receipt.receiptDate);

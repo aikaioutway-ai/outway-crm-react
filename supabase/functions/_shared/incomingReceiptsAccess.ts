@@ -1,5 +1,7 @@
 export const RECEIPT_ROLES = new Set(['admin', 'gen_director', 'director', 'manager', 'cashier']);
 const LEADERSHIP = new Set(['admin', 'gen_director', 'director']);
+/** Удаление файла навсегда — только руководство. */
+export const canDeleteReceipts = (role: string) => LEADERSHIP.has(role);
 export const RECEIPT_FILTERS = new Set(['review', 'submitted', 'duplicates', 'other', 'all']);
 
 export type ReceiptBranch = { id: string; code: string | null; short_name: string | null; name: string | null };
