@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { ChevronDown, MessageCircle, Phone, Search, X } from 'lucide-react';
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { ChevronDown, Inbox, MessageCircle, Phone, Search, SlidersHorizontal, X } from 'lucide-react';
 import { formatPhone } from '../utils/format';
 import { VEHICLE_COLOR } from '../core/dashboard/TransferCell';
 
@@ -53,9 +53,10 @@ export function SearchField({ value, onChange, placeholder = 'Поиск: имя
 }) {
   return (
     <label className="m-search">
-      <Search size={18} />
+      <Search size={18} aria-hidden="true" />
       <input
         type="search"
+        aria-label={placeholder}
         inputMode="search"
         enterKeyHint="search"
         value={value}
@@ -132,7 +133,7 @@ export function Kpi({ label, value, color, icon }: { label: string; value: React
       <div className="m-kpi-label">
         {icon ? <span className="m-kpi-icon" style={color ? { color } : undefined}>{icon}</span>
           : color && <span className="m-kpi-dot" style={{ background: color }} />}
-        {label}
+        <span className="m-kpi-label-text">{label}</span>
       </div>
     </div>
   );
@@ -142,8 +143,17 @@ export function Skeletons({ count = 5 }: { count?: number }) {
   return <div className="m-list">{Array.from({ length: count }, (_, index) => <div key={index} className="m-skeleton" />)}</div>;
 }
 
+export function FilterPanel({ children, summary }: { children: React.ReactNode; summary: string }) {
+  return (
+    <details className="m-filters">
+      <summary><SlidersHorizontal size={17} aria-hidden="true" /><span>Фильтры<span className="m-filters-summary">{summary}</span></span><ChevronDown size={17} aria-hidden="true" /></summary>
+      <div className="m-filters-body">{children}</div>
+    </details>
+  );
+}
+
 export function Empty({ children }: { children: React.ReactNode }) {
-  return <div className="m-empty">{children}</div>;
+  return <div className="m-empty"><Inbox size={24} aria-hidden="true" /><span>{children}</span></div>;
 }
 
 export function ErrorBox({ children }: { children: React.ReactNode }) {
@@ -181,6 +191,13 @@ export function Sheet({ title, onClose, full = false, children, headerAction }: 
   headerAction?: React.ReactNode;
 }) {
   // Лист закрывается свайпом вниз за «ручку» или по тапу на затемнение.
+  const headingId = useId();
+  const dialogRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null;
+    dialogRef.current?.focus({ preventScroll: true });
+    return () => { if (previous?.isConnected) previous.focus({ preventScroll: true }); };
+  }, []);
   const startY = useRef<number | null>(null);
   const [dragY, setDragY] = useState(0);
 
@@ -206,14 +223,25 @@ export function Sheet({ title, onClose, full = false, children, headerAction }: 
       <div className="m-sheet-backdrop" onClick={onClose} />
       <div
         className={`m-sheet ${full ? 'm-sheet--full' : ''}`}
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-labelledby={headingId}
+        tabIndex={-1}
+        onKeyDown={event => {
+          if (event.key !== 'Tab') return;
+          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>('button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]'));
+          const first = controls[0], last = controls[controls.length - 1];
+          if (!first) { event.preventDefault(); return; }
+          if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }}
         style={dragY ? { transform: `translateY(${dragY}px)`, transition: 'none' } : undefined}
       >
         <div onTouchStart={onTouchStart} onTouchMove={onTouchMove} onTouchEnd={onTouchEnd}>
           <div className="m-sheet-grip" />
           <div className="m-sheet-head">
-            <div className="m-sheet-title">{title}</div>
+            <div id={headingId} className="m-sheet-title">{title}</div>
             {headerAction}
             <button type="button" className="m-icon-btn" aria-label="Закрыть" onClick={onClose}><X size={18} /></button>
           </div>

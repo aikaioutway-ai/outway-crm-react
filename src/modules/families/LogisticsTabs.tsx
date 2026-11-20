@@ -1,8 +1,8 @@
 import { microbusAverageTone } from './familiesRowHelpers';
 import React from 'react';
-import { User, UserPlus, MapIcon, School } from 'lucide-react';
+import { ClipboardCheck, User, UserPlus, MapIcon, School } from 'lucide-react';
 import DriverIcon from '../../core/icons/DriverIcon';
-export type LogisticsTab = 'requests' | 'table' | 'map' | 'drivers';
+export type LogisticsTab = 'requests' | 'table' | 'map' | 'drivers' | 'reconciliation';
 type Metric = { label: string; value: string | number; alert?: boolean; average?: boolean };
 type Summaries = Partial<Record<LogisticsTab, Metric[]>>;
 
@@ -11,6 +11,7 @@ const tabs = [
   ['requests', 'Новые заявки', UserPlus],
   ['map', 'Карта', MapIcon],
   ['drivers', 'Водители', DriverIcon],
+  ['reconciliation', 'Сверка', ClipboardCheck],
 ] as const;
 
 export default function LogisticsTabs({ value, onChange, cards = false, showMap = !cards, mapLabel = "Карта", summaries }: {
@@ -24,7 +25,7 @@ export default function LogisticsTabs({ value, onChange, cards = false, showMap 
 }) {
   return <div role="tablist" aria-label="Раздел логистики" className={cards ? 'manager-mode-cards' : 'ow-seg'}>
     {(cards && showMap
-      ? mapLabel === 'Школы' ? [tabs[0], tabs[1], tabs[3], tabs[2]] : [tabs[2], tabs[0], tabs[1], tabs[3]]
+      ? mapLabel === 'Школы' ? [tabs[0], tabs[1], tabs[3], tabs[4], tabs[2]] : [tabs[2], tabs[0], tabs[1], tabs[3], tabs[4]]
       : tabs.filter(([key]) => showMap || key !== 'map')).map(([key, defaultLabel, DefaultIcon]) => {
       const Icon = key === 'map' && mapLabel === 'Школы' ? School : DefaultIcon;
       const label = key === 'map' ? mapLabel : defaultLabel;

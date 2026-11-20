@@ -197,7 +197,7 @@ export default function LogisticsSection({ user }: { user: AuthenticatedUser }) 
 
   return (
     <>
-      <Screen pageKey={`logistics:home:${homeTab}`} title="Логистика" subtitle={user.name}>
+      <Screen pageKey={`logistics:home:${homeTab}`} title="Логистика" subtitle="Трансферы и водители">
         <Segment value={homeTab} onChange={value => { setHomeTab(value); setQuery(''); }} options={[{ value: 'schools', label: 'Школы' }, { value: 'drivers', label: 'Водители' }]} />
         <SearchField
           value={query}

@@ -92,7 +92,7 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
   const changePropertiesOpen = onColumnsOpenChange ?? setLocalColumnsOpen;
   const [search, setSearch] = useState('');
   useEffect(() => { if (propertiesOpen) setTableOpen(true); }, [propertiesOpen]);
-  const [sortKey, setSortKey] = useState('category');
+  const [sortKey, setSortKey] = useState('default');
   const [ascending, setAscending] = useState(true);
   const [periodKey, setPeriodKey] = useState(currentCashierPeriodKey);
   const [rows, setRows] = useState<ExpenseRecord[]>([]);
@@ -272,7 +272,8 @@ export default function ExpensesModule({ userName, userRole, sessionToken, toolb
           { key: 'cash', label: 'Наличные', total: money(categoryRows.filter(row => row.paymentMethod === 'cash').reduce((sum, row) => sum + row.amount, 0)), color: '#15803D' },
         ]}
         rows={overviewRows.sort((a, b) => {
-          const comparison = sortKey === 'category' ? a.label.localeCompare(b.label, 'ru') : a.metrics[sortKey as keyof typeof a.metrics] - b.metrics[sortKey as keyof typeof b.metrics];
+          if (sortKey === 'default' && !selectedCategory) return 0;
+          const comparison = sortKey === 'category' || sortKey === 'default' ? a.label.localeCompare(b.label, 'ru') : a.metrics[sortKey as keyof typeof a.metrics] - b.metrics[sortKey as keyof typeof b.metrics];
           return ascending ? comparison : -comparison;
         }).map(row => ({ ...row, values: { count: row.metrics.count, amount: money(row.metrics.amount), cashless: money(row.metrics.cashless), cash: money(row.metrics.cash) } }))}
         sortKey={sortKey} ascending={ascending}

@@ -1,0 +1,21 @@
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import MobileApp from './MobileApp';
+jest.mock('../services/taskService',()=>({useTaskSummary:()=>({data:{attention:2}}),callTaskApi:jest.fn()}));
+jest.mock('./sections/ManagerSection',()=>()=> <p>Клиенты</p>);
+jest.mock('./sections/LogisticsSection',()=>()=> <p>Трансферы</p>);
+jest.mock('./sections/CashierSection',()=>()=> <p>Платежи</p>);
+jest.mock('./sections/TasksSection',()=>()=> <p>Список задач</p>);
+const user={id:'emp-admin',name:'Тестовый сотрудник',login:'test',role:'admin' as const,schoolKeys:['ALL'],sessionToken:'test'};
+beforeEach(()=>sessionStorage.clear());
+test('workspace profile opens the existing account menu and keeps module navigation working',async()=>{
+ const desktop=jest.fn();render(<MobileApp user={user} onLogout={jest.fn()} onOpenDesktop={desktop}/>);
+ await screen.findByText('Клиенты');
+ fireEvent.click(screen.getByRole('button',{name:'Профиль: Тестовый сотрудник'}));
+ expect(await screen.findByRole('heading',{name:'Ещё'})).toBeInTheDocument();
+ fireEvent.click(screen.getByRole('button',{name:/Открыть полную версию/}));expect(desktop).toHaveBeenCalledTimes(1);
+ const nav=screen.getByRole('navigation',{name:'Разделы'});
+ expect(within(nav).getAllByRole('button')).toHaveLength(5);
+ fireEvent.click(within(nav).getByRole('button',{name:'Логистика'}));
+ expect(await screen.findByText('Трансферы')).toBeInTheDocument();
+ expect(within(nav).getByRole('button',{name:'Логистика'})).toHaveAttribute('aria-current','page');
+});

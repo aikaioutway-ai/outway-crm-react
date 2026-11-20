@@ -5,7 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { filterRepeatedValues } from '../../core/tables/repeatedValues';
 import '../../core/tables/DataTable.css';
 import './managerMetricGrid.css';
-import { ArrowDown, ArrowUp, ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, ChevronRight, ListChecks, ClipboardList, UserCheck, UserPlus, Clock, Hourglass, AlertCircle, Users, Wallet, Calculator, UserX, Scale, FileX, CircleHelp, BusFront, CarFront, Route, ScanQrCode, Banknote } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowDownWideNarrow, ArrowUpNarrowWide, ChevronDown, ChevronRight, Copy, ListChecks, ClipboardList, UserCheck, UserPlus, Clock, Hourglass, AlertCircle, Users, Wallet, Calculator, UserX, Scale, FileX, CircleHelp, BusFront, CarFront, Route, ScanQrCode, Banknote } from 'lucide-react';
 import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 
 interface Metric { key: string; label: string; total: string | number; }
@@ -106,6 +106,7 @@ function ManagerMetricGrid({ compactTotals, footer, columns, rows, sortKey, asce
 
 
 const METRIC_ICONS: Record<string, typeof ClipboardList> = {
+  review: Clock, duplicates: Copy, other: FileX, total: ClipboardList,
   applications: ClipboardList, boarded: UserCheck, newRequests: UserPlus,
   inWork: ListChecks, waiting: Hourglass, overdue: Clock, debtorsCount: Users,
   debtSum: AlertCircle, charged: Calculator, paid: Wallet, balance: Scale,

@@ -55,12 +55,15 @@ export async function authorizeCell(db:any,employee:any,target:CellTarget):Promi
   const {table,row,column,context}=target;
   const role=employee.role;
   if(table==='drivers_table_by_school')return logistics.includes(role)&&driverAllowed(db,employee,row);
-  if(table==='employees_table_v2')return employeeAllowed(db,employee,row);
+  if(table==='employees_table' || table==='employees_table_v2')return employeeAllowed(db,employee,row);
   if(['cashier_table','payments_table','cashier_refunds_table'].includes(table)){
     if(!management.includes(role))return false;
     const source=table==='cashier_refunds_table'?'v2_refunds':'v2_payments';
     const record=check(await db.from(source).select('family_id').eq('id',row).maybeSingle());
     return Boolean(record && await familyAllowed(db,employee,record.family_id));
+  }
+  if(table==='families_table_accruals' || table==='families_table_accruals_v3'){
+    return (employee.id==='emp-admin' || ['gen_director','director'].includes(role)) && childAllowed(db,employee,row);
   }
   if(/^families_table_(requests_v3|charges_v2|payments_v2|requests|payments|charges|debtors|directory|cashier|logistics|drivers_logistics)$/.test(table)){
     const allowed=table.includes('logistics')?logistics:management;

@@ -4,6 +4,8 @@ import { Briefcase, BusFront, CalendarDays } from 'lucide-react';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
 import LogisticsSchoolAddresses from './LogisticsSchoolAddresses';
+import { RECONCILIATION_PERIODS, resolveReconciliationPeriod } from './LogisticsReconciliation';
+import { fetchLogisticsReconciliationMonth, ReconciliationMonthData } from '../../services/driverCheckService';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay, countRequestsBySchool } from './NewRequestsDashboard';
 import { requestStage, isRequestOnBoard } from './requestWorkflow';
@@ -40,11 +42,14 @@ interface LogisticsOverviewProps {
   onSelectSchool: (key: string) => void;
   onOpenFamily: (schoolKey: string, familyId: string, search: string, row: FamilySearchHit) => void;
   onDrivers: () => void;
-  view: 'requests' | 'table' | 'map' | 'drivers';
+  view: 'requests' | 'table' | 'map' | 'drivers' | 'reconciliation';
   driversContent?: React.ReactNode;
   driversSearch?: React.ReactNode;
-  onViewChange: (view: 'requests' | 'table' | 'map') => void;
+  onViewChange: (view: 'requests' | 'table' | 'map' | 'reconciliation') => void;
   allowedSchools?: string[];
+  sessionToken?: string;
+  reconciliationPeriodKey?: string;
+  onReconciliationPeriodKeyChange?: (key: string) => void;
   splitView?: boolean;
   onSidebarWidthChange?: (width: number) => void;
 }
@@ -197,7 +202,7 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
   </>;
 }
 
-export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, view, onViewChange, onDrivers, splitView = false, driversContent, driversSearch }: LogisticsOverviewProps) {
+export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSidebarWidthChange, allowedSchools, sessionToken, reconciliationPeriodKey, onReconciliationPeriodKeyChange, view, onViewChange, onDrivers, splitView = false, driversContent, driversSearch }: LogisticsOverviewProps) {
   const { data: allRows = null } = useLogisticsTable();
   const rows = useMemo(
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
@@ -205,10 +210,24 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   );
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
+  const [reconcileSort, setReconcileSort] = useState<{ key: 'school' | 'childrenCount' | 'r1' | 'r2' | 'r3' | 'r4'; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
+  const [localReconcilePeriod, setLocalReconcilePeriod] = useState(RECONCILIATION_PERIODS[0].key);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [schoolTier] = useState<SchoolTier>('1.0');
   const [requestDay, setRequestDay] = useState('ALL');
   const toggleGroup = (key: string) => setExpandedGroups(prev => toggleGroupKey(prev, key));
+
+  const activePeriodKey = reconciliationPeriodKey ?? localReconcilePeriod;
+  const setActivePeriodKey = onReconciliationPeriodKeyChange ?? setLocalReconcilePeriod;
+  const activePeriod = useMemo(() => resolveReconciliationPeriod(activePeriodKey), [activePeriodKey]);
+
+  const { data: monthRaw } = useQuery<ReconciliationMonthData>({
+    queryKey: ['logistics-reconciliation-month', activePeriod.year, activePeriod.month, 'ALL'],
+    queryFn: () => fetchLogisticsReconciliationMonth(sessionToken, { year: activePeriod.year, month: activePeriod.month }),
+    enabled: view === 'reconciliation' && Boolean(sessionToken),
+    staleTime: 30_000,
+  });
+  const monthData = monthRaw as ReconciliationMonthData | undefined;
 
   useEffect(() => {
     if (!splitView) onSidebarWidthChange?.(sidebarHidden ? SCHOOL_DOCK_HIDDEN_WIDTH : SCHOOL_DOCK_WIDTH);
@@ -217,6 +236,55 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   const testMarks = useTestTransfers();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- testMarks: пересчёт при смене тестовых отметок
   const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier, allowedSchools), [rows, schoolTier, allowedSchools, testMarks]);
+  const reconcileStats = useMemo(() => {
+    const marks = monthData?.marksByChild ?? {};
+    return SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (schoolTier === '2.0')).map((tab, index) => {
+      const schoolChildren = (rows ?? []).filter(row => row.branchFilter === tab.key && row.status !== 'rejected' && !row.rowId.endsWith('_empty') && !isInTestTransfer(row));
+      let r1 = 0; let r2 = 0; let r3 = 0; let r4 = 0;
+      for (const child of schoolChildren) {
+        const m = marks[child.rowId];
+        if (!m) continue;
+        if (m[1]?.present) r1 += 1;
+        if (m[2]?.present) r2 += 1;
+        if (m[3]?.present) r3 += 1;
+        if (m[4]?.present) r4 += 1;
+      }
+      return {
+        key: tab.key,
+        label: tab.label,
+        color: SCHOOL_COLORS[index % SCHOOL_COLORS.length],
+        logo: tab.logo,
+        childrenCount: schoolChildren.length,
+        r1,
+        r2,
+        r3,
+        r4,
+      };
+    });
+  }, [rows, monthData, schoolTier, allowedSchools]);
+  const reconcileTotals = useMemo(() => ({
+    schools: reconcileStats.length,
+    childrenCount: reconcileStats.reduce((sum, item) => sum + item.childrenCount, 0),
+    r1: reconcileStats.reduce((sum, item) => sum + item.r1, 0),
+    r2: reconcileStats.reduce((sum, item) => sum + item.r2, 0),
+    r3: reconcileStats.reduce((sum, item) => sum + item.r3, 0),
+    r4: reconcileStats.reduce((sum, item) => sum + item.r4, 0),
+  }), [reconcileStats]);
+  const reconcileRows = useMemo(() => buildGroupedRows(
+    reconcileStats,
+    expandedGroups,
+    ['childrenCount', 'r1', 'r2', 'r3', 'r4'],
+    (a, b) => {
+      const av = reconcileSort.key === 'school' ? a.label : a.data[reconcileSort.key];
+      const bv = reconcileSort.key === 'school' ? b.label : b.data[reconcileSort.key];
+      const cmp = typeof av === 'string' ? av.localeCompare(bv as string) : (av as number) - (bv as number);
+      return reconcileSort.dir === 'asc' ? cmp : -cmp;
+    },
+  ), [reconcileStats, expandedGroups, reconcileSort]);
+  const handleReconcileSort = (key: string) => {
+    const nextKey = key as 'school' | 'childrenCount' | 'r1' | 'r2' | 'r3' | 'r4';
+    setReconcileSort(prev => prev.key === nextKey ? { key: nextKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { key: nextKey, dir: nextKey === 'school' ? 'asc' : 'desc' });
+  };
   const totals = useMemo(() => {
     const tierRows = (rows ?? []).filter(row => SCHOOL_TIER_2_KEYS.includes(row.branchFilter) === (schoolTier === '2.0'));
     const transferSummary = transferStats(tierRows);
@@ -280,13 +348,35 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
               </button>;
             })}
           </div>}
+          {view === 'reconciliation' && (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <ManagerPeriodBar
+                showAll={false}
+                periods={RECONCILIATION_PERIODS}
+                periodKey={activePeriod.key}
+                onPeriodKeyChange={setActivePeriodKey}
+              />
+            </div>
+          )}
           <div className="manager-overview-search">{view === 'drivers' ? driversSearch : <ManagerSearch rows={rows} onOpenFamily={onOpenFamily} />}</div>
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />{view !== 'map' && <AllRecordsButton onClick={() => onSelectSchool('ALL')} />}</div>
         </DashboardTopPanel>
         <div className="manager-workspace manager-overview-body">
           <div className="manager-overview-sidebar"><LogisticsSummaryTabs showMap allowedSchools={allowedSchools} value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} /></div>
           <div className="manager-workspace-content">
-        {view === 'map' ? <LogisticsSchoolAddresses allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
+        {view === 'reconciliation' ? <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:reconciliation"
+          columns={[
+            { key: 'r1', label: 'Сверка 1', total: reconcileTotals.r1, color: '#15803D' },
+            { key: 'r2', label: 'Сверка 2', total: reconcileTotals.r2, color: '#1D6FA4' },
+            { key: 'r3', label: 'Сверка 3', total: reconcileTotals.r3, color: '#0F766E' },
+            { key: 'r4', label: 'Сверка 4', total: reconcileTotals.r4, color: '#2563EB' },
+          ]}
+          rows={reconcileRows.map(row => ({ ...row, values: { childrenCount: row.data.childrenCount, r1: row.data.r1, r2: row.data.r2, r3: row.data.r3, r4: row.data.r4 } }))}
+          sortKey={reconcileSort.key}
+          ascending={reconcileSort.dir === 'asc'}
+          onSort={handleReconcileSort}
+          onSelect={key => reconcileRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        /> : view === 'map' ? <LogisticsSchoolAddresses allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
           columns={[
             { key: 'microbusAverage', label: 'Средний по МКР', total: totals.microbusAverage.toFixed(1), color: KPI_COLORS.microbusAverage },
             { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
@@ -312,11 +402,27 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <LogisticsTabs value={view} onChange={key => key === 'drivers' ? onDrivers() : onViewChange(key)} />
           {view === 'requests'
             ? <div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar periodKey={requestDay} onPeriodKeyChange={setRequestDay} periods={REQUEST_DAY_PERIODS} allLabel="Все" useLabels periodCounts={requestDayCounts(rows)} periodTitle={period => period.key === '11' ? 'Старше 10 дней' : `День ${period.label} с создания заявки`} /></div>
-            : <div style={{ flex: 1 }} />}
+            : view === 'reconciliation'
+              ? <div style={{ flex: 1, minWidth: 0 }}><ManagerPeriodBar showAll={false} periods={RECONCILIATION_PERIODS} periodKey={activePeriod.key} onPeriodKeyChange={setActivePeriodKey} /></div>
+              : <div style={{ flex: 1 }} />}
           <ManagerSearch rows={rows.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools))} onOpenFamily={onOpenFamily} />
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} /><AllRecordsButton onClick={() => onSelectSchool('ALL')}/></div>
         </DashboardTopPanel>
-        {view === 'requests' ? <NewRequestsDashboard rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
+        {view === 'reconciliation' ? <SchoolDashboardTable commentScope="families/LogisticsOverview:reconciliation"
+          columns={[
+            { key: 'school', label: 'Школа', total: reconcileTotals.schools, color: KPI_COLORS.school },
+            { key: 'childrenCount', label: 'Детей', total: reconcileTotals.childrenCount, color: '#64748B' },
+            { key: 'r1', label: 'Сверка 1', total: reconcileTotals.r1, color: '#15803D' },
+            { key: 'r2', label: 'Сверка 2', total: reconcileTotals.r2, color: '#1D6FA4' },
+            { key: 'r3', label: 'Сверка 3', total: reconcileTotals.r3, color: '#0F766E' },
+            { key: 'r4', label: 'Сверка 4', total: reconcileTotals.r4, color: '#2563EB' },
+          ]}
+          rows={reconcileRows.map(row => ({ ...row, values: { childrenCount: row.data.childrenCount, r1: row.data.r1, r2: row.data.r2, r3: row.data.r3, r4: row.data.r4 } }))}
+          sortKey={reconcileSort.key}
+          ascending={reconcileSort.dir === 'asc'}
+          onSort={handleReconcileSort}
+          onSelect={key => reconcileRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
+        /> : view === 'requests' ? <NewRequestsDashboard rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable commentScope="families/LogisticsOverview:overview"
           columns={[
             { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
             { key: 'newRequests', label: 'Новые заявки', total: totals.newRequests, color: KPI_COLORS.newRequests },

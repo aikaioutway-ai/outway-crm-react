@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './services/queryClient';
@@ -6,11 +6,15 @@ import './index.css';
 import App from './App';
 import AppUpdater from './core/AppUpdater';
 import ParentTrackingDemoPage from './modules/parentDemo/ParentTrackingDemoPage';
+import { extractDriverCheckToken } from './services/driverCheckService';
+
+const DriverCheckPage = lazy(() => import('./modules/driverCheck/DriverCheckPage'));
 
 // Демо-прототип родительского интерфейса живёт на отдельном пути и не заходит
 // в основной App (авторизация, sidebar, CRM-разделы) — это самостоятельная
 // mobile-first страница для показа макета, без влияния на рабочие модули.
 const isParentDemoRoute = window.location.pathname.startsWith('/parent-demo');
+const driverCheckToken = extractDriverCheckToken();
 
 const root = ReactDOM.createRoot(
   document.getElementById('root') as HTMLElement
@@ -18,7 +22,15 @@ const root = ReactDOM.createRoot(
 root.render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
-      {isParentDemoRoute ? <ParentTrackingDemoPage /> : <><App /><AppUpdater /></>}
+      {driverCheckToken ? (
+        <Suspense fallback={<div style={{ padding: 24, textAlign: 'center', color: '#64748B' }}>Загрузка…</div>}>
+          <DriverCheckPage token={driverCheckToken} />
+        </Suspense>
+      ) : isParentDemoRoute ? (
+        <ParentTrackingDemoPage />
+      ) : (
+        <><App /><AppUpdater /></>
+      )}
     </QueryClientProvider>
   </React.StrictMode>
 );

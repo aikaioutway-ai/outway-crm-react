@@ -11,7 +11,7 @@ import {
 } from '../../modules/tasks/taskTypes';
 import '../../modules/tasks/TasksModule.css';
 import { Screen } from '../nav';
-import { Badge, Empty, ErrorBox, SearchField, SelectField, Skeletons } from '../ui';
+import { Badge, Empty, ErrorBox, FilterPanel, SearchField, SelectField, Skeletons } from '../ui';
 
 type ListKey = 'mine' | 'created' | 'watching' | 'review' | 'all';
 type StatusKey = TaskFilters['status'];
@@ -198,6 +198,7 @@ export default function TasksSection({ user, context, onClearContext, onOpenTarg
       )}
 
       <SelectField label="Список" value={list} onChange={value => setList(value)} options={lists} />
+      <FilterPanel summary={[STATUS_OPTIONS.find(option => option.value === status)?.label, list === 'all' ? scopeOptions.find(option => option.value === scope)?.label : due ? DUE_LABEL[due] : 'Любой срок'].filter(Boolean).join(' · ')}>
       <div className="m-selects">
         <SelectField label="Статус" value={status} onChange={value => { setStatus(value); setDue(''); setPage(0); }} options={STATUS_OPTIONS} />
         {list === 'all' ? (
@@ -211,6 +212,7 @@ export default function TasksSection({ user, context, onClearContext, onOpenTarg
           />
         )}
       </div>
+      </FilterPanel>
       {list === 'all' && due && (
         <div className="m-filter-chip">
           <span>{DUE_LABEL[due]}</span>

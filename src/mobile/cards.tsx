@@ -23,12 +23,12 @@ export function SchoolCard({ school, stats, progress, onClick }: {
   onClick: () => void;
 }) {
   return (
-    <button type="button" className="m-card" onClick={onClick}>
+    <button type="button" className="m-card m-school-card" onClick={onClick}>
       <div className="m-card-row">
-        <SchoolAvatar logo={school.logo} label={school.label} color="#626C8B" size={44} radius={22} fontSize={13} />
+        <SchoolAvatar logo={school.logo} label={school.label} color="#626C8B" size={44} radius={10} fontSize={13} />
         <div className="m-card-main">
           <div className="m-card-title">{school.label}</div>
-          <div className="m-stats">
+          <div className="m-stats" style={{gridTemplateColumns:`repeat(${Math.min(3, Math.max(1, stats.length))}, minmax(0, 1fr))`}}>
             {stats.map(stat => stat.icon ? (
               <div key={stat.label} className="m-stat m-stat--icon" title={stat.label} aria-label={`${stat.label}: ${stat.value}`} style={stat.color ? { color: stat.color } : undefined}>
                 {stat.icon}<b>{stat.value}</b>
@@ -61,8 +61,9 @@ export function ChildCard({ row, onClick, showSchool = false, showDebt = false }
 }) {
   const name = /[\p{L}]/u.test(row.childName) ? formatName(row.childName) : 'Без имени';
   return (
-    <button type="button" className="m-card" onClick={onClick}>
+    <button type="button" className="m-card m-child-card" onClick={onClick}>
       <div className="m-card-row" style={{ alignItems: 'flex-start' }}>
+        <span className="m-contact-avatar" aria-hidden="true">{name.split(/\s+/).map(part => part[0]).slice(0,2).join('')}</span>
         <div className="m-card-main">
           <div className="m-card-title">{name}</div>
           <div className="m-card-sub">{row.streetAddress || 'адрес не указан'}</div>

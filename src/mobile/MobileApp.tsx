@@ -1,6 +1,6 @@
 import React, { lazy, Suspense, useEffect, useState } from 'react';
 import { ListTodo, ChevronRight, LogOut, Menu, Monitor, Route, UserCog, Users, Wallet } from 'lucide-react';
-import { canAccessSection, NavSection } from '../core/bars/Sidebar';
+import { canAccessSection, NavSection, OutWayLogo } from '../core/bars/Sidebar';
 import { AuthenticatedUser } from '../services/employeeService';
 import { MobileNavProvider, Screen, useMobileNav, useNavPosition } from './nav';
 import { Skeletons } from './ui';
@@ -137,6 +137,13 @@ function MobileShell({ user, onLogout, onOpenDesktop, onOpenTaskTarget }: {
 
   return (
     <div className={`m-app ${isMobilePreview() ? 'm-app--preview' : ''}`}>
+      <div className="m-workspace-bar">
+        <div className="m-workspace-brand"><OutWayLogo width={78} height={20}/><span className="m-workspace-label">CRM</span></div>
+        <button type="button" className="m-workspace-account" aria-label={`Профиль: ${user.name}`} onClick={() => selectTab('more')}>
+          <span className="m-workspace-account-name">{user.name}</span>
+          <span className="m-workspace-account-avatar" aria-hidden="true">{user.name.split(/\s+/).map(part => part[0]).slice(0,2).join('').toUpperCase()}</span>
+        </button>
+      </div>
       <Suspense fallback={<div className="m-content"><div className="m-page"><Skeletons /></div></div>}>
         {section}
         {taskFamilyId && <TaskFamilySheet familyId={taskFamilyId} onClose={()=>setTaskFamilyId('')} canEditStatus={false} showFinance={false} userName={user.name} />}

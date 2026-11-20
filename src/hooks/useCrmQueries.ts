@@ -41,6 +41,16 @@ import {
   PeriodChargeStats,
 } from '../services/crmV2Service';
 import { fetchEmployees } from '../services/employeeService';
+import {
+  fetchIncomingReceipts,
+  fetchIncomingReceiptsSummary,
+  fetchWhatsappGroups,
+  IncomingReceiptFilter,
+  IncomingReceiptsPage,
+  IncomingReceiptsSummary,
+  ReceiptScope,
+  WhatsappGroup,
+} from '../services/incomingReceiptService';
 import { Employee } from '../types';
 import { QK } from '../services/queryClient';
 import { ALL_PERIODS, getBranchFilter } from '../modules/families/constants';
@@ -267,6 +277,34 @@ export function useFamilySearch(text: string, digits: string): UseQueryResult<Fa
     queryFn: () => searchFamilyChildren(text, digits),
     enabled: text.length >= 2 || digits.length >= 3,
     placeholderData: keepPreviousData,
+  });
+}
+
+export function useIncomingReceipts(sessionToken: string | undefined, params: { filter: IncomingReceiptFilter; search: string; page: number } & ReceiptScope): UseQueryResult<IncomingReceiptsPage> {
+  const scope = JSON.stringify([params.transferId, params.unassigned, params.schoolKey, params.dateFrom, params.dateTo]);
+  return useQuery({
+    queryKey: QK.incomingReceipts(sessionToken, params.filter, params.search, params.page, scope),
+    queryFn: () => fetchIncomingReceipts(sessionToken, params),
+    enabled: Boolean(sessionToken),
+    placeholderData: keepPreviousData,
+    refetchInterval: 60 * 1000,
+  });
+}
+
+export function useIncomingReceiptsSummary(sessionToken: string | undefined): UseQueryResult<IncomingReceiptsSummary> {
+  return useQuery({
+    queryKey: QK.incomingReceiptsSummary(sessionToken),
+    queryFn: () => fetchIncomingReceiptsSummary(sessionToken),
+    enabled: Boolean(sessionToken),
+    refetchInterval: 60 * 1000,
+  });
+}
+
+export function useWhatsappGroups(sessionToken: string | undefined, enabled: boolean): UseQueryResult<WhatsappGroup[]> {
+  return useQuery({
+    queryKey: QK.whatsappGroups(sessionToken),
+    queryFn: () => fetchWhatsappGroups(sessionToken),
+    enabled: Boolean(sessionToken) && enabled,
   });
 }
 

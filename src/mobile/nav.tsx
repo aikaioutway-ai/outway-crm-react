@@ -127,7 +127,7 @@ export function Screen({ pageKey, title, subtitle, onBack, action, children }: {
           </button>
         )}
         <div className="m-header-titles">
-          <div className="m-header-title">{title}</div>
+          <h1 className="m-header-title" style={{margin:0}}>{title}</h1>
           {subtitle && <div className="m-header-subtitle">{subtitle}</div>}
         </div>
         {action && <div className="m-header-action">{action}</div>}

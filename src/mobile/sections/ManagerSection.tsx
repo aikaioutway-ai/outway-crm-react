@@ -136,12 +136,12 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
 
   return (
     <>
-      <Screen pageKey={`manager:home:${homeTab}`} title="Менеджер" subtitle={user.name}>
+      <Screen pageKey={`manager:home:${homeTab}`} title="Менеджер" subtitle="Клиенты и школы">
         <Segment value={homeTab} onChange={setHomeTab} options={[{ value: 'schools', label: 'Школы' }, { value: 'debts', label: debtorCount ? `Долги · ${debtorCount}` : 'Долги' }]} />
         <SearchField
           value={query}
           onChange={setQuery}
-          placeholder={homeTab === 'debts' ? 'Родитель, ребёнок или телефон' : 'Поиск по всем школам: имя или телефон'}
+          placeholder={homeTab === 'debts' ? 'Родитель, ребёнок или телефон' : 'Имя ребёнка или телефон'}
         />
         {error && <ErrorBox>Не удалось загрузить данные. Проверьте интернет и обновите страницу.</ErrorBox>}
         {isLoading && !data ? <Skeletons /> : homeTab === 'debts' ? (
@@ -162,7 +162,7 @@ export default function ManagerSection({ user }: { user: AuthenticatedUser }) {
               <Kpi label="Посажены" value={rows.filter(row => row.status === 'boarded').length} color="#16A34A" />
               <Kpi label="Отказ" value={rows.filter(row => row.status === 'rejected').length} color="#64748B" />
             </div>
-            <div className="m-section-title">Школы</div>
+            <div className="m-section-title"><span>Школы</span><span className="m-section-count">{schools.length}</span></div>
             <div className="m-list">
               {schools.map(({ school, list }) => (
                 <SchoolCard

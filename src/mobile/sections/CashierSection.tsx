@@ -348,9 +348,9 @@ export default function CashierSection({ user }: { user: AuthenticatedUser }) {
 
   return (
     <>
-      <Screen pageKey={`cashier:home:${tab}`} title="Кассир" subtitle={user.name}>
+      <Screen pageKey={`cashier:home:${tab}`} title="Кассир" subtitle="Платежи и сверка">
         {controls}
-        <SearchField value={query} onChange={setQuery} placeholder="Поиск по всем школам: родитель или телефон" />
+        <SearchField value={query} onChange={setQuery} placeholder="Родитель или телефон" />
         {active.error && <ErrorBox>Не удалось загрузить данные. Проверьте интернет и обновите страницу.</ErrorBox>}
         {active.isLoading && !active.data ? <Skeletons /> : query.trim() ? list : (
           <>

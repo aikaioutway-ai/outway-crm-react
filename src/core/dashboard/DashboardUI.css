@@ -1151,3 +1151,7 @@ button.manager-school-brand {
 .manager-overview-sidebar .manager-mode-cards:has(> .manager-mode-card[data-logistics-tab="map"]:last-child) {
   grid-template-rows: repeat(3, 1fr) auto;
 }
+
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] {
+  grid-auto-rows: 112px;
+}

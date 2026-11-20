@@ -5,7 +5,7 @@ import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
-import ManagerModeTabs, { canAccessManagerAccruals } from './modules/families/ManagerModeTabs';
+import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts, ManagerMode } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, getInitialSection, NavSection, OWNER_EMPLOYEE_ID } from './core/bars/Sidebar';
@@ -19,6 +19,7 @@ import LogisticsOverview, { LogisticsSummaryTabs } from './modules/families/Logi
 import LogisticsSchoolKpiStrip from './modules/families/LogisticsSchoolKpiStrip';
 import LogisticsSchoolTransferDashboard from './modules/families/LogisticsSchoolTransferDashboard';
 import LogisticsMapView from './modules/families/LogisticsMapView';
+import LogisticsReconciliation, { RECONCILIATION_PERIODS } from './modules/families/LogisticsReconciliation';
 import SchoolKpiStrip from './modules/families/SchoolKpiStrip';
 import SchoolTransferDashboard from './modules/families/SchoolTransferDashboard';
 import ManagerPeriodBar from './modules/families/ManagerPeriodBar';
@@ -63,6 +64,7 @@ const B2BModule = lazy(() => import('./modules/b2b/B2BModule'));
 const SummaryModule = lazy(() => import('./modules/summary/SummaryModule'));
 const TasksModule = lazy(() => import('./modules/tasks/TasksModule'));
 const MessagesModule = lazy(() => import('./modules/messages/MessagesModule'));
+const ReceiptsBrowser = lazy(() => import('./modules/receipts/ReceiptsBrowser'));
 const MessageComposer = lazy(() => import('./modules/messages/MessageComposer'));
 const TaskComposer = lazy(() => import('./modules/tasks/TaskComposer'));
 const TaskFamilyCard = lazy(() => import('./modules/families/InlineFamilyCard'));
@@ -165,18 +167,21 @@ export default function App() {
   const [logisticsSearch, setLogisticsSearch] = useState('');
   const [logistics2Search, setLogistics2Search] = useState('');
   // Модули менеджера и логиста открываются на «Справочнике».
-  const [logisticsView, setLogisticsView] = useState<'requests' | 'table' | 'map'>('table');
+  const [logisticsView, setLogisticsView] = useState<'requests' | 'table' | 'map' | 'reconciliation'>('table');
+  const [logisticsReconcilePeriodKey, setLogisticsReconcilePeriodKey] = useState<string>(() => currentPayrollPeriodKey());
   const [logistics2DriverSearch, setLogistics2DriverSearch] = useState('');
-  const [logistics2View, setLogistics2View] = useState<'requests' | 'table' | 'map' | 'drivers'>('table');
+  const [logistics2View, setLogistics2View] = useState<'requests' | 'table' | 'map' | 'drivers' | 'reconciliation'>('table');
   const [driversSchoolKey, setDriversSchoolKey] = useState<string | null>(null);
   const [driversTransferFilter, setDriversTransferFilter] = useState('');
   const [driversSearch, setDriversSearch] = useState('');
   const [managerSchoolKey, setManagerSchoolKey] = useState<string | null>(null);
-  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<'directory' | 'charges' | 'accruals' | 'requests'>('directory');
+  const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<ManagerMode>('directory');
   const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
-  const managerSchoolMode = requestedManagerSchoolMode === 'accruals' && !canViewManagerAccruals ? 'directory' : requestedManagerSchoolMode;
-  const setManagerSchoolMode = (mode: 'directory' | 'charges' | 'accruals' | 'requests') => {
-    setRequestedManagerSchoolMode(mode === 'accruals' && !canViewManagerAccruals ? 'directory' : mode);
+  const canViewManagerReceipts = !!currentUser && canAccessManagerReceipts(currentUserRole);
+  const managerModeAllowed = (mode: ManagerMode) => (mode !== 'accruals' || canViewManagerAccruals) && (mode !== 'receipts' || canViewManagerReceipts);
+  const managerSchoolMode = managerModeAllowed(requestedManagerSchoolMode) ? requestedManagerSchoolMode : 'directory';
+  const setManagerSchoolMode = (mode: ManagerMode) => {
+    setRequestedManagerSchoolMode(managerModeAllowed(mode) ? mode : 'directory');
   };
   useEffect(() => {
     if (!canViewManagerAccruals) setRequestedManagerSchoolMode(mode => mode === 'accruals' ? 'directory' : mode);
@@ -517,8 +522,28 @@ export default function App() {
     );
   }
 
+  // Экран чеков — вкладка «Чеки» в «Менеджере» и «Менеджере 2.0».
+  const renderReceipts = (schoolKey: string | null) => (
+    <ReceiptsBrowser
+      key={schoolKey ?? 'schools'}
+      sessionToken={currentUser?.sessionToken}
+      userName={currentUser?.name}
+      allowedSchools={currentUser?.schoolKeys}
+      schoolKey={schoolKey}
+      schoolTier={managerTier}
+      onSelectSchool={handleManagerSelectSchool}
+      onOpenFamily={async familyId => {
+        const family = await fetchV2Family(familyId);
+        if (!family) throw new Error('Семья не найдена');
+        setTaskChildId('');
+        setTaskFamilyTab(undefined);
+        setTaskFamily(family);
+      }}
+    />
+  );
+
   const renderManagerSchool = (schoolKey: string, period: string, day?: string, directoryPeriod?: string, onDebtTotals?: (amount: number, count: number) => void) => (
-    managerSchoolMode === 'requests' ? <SchoolRequestsKanban externalDay={day} key={schoolKey} schoolKey={schoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
+    managerSchoolMode === 'receipts' ? renderReceipts(schoolKey) : managerSchoolMode === 'requests' ? <SchoolRequestsKanban externalDay={day} key={schoolKey} schoolKey={schoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
     <>
       {!isManager2 && (<DashboardTopPanel>
         {!isManager2 && managerSchoolMode !== 'directory' && (
@@ -806,11 +831,22 @@ export default function App() {
             ) : (
               <>
               <DashboardTopPanel>
-                {logisticsSchoolKey !== 'ALL' && <LogisticsSchoolKpiStrip
-                  schoolKey={logisticsSchoolKey}
-                  selectedKey={logisticsTransferFilter}
-                  rightReserveWidth={schoolSidebarReserveWidth}
-                />}
+                {logisticsView === 'reconciliation' ? (
+                  <div style={{ paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+                    <ManagerPeriodBar
+                      showAll={false}
+                      periods={RECONCILIATION_PERIODS}
+                      periodKey={logisticsReconcilePeriodKey}
+                      onPeriodKeyChange={setLogisticsReconcilePeriodKey}
+                    />
+                  </div>
+                ) : (
+                  logisticsSchoolKey !== 'ALL' && <LogisticsSchoolKpiStrip
+                    schoolKey={logisticsSchoolKey}
+                    selectedKey={logisticsTransferFilter}
+                    rightReserveWidth={schoolSidebarReserveWidth}
+                  />
+                )}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {logisticsSchoolKey !== 'ALL' && <LogisticsSchoolTransferDashboard schoolKey={logisticsSchoolKey} selectedKey={logisticsTransferFilter} onSelect={setLogisticsTransferFilter} />}
@@ -818,7 +854,17 @@ export default function App() {
                   <div style={{ paddingTop: 10 }}><DashboardSearch value={logisticsSearch} onChange={setLogisticsSearch} placeholder="Имя, телефон, ребёнок, адрес..." /></div>
                 </div>
               </DashboardTopPanel>
-              {logisticsView === 'map' ? (
+              {logisticsView === 'reconciliation' ? (
+                <LogisticsReconciliation
+                  schoolKey={logisticsSchoolKey}
+                  periodKey={logisticsReconcilePeriodKey}
+                  transferFilter={logisticsTransferFilter}
+                  search={logisticsSearch}
+                  sessionToken={currentUser?.sessionToken}
+                  allowedSchools={currentUser?.schoolKeys}
+                  onOpenFamily={openRequestFamily}
+                />
+              ) : logisticsView === 'map' ? (
                 <LogisticsMapView
                   schoolKey={logisticsSchoolKey}
                   transferFilter={logisticsTransferFilter}
@@ -861,6 +907,9 @@ export default function App() {
                 onOpenFamily={handleLogisticsOpenFamily}
                 onSelectSchool={handleLogisticsSelectSchool}
                 allowedSchools={currentUser?.schoolKeys}
+                sessionToken={currentUser?.sessionToken}
+                reconciliationPeriodKey={logisticsReconcilePeriodKey}
+                onReconciliationPeriodKeyChange={setLogisticsReconcilePeriodKey}
                 onSidebarWidthChange={setSchoolSidebarReserveWidth}
               />
             )}
@@ -883,6 +932,16 @@ export default function App() {
               <>
               {logistics2View !== 'requests' && logistics2View !== 'drivers' && (
               <DashboardTopPanel>
+                {logistics2View === 'reconciliation' && (
+                  <div style={{ paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+                    <ManagerPeriodBar
+                      showAll={false}
+                      periods={RECONCILIATION_PERIODS}
+                      periodKey={logisticsReconcilePeriodKey}
+                      onPeriodKeyChange={setLogisticsReconcilePeriodKey}
+                    />
+                  </div>
+                )}
                 <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     {logistics2SchoolKey !== 'ALL' && <LogisticsSchoolTransferDashboard showBusFilter schoolKey={logistics2SchoolKey} selectedKey={logistics2TransferFilter} onSelect={setLogistics2TransferFilter} />}
@@ -915,6 +974,16 @@ export default function App() {
                   />
               ) : logistics2View === 'requests' ? (
               <SchoolRequestsKanban key={logistics2SchoolKey} schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier="1.0" actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} />
+              ) : logistics2View === 'reconciliation' ? (
+              <LogisticsReconciliation
+                schoolKey={logistics2SchoolKey}
+                periodKey={logisticsReconcilePeriodKey}
+                transferFilter={logistics2TransferFilter}
+                search={logistics2Search}
+                sessionToken={currentUser?.sessionToken}
+                allowedSchools={currentUser?.schoolKeys}
+                onOpenFamily={openRequestFamily}
+              />
             ) : (
               <>
 
@@ -981,6 +1050,9 @@ export default function App() {
                 onOpenFamily={handleLogistics2OpenFamily}
                 onSelectSchool={handleLogistics2SelectSchool}
                 allowedSchools={currentUser?.schoolKeys}
+                sessionToken={currentUser?.sessionToken}
+                reconciliationPeriodKey={logisticsReconcilePeriodKey}
+                onReconciliationPeriodKeyChange={setLogisticsReconcilePeriodKey}
               />
             )}
           </div>
@@ -994,13 +1066,14 @@ export default function App() {
                     <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
-                {managerSchoolKey && !isManager2 && <ManagerModeTabs showRequests canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
+                {managerSchoolKey && !isManager2 && <ManagerModeTabs showRequests showReceipts={canViewManagerReceipts} canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
                 {!isManager2 && contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
             </div>
             {managerSchoolKey && !isManager2 ? renderManagerSchool(managerSchoolKey, managerPeriodKey) : (
               <ManagerOverview
+                sessionToken={currentUser?.sessionToken}
                 key={section}
                 employeeCardAccess={canAccessSection(currentUserRole, 'employees', currentUser?.id)
                   ? { roles: restrictedRoleFor(currentUserRole), sessionToken: currentUser?.sessionToken }
@@ -1009,7 +1082,8 @@ export default function App() {
                 detailTransferFilter={managerTransferFilter}
                 detailSchoolKey={isManager2 ? managerSchoolKey ?? undefined : undefined}
                 renderSchool={isManager2 && managerSchoolKey ? (period, day, directoryPeriod, onDebtTotals) => renderManagerSchool(managerSchoolKey, period, day, directoryPeriod, onDebtTotals) : undefined}
-                renderTransfers={isManager2 && managerSchoolKey && managerSchoolKey !== 'ALL' && managerSchoolMode !== 'requests'
+                renderReceipts={canViewManagerReceipts ? () => renderReceipts(null) : undefined}
+                renderTransfers={isManager2 && managerSchoolKey && managerSchoolKey !== 'ALL' && managerSchoolMode !== 'requests' && managerSchoolMode !== 'receipts'
                   ? period => <SchoolTransferDashboard showBusFilter topPadding={0} mode={managerSchoolMode} periodKey={period} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
                   : undefined}
                 splitView={isManager2}
