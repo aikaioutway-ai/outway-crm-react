@@ -1153,17 +1153,17 @@ button.manager-school-brand {
 }
 
 .manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] {
-  grid-auto-rows: 112px;
+  grid-auto-rows: minmax(max-content, 1fr);
 }
 
 .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] {
-  grid-auto-rows: 112px;
+  grid-auto-rows: minmax(max-content, 1fr);
   grid-template-rows: none;
   align-content: start;
 }
 .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"]:has(> [data-logistics-tab="map"]:last-child) {
-  grid-template-rows: repeat(4, 112px) 48px;
+  grid-template-rows: repeat(4, minmax(max-content, 1fr)) auto;
 }
 .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"]:has(> [data-logistics-tab="map"]:first-child) {
-  grid-template-rows: 48px;
+  grid-template-rows: auto;
 }

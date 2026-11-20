@@ -114,3 +114,7 @@ export function sortChildrenForDriver<T extends { stop_order: number | null; chi
     return String(a.child_name ?? '').localeCompare(String(b.child_name ?? ''), 'ru');
   });
 }
+
+export function canCorrectDriverMarks(userId?: string, role?: string): boolean {
+  return userId === 'emp-admin' || role === 'senior_logist';
+}

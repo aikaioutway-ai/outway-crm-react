@@ -857,6 +857,8 @@ export default function App() {
               </DashboardTopPanel>
               {logisticsView === 'reconciliation' ? (
                 <LogisticsReconciliation
+                userId={currentUser?.id}
+                userRole={currentUserRole}
                   schoolKey={logisticsSchoolKey}
                   periodKey={logisticsReconcilePeriodKey}
                   transferFilter={logisticsTransferFilter}
@@ -978,6 +980,8 @@ export default function App() {
               <SchoolRequestsKanban key={logistics2SchoolKey} schoolKey={logistics2SchoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier="1.0" actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} />
               ) : logistics2View === 'reconciliation' ? (
               <LogisticsReconciliation
+                userId={currentUser?.id}
+                userRole={currentUserRole}
                 schoolKey={logistics2SchoolKey}
                 periodKey={logisticsReconcilePeriodKey}
                 transferFilter={logistics2TransferFilter}

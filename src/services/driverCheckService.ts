@@ -1,3 +1,4 @@
+export { canCorrectDriverMarks } from '../../supabase/functions/driver-check-api/helpers';
 import { supabase } from './supabase';
 import { EMPLOYEE_SESSION_EXPIRED_EVENT, isEmployeeSessionExpiredMessage } from './employeeSession';
 
@@ -319,4 +320,11 @@ export async function rotateTransferDriverToken(
     },
     sessionToken,
   );
+}
+
+export async function correctDriverCheckMark(sessionToken: string | undefined, params: {
+  transferId: string; childId: string; year: number; month: number; round: CheckRound; present: boolean | null;
+}): Promise<void> {
+  if (!sessionToken) throw new Error('Войдите в CRM, чтобы исправить сверку');
+  await callDriverCheckApi({ action: 'crm_correct_mark', ...params }, sessionToken);
 }

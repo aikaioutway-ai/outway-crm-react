@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
+  canCorrectDriverMarks,
   allowedBranchIds,
   bishkekToday,
   BranchRow,
@@ -479,6 +480,53 @@ Deno.serve(async request => {
     }
 
     // 5. Обновить секретную ссылку трансфера (если сменился водитель — старая перестанет открываться).
+    if (action === 'crm_correct_mark') {
+      if (!canCorrectDriverMarks(employee.id, employee.role)) {
+        throw new UserError('Исправлять сверку могут только владелец и начальник логистики', 403);
+      }
+      if (!isUuid(body.transferId) || !isUuid(body.childId) || (body.present !== null && typeof body.present !== 'boolean')) {
+        throw new UserError('Некорректная отметка');
+      }
+      const year = Number(body.year);
+      const month = Number(body.month);
+      const round = Number(body.round);
+      if (!Number.isInteger(year) || year < 2024 || year > 2035 || !Number.isInteger(month) || month < 1 || month > 12 || ![1,2,3,4].includes(round)) {
+        throw new UserError('Некорректный период');
+      }
+      const { data: child, error: childError } = await db.from('v2_children').select('id,branch_id,transfer_id').eq('id', body.childId).maybeSingle();
+      if (childError) throw childError;
+      if (!child || child.transfer_id !== body.transferId || (scope !== null && !scope.includes(String(child.branch_id)))) {
+        throw new UserError('Ребёнок не найден в доступном трансфере', 403);
+      }
+      const startDay = [1,8,15,22][round - 1];
+      const lastDay = round === 4 ? new Date(Date.UTC(year, month, 0)).getUTCDate() : startDay + 6;
+      const prefix = `${year}-${String(month).padStart(2, '0')}-`;
+      const start = prefix + String(startDay).padStart(2, '0');
+      const end = prefix + String(lastDay).padStart(2, '0');
+      if (body.present === null) {
+        const { error: resetError } = await db.from('v2_driver_check_marks').delete()
+          .eq('transfer_id', body.transferId).eq('child_id', body.childId)
+          .gte('check_date', start).lte('check_date', end);
+        if (resetError) throw resetError;
+        return response({ ok: true });
+      }
+      const { data: marks, error: markError } = await db.from('v2_driver_check_marks').select('check_date')
+        .eq('transfer_id', body.transferId).eq('child_id', body.childId).gte('check_date', start).lte('check_date', end)
+        .order('check_date', { ascending: false }).limit(1);
+      if (markError) throw markError;
+      const { data: submissions, error: submissionError } = await db.from('v2_driver_check_submissions').select('check_date')
+        .eq('transfer_id', body.transferId).gte('check_date', start).lte('check_date', end)
+        .order('check_date', { ascending: false }).limit(1);
+      if (submissionError) throw submissionError;
+      const checkDate = marks?.[0]?.check_date ?? submissions?.[0]?.check_date ?? start;
+      const { error: saveError } = await db.from('v2_driver_check_marks').upsert({
+        transfer_id: body.transferId, child_id: body.childId, check_date: checkDate,
+        present: body.present, marked_at: new Date().toISOString(),
+      }, { onConflict: 'transfer_id,child_id,check_date' });
+      if (saveError) throw saveError;
+      return response({ ok: true });
+    }
+
     if (action === 'crm_rotate_token') {
       if (!isUuid(body.transferId)) throw new UserError('Трансфер не найден');
       const { data: transfer, error: findError } = await db

@@ -11,6 +11,7 @@ jest.mock('../../services/driverCheckService', () => {
     ...actual,
     fetchLogisticsReconciliationMonth: jest.fn(),
     rotateTransferDriverToken: jest.fn(),
+    correctDriverCheckMark: jest.fn(),
   };
 });
 
@@ -91,6 +92,23 @@ describe('LogisticsReconciliation (monthly 4-round table)', () => {
     });
   });
 
+  test('cycles a mark through false, reset and true', async () => {
+    const data = await mockedService.fetchLogisticsReconciliationMonth('tok', { year: 2026, month: 11 });
+    mockedService.fetchLogisticsReconciliationMonth.mockImplementation(async () => JSON.parse(JSON.stringify(data)));
+    mockedService.correctDriverCheckMark.mockImplementation(async (_, params) => {
+      if (params.present === null) delete data.marksByChild.c1[1];
+      else data.marksByChild.c1[1] = { present: params.present, checkDate: '2026-11-05', markedAt: '2026-11-05T02:10:00Z' };
+    });
+    renderWithQuery(<LogisticsReconciliation schoolKey="TIS" periodKey="11" transferFilter="3"
+      sessionToken="tok" userId="emp-admin" userRole="admin" />);
+    const mark = await screen.findByRole('button', { name: 'Сверка 1: Алия Ахметова' });
+    for (const present of [false, null, true]) {
+      fireEvent.click(mark);
+      await waitFor(() => expect(mockedService.correctDriverCheckMark).toHaveBeenLastCalledWith('tok', expect.objectContaining({ childId: 'c1', round: 1, present })));
+      await waitFor(() => expect(mark).not.toBeDisabled());
+    }
+  });
+
   test('selects the first active transfer when opening a school without a selection', async () => {
     const select = jest.fn();
     renderWithQuery(<LogisticsReconciliation schoolKey="TIS" periodKey="11" sessionToken="tok" onTransferSelect={select} />);
@@ -139,4 +157,14 @@ test('counts completed transfers for the current round independently of child ma
   } as unknown as driverCheckService.ReconciliationMonthData;
   expect(driverCheckService.reconciliationTransferCounts(base, 'TIS')).toEqual({ completed: 1, pending: 1 });
   expect(driverCheckService.reconciliationTransferCounts(base)).toEqual({ completed: 2, pending: 1 });
+});
+
+test.each([
+  ['emp-admin', 'admin', true],
+  ['head', 'senior_logist', true],
+  ['another-admin', 'admin', false],
+  ['director', 'director', false],
+  ['logist', 'logist', false],
+])('correction access for %s / %s is %s', (id, role, allowed) => {
+  expect(driverCheckService.canCorrectDriverMarks(id, role)).toBe(allowed);
 });

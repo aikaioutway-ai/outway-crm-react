@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Check,
   ChevronDown,
@@ -11,6 +11,8 @@ import {
   X,
 } from 'lucide-react';
 import {
+  canCorrectDriverMarks,
+  correctDriverCheckMark,
   buildDriverCheckUrl,
   buildDriverInviteWhatsAppText,
   buildWhatsAppShareUrl,
@@ -35,6 +37,8 @@ export function resolveReconciliationPeriod(periodKey: string): { key: string; m
 }
 
 interface LogisticsReconciliationProps {
+  userId?: string;
+  userRole?: string;
   schoolKey: string;
   periodKey: string;
   transferFilter?: string;
@@ -47,6 +51,8 @@ interface LogisticsReconciliationProps {
 
 export default function LogisticsReconciliation({
   schoolKey,
+  userId,
+  userRole,
   periodKey,
   transferFilter = '',
   search = '',
@@ -55,6 +61,10 @@ export default function LogisticsReconciliation({
   onOpenFamily,
   onTransferSelect,
 }: LogisticsReconciliationProps) {
+  const queryClient = useQueryClient();
+  const canCorrect = canCorrectDriverMarks(userId, userRole);
+  const [correcting, setCorrecting] = useState(false);
+  const [correctionError, setCorrectionError] = useState('');
   const { data: logisticsRows, isPending: rowsPending } = useLogisticsTable();
   const [copied, setCopied] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -133,6 +143,20 @@ export default function LogisticsReconciliation({
     });
   }, [logisticsRows, allowedSchools, scopedSchool, transferFilter, search]);
 
+  async function correctMark(transferId: string, childId: string, round: CheckRound, present: boolean | null) {
+    if (!canCorrect || correcting) return;
+    setCorrecting(true);
+    setCorrectionError('');
+    try {
+      await correctDriverCheckMark(sessionToken, { transferId, childId, year: period.year, month: period.month, round, present });
+      await queryClient.invalidateQueries({ queryKey: ['logistics-reconciliation-month'] });
+    } catch (error) {
+      setCorrectionError(error instanceof Error ? error.message : 'Не удалось исправить отметку');
+    } finally {
+      setCorrecting(false);
+    }
+  }
+
   const roundCounts = useMemo(() => {
     const counts: Record<CheckRound, number> = { 1: 0, 2: 0, 3: 0, 4: 0 };
     const marks = monthData?.marksByChild ?? {};
@@ -191,6 +215,7 @@ export default function LogisticsReconciliation({
 
   return (
     <div className="lr-wrap">
+      {correctionError && <p role="alert">{correctionError}</p>}
       <div className="lr-bar">
         <div className="lr-bar-left">
           <span>{period.label}</span>
@@ -373,7 +398,16 @@ export default function LogisticsReconciliation({
                     </td>
                     {CHECK_ROUNDS.map(({ round, label }) => {
                       const mark = childMarks?.[round];
-                      const roundWasChecked = Boolean(transferMeta?.rounds[round]?.checked);
+
+                      if (canCorrect && transferMeta) {
+                        return <td key={round} className="is-round">
+                          <button type="button" className={`lr-mark ${!mark ? 'lr-mark--empty' : mark.present ? 'lr-mark--yes' : 'lr-mark--no'}`}
+                            disabled={correcting} aria-label={`${label}: ${displayName}`} aria-pressed={Boolean(mark?.present)}
+                            title="Галочка → крестик → сброс" onClick={() => void correctMark(transferMeta.transferId, row.rowId, round, !mark ? true : mark.present ? false : null)}>
+                            {!mark ? '—' : mark.present ? <Check size={15} /> : <X size={14} />}
+                          </button>
+                        </td>;
+                      }
                       if (mark?.present) {
                         const dt = [formatShortRuDate(mark.checkDate), formatBishkekTime(mark.markedAt)].filter(Boolean).join(' · ');
                         return (
@@ -384,7 +418,7 @@ export default function LogisticsReconciliation({
                           </td>
                         );
                       }
-                      if (roundWasChecked) {
+                      if (mark) {
                         return (
                           <td key={round} className="is-round">
                             <span className="lr-mark lr-mark--no" title={`${label}: не отмечен водителем`}>
