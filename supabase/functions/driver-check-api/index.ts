@@ -186,7 +186,52 @@ Deno.serve(async request => {
       });
     }
 
-    // 2. Водитель ставит или снимает галочку на ребёнке за сегодня.
+    // 2. Водитель сохраняет всю сверку целиком одной кнопкой «Сохранить».
+    if (action === 'driver_save') {
+      const transfer = await findTransferByToken(db, body.token);
+      const rawMarks = Array.isArray(body.marks) ? body.marks : [];
+      const markedAt = new Date().toISOString();
+
+      const { data: children, error: childrenError } = await db
+        .from('v2_children')
+        .select('id')
+        .eq('transfer_id', transfer.id)
+        .neq('status', 'rejected');
+      if (childrenError) throw childrenError;
+
+      const validChildIds = new Set((children ?? []).map(c => String(c.id)));
+      const rowsToUpsert = rawMarks
+        .filter((item: { childId?: unknown; present?: unknown }) => item && isUuid(item.childId) && validChildIds.has(String(item.childId)))
+        .map((item: { childId: string; present?: unknown }) => ({
+          transfer_id: transfer.id,
+          child_id: String(item.childId),
+          check_date: today,
+          present: Boolean(item.present),
+          marked_at: markedAt,
+        }));
+
+      if (rowsToUpsert.length > 0) {
+        const { error: upsertError } = await db
+          .from('v2_driver_check_marks')
+          .upsert(rowsToUpsert, { onConflict: 'transfer_id,child_id,check_date' });
+        if (upsertError) throw upsertError;
+      }
+
+      await db
+        .from('v2_driver_check_submissions')
+        .upsert(
+          {
+            transfer_id: transfer.id,
+            check_date: today,
+            submitted_at: markedAt,
+          },
+          { onConflict: 'transfer_id,check_date' },
+        );
+
+      return response({ ok: true, date: today, savedCount: rowsToUpsert.length, savedAt: markedAt });
+    }
+
+    // 3. Водитель ставит или снимает галочку на ребёнке за сегодня (одиночный toggle).
     if (action === 'driver_toggle') {
       const transfer = await findTransferByToken(db, body.token);
       if (!isUuid(body.childId)) throw new UserError('Ребёнок не найден');

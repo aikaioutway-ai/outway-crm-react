@@ -259,6 +259,17 @@ export async function toggleDriverCheckMark(
   });
 }
 
+export async function saveDriverCheckMarks(
+  token: string,
+  marks: Array<{ childId: string; present: boolean }>,
+): Promise<{ date: string; savedCount: number; savedAt: string }> {
+  return callDriverCheckApi({
+    action: 'driver_save',
+    token,
+    marks,
+  });
+}
+
 export async function submitDriverCheck(token: string): Promise<{ date: string; submittedAt: string }> {
   return callDriverCheckApi({
     action: 'driver_submit',

@@ -9,6 +9,7 @@ jest.mock('../../services/driverCheckService', () => {
     ...actual,
     fetchDriverCheckList: jest.fn(),
     toggleDriverCheckMark: jest.fn(),
+    saveDriverCheckMarks: jest.fn(),
     submitDriverCheck: jest.fn(),
   };
 });
@@ -22,7 +23,7 @@ describe('DriverCheckPage', () => {
     jest.clearAllMocks();
   });
 
-  test('renders children list (name + address + checkbox) and toggles checkmark', async () => {
+  test('toggles child locally and saves to CRM only upon clicking "Сохранить в CRM"', async () => {
     mockedService.fetchDriverCheckList.mockResolvedValue({
       date: '2026-11-20',
       transfer: { id: 't1', transferNumber: 4, schoolLabel: 'TIS', driverName: 'Азамат' },
@@ -32,11 +33,10 @@ describe('DriverCheckPage', () => {
         { id: 'c2', childName: 'Тимур Исаев', address: 'мкр. Джал 15', stopOrder: 2, present: true, markedAt: '2026-11-20T02:10:00Z' },
       ],
     });
-    mockedService.toggleDriverCheckMark.mockResolvedValue({
+    mockedService.saveDriverCheckMarks.mockResolvedValue({
       date: '2026-11-20',
-      childId: 'c1',
-      present: true,
-      markedAt: '2026-11-20T02:15:00Z',
+      savedCount: 2,
+      savedAt: '2026-11-20T08:55:00Z',
     });
 
     render(<DriverCheckPage token={token} />);
@@ -49,13 +49,26 @@ describe('DriverCheckPage', () => {
     const firstRow = screen.getByRole('checkbox', { name: /Алия Ахметова/i });
     expect(firstRow).toHaveAttribute('aria-checked', 'false');
 
+    // Кликаем по ребёнку — отметка меняется мгновенно на экране
     fireEvent.click(firstRow);
-
-    await waitFor(() => {
-      expect(mockedService.toggleDriverCheckMark).toHaveBeenCalledWith(token, 'c1', true);
-    });
     expect(firstRow).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByText('Есть: 2 из 2')).toBeInTheDocument();
+
+    // До нажатия на «Сохранить» запрос на сервер НЕ отправляется!
+    expect(mockedService.saveDriverCheckMarks).not.toHaveBeenCalled();
+
+    // Нажимаем «Сохранить в CRM»
+    const saveButton = screen.getByRole('button', { name: /Сохранить в CRM/i });
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(mockedService.saveDriverCheckMarks).toHaveBeenCalledWith(token, [
+        { childId: 'c1', present: true },
+        { childId: 'c2', present: true },
+      ]);
+    });
+
+    expect(await screen.findByText(/Сверка сохранена в CRM/i)).toBeInTheDocument();
   });
 
   test('shows error state with retry button when link is invalid', async () => {

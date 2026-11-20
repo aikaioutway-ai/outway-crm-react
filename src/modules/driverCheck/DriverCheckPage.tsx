@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Check, MessageCircle, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Check, MessageCircle, RefreshCw, Save } from 'lucide-react';
 import {
   buildDriverWhatsAppText,
   buildWhatsAppShareUrl,
@@ -8,8 +8,8 @@ import {
   formatBishkekTime,
   formatRuDate,
   roundOfIsoDate,
+  saveDriverCheckMarks,
   submitDriverCheck,
-  toggleDriverCheckMark,
 } from '../../services/driverCheckService';
 import './DriverCheckPage.css';
 
@@ -56,9 +56,12 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
   const [data, setData] = useState<DriverCheckPayload | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [loadError, setLoadError] = useState('');
   const [saveError, setSaveError] = useState('');
-  const [pendingIds, setPendingIds] = useState<Record<string, boolean>>({});
+  const [saveSuccess, setSaveSuccess] = useState('');
+  const [savedMarksMap, setSavedMarksMap] = useState<Map<string, boolean>>(new Map());
+  const [lastSavedAt, setLastSavedAt] = useState<string | null>(null);
 
   const loadList = useCallback(async (silent = false) => {
     if (silent) setRefreshing(true);
@@ -67,6 +70,12 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
     try {
       const payload = await fetchDriverCheckList(token);
       setData(payload);
+      const initialMap = new Map<string, boolean>();
+      payload.children.forEach(c => initialMap.set(c.id, c.present));
+      setSavedMarksMap(initialMap);
+      if (payload.submittedAt) {
+        setLastSavedAt(payload.submittedAt);
+      }
     } catch (error) {
       setLoadError(error instanceof Error ? error.message : 'Не удалось загрузить список');
     } finally {
@@ -79,7 +88,7 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
     void loadList(false);
   }, [loadList]);
 
-  // При возврате в открытую вкладку подтягиваем свежий список из CRM (и сбрасываем галочки на новый день).
+  // При возврате в открытую вкладку подтягиваем свежий список из CRM.
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === 'visible') void loadList(true);
@@ -95,61 +104,69 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
     return applyDriverManifest(title);
   }, [data]);
 
-  const handleToggle = async (childId: string) => {
-    if (!data || pendingIds[childId]) return;
-    const target = data.children.find(child => child.id === childId);
-    if (!target) return;
+  // Вычисляем, есть ли несохранённые изменения
+  const hasUnsavedChanges = useMemo(() => {
+    if (!data) return false;
+    for (const child of data.children) {
+      const prev = savedMarksMap.get(child.id) ?? false;
+      if (child.present !== prev) return true;
+    }
+    return false;
+  }, [data, savedMarksMap]);
 
-    const nextPresent = !target.present;
+  // Водитель нажимает на галочку: меняем мгновенно в локальном стейте (без отправки на сервер)
+  const handleToggle = (childId: string) => {
+    if (!data || saving) return;
     setSaveError('');
-    setPendingIds(prev => ({ ...prev, [childId]: true }));
-
-    // Мгновенно меняем галочку на экране, чтобы водителю не приходилось ждать ответа сети.
+    setSaveSuccess('');
     setData(prev => prev ? {
       ...prev,
       children: prev.children.map(child => (
-        child.id === childId ? { ...child, present: nextPresent } : child
+        child.id === childId ? { ...child, present: !child.present } : child
       )),
     } : prev);
+  };
 
+  // Кнопка «Сохранить»: отправляет всю сверку в CRM
+  const handleSave = async (): Promise<boolean> => {
+    if (!data || saving) return false;
+    setSaving(true);
+    setSaveError('');
+    setSaveSuccess('');
     try {
-      const saved = await toggleDriverCheckMark(token, childId, nextPresent);
-      setData(prev => prev ? {
-        ...prev,
-        date: saved.date,
-        children: prev.children.map(child => (
-          child.id === childId ? { ...child, present: saved.present, markedAt: saved.markedAt } : child
-        )),
-      } : prev);
+      const marks = data.children.map(child => ({
+        childId: child.id,
+        present: child.present,
+      }));
+      const res = await saveDriverCheckMarks(token, marks);
+      const nextMap = new Map<string, boolean>();
+      data.children.forEach(c => nextMap.set(c.id, c.present));
+      setSavedMarksMap(nextMap);
+      setLastSavedAt(res.savedAt);
+      const timeStr = formatBishkekTime(res.savedAt);
+      setSaveSuccess(`Сверка сохранена в CRM (${timeStr})`);
+      return true;
     } catch (error) {
-      setData(prev => prev ? {
-        ...prev,
-        children: prev.children.map(child => (
-          child.id === childId ? { ...child, present: target.present } : child
-        )),
-      } : prev);
-      setSaveError(error instanceof Error ? error.message : 'Не удалось сохранить отметку');
+      setSaveError(error instanceof Error ? error.message : 'Не удалось сохранить в CRM');
+      return false;
     } finally {
-      setPendingIds(prev => {
-        const next = { ...prev };
-        delete next[childId];
-        return next;
-      });
+      setSaving(false);
     }
   };
 
-  const handleSendWhatsApp = () => {
+  const handleSendWhatsApp = async () => {
     if (!data) return;
+
+    // Если есть несохранённые отметки, сначала сохраняем их в CRM
+    if (hasUnsavedChanges) {
+      const ok = await handleSave();
+      if (!ok) return;
+    } else {
+      void submitDriverCheck(token).catch(() => undefined);
+    }
+
     const text = buildDriverWhatsAppText(data);
     const url = buildWhatsAppShareUrl(text);
-
-    // Фиксируем отправку в CRM параллельно, не задерживая переход в WhatsApp.
-    void submitDriverCheck(token)
-      .then(res => {
-        setData(prev => prev ? { ...prev, submittedAt: res.submittedAt } : prev);
-      })
-      .catch(() => { /* отправке в WhatsApp не мешаем */ });
-
     window.location.href = url;
   };
 
@@ -189,7 +206,7 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
   const presentCount = data.children.filter(child => child.present).length;
   const absentCount = total - presentCount;
   const percent = total > 0 ? Math.round((presentCount / total) * 100) : 0;
-  const sentTime = formatBishkekTime(data.submittedAt);
+  const savedTimeString = lastSavedAt ? formatBishkekTime(lastSavedAt) : '';
 
   return (
     <div className="dc-shell">
@@ -224,7 +241,30 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
               <div className="dc-progress-fill" style={{ width: `${percent}%` }} />
             </div>
           </div>
+
+          <div className="dc-status-bar">
+            {hasUnsavedChanges ? (
+              <span className="dc-status-chip is-dirty">
+                ● Есть несохранённые отметки (нажмите «Сохранить»)
+              </span>
+            ) : savedTimeString ? (
+              <span className="dc-status-chip is-clean">
+                ✓ Сохранено в CRM в {savedTimeString}
+              </span>
+            ) : (
+              <span className="dc-status-chip is-neutral">
+                Отметьте кто катается и нажмите «Сохранить»
+              </span>
+            )}
+          </div>
         </header>
+
+        {saveSuccess && (
+          <div className="dc-banner dc-banner--success" role="status">
+            <Check size={18} strokeWidth={3} />
+            <span>{saveSuccess}</span>
+          </div>
+        )}
 
         {saveError && (
           <div className="dc-banner dc-banner--error" role="alert">
@@ -252,7 +292,7 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
                 role="checkbox"
                 aria-checked={child.present}
                 className={`dc-item${child.present ? ' is-checked' : ''}`}
-                onClick={() => void handleToggle(child.id)}
+                onClick={() => handleToggle(child.id)}
               >
                 <span className="dc-index">{index + 1}</span>
                 <span className="dc-main">
@@ -271,13 +311,39 @@ export default function DriverCheckPage({ token }: DriverCheckPageProps) {
       {total > 0 && (
         <footer className="dc-footer">
           <div className="dc-footer-inner">
-            <button type="button" className="dc-wa-btn" onClick={handleSendWhatsApp}>
-              <MessageCircle size={22} />
-              Отправить список в WhatsApp
+            <button
+              type="button"
+              className={`dc-save-btn${hasUnsavedChanges ? ' is-dirty' : ' is-saved'}`}
+              onClick={() => void handleSave()}
+              disabled={saving}
+            >
+              {saving ? (
+                <>
+                  <RefreshCw size={20} className="dc-spin" />
+                  Сохраняем в CRM…
+                </>
+              ) : hasUnsavedChanges ? (
+                <>
+                  <Save size={20} />
+                  Сохранить в CRM ({presentCount} из {total})
+                </>
+              ) : (
+                <>
+                  <Check size={20} strokeWidth={3} />
+                  Сохранено в CRM {savedTimeString ? `(${savedTimeString})` : ''}
+                </>
+              )}
             </button>
-            {sentTime && (
-              <div className="dc-sent-note">Отправлено в WhatsApp в {sentTime}</div>
-            )}
+
+            <button
+              type="button"
+              className="dc-wa-btn"
+              onClick={() => void handleSendWhatsApp()}
+              disabled={saving}
+            >
+              <MessageCircle size={20} />
+              Отправить в WhatsApp
+            </button>
           </div>
         </footer>
       )}
