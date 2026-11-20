@@ -119,6 +119,29 @@
 }
 .reconcile-open-statement span { color: var(--text-2); }
 
+.reconcile-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: 280px;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-2);
+}
+.reconcile-search input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+}
+
 .reconcile-files-hint { margin: 0 0 10px; color: var(--text-2); font-size: 13px; }
 .reconcile-files { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .reconcile-files li {

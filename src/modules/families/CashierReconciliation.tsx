@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ChevronLeft, CircleAlert, CircleCheckBig, Copy, FileText, Landmark, Pencil, Upload, X, type LucideIcon } from 'lucide-react';
+import { ChevronLeft, CircleAlert, CircleCheckBig, Copy, FileText, Landmark, Pencil, Search, Upload, X, type LucideIcon } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePaymentsTable, useReconciliationGroup, useReconciliationSummary } from '../../hooks/useCrmQueries';
 import { QK } from '../../services/queryClient';
@@ -90,6 +90,17 @@ const unmatchedWidths = [160, 110, 225, 155, 105, 430];
 const collator = new Intl.Collator('ru', { numeric: true });
 
 // Окно закрывается кликом по затемнённому фону вокруг него.
+// Поиск по строкам сверки: текст ищется как есть, а цифры — без пробелов, дефисов и точек,
+// чтобы «6800» находило «6 800», а номер поручения или код чека — в любом написании.
+export function matchesReconcileSearch(query: string, values: unknown[]): boolean {
+  const text = query.trim().toLowerCase();
+  if (!text) return true;
+  const haystack = values.filter(value => value !== null && value !== undefined && value !== '').map(String).join(' ').toLowerCase();
+  if (haystack.includes(text)) return true;
+  const digits = text.replace(/[\s.,-]/g, '');
+  return /^\d{3,}$/.test(digits) && haystack.replace(/[\s.,-]/g, '').includes(digits);
+}
+
 function closeOnBackdrop(event: React.MouseEvent<HTMLDialogElement>) {
   const box = event.currentTarget.getBoundingClientRect();
   if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) {
@@ -132,6 +143,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
   const [page, setPage] = useState(1);
   const [sort, setSort] = useState<{ index: number; descending: boolean } | null>(null);
   const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
   const [reading, setReading] = useState(false);
   const queryClient = useQueryClient();
   // Все загруженные выписки сверяются как одна, за весь период сразу — это делает сервер.
@@ -270,7 +282,8 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
     const crmCodes = payment.receiptCode?.split('/').map(code => code.toLowerCase().replace(/[-\s]/g, '')) ?? [];
     const shortCode = crmCodes[crmCodes.length - 1]?.slice(-8);
     return { payment, parent, crmDate, school, shortCode, sortValues: [school, parent, payment.amount, shortCode, crmDate, payment.status] };
-  });
+  }).filter(item => matchesReconcileSearch(search, [item.school, item.parent, item.payment.familyId, item.payment.amount,
+    item.payment.receiptCode, item.crmDate, item.crmDate && paymentDate(item.crmDate), item.payment.comment]));
   if (sort && crmOnly) missingRows.sort((a, b) => {
     const left = a.sortValues[sort.index];
     const right = b.sortValues[sort.index];
@@ -297,7 +310,9 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
         crmDate, entry.postingDate, orderNumber, comment, payment?.status];
       return { row, entry, payment, bankCodes, shortCode, parent, crmDate, orderNumber, comment, statementValues, sortValues };
     });
-  });
+  }).filter(item => matchesReconcileSearch(search, [item.orderNumber, item.entry.document, item.parent, item.payment?.familyId,
+    item.payment?.amount, item.entry.amount, item.payment?.receiptCode, ...item.entry.codes, ...item.statementValues, item.comment,
+    item.crmDate, item.crmDate && paymentDate(item.crmDate), item.entry.postingDate, item.payment?.comment]));
   if (sort) visibleRows.sort((a, b) => {
     const left = a.sortValues[sort.index];
     const right = b.sortValues[sort.index];
@@ -404,6 +419,11 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
         <div className="reconcile-open-statement">
           <strong>{groups.find(item => item.key === group)?.label}</strong>
         </div>
+        <label className="reconcile-search">
+          <Search size={14} aria-hidden="true" />
+          <input type="search" aria-label="Поиск по сверке" placeholder="№ поручения, родитель, сумма, код чека"
+            value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} />
+        </label>
         {group !== 'Х' && group !== 'Д' && <div className="ow-seg reconcile-groups" role="group" aria-label="Статус платежа">
           {statuses.map(item => <button key={item.key} className="ow-seg-btn" type="button" aria-pressed={status === item.key}
             onClick={() => { setStatus(item.key); resetView(); }}>{item.label}</button>)}
@@ -483,7 +503,7 @@ export default function CashierReconciliation({ userId, userName, userRole, sess
                       onClick={() => void openDecision(row, payment)}><Pencil size={12} /> На проверке</button>
                   : payment?.status === 'Подтверждено' ? 'Подтверждён' : '—'}</td>}
             </tr>)}
-        {!rowTotal && <tr><td className="dt-td" colSpan={tableHeaders.length}>{crmOnly ? 'Все платежи CRM за эти даты есть в выписке.' : 'В этой группе нет поступлений.'}</td></tr>}</tbody>
+        {!rowTotal && <tr><td className="dt-td" colSpan={tableHeaders.length}>{search.trim() ? 'По этому запросу ничего не найдено в выбранной группе.' : crmOnly ? 'Все платежи CRM за эти даты есть в выписке.' : 'В этой группе нет поступлений.'}</td></tr>}</tbody>
       </FilterableTable>
     </div></div>}
   </section>;
