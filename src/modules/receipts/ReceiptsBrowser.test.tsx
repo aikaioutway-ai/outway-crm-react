@@ -5,7 +5,7 @@ import { useIncomingReceipts, useIncomingReceiptsSummary, useWhatsappGroups } fr
 import { fetchIncomingReceiptsSummary, linkTransferGroup } from '../../services/incomingReceiptService';
 
 jest.mock('../../hooks/useCrmQueries', () => ({
-  useIncomingReceipts: jest.fn(), useIncomingReceiptsSummary: jest.fn(), useWhatsappGroups: jest.fn(), useFamilySearch: jest.fn(),
+  useIncomingReceipts: jest.fn(), useIncomingReceiptsSummary: jest.fn(), useWhatsappGroups: jest.fn(), useFamilySearch: jest.fn(), useSchoolTransferVehicleTypes: () => ({}),
 }));
 jest.mock('../families/ReceiptModal', () => ({ __esModule: true, default: () => null }));
 jest.mock('../../services/incomingReceiptService', () => ({

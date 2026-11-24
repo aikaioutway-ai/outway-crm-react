@@ -3,12 +3,12 @@ import { CalendarDays, ChevronLeft, Link2, RotateCcw, Users } from 'lucide-react
 import { QK } from '../../services/queryClient';
 import { useQueries } from '@tanstack/react-query';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
-import TransferCell from '../../core/dashboard/TransferCell';
+import TransferCell, { transferCellColor } from '../../core/dashboard/TransferCell';
 import TransferBarPages from '../../core/dashboard/TransferBarPages';
 import SchoolDashboardTable from '../families/SchoolDashboardTable';
 import { ALL_PERIODS, MAX_TRANSFER_NUMBER, isSchoolInTier, SCHOOL_DIRECTORY } from '../families/constants';
 import type { SchoolTier } from '../families/SchoolTierTabs';
-import { useIncomingReceiptsSummary } from '../../hooks/useCrmQueries';
+import { useIncomingReceiptsSummary, useSchoolTransferVehicleTypes } from '../../hooks/useCrmQueries';
 import { fetchIncomingReceiptsSummary, ReceiptCounts, ReceiptTransferSummary } from '../../services/incomingReceiptService';
 import ReceiptsModule from './ReceiptsModule';
 import GroupPickerModal from './GroupPickerModal';
@@ -81,6 +81,7 @@ export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools
   const periodSummary = periodKey === 'ALL' ? summary : monthlySummaries[receiptMonths.findIndex(month => month.key === periodKey)];
   const schoolTransfers = useMemo(() => (periodSummary?.data?.transfers ?? []).filter(row => row.schoolKey === schoolKey), [periodSummary?.data, schoolKey]);
   const selectedTransfer = schoolTransfers.find(row => row.transferId === transferId) ?? null;
+  const vehicleTypes = useSchoolTransferVehicleTypes(schoolKey ?? '');
   const schoolLabel = SCHOOL_DIRECTORY.find(school => school.key === schoolKey)?.label ?? schoolKey ?? '';
 
   if (schoolKey === 'ALL') return <ReceiptsModule {...common} title="Все чеки" />;
@@ -144,6 +145,7 @@ export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools
           {transferNumbers.map(number => {
             const transfer = schoolTransfers.find(item => item.transferNumber === number);
             return <TransferCell key={number} label={String(number)} value={counts[number - 1]} active={Boolean(transfer)}
+              color={transferCellColor({ vehicleType: vehicleTypes[String(number)] })}
               selected={Boolean(transfer && transferId === transfer.transferId)}
               onClick={transfer ? () => setTransferId(transfer.transferId) : undefined} />;
           })}
