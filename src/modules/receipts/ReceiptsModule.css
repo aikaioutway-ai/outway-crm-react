@@ -239,3 +239,13 @@
 .receipts-transfer-picker header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .receipts-transfer-picker h3 { margin: 0; }
 .receipts-transfer-picker p { color: var(--text-2); font-size: 13px; }
+.receipts-history-fields {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.receipts-history-fields p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }

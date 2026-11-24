@@ -62,7 +62,7 @@ export interface IncomingReceiptsPage {
 
 async function callApi<T>(sessionToken: string | undefined, body: Record<string, unknown>): Promise<T> {
   if (!sessionToken) throw new Error('Войдите в CRM, чтобы работать с чеками');
-  const { data, error } = await supabase.functions.invoke('incoming-receipts-api', { body, headers: { 'x-employee-session': sessionToken } });
+  const { data, error } = await supabase.functions.invoke(['groups', 'syncGroups', 'linkGroup', 'historyStatus', 'retryHistory'].includes(String(body.action)) ? 'whatsapp-groups-api' : 'incoming-receipts-api', { body, headers: { 'x-employee-session': sessionToken } });
   let message = '';
   if (error) {
     message = /failed to send a request|failed to fetch/i.test(error.message) ? 'Не удалось подключиться к серверу чеков. Проверьте интернет и повторите.' : error.message;
@@ -128,8 +128,32 @@ export async function fetchIncomingReceiptsSummary(sessionToken: string | undefi
   };
 }
 
-export async function fetchWhatsappGroups(sessionToken: string | undefined): Promise<WhatsappGroup[]> {
-  return (await callApi<{ groups: WhatsappGroup[] }>(sessionToken, { action: 'groups' })).groups;
+export async function fetchWhatsappGroups(sessionToken: string | undefined, inviteLink?: string): Promise<WhatsappGroup[]> {
+  return (await callApi<{ groups: WhatsappGroup[] }>(sessionToken, { action: 'groups', ...(inviteLink ? { inviteLink } : {}) })).groups;
+}
+
+export async function syncWhatsappGroups(sessionToken: string | undefined): Promise<number> {
+  return (await callApi<{ count: number }>(sessionToken, { action: 'syncGroups' })).count;
+}
+
+export type ReceiptHistoryRequest = { transferId: string; chatId: string; dateFrom: string; dateTo: string };
+export type ReceiptHistoryJob = {
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  position: number; total: number; scanned: number; imported: number; existing: number;
+  other: number; failed: number; limited: boolean; error: string | null;
+};
+export async function fetchReceiptHistoryStatus(sessionToken: string | undefined, transferId: string, chatId: string): Promise<ReceiptHistoryJob | null> {
+  return (await callApi<{ job: ReceiptHistoryJob | null }>(sessionToken, { action: 'historyStatus', transferId, chatId })).job;
+}
+export async function retryReceiptHistory(sessionToken: string | undefined, transferId: string, chatId: string): Promise<void> {
+  await callApi(sessionToken, { action: 'retryHistory', transferId, chatId });
+}
+export async function fetchReceiptHistory(sessionToken: string | undefined, params: ReceiptHistoryRequest): Promise<{ messageIds: string[]; scanned: number; limited: boolean }> {
+  return callApi(sessionToken, { action: 'history', ...params });
+}
+
+export async function importReceiptHistoryFile(sessionToken: string | undefined, params: ReceiptHistoryRequest, messageId: string): Promise<'imported' | 'existing' | 'other' | 'failed'> {
+  return (await callApi<{ result: 'imported' | 'existing' | 'other' | 'failed' }>(sessionToken, { action: 'importHistoryFile', ...params, messageId })).result;
 }
 
 /** Привязывает группу WhatsApp к трансферу; null — отвязать. */

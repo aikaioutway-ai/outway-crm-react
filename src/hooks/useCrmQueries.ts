@@ -305,6 +305,10 @@ export function useWhatsappGroups(sessionToken: string | undefined, enabled: boo
     queryKey: QK.whatsappGroups(sessionToken),
     queryFn: () => fetchWhatsappGroups(sessionToken),
     enabled: Boolean(sessionToken) && enabled,
+    staleTime: 0,
+    refetchOnMount: 'always',
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }
 

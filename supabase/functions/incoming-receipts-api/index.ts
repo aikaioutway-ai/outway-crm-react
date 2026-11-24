@@ -1,6 +1,10 @@
+import { verifySession } from '../_shared/employeeApiSession.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { allowedBranchIds, canDeleteReceipts, schoolKey as branchSchoolKey, parseReceiptEdit, RECEIPT_FILTERS, RECEIPT_ROLES, summarizeBySchool, type ReceiptTransferCount } from '../_shared/incomingReceiptsAccess.ts';
 import { SCHOOL_TABS } from '../task-api/schools.ts';
+import { greenApiRequest, GreenApiError } from '../_shared/greenApiClient.ts';
+import { HISTORY_COUNT, historyCandidates, historyPeriod, historyWeek, parseHistoryReceipt } from '../_shared/greenApiHistory.ts';
+import { importHistoryReceipt } from '../_shared/importHistoryReceipt.ts';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -17,20 +21,6 @@ function response(body: Record<string, unknown>, status = 200) {
   return Response.json(body, { status, headers: corsHeaders });
 }
 
-function decodeBase64Url(value: string): Uint8Array {
-  const base64 = value.replaceAll('-', '+').replaceAll('_', '/') + '='.repeat((4 - value.length % 4) % 4);
-  return Uint8Array.from(atob(base64), char => char.charCodeAt(0));
-}
-
-async function verifySession(token: string): Promise<{ sub: string } | null> {
-  const [payloadPart, signaturePart, extra] = token.split('.');
-  if (!payloadPart || !signaturePart || extra) return null;
-  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SUPABASE_SERVICE_KEY), { name: 'HMAC', hash: 'SHA-256' }, false, ['verify']);
-  if (!await crypto.subtle.verify('HMAC', key, decodeBase64Url(signaturePart), new TextEncoder().encode(payloadPart))) return null;
-  const payload = JSON.parse(new TextDecoder().decode(decodeBase64Url(payloadPart)));
-  if (!payload?.sub || !Number.isFinite(Number(payload.exp)) || Number(payload.exp) <= Math.floor(Date.now() / 1000)) return null;
-  return { sub: String(payload.sub) };
-}
 
 function isUuid(value: unknown) {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ''));
@@ -41,7 +31,7 @@ Deno.serve(async request => {
   if (request.method !== 'POST') return response({ ok: false, error: 'Method not allowed' }, 405);
   try {
     let session: { sub: string } | null;
-    try { session = await verifySession(request.headers.get('x-employee-session') ?? ''); } catch { session = null; }
+    try { session = await verifySession(request.headers.get('x-employee-session') ?? '', SUPABASE_SERVICE_KEY); } catch { session = null; }
     if (!session) return response({ ok: false, error: 'Сессия недействительна или истекла' }, 401);
 
     const db = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY, { auth: { persistSession: false } });
@@ -69,6 +59,59 @@ Deno.serve(async request => {
     };
 
     const body = await request.json();
+
+    if (body.action === 'history' || body.action === 'importHistoryFile' || body.action === 'historyStatus' || body.action === 'retryHistory') {
+      if (!isUuid(body.transferId)) throw new UserError('Трансфер не найден');
+      const { data: transfer, error } = await db.from('v2_transfers').select('id,branch_id,whatsapp_chat_id').eq('id', body.transferId).maybeSingle();
+      if (error) throw error;
+      if (!transfer || (scope !== null && !scope.includes(transfer.branch_id))) throw new UserError('Этот трансфер вам недоступен');
+      const chatId = transfer.whatsapp_chat_id;
+      if (!chatId || !chatId.endsWith('@g.us')) throw new UserError('Сначала привяжите группу к трансферу');
+      // Не продолжать загрузку в другую группу, если привязка изменилась в соседнем окне.
+      if (body.chatId !== chatId) throw new UserError('Группа трансфера изменилась. Откройте окно заново');
+      if (body.action === 'retryHistory') {
+        const { data, error: retryError } = await db.from('v2_whatsapp_history_jobs').update({
+          status: 'queued', window_end: new Date().toISOString(), message_ids: null, position: 0, scanned: 0, imported: 0, existing: 0,
+          other: 0, failed: 0, attempts: 0, discovery_attempts: 0, limited: false, error: null,
+          lease_id: null, lease_until: null, next_run_at: new Date().toISOString(), updated_at: new Date().toISOString(),
+        }).eq('chat_id', chatId).in('status', ['completed', 'failed', 'cancelled']).select('chat_id').maybeSingle();
+        if (retryError) throw retryError;
+        if (!data) throw new UserError('Загрузка уже идёт или ещё не поставлена в очередь');
+        return response({ ok: true });
+      }
+      if (body.action === 'historyStatus') {
+        const { data: job, error: jobError } = await db.from('v2_whatsapp_history_jobs')
+          .select('status,position,total,scanned,imported,existing,other,failed,limited,error,updated_at').eq('chat_id', chatId).maybeSingle();
+        if (jobError) throw jobError;
+        return response({ ok: true, job });
+      }
+      const requestedPeriod = historyPeriod(body.dateFrom, body.dateTo);
+      const week = historyWeek(Date.now());
+      const period = { start: Math.max(week.start, requestedPeriod.start), end: Math.min(week.end, requestedPeriod.end) };
+      if (period.start > period.end) throw new UserError('Можно загружать чеки только за последние 7 дней');
+      const { data: group, error: groupError } = await db.from('v2_whatsapp_groups').select('name').eq('chat_id', chatId).maybeSingle();
+      if (groupError) throw groupError;
+      const instanceId = Deno.env.get('GREEN_API_INSTANCE_ID') ?? '';
+      if (body.action === 'history') {
+        const rows = await greenApiRequest('getChatHistory', { chatId, count: HISTORY_COUNT });
+        if (!Array.isArray(rows)) throw new GreenApiError('Green API вернул некорректную историю');
+        const candidates = historyCandidates(rows, instanceId, chatId, group?.name ?? null, period);
+        return response({ ok: true, messageIds: [...new Set(candidates.map(receipt => receipt.messageId))], scanned: rows.length, limited: rows.length >= HISTORY_COUNT });
+      }
+      const messageId = String(body.messageId ?? '');
+      if (!messageId || messageId.length > 200) throw new UserError('Некорректное сообщение');
+      const { data: existing, error: existingError } = await db.from('v2_incoming_receipts')
+        .select('status,payment_id').eq('provider', 'green_api').eq('provider_message_id', messageId).maybeSingle();
+      if (existingError) throw existingError;
+      if (existing && (existing.status !== 'failed' || existing.payment_id)) return response({ ok: true, result: 'existing' });
+      // Получаем файл с сервера провайдера: браузер не может подставить URL или чужую группу.
+      const row = await greenApiRequest('getMessage', { chatId, idMessage: messageId });
+      const receipt = parseHistoryReceipt(row, instanceId, chatId, group?.name ?? null);
+      if (!receipt || receipt.messageId !== messageId || Date.parse(receipt.messageAt) < period.start || Date.parse(receipt.messageAt) > period.end) throw new UserError('Файл недоступен или находится вне выбранного периода');
+      if (!Deno.env.get('ANTHROPIC_API_KEY')) throw new UserError('Распознавание чеков не настроено');
+      const result = await importHistoryReceipt(db, receipt);
+      return response({ ok: true, result });
+    }
 
     const listScope = body.schoolKey
       ? (branches ?? []).filter(branch => branchSchoolKey(branch, SCHOOL_TABS) === body.schoolKey && (scope === null || scope.includes(branch.id))).map(branch => branch.id)
@@ -98,45 +141,6 @@ Deno.serve(async request => {
       if (error) throw error;
       const summary = summarizeBySchool((data?.transfers ?? []) as ReceiptTransferCount[], branches ?? [], SCHOOL_TABS);
       return response({ ok: true, ...summary, unassigned: data?.unassigned ?? { review: 0, duplicates: 0, other: 0, total: 0 } });
-    }
-
-    if (body.action === 'groups') {
-      const [{ data: groups, error }, { data: linked, error: linkedError }] = await Promise.all([
-        db.from('v2_whatsapp_groups').select('chat_id,name,last_seen_at').order('last_seen_at', { ascending: false }).limit(500),
-        db.from('v2_transfers').select('id,transfer_number,whatsapp_chat_id').not('whatsapp_chat_id', 'is', null),
-      ]);
-      if (error) throw error;
-      if (linkedError) throw linkedError;
-      const transferByChat = new Map((linked ?? []).map(row => [row.whatsapp_chat_id, row]));
-      return response({
-        ok: true,
-        groups: (groups ?? []).map(group => ({
-          chatId: group.chat_id,
-          name: group.name,
-          lastSeenAt: group.last_seen_at,
-          transferId: transferByChat.get(group.chat_id)?.id ?? null,
-          transferNumber: transferByChat.get(group.chat_id)?.transfer_number ?? null,
-        })),
-      });
-    }
-
-    if (body.action === 'linkGroup') {
-      if (!isUuid(body.transferId)) throw new UserError('Трансфер не найден');
-      const { data: transfer, error } = await db.from('v2_transfers').select('id,branch_id,whatsapp_chat_id').eq('id', body.transferId).maybeSingle();
-      if (error) throw error;
-      if (!transfer || (scope !== null && !scope.includes(transfer.branch_id))) throw new UserError('Этот трансфер вам недоступен');
-      const chatId = body.chatId === null ? null : String(body.chatId ?? '');
-      if (chatId !== null) {
-        const { data: group, error: groupError } = await db.from('v2_whatsapp_groups').select('chat_id').eq('chat_id', chatId).maybeSingle();
-        if (groupError) throw groupError;
-        if (!group) throw new UserError('Группа не найдена. Добавьте бота в группу и отправьте в неё любое сообщение');
-        const { data: other, error: otherError } = await db.from('v2_transfers').select('transfer_number').eq('whatsapp_chat_id', chatId).neq('id', transfer.id).maybeSingle();
-        if (otherError) throw otherError;
-        if (other) throw new UserError(`Эта группа уже привязана к трансферу ${other.transfer_number}`);
-      }
-      const { error: updateError } = await db.from('v2_transfers').update({ whatsapp_chat_id: chatId }).eq('id', transfer.id);
-      if (updateError) throw updateError;
-      return response({ ok: true });
     }
 
     const receipt = await loadReceipt(body.id);
@@ -233,6 +237,7 @@ Deno.serve(async request => {
 
     throw new UserError('Неизвестное действие');
   } catch (error) {
+    if (error instanceof GreenApiError) return response({ ok: false, error: error.message }, 400);
     if (error instanceof UserError) return response({ ok: false, error: error.message }, 400);
     if (error instanceof Error && /^Укажите/.test(error.message)) return response({ ok: false, error: error.message }, 400);
     // Подробности базы браузеру не передаются.
