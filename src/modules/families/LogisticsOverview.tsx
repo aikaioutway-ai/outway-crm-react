@@ -1,11 +1,11 @@
-import { schoolStaff } from './SchoolKpiChip';
+import { reconciliationRouteCounts } from './logisticsReconciliationStats';
 import { useQuery } from '@tanstack/react-query';
-import { Briefcase, BusFront, CalendarDays } from 'lucide-react';
+import { MapPin } from 'lucide-react';
 import AllRecordsButton from '../../core/dashboard/AllRecordsButton';
 import LogisticsTabs from './LogisticsTabs';
 import LogisticsSchoolAddresses from './LogisticsSchoolAddresses';
 import { RECONCILIATION_PERIODS, resolveReconciliationPeriod } from './LogisticsReconciliation';
-import { fetchLogisticsReconciliationMonth, reconciliationTransferCounts, ReconciliationMonthData } from '../../services/driverCheckService';
+import { fetchLogisticsReconciliationMonth, ReconciliationMonthData } from '../../services/driverCheckService';
 import ManagerPeriodBar from './ManagerPeriodBar';
 import NewRequestsDashboard, { REQUEST_DAY_PERIODS, requestMatchesDay, countRequestsBySchool } from './NewRequestsDashboard';
 import { requestStage, isRequestOnBoard } from './requestWorkflow';
@@ -26,8 +26,8 @@ import { ManagerSearch } from './ManagerOverview';
 import SchoolDashboardTable from './SchoolDashboardTable';
 import HiddenSchoolsList from './HiddenSchoolsList';
 import { useEffect, useMemo, useState } from 'react';
-import { FamilyListRow, FamilySearchHit, fetchExpiredDriverIds } from '../../services/crmV2Service';
-import { useDriversTable, useEmployees, useLogisticsTable } from '../../hooks/useCrmQueries';
+import { FamilyListRow, FamilySearchHit } from '../../services/crmV2Service';
+import { useDriversTable, useLogisticsTable } from '../../hooks/useCrmQueries';
 import { SCHOOL_GROUPS, SCHOOL_TABS, SCHOOL_TIER_2_KEYS, currentPayrollPeriodKey, getBranchFilter, isSchoolAllowed } from './constants';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
 import SchoolDockSidebar, { SCHOOL_DOCK_HIDDEN_WIDTH, SCHOOL_DOCK_WIDTH } from './SchoolDockSidebar';
@@ -159,12 +159,9 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
     staleTime: 30_000,
     refetchInterval: 60_000,
   });
-  const checkCounts = checkQuery.data ? reconciliationTransferCounts({
-    ...checkQuery.data,
-    transfers: checkQuery.data.transfers.filter((transfer: ReconciliationMonthData['transfers'][number]) => !SCHOOL_TIER_2_KEYS.includes(transfer.schoolKey)
-      && isSchoolAllowed(transfer.schoolKey, allowedSchools)),
-  }) : undefined;
   const { data: rows } = useLogisticsTable();
+  const checkCounts = checkQuery.data && rows ? reconciliationRouteCounts(checkQuery.data,
+    workRows(rows).filter(row => !SCHOOL_TIER_2_KEYS.includes(row.branchFilter) && isSchoolAllowed(row.branchFilter, allowedSchools)), schoolKey) : undefined;
   const { data: drivers } = useDriversTable();
   const inScope = (key: string) => !SCHOOL_TIER_2_KEYS.includes(key)
     && isSchoolAllowed(key, allowedSchools) && (!schoolKey || schoolKey === 'ALL' || schoolKey === key);
@@ -176,19 +173,9 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
     && driver.transfers.some(transfer => inScope(getBranchFilter(transfer.branchShort, transfer.branchCode))))
     .map(driver => [driver.driverId, driver]));
   const ids = Array.from(assigned.keys()).sort();
-  const expired = useQuery({
-    queryKey: ['logistics2-expired-driver-ids', ids],
-    queryFn: () => fetchExpiredDriverIds(ids),
-    enabled: ids.length > 0,
-    staleTime: 60_000,
-  });
-  const temporaryCount = Array.from(assigned.values()).filter(driver => /^Временный водитель №\d+$/.test(driver.fullName.trim())).length;
-  const hasSchool = !!schoolKey && schoolKey !== 'ALL';
-  const { data: employees } = useEmployees({ enabled: hasSchool });
-  const staff = hasSchool && schoolKey ? schoolStaff(employees ?? [], schoolKey) : null;
 
   return <>
-  <LogisticsTabs cards mapLabel={showMap ? "Школы" : undefined} showMap={showMap || (hasSchool && value !== 'drivers')} value={value} onChange={onChange} summaries={{
+  <LogisticsTabs cards mapLabel="Карта" showMap={Boolean(schoolKey && schoolKey !== 'ALL')} value={value} onChange={onChange} summaries={{
     table: [
       { label: 'Средний', average: true, value: rows ? totals.microbusAverage.toFixed(1) : '—' },
       { label: 'Микроавтобусы', value: rows ? totals.microbusCount : '—' },
@@ -196,28 +183,15 @@ export function LogisticsSummaryTabs({ value, onChange, allowedSchools, schoolKe
     ],
     requests: [
       { label: 'Новые', value: rows ? newCount : '—', alert: newCount > 0 },
-      { label: 'В работе', value: rows ? requests.reduce((sum, row) => sum + row.inWork, 0) : '—' },
     ],
     reconciliation: [
-      { label: 'Сделано', value: checkCounts?.completed ?? '—' },
       { label: 'Не сделано', value: checkCounts?.pending ?? '—', alert: Boolean(checkCounts?.pending) },
     ],
     drivers: [
       { label: 'Активные', value: drivers ? ids.length : '—' },
-      { label: 'Документы Х', value: drivers && !ids.length ? 0 : expired.data?.length ?? '—', alert: !!expired.data?.length },
-      { label: 'Временные', value: drivers ? temporaryCount : '—' },
     ],
   }} />
-  {staff && <dl className="manager-school-staff">
-    <div>
-      <dt><Briefcase size={14} aria-hidden="true" /> Менеджер</dt>
-      <dd>{staff.managers.map(person => person.fullName).join(', ') || '—'}</dd>
-    </div>
-    <div>
-      <dt><BusFront size={14} aria-hidden="true" /> Логист</dt>
-      <dd>{staff.logists.map(person => person.fullName).join(', ') || '—'}</dd>
-    </div>
-  </dl>}
+
   </>;
 }
 
@@ -227,6 +201,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
     () => allRows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools)) ?? null,
     [allRows, allowedSchools],
   );
+  const [showAddresses, setShowAddresses] = useState(false);
   const [sidebarHidden, setSidebarHidden] = useState(false);
   const [sortState, setSortState] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
   const [reconcileSort, setReconcileSort] = useState<{ key: 'school' | 'childrenCount' | 'r1' | 'r2' | 'r3' | 'r4'; dir: 'asc' | 'desc' }>({ key: 'school', dir: 'asc' });
@@ -257,7 +232,7 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   const stats = useMemo(() => computeLogisticsStats(rows ?? [], schoolTier, allowedSchools), [rows, schoolTier, allowedSchools, testMarks]);
   const reconcileStats = useMemo(() => {
     return SCHOOL_TABS.filter(tab => tab.key !== 'ALL' && isSchoolAllowed(tab.key, allowedSchools) && SCHOOL_TIER_2_KEYS.includes(tab.key) === (schoolTier === '2.0')).map((tab, index) => {
-      const counts = monthData ? reconciliationTransferCounts(monthData, tab.key) : { completed: 0, pending: 0 };
+      const counts = monthData ? reconciliationRouteCounts(monthData, workRows(rows ?? []), tab.key) : { completed: 0, pending: 0 };
       return {
         key: tab.key,
         label: tab.label,
@@ -346,27 +321,21 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
   return (
     <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-        <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar manager-overview-toolbar--wide">
+        <DashboardTopPanel className="dashboard-control-row manager-overview-toolbar manager-overview-toolbar--wide manager-overview-toolbar--inline logistics-overview-toolbar">
           {view === 'requests' && <div className="manager-period-tiles" role="group" aria-label="Возраст заявки">
             {periods.map(period => {
               const count = period.key === 'ALL' ? totals.newRequests : requestCounts[period.key] ?? 0;
               return <button key={period.key} type="button" aria-pressed={requestDay === period.key} onClick={() => setRequestDay(period.key)}>
-                <CalendarDays size={16} aria-hidden="true" />
                 <span>{period.key === 'ALL' ? 'Все' : period.key === '11' ? '10+ дн.' : period.label + ' дн.'}</span>
                 <strong className={count > 0 ? 'manager-period-count-alert' : undefined}>{count}</strong>
               </button>;
             })}
           </div>}
-          {view === 'reconciliation' && (
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <ManagerPeriodBar
-                showAll={false}
-                periods={RECONCILIATION_PERIODS}
-                periodKey={activePeriod.key}
-                onPeriodKeyChange={setActivePeriodKey}
-              />
-            </div>
-          )}
+          {view === 'reconciliation' && <div className="manager-period-tiles manager-period-tiles--months" role="group" aria-label="Период логистики">
+            {RECONCILIATION_PERIODS.map(period => <button key={period.key} type="button" aria-pressed={activePeriodKey === period.key} onClick={() => setActivePeriodKey(period.key)} title={period.label}>
+              <span>{period.label.slice(0, 3)}</span>
+            </button>)}
+          </div>}
           <div className="manager-overview-search">{view === 'drivers' ? driversSearch : <ManagerSearch rows={rows} onOpenFamily={onOpenFamily} />}</div>
           <div className="overview-icon-actions"><HiddenSchoolsList onSelectSchool={onSelectSchool} allowedSchools={allowedSchools} />{view !== 'map' && <AllRecordsButton onClick={() => onSelectSchool('ALL')} />}</div>
         </DashboardTopPanel>
@@ -375,7 +344,6 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           <div className="manager-workspace-content">
         {view === 'reconciliation' ? monthPending ? <p role="status">Загрузка сверки…</p> : monthError ? <p role="alert">Не удалось загрузить сверку. <button type="button" onClick={() => void refreshMonth()}>Повторить</button></p> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:reconciliation"
           columns={[
-            { key: 'r1', label: `Сверка №${monthData?.currentRound ?? '—'} · Сделано`, total: reconcileTotals.r1, color: '#15803D' },
             { key: 'r2', label: 'Не сделано', total: reconcileTotals.r2, color: '#1D6FA4' },
 
 
@@ -386,6 +354,8 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           onSort={handleReconcileSort}
           onSelect={key => reconcileRows.find(row => row.key === key)?.isGroup ? toggleGroup(key) : onSelectSchool(key)}
         /> : view === 'map' ? <LogisticsSchoolAddresses allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : view === 'drivers' ? driversContent : view === 'requests' ? <NewRequestsDashboard splitView rows={rows} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} /> : <SchoolDashboardTable splitView compactTotals commentScope="families/LogisticsOverview:overview"
+          headerActions={<button type="button" className="ow-btn ow-btn--sm" aria-pressed={showAddresses} onClick={() => setShowAddresses(value => !value)}><MapPin size={15} aria-hidden="true" />{showAddresses ? 'Показатели' : 'Адреса'}</button>}
+          gridContent={showAddresses ? <LogisticsSchoolAddresses cards allowedSchools={allowedSchools} onSelectSchool={onSelectSchool} /> : undefined}
           columns={[
             { key: 'microbusAverage', label: 'Средний по МКР', total: totals.microbusAverage.toFixed(1), color: KPI_COLORS.microbusAverage },
             { key: 'microbusCount', label: 'Микробусы', total: totals.microbusCount, color: KPI_COLORS.microbusCount },
@@ -421,7 +391,6 @@ export default function LogisticsOverview({ onSelectSchool, onOpenFamily, onSide
           columns={[
             { key: 'school', label: 'Школа', total: reconcileTotals.schools, color: KPI_COLORS.school },
             { key: 'childrenCount', label: 'Трансферов', total: reconcileTotals.childrenCount, color: '#64748B' },
-            { key: 'r1', label: `Сверка №${monthData?.currentRound ?? '—'} · Сделано`, total: reconcileTotals.r1, color: '#15803D' },
             { key: 'r2', label: 'Не сделано', total: reconcileTotals.r2, color: '#1D6FA4' },
 
 

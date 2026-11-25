@@ -1,14 +1,16 @@
 import { Map, MapPin, School } from 'lucide-react';
+import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 import { useMemo } from 'react';
 import { useV2Branches } from '../../hooks/useCrmQueries';
 import { getBranchFilter, isSchoolAllowed, isSchoolInTier, SCHOOL_TABS } from './constants';
 
 interface Props {
+  cards?: boolean;
   allowedSchools?: string[];
   onSelectSchool: (key: string) => void;
 }
 
-export default function LogisticsSchoolAddresses({ allowedSchools, onSelectSchool }: Props) {
+export default function LogisticsSchoolAddresses({ allowedSchools, onSelectSchool, cards = false }: Props) {
   const branches = useV2Branches();
   const schools = useMemo(() => (branches.data ?? []).flatMap(branch => {
     const branchNames = [branch.code, branch.shortName, branch.name];
@@ -24,6 +26,24 @@ export default function LogisticsSchoolAddresses({ allowedSchools, onSelectSchoo
   if (branches.isPending) return <p role="status">Загрузка школ…</p>;
   if (branches.isError) return <p role="alert">Не удалось загрузить школы.</p>;
   if (schools.length === 0) return <p>Нет доступных школ.</p>;
+
+  if (cards) return <div className="manager-school-grid logistics-address-grid">
+    {schools.map(({ id, key, label, address, latitude, longitude }) => {
+      const school = SCHOOL_TABS.find(item => item.key === key);
+      const text = key === 'AES' ? 'ул. Бегматова, 65' : address?.trim();
+      const coords = latitude != null && longitude != null;
+      const url = coords ? `https://yandex.com/maps/?ll=${longitude},${latitude}&z=17&pt=${longitude},${latitude},pm2rdm`
+        : text ? `https://yandex.com/maps/?text=${encodeURIComponent('Бишкек ' + text)}` : null;
+      return <div className="logistics-address-card" key={id}>
+        <button type="button" className="logistics-address-school" onClick={() => onSelectSchool(key)}>
+          <SchoolAvatar logo={school?.logo} label={label} color="var(--accent)" size={40} />{label}
+        </button>
+        <div><span>{text || 'Адрес не указан'}</span>
+          {url && <a href={url} target="_blank" rel="noopener noreferrer"><MapPin size={13} aria-hidden="true" />На карте</a>}
+        </div>
+      </div>;
+    })}
+  </div>;
 
   return <div className="ow-school-table-wrap logistics-school-addresses">
     <table className="ow-school-table" aria-label="Адреса школ">

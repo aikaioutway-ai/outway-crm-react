@@ -20,21 +20,17 @@ beforeEach(() => {
   (useWhatsappGroups as jest.Mock).mockReturnValue({ data: [{ chatId: 'group@g.us', name: 'Группа', transferId: null }], refetch });
 });
 
-test('shows server progress without requiring a manual date range', async () => {
-  (fetchReceiptHistoryStatus as jest.Mock).mockResolvedValue({ status: 'running', position: 2, total: 5 });
-  const view = open();
-  await screen.findByText('Автозагрузка: обработано 2 из 5 файлов');
-  expect(fetchReceiptHistoryStatus).toHaveBeenCalledWith('session', 't1', 'group@g.us');
-  view.unmount();
-});
-
-test('can restart failed background work without opening manual upload', async () => {
-  (fetchReceiptHistoryStatus as jest.Mock).mockResolvedValue({ status: 'failed', total: 0 });
-  (retryReceiptHistory as jest.Mock).mockResolvedValue(undefined);
+test('shows the connected group separately and offers only free groups', () => {
+  (useWhatsappGroups as jest.Mock).mockReturnValue({ data: [
+    { chatId: 'group@g.us', name: 'Подключённая', transferId: 't1' },
+    { chatId: 'taken@g.us', name: 'Занятая', transferId: 't2' },
+    { chatId: 'free@g.us', name: 'Свободная', transferId: null },
+  ] });
   open();
-  fireEvent.click(await screen.findByText('Проверить историю ещё раз'));
-  await screen.findByText(/Повторная проверка истории поставлена в очередь/);
-  expect(retryReceiptHistory).toHaveBeenCalledWith('session', 't1', 'group@g.us');
+  expect(screen.getByText('Подключённая')).toBeInTheDocument();
+  expect(screen.queryByText('Занятая')).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /Свободная/ })).toBeEnabled();
+  expect(screen.queryByText('Старые чеки')).not.toBeInTheDocument();
 });
 
 test('refreshes provider groups without requiring a group message', async () => {
@@ -45,11 +41,11 @@ test('refreshes provider groups without requiring a group message', async () => 
   expect(fetchWhatsappGroups).toHaveBeenCalledWith('session', undefined, true);
 });
 
-test('keeps the picker open after linking so history can be imported', async () => {
+test('shows confirmation after linking', async () => {
   (linkTransferGroup as jest.Mock).mockResolvedValue(undefined);
   open(null);
   fireEvent.click(screen.getByText('Группа', { selector: 'strong' }));
-  await screen.findByText(/Чеки за последние 7 дней поставлены в очередь/);
+  await screen.findByText('Группа привязана.');
   expect(linkTransferGroup).toHaveBeenCalledWith('session', 't1', 'group@g.us');
 });
 
@@ -68,11 +64,4 @@ test('does not offer an unverified invitation result', async () => {
   fireEvent.change(screen.getByLabelText('Название группы или ссылка приглашения'), { target: { value: 'https://chat.whatsapp.com/ABCDEFGHIJKLMNOPQRSTUV' } });
   await screen.findByText('Не удалось подтвердить группу');
   expect(screen.queryByText('Группа', { selector: 'strong' })).not.toBeInTheDocument();
-});
-
-test('does not offer loading older dates', async () => {
-  open();
-  await waitFor(() => expect(fetchReceiptHistoryStatus).toHaveBeenCalled());
-  expect(screen.getByText(/только чеки за последние 7 дней/)).toBeInTheDocument();
-  expect(screen.queryByLabelText('С даты')).not.toBeInTheDocument();
 });

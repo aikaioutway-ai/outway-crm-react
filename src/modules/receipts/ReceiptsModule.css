@@ -249,3 +249,57 @@
   border-radius: 8px;
 }
 .receipts-history-fields p { margin: 0; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+
+.receipts-school-workspace .ow-transfer-bar {
+  flex: none;
+  align-items: stretch;
+  min-height: var(--transfer-row-h);
+}
+.receipts-school-workspace .ow-transfer-bar > .ow-transfer-cell {
+  flex: 1 0 42px;
+  height: var(--transfer-row-h);
+  min-height: var(--transfer-row-h);
+}
+.receipts-school-workspace .manager-period-tiles { flex: none; }
+
+.receipts-current-group {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  background: var(--accent-l);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.receipts-current-group > span { color: var(--text-2); font-size: 12px; }
+.receipts-current-group > strong { display: flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+
+.receipts-table .receipts-action--row {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 8px;
+}
+.receipts-table .receipts-action--row > .receipts-primary,
+.receipts-table .receipts-action--row > .receipts-delete {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 112px;
+  width: 112px;
+  height: 32px;
+  padding: 0 10px;
+  gap: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 1;
+}
+.receipts-table .receipts-action--row > .receipts-delete {
+  background: var(--surface, #fff);
+  color: var(--danger);
+}
+.receipts-table .receipts-action--row > .receipts-delete svg { flex: none; }
+
+.receipts-table .receipts-primary.receipts-warning { color: #fff; }

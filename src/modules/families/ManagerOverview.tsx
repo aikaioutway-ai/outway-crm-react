@@ -1,5 +1,4 @@
 import { QK, queryClient } from '../../services/queryClient';
-import { createPortal } from 'react-dom';
 import type { Employee } from '../../types';
 import { requestStage } from './requestWorkflow';
 import NewRequestsDashboard, { countRequestsBySchool, REQUEST_DAY_PERIODS, requestMatchesDay } from './NewRequestsDashboard';
@@ -8,14 +7,11 @@ import SchoolDashboardTable from './SchoolDashboardTable';
 import DirectorySchoolDashboard, { computeDirectoryStats } from './DirectorySchoolDashboard';
 import ManagerModeTabs, { ManagerMode } from './ManagerModeTabs';
 import HiddenSchoolsList from './HiddenSchoolsList';
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 
-// Карточка сотрудника нужна редко — грузим её вместе со страницей сотрудников только по клику.
-const EmployeeCardModal = lazy(() => import('../employees/EmployeesPage').then(module => ({ default: module.EmployeeCardModal })));
-import { Briefcase, BusFront, CalendarDays, List, Plus, Search, X } from 'lucide-react';
+import { List, Plus, Search, X } from 'lucide-react';
 import { FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { schoolStaff } from './SchoolKpiChip';
-import { useIncomingReceiptsSummary, useEmployees, useMonthlyChargeStats, useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
+import { useIncomingReceiptsSummary, useMonthlyChargeStats, useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
 import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, isSchoolInTier, schoolTabsForTier } from './constants';
 import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
@@ -324,18 +320,6 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
     && isSchoolAllowed(detailSchoolKey, allowedSchools, schoolTier)
     ? SCHOOL_TABS.find(school => school.key === detailSchoolKey)
     : undefined;
-  const { data: employees } = useEmployees({ enabled: !!detailSchool });
-  const staff = detailSchool ? schoolStaff(employees ?? [], detailSchool.key) : null;
-  const [staffCard, setStaffCard] = useState<Employee | null>(null);
-  const selectedStaff = staffCard?.schoolKeys.includes(detailSchool?.key ?? '') ? staffCard : null;
-  const canOpenFullCard = selectedStaff && employeeCardAccess
-    && (!employeeCardAccess.roles || employeeCardAccess.roles.includes(selectedStaff.role));
-  const staffNames = (people: Employee[]) => people.length ? people.map(person => (
-    <button key={person.id} type="button" className="manager-staff-name" onClick={() => setStaffCard(person)}>
-      {person.fullName}
-    </button>
-  )) : '—';
-
   const scopedSchools = useMemo(() => detailSchoolKey && detailSchoolKey !== 'ALL' ? [detailSchoolKey] : allowedSchools, [detailSchoolKey, allowedSchools]);
   const [tableDebt, setTableDebt] = useState<{ amount: number; count: number }>();
   const syncTableDebt = React.useCallback((amount: number, count: number) => {
@@ -542,7 +526,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
       <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-        <DashboardTopPanel className={`dashboard-control-row manager-overview-toolbar${splitView ? ' manager-overview-toolbar--wide' : ''}${renderTransfers ? ' manager-overview-toolbar--transfers' : ''}`}>
+        <DashboardTopPanel className={`dashboard-control-row manager-overview-toolbar${splitView ? ' manager-overview-toolbar--wide' : ''}${renderTransfers ? ' manager-overview-toolbar--transfers' : ''}${splitView && !renderTransfers ? ' manager-overview-toolbar--inline' : ''}`}>
           {!splitView && <ManagerModeTabs showRequests showReceipts={showReceipts} showReconciliation={showReconciliation} canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />}
           {receiptsOpen ? null : splitView ? (
             <div className={mode === 'requests' ? 'manager-period-tiles' : 'manager-period-tiles manager-period-tiles--months'} role="group" aria-label={mode === 'requests' ? 'Возраст заявки' : 'Период'}>
@@ -550,7 +534,6 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
                 <button key={period.key} type="button" aria-pressed={period.key === selectedPeriod}
                   title={mode === 'requests' ? (period.key === 'ALL' ? 'Все заявки' : `День ${period.label}`) : period.label}
                   onClick={() => (mode === 'requests' ? setRequestDay : mode === 'directory' ? setDirectoryPeriod : setPeriodKey)(period.key)}>
-                  <CalendarDays size={16} aria-hidden="true" />
                   <span>{period.key === 'ALL' ? 'Все' : mode === 'requests' ? `${period.label} дн.` : period.key === 'deposit' ? period.label : period.label.slice(0, 3)}</span>
                   <strong className={mode === 'requests' && (requestDayCounts[period.key] ?? 0) > 0 ? 'manager-period-count-alert' : undefined}>{period.metric}</strong>
                 </button>
@@ -576,46 +559,10 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
                   <SchoolAvatar logo={detailSchool.logo} label={detailSchool.label} color="var(--accent)" size={64} radius={14} fontSize={16} />
                 </button>
               )}
+
               <ManagerModeTabs cards summaries={summaries} showRequests showReceipts={showReceipts} showReconciliation={showReconciliation} canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
-              {selectedStaff && createPortal(canOpenFullCard ? (
-                <Suspense fallback={null}><EmployeeCardModal
-                  key={selectedStaff.id}
-                  employee={selectedStaff}
-                  restrictedRole={employeeCardAccess.roles}
-                  sessionToken={employeeCardAccess.sessionToken}
-                  onClose={() => setStaffCard(null)}
-                  onChanged={employee => {
-                    setStaffCard(employee.schoolKeys.includes(detailSchool?.key ?? '') ? employee : null);
-                    void queryClient.invalidateQueries({ queryKey: QK.employees });
-                  }}
-                  onDeleted={() => {
-                    setStaffCard(null);
-                    void queryClient.invalidateQueries({ queryKey: QK.employees });
-                  }}
-                /></Suspense>
-              ) : (
-                <dialog className="manager-staff-contact" aria-label="Карточка сотрудника"
-                  ref={dialog => { if (dialog && !dialog.open) dialog.showModal(); }}
-                  onClose={() => setStaffCard(null)}>
-                  <form method="dialog">
-                    <button type="submit" className="overview-icon-button" aria-label="Закрыть"><X size={16} /></button>
-                  </form>
-                  <h2>{selectedStaff.fullName}</h2>
-                  <p>{selectedStaff.position || (selectedStaff.role === 'manager' ? 'Менеджер' : 'Логист')} · {detailSchool?.label}</p>
-                </dialog>
-              ), document.body)}
-              {staff && (
-                <dl className="manager-school-staff">
-                  <div>
-                    <dt><Briefcase size={14} aria-hidden="true" /> Менеджер</dt>
-                    <dd>{staffNames(staff.managers)}</dd>
-                  </div>
-                  <div>
-                    <dt><BusFront size={14} aria-hidden="true" /> Логист</dt>
-                    <dd>{staffNames(staff.logists)}</dd>
-                  </div>
-                </dl>
-              )}
+
+
             </div>
           )}
           <div className={splitView ? 'manager-workspace-content' : undefined} style={splitView ? undefined : { display: 'contents' }}>
@@ -640,8 +587,8 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
             { key: 'balance', label: 'Баланс', total: totals.balance.toLocaleString('ru-RU'), color: KPI_COLORS.balance },
             ]),
           ].filter(column => !splitView || (mode === 'accruals'
-            ? column.key === 'charged' || column.key === 'uncharged'
-            : column.key === 'debtorsCount' || column.key === 'debtSum'))}
+            ? column.key === 'uncharged'
+            : column.key === 'debtSum'))}
           rows={displayRows.map(row => ({ ...row, values: { debtorsCount: row.data.debtorsCount ?? 0, boarded: row.data.boarded ?? 0, uncharged: row.data.uncharged ?? 0, newRequests: row.data.newRequests, charged: money(row.data.charged), paid: money(row.data.paid), debtSum: money(row.data.debtSum), balance: row.data.balance.toLocaleString('ru-RU') } }))}
           sortKey={activeSortKey}
           ascending={activeSortDirection === 'asc'}

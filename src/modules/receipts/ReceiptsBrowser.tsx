@@ -1,5 +1,5 @@
 import React, { useMemo, useRef, useState } from 'react';
-import { CalendarDays, ChevronLeft, Link2, RotateCcw, Users } from 'lucide-react';
+import { Pin, ChevronLeft, Link2, RotateCcw, Users } from 'lucide-react';
 import { QK } from '../../services/queryClient';
 import { useQueries } from '@tanstack/react-query';
 import { DashboardTopPanel } from '../../core/dashboard/DashboardUI';
@@ -134,7 +134,6 @@ export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools
           const data = period.key === 'ALL' ? summary.data : monthlySummaries[receiptMonths.findIndex(month => month.key === period.key)]?.data;
           const count = data?.transfers.filter(transfer => transfer.schoolKey === schoolKey).reduce((total, transfer) => total + transfer.review, 0);
           return <button type="button" key={period.key} aria-pressed={periodKey === period.key} onClick={() => setPeriodKey(period.key)} title={period.label}>
-            <CalendarDays size={16} aria-hidden="true" />
             <span>{period.key === 'ALL' ? 'Все' : period.label.slice(0, 3)}</span>
             <strong>{count === undefined ? '—' : count}</strong>
           </button>;
@@ -145,6 +144,8 @@ export default function ReceiptsBrowser({ sessionToken, userName, allowedSchools
           {transferNumbers.map(number => {
             const transfer = schoolTransfers.find(item => item.transferNumber === number);
             return <TransferCell key={number} label={String(number)} value={counts[number - 1]} active={Boolean(transfer)}
+              badge={transfer?.chatId ? <Pin size={10} aria-label="Группа WhatsApp привязана" /> : undefined}
+              title={transfer?.chatId ? `Трансфер №${number} · ${transfer.groupName ?? 'Группа WhatsApp привязана'}` : `Трансфер №${number}`}
               color={transferCellColor({ vehicleType: vehicleTypes[String(number)] })}
               selected={Boolean(transfer && transferId === transfer.transferId)}
               onClick={transfer ? () => setTransferId(transfer.transferId) : undefined} />;

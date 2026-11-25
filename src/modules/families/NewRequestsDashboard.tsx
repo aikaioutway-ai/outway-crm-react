@@ -58,7 +58,7 @@ export default function NewRequestsDashboard({ rows, schools, day, onSelectSchoo
       { key: 'inWork', label: splitView ? 'В работе' : 'В работе (!)', total: total('inWork'), color: '#2563EB' },
       { key: 'waiting', label: splitView ? 'Ожидание' : 'Ожидание (?)', total: total('waiting'), color: '#B45309' },
       { key: 'overdue', label: 'Просрочено', total: total('overdue'), color: '#DC2626' },
-    ].filter(column => !splitView || column.key === 'newRequests' || column.key === 'inWork')} rows={sorted} sortKey={sort.key} ascending={sort.ascending}
+    ].filter(column => !splitView || column.key === 'newRequests')} rows={sorted} sortKey={sort.key} ascending={sort.ascending}
     onSort={key => setSort(previous => ({ key, ascending: previous.key === key ? !previous.ascending : key === 'school' }))}
     onSelect={onSelectSchool} />;
 }

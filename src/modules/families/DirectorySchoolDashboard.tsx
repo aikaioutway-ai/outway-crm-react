@@ -48,7 +48,7 @@ export default function DirectorySchoolDashboard({ branches, allowedSchools, sch
     return sort.asc ? comparison : -comparison;
   });
   return <SchoolDashboardTable splitView={splitView} commentScope="families/DirectorySchoolDashboard:overview"
-    columns={(splitView ? [['applications', 'Заявки'], ['boarded', 'Посажены'], ['rejected', 'Отказы']] as const : columns).map(([key, label]) => ({ key, label, color: DIRECTORY_COLORS[key], total: key === 'label' ? stats.length : displayedStats.reduce((sum, school) => sum + school[key], 0) }))}
+    columns={(splitView ? [['boarded', 'Посажены']] as const : columns).map(([key, label]) => ({ key, label, color: DIRECTORY_COLORS[key], total: key === 'label' ? stats.length : displayedStats.reduce((sum, school) => sum + school[key], 0) }))}
     rows={sorted.map(school => ({ key: school.key, label: school.label, logo: school.logo, values: { applications: school.applications, newRequests: school.newRequests, boarded: school.boarded, rejected: school.rejected } }))}
     sortKey={sort.key}
     ascending={sort.asc}

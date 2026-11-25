@@ -1,14 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useQueryClient } from '@tanstack/react-query';
-import { FileText, Pencil, RotateCcw, Search, Trash2 } from 'lucide-react';
+import { FileText, RotateCcw, Search, Trash2 } from 'lucide-react';
 import FilterableTable from '../../core/tables/FilterableTable';
 import { useIncomingReceipts } from '../../hooks/useCrmQueries';
 import { QK } from '../../services/queryClient';
 import {
   canSubmitIncomingReceipt,
   deleteIncomingReceipt,
-  dismissIncomingReceipt,
   fetchIncomingReceiptFileUrl,
   IncomingReceiptFilter,
   IncomingReceiptRow,
@@ -38,12 +37,6 @@ const EMPTY_TEXT: Record<IncomingReceiptFilter, string> = {
   all: 'Чеки из групп WhatsApp пока не поступали.',
 };
 
-function deletionDate(messageAt: string): string {
-  const date = new Date(messageAt);
-  date.setDate(date.getDate() + OTHER_FILES_RETENTION_DAYS);
-  return date.toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' });
-}
-
 const ERROR_TEXT: Record<string, string> = {
   ocr_failed: 'Чек не распознан, заполните вручную',
   ocr_and_storage_failed: 'Файл не сохранился',
@@ -63,7 +56,6 @@ function matchHint(receipt: IncomingReceiptRow): string {
 }
 
 const dateLabel = (value: string | null) => value ? value.split('-').reverse().join('.') : '—';
-const unique = (values: (string | number | null)[]) => Array.from(new Set(values.filter(value => value !== null && value !== ''))).join(', ') || '—';
 
 export default function ReceiptsModule({ sessionToken, userName, allowedSchools, onOpenFamily, scope, title = 'Чеки', toolbar, canDelete = false }: {
   sessionToken?: string;
@@ -129,14 +121,6 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
     setPreview({ url, pdf: receipt.mimeType === 'application/pdf', subtitle: receipt.chatName ?? 'Группа WhatsApp', other: receipt.kind === 'other' });
   });
 
-  const dismiss = (receipt: IncomingReceiptRow) => run(receipt.id, async () => {
-    try {
-      await dismissIncomingReceipt(sessionToken, receipt.id);
-    } finally {
-      await refresh();
-    }
-  });
-
   const remove = (receipt: IncomingReceiptRow) => {
     setMenu(null);
     const what = receipt.kind === 'other' ? 'Файл' : 'Чек';
@@ -167,35 +151,13 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
         {receipt.submittedBy && <small>{receipt.submittedBy}</small>}
       </div>;
     }
-    if (receipt.kind === 'duplicates') {
-      return receipt.duplicateFamilyId
-        ? <button type="button" className="receipts-link receipts-warning" onClick={() => openFamily(receipt.duplicateFamilyId!)}>Дубль, открыть платёж</button>
-        : <span className="receipts-warning">Дубль, платёж удалён</span>;
-    }
-    if (receipt.status === 'received') return <span className="receipts-muted">Обрабатывается…</span>;
-    const notReceipt = <button type="button" className="receipts-dismiss" disabled={busy} onClick={() => void dismiss(receipt)}>Не чек</button>;
-    if (receipt.kind === 'other') {
-      return <div className="receipts-action">
-        <div className="receipts-action--row">
-          <button type="button" className="ow-btn ow-btn--sm" disabled={busy} onClick={() => setEditing(receipt)}>Это чек</button>
-          {notReceipt}
-        </div>
-        <small>Удалится {deletionDate(receipt.messageAt)}</small>
-      </div>;
-    }
-    if (!receipt.hasFile) return <div className="receipts-action"><span className="receipts-danger">Файла нет</span>{notReceipt}</div>;
-    if (!canSubmitIncomingReceipt(receipt)) {
-      return <div className="receipts-action receipts-action--row">
-        <button type="button" className="ow-btn ow-btn--sm" disabled={busy} onClick={() => setEditing(receipt)}>
-          {receipt.familyId ? 'Заполнить' : 'Выбрать семью'}
-        </button>
-        {notReceipt}
-      </div>;
-    }
+    const duplicate = receipt.kind === 'duplicates';
     return <div className="receipts-action receipts-action--row">
-      <button type="button" className="ow-btn ow-btn--sm receipts-primary" disabled={busy} onClick={() => void submit(receipt)}>{busy ? 'Отправляем…' : 'На проверку'}</button>
-      <button type="button" className="receipts-icon" aria-label="Исправить чек" title="Исправить" disabled={busy} onClick={() => setEditing(receipt)}><Pencil size={13} /></button>
-      {notReceipt}
+      {duplicate ? <button type="button" className="ow-btn ow-btn--sm receipts-primary receipts-warning" disabled={busy || !receipt.duplicateFamilyId}
+        title={receipt.duplicateFamilyId ? 'Открыть платёж' : 'Платёж удалён'} onClick={() => openFamily(receipt.duplicateFamilyId!)}>Дубль</button>
+        : <button type="button" className="ow-btn ow-btn--sm receipts-primary" disabled={busy || !receipt.hasFile || receipt.status === 'received'}
+          onClick={() => canSubmitIncomingReceipt(receipt) ? void submit(receipt) : setEditing(receipt)}>{busy ? 'Отправляем…' : 'На проверку'}</button>}
+      {canDelete && !receipt.paymentId && <button type="button" className="receipts-icon receipts-delete" aria-label="Удалить чек" title="Удалить" disabled={busy} onClick={() => remove(receipt)}><Trash2 size={13} aria-hidden="true" /> Удалить</button>}
     </div>;
   }
 
@@ -227,7 +189,7 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
         : <FilterableTable className="receipts-table">
           <thead><tr>
             <th>Группа</th><th>Отправитель</th><th>Чек</th><th>Сумма</th><th>Дата</th>
-            <th>Комментарий</th><th>Школа</th><th>Трансфер</th><th>Семья / дети</th><th>Действия</th>
+            <th>Комментарий</th><th>Семья / дети</th><th>Действия</th>
           </tr></thead>
           <tbody>{rows.map(receipt => <tr key={receipt.id} onContextMenu={canDelete && !receipt.paymentId ? event => {
             event.preventDefault();
@@ -245,15 +207,14 @@ export default function ReceiptsModule({ sessionToken, userName, allowedSchools,
             <td className="receipts-money">{receipt.amount ? money(receipt.amount) : '—'}</td>
             <td>{dateLabel(receipt.receiptDate)}</td>
             <td className="receipts-caption" title={receipt.caption ?? undefined}>{receipt.caption ?? '—'}</td>
-            <td>{receipt.familyId ? unique(receipt.children.map(child => child.school)) : '—'}</td>
-            <td>{receipt.familyId ? unique(receipt.children.map(child => child.transfer)) : '—'}</td>
             <td className="receipts-family">
               {receipt.familyId
                 ? <>
                   <button type="button" className="receipts-link" onClick={() => void run(receipt.id, () => onOpenFamily(receipt.familyId!))}>{formatName(receipt.parentName) || receipt.familyId}</button>
                   {receipt.children.length > 0 && <small>{receipt.children.map(child => formatName(child.name)).join(', ')}</small>}
                 </>
-                : <>—{matchHint(receipt) && <small>{matchHint(receipt)}</small>}</>}
+                : <><button type="button" className="ow-btn ow-btn--sm" disabled={busyId === receipt.id} onClick={() => setEditing(receipt)}>Выбрать семью</button>{matchHint(receipt) && <small>{matchHint(receipt)}</small>}</>}
+              {receipt.familyId && receipt.kind !== 'submitted' && <button type="button" className="ow-btn ow-btn--sm" disabled={busyId === receipt.id} onClick={() => setEditing(receipt)}>Выбрать семью</button>}
               {receipt.error && ERROR_TEXT[receipt.error] && <small className="receipts-danger">{ERROR_TEXT[receipt.error]}</small>}
             </td>
             <td>{action(receipt)}</td>

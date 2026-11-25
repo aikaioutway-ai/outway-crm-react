@@ -246,14 +246,11 @@ export function CashierPaymentSummaryTabs({ periodKey, schoolKey, allowedSchools
   const reconciliation = useCashierReconciliationSummary(sessionToken, !!tabs.onReconciliation);
   const extraMetrics = {
     spending: [
-      { label: 'Школы', value: expenseTotal(category => category !== 'Logistics' && category !== 'Личное') },
-      { label: 'Логистика', value: expenseTotal(category => category === 'Logistics') },
-      ...(showPersonal ? [{ label: 'Личное', value: expenseTotal(category => category === 'Личное') }] : []),
+      { label: 'Итого', value: expenseTotal(category => showPersonal || category !== 'Личное') },
     ],
     reconciliation: [
       { label: 'Совпали', value: reconciliation?.['1'] ?? '—' },
       { label: 'Частично', value: reconciliation?.['2'] ?? '—' },
-      { label: 'Дубли', value: reconciliation?.['Д'] ?? '—' },
     ],
   };
   return <CashierViewTabs {...tabs} cards extraMetrics={extraMetrics} summaries={{
@@ -397,7 +394,7 @@ export default function CashierOverview({ splitView, view, onViewChange, onSpend
               { key: 'qrAmount', label: 'QR', total: money(totals.qrAmount), color: KPI_COLORS.qrAmount },
               { key: 'cashAmount', label: 'Наличные', total: money(totals.cashAmount), color: KPI_COLORS.cashAmount },
             ] : []),
-          ]}
+          ].filter(column => !splitView || !['pendingCount', 'confirmedCount'].includes(column.key))}
           rows={displayRows.map(row => ({ ...row, values: { pendingCount: row.data.pendingCount, pendingAmount: money(row.data.pendingAmount), confirmedCount: row.data.confirmedCount, confirmedAmount: money(row.data.confirmedAmount), qrAmount: money(row.data.qrAmount), cashAmount: money(row.data.cashAmount), refundsCount: row.data.refundsCount, refundsAmount: money(row.data.refundsAmount), refundsPendingAmount: money(row.data.refundsPendingAmount), refundsConfirmedAmount: money(row.data.refundsConfirmedAmount) } }))}
           sortKey={sortState.key}
           ascending={sortState.dir === 'asc'}

@@ -874,3 +874,6 @@
 .spending-category-navigation {
   margin-bottom: 12px;
 }
+
+.spending-categories .spending-category-navigation { margin: 0; flex: none; }
+.spending-categories .spending-category-navigation > button { width: 100%; justify-content: flex-start; }

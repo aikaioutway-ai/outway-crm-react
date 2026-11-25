@@ -17,7 +17,7 @@ export default function CashierViewTabs({ value, onChange, onSpending, onReconci
           <span className="manager-mode-title">{label}</span>
           {summaries && (key === 'pending' || key === 'confirmed' || key === 'refunds') && <span className="manager-mode-metrics">
             <span className="manager-mode-metric"><span>Сумма</span><strong>{summaries[key].amount}</strong></span>
-            <span className="manager-mode-metric"><span>Количество</span><strong>{summaries[key].count}</strong></span>
+            {key === 'refunds' && <span className="manager-mode-metric"><span>Количество</span><strong>{summaries[key].count}</strong></span>}
           </span>}
           {(key === 'spending' || key === 'reconciliation') && extraMetrics?.[key] && <span className="manager-mode-metrics">
             {extraMetrics[key]?.map(metric => <span className="manager-mode-metric" key={metric.label}>

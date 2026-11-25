@@ -16,6 +16,7 @@ export function transferCellColor(cell: { color?: string; vehicleType?: string |
 
 interface TransferCellProps {
   label: string;
+  badge?: React.ReactNode;
   value?: number;
   alert?: boolean;
   color?: string;
@@ -31,6 +32,7 @@ const SPECIAL_LABEL: Record<string, string> = { '—': 'Без №', '×': 'Х',
 
 export default function TransferCell({
   label,
+  badge,
   value = 0,
   alert = false,
   color = DEFAULT_COLOR,
@@ -62,6 +64,7 @@ export default function TransferCell({
       style={{ ['--cell-color' as string]: accent } as React.CSSProperties}
     >
       <span className="ow-transfer-cell-count">{isBus || (active && value > 0) ? value : ''}</span>
+      {badge && <span className="ow-transfer-cell-badge">{badge}</span>}
       <span className="ow-transfer-cell-label">{isBus ? <BusFront size={16} aria-hidden="true" /> : special ?? label}</span>
     </button>
   );

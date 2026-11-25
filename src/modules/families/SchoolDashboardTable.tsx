@@ -11,9 +11,9 @@ import { SchoolAvatar } from '../../core/dashboard/DashboardUI';
 interface Metric { key: string; label: string; total: string | number; }
 interface Column extends Metric { color: string; }
 interface Row { key: string; label: string; logo?: string; icon?: React.ReactNode; values: Record<string, string | number>; isChild?: boolean; isGroup?: boolean; expanded?: boolean; disabled?: boolean; }
-interface Props { footer?: React.ReactNode; splitView?: boolean; compactTotals?: boolean; commentScope?: string; commentContext?: string; columns: Column[]; rows: Row[]; sortKey: string; ascending: boolean; onSort: (key: string) => void; onSelect: (key: string) => void; showAvatars?: boolean; showValueLabels?: boolean; rowGap?: number; className?: string; }
+interface Props { headerActions?: React.ReactNode; gridContent?: React.ReactNode; footer?: React.ReactNode; splitView?: boolean; compactTotals?: boolean; commentScope?: string; commentContext?: string; columns: Column[]; rows: Row[]; sortKey: string; ascending: boolean; onSort: (key: string) => void; onSelect: (key: string) => void; showAvatars?: boolean; showValueLabels?: boolean; rowGap?: number; className?: string; }
 
-export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, showValueLabels = false, className = '', commentScope, commentContext = '', splitView, footer, compactTotals }: Props) {
+export default function SchoolDashboardTable({ columns, rows, sortKey, ascending, onSort, onSelect, showAvatars = true, showValueLabels = false, className = '', commentScope, commentContext = '', splitView, footer, compactTotals, headerActions, gridContent }: Props) {
   const [repeatedKey, setRepeatedKey] = useState<string | null>(null);
   const [menu, setMenu] = useState<{ key: string; x: number; y: number } | null>(null);
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
     window.addEventListener('scroll', close, true);
     return () => { document.removeEventListener('click', close); document.removeEventListener('keydown', onKey); window.removeEventListener('scroll', close, true); };
   }, [splitView]);
-  if (splitView) return <ManagerMetricGrid compactTotals={compactTotals} footer={footer} columns={columns} rows={rows} sortKey={sortKey} ascending={ascending} onSort={onSort} onSelect={onSelect} />;
+  if (splitView) return <ManagerMetricGrid headerActions={headerActions} gridContent={gridContent} compactTotals={compactTotals} footer={footer} columns={columns} rows={rows} sortKey={sortKey} ascending={ascending} onSort={onSort} onSelect={onSelect} />;
   const filteredRows = repeatedKey ? filterRepeatedValues(rows, row => columns[0]?.key === repeatedKey ? row.label : row.values[repeatedKey]) : rows;
   return (
     <div className="ow-school-table-wrap">
@@ -66,7 +66,7 @@ export default function SchoolDashboardTable({ columns, rows, sortKey, ascending
   );
 }
 
-function ManagerMetricGrid({ compactTotals, footer, columns, rows, sortKey, ascending, onSort, onSelect }: Pick<Props, 'compactTotals' | 'footer' | 'columns' | 'rows' | 'sortKey' | 'ascending' | 'onSort' | 'onSelect'>) {
+function ManagerMetricGrid({ headerActions, gridContent, compactTotals, footer, columns, rows, sortKey, ascending, onSort, onSelect }: Pick<Props, 'headerActions' | 'gridContent' | 'compactTotals' | 'footer' | 'columns' | 'rows' | 'sortKey' | 'ascending' | 'onSort' | 'onSelect'>) {
   const metric = columns.find(column => column.key === 'debtSum') ?? columns[0];
   if (!metric) return null;
   const sortLabel = `Сортировать по показателю «${metric.label}» ${sortKey === metric.key && !ascending ? 'по возрастанию' : 'по убыванию'}`;
@@ -76,12 +76,12 @@ function ManagerMetricGrid({ compactTotals, footer, columns, rows, sortKey, asce
       <div className="manager-metric-panel">
         <header className={compactTotals ? 'manager-metric-compact-totals' : undefined}>
           <h2>{columns.map(item => <MetricValue key={item.key} metric={item} value={item.total} showLabel />)}</h2>
-          <button type="button" className="overview-icon-button"
+          <div className="overview-icon-actions">{headerActions}<button type="button" className="overview-icon-button"
             aria-label={sortLabel} title={sortLabel} onClick={() => onSort(metric.key)}>
             {sortKey === metric.key && ascending ? <ArrowUpNarrowWide size={18} aria-hidden="true" /> : <ArrowDownWideNarrow size={18} aria-hidden="true" />}
-          </button>
+          </button></div>
         </header>
-        {rows.length ? (
+        {gridContent ?? (rows.length ? (
           <div className="manager-school-grid">
             {rows.map(row => (
               <button type="button" key={row.key} disabled={row.disabled} onClick={() => onSelect(row.key)}
@@ -97,7 +97,7 @@ function ManagerMetricGrid({ compactTotals, footer, columns, rows, sortKey, asce
               </button>
             ))}
           </div>
-        ) : <p className="manager-metric-empty">Нет школ для отображения</p>}
+        ) : <p className="manager-metric-empty">Нет школ для отображения</p>)}
         {footer}
       </div>
     </section>

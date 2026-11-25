@@ -45,9 +45,9 @@ beforeEach(() => {
 test('shows a recognized family and sends the receipt for review', async () => {
   (submitIncomingReceipt as jest.Mock).mockResolvedValue(undefined);
   show();
-  expect(screen.getByText('TIS')).toBeInTheDocument();
-  expect(screen.getByText('12')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'На проверку' }));
+  expect(screen.queryAllByRole('columnheader', { name: 'Школа', exact: true })).toHaveLength(0);
+  expect(screen.queryAllByRole('columnheader', { name: 'Трансфер', exact: true })).toHaveLength(0);
+  fireEvent.click(screen.getAllByRole('button', { name: 'На проверку' })[0]);
   await waitFor(() => expect(submitIncomingReceipt).toHaveBeenCalledWith('token', matched, 'Менеджер'));
 });
 
@@ -57,25 +57,25 @@ test('an unknown sender gets dashes, a hint and a family picker', async () => {
   expect(screen.getByText('Номера нет в CRM')).toBeInTheDocument();
   expect(screen.getByRole('columnheader', { name: 'Комментарий' })).toBeInTheDocument();
   expect(screen.getByText('Эсеналиева Наиля')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Выбрать семью' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Выбрать семью' })[1]);
   fireEvent.click(screen.getByRole('button', { name: /Петрова/ }));
   fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
   await waitFor(() => expect(updateIncomingReceipt).toHaveBeenCalledWith('token', 'r2', { familyId: 'F2', amount: 6800, receiptDate: '2026-11-18' }));
 });
 
-test('an other file can be marked as a receipt or dismissed', async () => {
-  (dismissIncomingReceipt as jest.Mock).mockResolvedValue(undefined);
-  (updateIncomingReceipt as jest.Mock).mockResolvedValue(undefined);
-  show({ rows: [photo], counts: { ...counts, other: 1 }, pageSize: 50 });
-  expect(screen.getByText('Удалится 01.12')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Не чек' }));
-  await waitFor(() => expect(dismissIncomingReceipt).toHaveBeenCalledWith('token', 'r3'));
+test('other files use the same review and delete actions', () => {
+  show({ rows: [photo], counts: { ...counts, other: 1 }, pageSize: 50 }, {}, true);
+  expect(screen.getByRole('button', { name: 'На проверку' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Удалить чек' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Выбрать семью' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'Не чек' })).not.toBeInTheDocument();
+});
 
-  fireEvent.click(screen.getByRole('button', { name: 'Это чек' }));
-  fireEvent.change(screen.getByLabelText('Сумма'), { target: { value: '6800' } });
-  fireEvent.change(screen.getByLabelText('Дата чека'), { target: { value: '2026-11-01' } });
-  fireEvent.click(screen.getByRole('button', { name: 'Сохранить' }));
-  await waitFor(() => expect(updateIncomingReceipt).toHaveBeenCalledWith('token', 'r3', { familyId: 'F1', amount: 6800, receiptDate: '2026-11-01' }));
+test('duplicates show the payment action and delete button', () => {
+  show({ rows: [{ ...matched, kind: 'duplicates', duplicateFamilyId: 'F1' }], counts, pageSize: 50 }, {}, true);
+  expect(screen.getByRole('button', { name: 'Дубль' })).toBeEnabled();
+  expect(screen.getByRole('button', { name: 'Удалить чек' })).toBeEnabled();
+  expect(screen.queryByRole('button', { name: 'На проверку' })).not.toBeInTheDocument();
 });
 
 test('explains empty and failed loading states', () => {

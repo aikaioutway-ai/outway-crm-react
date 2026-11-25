@@ -1167,3 +1167,239 @@ button.manager-school-brand {
 .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"]:has(> [data-logistics-tab="map"]:first-child) {
   grid-template-rows: auto;
 }
+
+/* Keep the manager period selector, search and actions on one toolbar row. */
+.manager-overview-toolbar--inline {
+  grid-template-columns: minmax(0, 1fr) minmax(190px, 24%) auto;
+}
+.manager-overview-toolbar--inline .manager-period-tiles {
+  grid-column: 1;
+  grid-row: 1;
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  min-width: 0;
+}
+.manager-overview-toolbar--inline .manager-period-tiles button { min-height: 52px; }
+.manager-overview-toolbar--inline .manager-overview-search {
+  grid-column: 2;
+  grid-row: 1;
+}
+.manager-overview-toolbar--inline .overview-icon-actions {
+  grid-column: 3;
+  grid-row: 1;
+}
+@media (max-width: 1000px) {
+  .manager-overview-toolbar--inline .manager-period-tiles {
+    display: flex;
+    overflow-x: auto;
+  }
+  .manager-overview-toolbar--inline .manager-period-tiles button { flex: 0 0 54px; }
+}
+@media (max-width: 600px) {
+  .manager-overview-toolbar--inline { grid-template-columns: minmax(0, 1fr) auto; }
+  .manager-overview-toolbar--inline .manager-period-tiles { grid-column: 1 / -1; }
+  .manager-overview-toolbar--inline .manager-overview-search { grid-column: 1; grid-row: 2; }
+  .manager-overview-toolbar--inline .overview-icon-actions { grid-column: 2; grid-row: 2; }
+}
+
+.manager-overview-toolbar--inline { gap: 8px; }
+.manager-overview-toolbar--inline .manager-period-tiles { gap: 8px; }
+.manager-overview-toolbar--inline .manager-period-tiles button {
+  box-sizing: border-box;
+  height: 52px;
+}
+.manager-overview-toolbar--inline .manager-overview-search > div,
+.manager-overview-toolbar--inline .manager-overview-search > div > div:first-child {
+  box-sizing: border-box;
+  height: 52px !important;
+}
+.manager-overview-toolbar--inline .overview-icon-button {
+  box-sizing: border-box;
+  width: 52px;
+  height: 52px;
+}
+
+/* Manager section cards retain a stable size. */
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] {
+  flex: none;
+  grid-auto-rows: 104px;
+  align-content: start;
+  overflow: visible;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card {
+  position: relative;
+  box-sizing: border-box;
+  height: 104px;
+  min-height: 104px;
+  background: var(--surface-2, #f1f5f9);
+  border-color: var(--border);
+  box-shadow: none;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card[aria-selected="true"] {
+  background: var(--surface, #fff);
+  border-color: var(--accent);
+  border-radius: 10px;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card[aria-selected="true"] > svg {
+  color: var(--accent-h);
+  background: var(--accent-l);
+}
+/* Stretch the manager sections evenly to the height of the adjacent panel. */
+@media (min-width: 701px) {
+  .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] {
+    flex: 1;
+    grid-auto-rows: minmax(104px, 1fr);
+    align-content: stretch;
+  }
+  .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card {
+    height: 100%;
+  }
+}
+
+.manager-overview-body .manager-metric-panel > header { border-bottom: 0; }
+.manager-school-team {
+  flex: none;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+  font-size: 12px;
+}
+.manager-school-team > summary { cursor: pointer; color: var(--text-2); }
+.manager-school-team .manager-school-staff { margin: 10px 0 0; padding: 0; border: 0; background: transparent; }
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] {
+  flex: none;
+  grid-auto-rows: 104px;
+}
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card {
+  height: 104px;
+}
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card[aria-selected="true"] {
+  border-radius: 10px;
+  border-right-color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-l);
+}
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел менеджера"] > .manager-mode-card[aria-selected="true"]::after { display: none; }
+
+.ow-transfer-cell-badge {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  display: flex;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* The linked-group indicator must remain visible on unselected cells too. */
+.ow-transfer-cell-badge {
+  z-index: 1;
+  top: 2px;
+  right: 2px;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  color: var(--accent-h, #146566);
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--cell-color);
+}
+
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] {
+  flex: 1;
+  grid-template-rows: none;
+  grid-auto-rows: minmax(104px, 1fr);
+  align-content: stretch;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] > .manager-mode-card {
+  min-height: 104px;
+  background: var(--surface-2, #f1f5f9);
+  box-shadow: none;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] > .manager-mode-card[aria-selected="true"] {
+  background: var(--surface, #fff);
+  border-color: var(--border);
+}
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] {
+  flex: none;
+  grid-auto-rows: 104px;
+}
+.manager-overview-body--school .manager-mode-cards[aria-label="Раздел логистики"] > .manager-mode-card[aria-selected="true"] {
+  background: var(--accent-l);
+  border-color: var(--accent);
+}
+
+.logistics-address-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  min-height: 112px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface, #fff);
+}
+.logistics-address-school {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  border: 0;
+  background: none;
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.logistics-address-card > div { display: grid; gap: 10px; font-size: 13px; }
+.logistics-address-card a { display: inline-flex; gap: 5px; align-items: center; color: var(--accent-h); }
+
+/* Three directory metrics must fit without spilling under the next tab. */
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] {
+  grid-auto-rows: 136px;
+}
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] > .manager-mode-card {
+  box-sizing: border-box;
+  height: 136px;
+  min-height: 136px;
+}
+
+/* The map shortcut is compact, matching the school logo tile. */
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"]:has(> [data-logistics-tab="map"]:first-child) {
+  grid-template-rows: 90px;
+  grid-auto-rows: 136px;
+}
+.manager-overview-body--school .manager-overview-sidebar .manager-mode-cards[aria-label="Раздел логистики"] > .manager-mode-card[data-logistics-tab="map"] {
+  height: 90px;
+  min-height: 90px;
+  align-content: center;
+}
+
+.cashier2-period-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 24%);
+  align-items: center;
+  gap: 8px;
+}
+.cashier2-period-panel .manager-period-tiles { grid-column: 1; grid-row: 1; }
+.cashier2-period-panel .cashier2-search-row { grid-column: 2; grid-row: 1; }
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел кассира"] {
+  flex: none;
+  grid-auto-rows: 104px;
+  align-content: start;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел кассира"] > .manager-mode-card {
+  box-sizing: border-box;
+  height: 104px;
+  min-height: 104px;
+  background: var(--surface-2, #f1f5f9);
+  box-shadow: none;
+}
+.manager-overview-sidebar .manager-mode-cards[aria-label="Раздел кассира"] > .manager-mode-card[aria-selected="true"] {
+  background: var(--surface, #fff);
+  border-color: var(--accent);
+}
+@media (max-width: 700px) {
+  .cashier2-period-panel { grid-template-columns: minmax(0, 1fr); }
+  .cashier2-period-panel .cashier2-search-row { grid-column: 1; grid-row: 2; }
+}

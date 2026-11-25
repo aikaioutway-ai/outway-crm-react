@@ -196,8 +196,6 @@ export default function DriversOverview({ onSelectSchool, onSidebarWidthChange, 
   const schoolTable = <SchoolDashboardTable splitView={embedded} compactTotals={embedded} commentScope="drivers/DriversOverview:overview"
           columns={embedded ? [
             { key: 'activeCount', label: 'Активные', total: driverTotals.activeCount, color: KPI_COLORS.activeCount },
-            { key: 'expiredCount', label: 'Документы Х', total: driverTotals.expiredCount, color: 'var(--danger)' },
-            { key: 'temporaryCount', label: 'Временные', total: driverTotals.temporaryCount, color: 'var(--accent)' },
           ] : [
             { key: 'school', label: 'Школа', total: totals.schools, color: KPI_COLORS.school },
             { key: 'activeCount', label: 'Активные', total: totals.activeCount, color: KPI_COLORS.activeCount },

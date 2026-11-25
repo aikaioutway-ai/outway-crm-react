@@ -686,7 +686,6 @@ export default function App() {
                   }))].map(period => (
                     <button key={period.key} type="button" title={period.label} aria-pressed={cashierPeriodKey === period.key}
                       onClick={() => setCashierPeriodKey(period.key)}>
-                      <CalendarDays size={16} aria-hidden="true" />
                       <span>{period.short}</span>
                     </button>
                   ))}
@@ -709,7 +708,7 @@ export default function App() {
               style={cashierSplitView ? { flex: 1, minHeight: 0 } : { display: 'contents' }}>
               {cashierSplitView && <div className="manager-overview-sidebar">
                 {cashierWorkspace === 'payments' && cashierSchoolKey && <button type="button" className="ow-btn ow-btn--ghost"
-                  onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }}>Все школы</button>}
+                  onClick={() => { setCashierSchoolKey(null); setCashierOpenFamilySearch(''); }}>Главная стр.</button>}
                 <CashierPaymentSummaryTabs sessionToken={currentUser?.sessionToken} showPersonal={currentUser?.id === OWNER_EMPLOYEE_ID || currentUserRole === 'gen_director'} periodKey={cashierPeriodKey} schoolKey={cashierSchoolKey} allowedSchools={currentUser?.schoolKeys} value={cashierWorkspace === 'payments' ? cashierView : cashierWorkspace}
                   onChange={view => { setCashierView(view); setCashierWorkspace('payments'); }}
                   onReconciliation={canReconcilePayments ? openReconciliation : undefined}
