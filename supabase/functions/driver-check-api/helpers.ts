@@ -1,4 +1,9 @@
 export const LOGISTICS_CHECK_ROLES = new Set(['admin', 'gen_director', 'director', 'logist', 'senior_logist']);
+// Менеджеры видят сверку логистики только на просмотр: без ссылок водителей и без правок.
+export const LOGISTICS_VIEW_ROLES = new Set(['admin', 'gen_director', 'director', 'logist', 'senior_logist', 'manager']);
+export function canManageDriverLinks(role?: string): boolean {
+  return LOGISTICS_CHECK_ROLES.has(role ?? '');
+}
 const LEADERSHIP_ROLES = new Set(['admin', 'gen_director', 'director']);
 
 export interface BranchRow {

@@ -144,6 +144,12 @@ describe('LogisticsReconciliation (monthly 4-round table)', () => {
 
 
   });
+
+  test('manager sees marks read-only, without driver links', async () => {
+    renderWithQuery(<LogisticsReconciliation schoolKey="TIS" periodKey="11" transferFilter="3" sessionToken="tok" userId="emp-m" userRole="manager" />);
+    expect(await screen.findByText(/Азамат Беков/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Ссылка трансфера/i })).not.toBeInTheDocument();
+  });
 });
 
 test('counts completed transfers for the current round independently of child marks', () => {

@@ -58,6 +58,7 @@ interface ManagerOverviewProps {
   renderSchool?: (period: string, day: string, directoryPeriod: string, onDebtTotals: (amount: number, count: number) => void) => React.ReactNode;
   /** Вкладка «Чеки»: есть только у сотрудников с доступом к чекам. */
   renderReceipts?: () => React.ReactNode;
+  renderReconciliation?: () => React.ReactNode;
   mode: ManagerMode;
   canViewAccruals?: boolean;
   onModeChange: (mode: ManagerMode) => void;
@@ -308,9 +309,11 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ sessionToken, mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers, renderReceipts }: ManagerOverviewProps) {
+export default function ManagerOverview({ sessionToken, mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers, renderReceipts, renderReconciliation }: ManagerOverviewProps) {
   const showReceipts = Boolean(renderReceipts);
-  const receiptsOpen = mode === 'receipts' && showReceipts;
+  const showReconciliation = Boolean(renderReconciliation);
+  const reconciliationOpen = mode === 'reconciliation' && showReconciliation;
+  const receiptsOpen = (mode === 'receipts' && showReceipts) || reconciliationOpen;
   const receiptsSummary = useIncomingReceiptsSummary(showReceipts ? sessionToken : undefined);
   const receiptsToReview = receiptsSummary.data
     ? receiptsSummary.data.schools
@@ -351,7 +354,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
   const branchStatsQuery = useBranchStats();
   // Справочник берёт цифры из базы; таблица семей с деньгами нужна только финансовым вкладкам.
   const directoryQuery = useSchoolDirectoryStats();
-  const familiesQuery = useFamiliesTable({ enabled: splitView || (mode !== 'directory' && mode !== 'receipts') });
+  const familiesQuery = useFamiliesTable({ enabled: splitView || (mode !== 'directory' && mode !== 'receipts' && mode !== 'reconciliation') });
   const rows: FamilyListRow[] | null = familiesQuery.data ?? null;
   const accessibleRows = useMemo(
     () => rows?.filter(row => isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier) && isSchoolAllowed(row.branchFilter, scopedSchools, schoolTier)) ?? null,
@@ -540,7 +543,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
       <div style={{ flex: 1, minHeight: 0, padding: '0 0 10px', display: 'flex', flexDirection: 'column', gap: 12 }}>
 
         <DashboardTopPanel className={`dashboard-control-row manager-overview-toolbar${splitView ? ' manager-overview-toolbar--wide' : ''}${renderTransfers ? ' manager-overview-toolbar--transfers' : ''}`}>
-          {!splitView && <ManagerModeTabs showRequests showReceipts={showReceipts} canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />}
+          {!splitView && <ManagerModeTabs showRequests showReceipts={showReceipts} showReconciliation={showReconciliation} canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />}
           {receiptsOpen ? null : splitView ? (
             <div className={mode === 'requests' ? 'manager-period-tiles' : 'manager-period-tiles manager-period-tiles--months'} role="group" aria-label={mode === 'requests' ? 'Возраст заявки' : 'Период'}>
               {metrics.map(period => (
@@ -573,7 +576,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
                   <SchoolAvatar logo={detailSchool.logo} label={detailSchool.label} color="var(--accent)" size={64} radius={14} fontSize={16} />
                 </button>
               )}
-              <ManagerModeTabs cards summaries={summaries} showRequests showReceipts={showReceipts} canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
+              <ManagerModeTabs cards summaries={summaries} showRequests showReceipts={showReceipts} showReconciliation={showReconciliation} canViewAccruals={canViewAccruals} value={mode} onChange={onModeChange} />
               {selectedStaff && createPortal(canOpenFullCard ? (
                 <Suspense fallback={null}><EmployeeCardModal
                   key={selectedStaff.id}
@@ -616,7 +619,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
             </div>
           )}
           <div className={splitView ? 'manager-workspace-content' : undefined} style={splitView ? undefined : { display: 'contents' }}>
-        {receiptsOpen && !renderSchool ? renderReceipts!() : renderSchool ? renderSchool(periodKey, requestDay, directoryPeriod, syncTableDebt) : mode === 'requests' ? (familiesQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка заявок…</div> : familiesQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить заявки. <button onClick={() => void familiesQuery.refetch()}>Повторить</button></div> : <NewRequestsDashboard splitView={splitView} rows={accessibleRows ?? []} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} />) : mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard periodRows={splitView && directoryPeriod !== 'ALL' && accessibleRows ? directoryRows.filter(row => monthKeys.get(row.childCreatedAt?.slice(0, 7) ?? '') === directoryPeriod) : undefined} splitView={splitView} branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
+        {reconciliationOpen && !renderSchool ? renderReconciliation!() : receiptsOpen && !renderSchool ? renderReceipts!() : renderSchool ? renderSchool(periodKey, requestDay, directoryPeriod, syncTableDebt) : mode === 'requests' ? (familiesQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка заявок…</div> : familiesQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить заявки. <button onClick={() => void familiesQuery.refetch()}>Повторить</button></div> : <NewRequestsDashboard splitView={splitView} rows={accessibleRows ?? []} schools={stats} day={requestDay} onSelectSchool={onSelectSchool} />) : mode !== 'directory' && (periodQuery.isPending || familiesQuery.isPending) ? <div role="status" style={{ padding: 24 }}>Загрузка начислений…</div> : mode !== 'directory' && (periodQuery.isError || familiesQuery.isError) ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить начисления. <button onClick={() => { void periodQuery.refetch(); void familiesQuery.refetch(); }}>Повторить</button></div> : mode === 'directory' ? (directoryQuery.isPending ? <div role="status" style={{ padding: 24 }}>Загрузка…</div> : directoryQuery.isError ? <div role="alert" style={{ padding: 24 }}>Не удалось загрузить справочник. <button onClick={() => void directoryQuery.refetch()}>Повторить</button></div> : <DirectorySchoolDashboard periodRows={splitView && directoryPeriod !== 'ALL' && accessibleRows ? directoryRows.filter(row => monthKeys.get(row.childCreatedAt?.slice(0, 7) ?? '') === directoryPeriod) : undefined} splitView={splitView} branches={directoryQuery.data ?? []} allowedSchools={allowedSchools} schoolTier={schoolTier} onSelectSchool={onSelectSchool} />) : (
         <SchoolDashboardTable splitView={splitView} commentScope={mode === "accruals" ? "families/ManagerOverview:accruals" : "families/ManagerOverview:overview"} commentContext={`${mode}:${periodKey}`}
           columns={[
             { key: 'school', label: 'Школа', total: displayStats.length, color: '#64748B' },

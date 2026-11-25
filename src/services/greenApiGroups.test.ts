@@ -46,3 +46,16 @@ test('does not claim membership when provider verification fails', async () => {
   await expect(verifiedGroups(request, [])).rejects.toThrow('offline');
   expect(() => accountIds({ stateInstance: 'notAuthorized' })).toThrow('не подключён');
 });
+
+test('reuses recently confirmed groups and checks only new ones', async () => {
+  const request = jest.fn(async (method: string, body?: Record<string, unknown>) => {
+    if (method === 'getWaSettings') return account;
+    if (method === 'getContacts') return [{ type: 'group', id: 'known@g.us' }, { type: 'group', id: 'new@g.us' }];
+    if (method === 'getChats') return [];
+    return data(String(body?.groupId));
+  }) as unknown as GroupRequest;
+  const recent = [{ chatId: 'known@g.us', name: 'Известная', inviteCode: null }];
+  const groups = await verifiedGroups(request, ['known@g.us'], undefined, recent);
+  expect(groups.map(g => g.chatId)).toEqual(['known@g.us', 'new@g.us']);
+  expect((request as unknown as jest.Mock).mock.calls.filter(([method]) => method === 'getGroupData')).toEqual([['getGroupData', { groupId: 'new@g.us' }]]);
+});

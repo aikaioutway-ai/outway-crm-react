@@ -57,12 +57,13 @@ async function cleanupExpiredFiles() {
 // Список групп обновляется не чаще раза в час на группу, чтобы не писать в базу на каждое сообщение.
 const GROUP_TOUCH_MS = 60 * 60 * 1000;
 const groupTouchedAt = new Map<string, number>();
-async function rememberGroup(chatId: string, chatName: string | null) {
+async function rememberGroup(chatId: string, chatName: string | null, verified: boolean) {
   if (Date.now() - (groupTouchedAt.get(chatId) ?? 0) < GROUP_TOUCH_MS) return;
   groupTouchedAt.set(chatId, Date.now());
-  const row: Record<string, unknown> = { chat_id: chatId, last_seen_at: new Date().toISOString() };
+  // Неподтверждённая группа (приглашение) записывается как «давно не видели»: синхронизация проверит участие бота.
+  const row: Record<string, unknown> = { chat_id: chatId, last_seen_at: verified ? new Date().toISOString() : new Date(0).toISOString() };
   if (chatName) row.name = chatName;
-  const { error } = await supabase.from('v2_whatsapp_groups').upsert(row, { onConflict: 'chat_id' });
+  const { error } = await supabase.from('v2_whatsapp_groups').upsert(row, { onConflict: 'chat_id', ignoreDuplicates: !verified });
   if (error) {
     groupTouchedAt.delete(chatId);
     console.error('whatsapp group save failed', error.code);
@@ -107,7 +108,7 @@ Deno.serve(async (request) => {
 
   const group = parseGreenApiGroup(payload);
   if (!group || group.instanceId !== INSTANCE_ID) return new Response('ignored');
-  EdgeRuntime.waitUntil(rememberGroup(group.chatId, group.chatName).catch(() => undefined));
+  EdgeRuntime.waitUntil(rememberGroup(group.chatId, group.chatName, group.verified).catch(() => undefined));
 
   const receipt = parseGreenApiReceipt(payload);
   if (!receipt || Date.parse(receipt.messageAt) < Date.now() - 7 * 24 * 60 * 60 * 1000) return new Response('ignored');

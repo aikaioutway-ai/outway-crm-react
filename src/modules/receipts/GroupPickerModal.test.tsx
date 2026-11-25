@@ -42,7 +42,7 @@ test('refreshes provider groups without requiring a group message', async () => 
   open(null);
   fireEvent.click(screen.getByText('Обновить группы'));
   await screen.findByText(/Получено групп: 3/);
-  expect(fetchWhatsappGroups).toHaveBeenCalledWith('session');
+  expect(fetchWhatsappGroups).toHaveBeenCalledWith('session', undefined, true);
 });
 
 test('keeps the picker open after linking so history can be imported', async () => {

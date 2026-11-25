@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts } from './ManagerModeTabs';
+import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts, canAccessManagerReconciliation } from './ManagerModeTabs';
 import type { UserRole } from '../../types';
 
 test.each(['director', 'gen_director'] as UserRole[])('%s can access accruals', role => {
@@ -27,4 +27,14 @@ test('receipts tab appears only for employees with receipts access', () => {
   rerender(<ManagerModeTabs value="directory" onChange={onChange} showReceipts />);
   screen.getByRole('tab', { name: 'Чеки' }).click();
   expect(onChange).toHaveBeenCalledWith('receipts');
+});
+
+test.each([['manager', true], ['director', true], ['cashier', false], ['b2b_manager', false]] as [UserRole, boolean][])('%s logistics reconciliation access: %s', (role, allowed) => {
+  expect(canAccessManagerReconciliation(role)).toBe(allowed);
+});
+test('reconciliation tab is shown only when allowed', () => {
+  const { rerender } = render(<ManagerModeTabs value="directory" onChange={jest.fn()} />);
+  expect(screen.queryByRole('tab', { name: 'Сверка' })).not.toBeInTheDocument();
+  rerender(<ManagerModeTabs value="directory" onChange={jest.fn()} showReconciliation />);
+  expect(screen.getByRole('tab', { name: 'Сверка' })).toBeInTheDocument();
 });

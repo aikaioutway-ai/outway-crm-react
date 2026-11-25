@@ -76,8 +76,12 @@ describe('parseGreenApiReceipt', () => {
 
 test('remembers any group message, but not private chats', () => {
   const base = { typeWebhook: 'incomingMessageReceived', instanceData: { idInstance: 1 }, senderData: { chatId: '1203@g.us', chatName: 'Трансфер 12' }, messageData: { typeMessage: 'textMessage' } };
-  expect(parseGreenApiGroup(base)).toEqual({ instanceId: '1', chatId: '1203@g.us', chatName: 'Трансфер 12' });
+  expect(parseGreenApiGroup(base)).toEqual({ instanceId: '1', chatId: '1203@g.us', chatName: 'Трансфер 12', verified: true });
+  expect(parseGreenApiGroup({ ...base, typeWebhook: 'outgoingMessageReceived' })).toMatchObject({ chatId: '1203@g.us', verified: true });
+  expect(parseGreenApiGroup({ ...base, typeWebhook: 'outgoingMessageStatus' })).toBeNull();
   expect(parseGreenApiGroup({ ...base, senderData: { chatId: '996555@c.us' } })).toBeNull();
+  expect(parseGreenApiGroup({ ...base, senderData: { chatId: '996555@c.us' }, messageData: { typeMessage: 'groupInviteMessage',
+    groupInviteMessageData: { groupJid: '777@g.us', groupName: 'Трансфер 9' } } })).toEqual({ instanceId: '1', chatId: '777@g.us', chatName: 'Трансфер 9', verified: false });
 });
 
 test('schools sum the receipts of their transfers', () => {

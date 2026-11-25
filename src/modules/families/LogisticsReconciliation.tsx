@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import {
   canCorrectDriverMarks,
+  canManageDriverLinks,
   correctDriverCheckMark,
   buildDriverCheckUrl,
   buildDriverInviteWhatsAppText,
@@ -63,6 +64,8 @@ export default function LogisticsReconciliation({
 }: LogisticsReconciliationProps) {
   const queryClient = useQueryClient();
   const canCorrect = canCorrectDriverMarks(userId, userRole);
+  // Менеджер видит сверку только на просмотр: ссылки водителей ему не выдаются.
+  const showDriverLinks = !userRole || canManageDriverLinks(userRole);
   const [correcting, setCorrecting] = useState(false);
   const [correctionError, setCorrectionError] = useState('');
   const { data: logisticsRows, isPending: rowsPending } = useLogisticsTable();
@@ -229,7 +232,7 @@ export default function LogisticsReconciliation({
         </div>
 
         <div className="lr-bar-actions">
-          {activeTransfer ? (
+          {!showDriverLinks ? null : activeTransfer ? (
             <button type="button" className={`lr-btn lr-btn--primary${copied ? ' lr-btn--copied' : ''}`}
               onClick={() => void handleCopyLink()} title="Скопировать ссылку трансфера">
               {copied ? <Check size={14} /> : <Copy size={14} />}

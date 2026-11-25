@@ -84,15 +84,24 @@ export function phoneSuffix(phone: string): string | null {
   return digits.length >= 9 ? digits.slice(-9) : null;
 }
 
-// Любое входящее сообщение группы: по нему бот запоминает, в каких группах он состоит.
-export function parseGreenApiGroup(payload: unknown): { instanceId: string; chatId: string; chatName: string | null } | null {
+// Любое сообщение группы (входящее или отправленное с номера бота): по нему бот запоминает,
+// в каких группах он состоит. Приглашение в группу личным сообщением даёт только кандидата —
+// участие бота потом подтверждает синхронизация групп (verified: false).
+const GROUP_WEBHOOKS = new Set(['incomingMessageReceived', 'outgoingMessageReceived', 'outgoingAPIMessageReceived']);
+export function parseGreenApiGroup(payload: unknown): { instanceId: string; chatId: string; chatName: string | null; verified: boolean } | null {
   const body = record(payload);
   const instance = record(body?.instanceData);
   const sender = record(body?.senderData);
-  if (body?.typeWebhook !== 'incomingMessageReceived' || !instance || !sender) return null;
+  if (typeof body?.typeWebhook !== 'string' || !GROUP_WEBHOOKS.has(body.typeWebhook) || !instance || !sender) return null;
+  const instanceId = String(instance.idInstance ?? '');
+  const invite = record(record(body.messageData)?.groupInviteMessageData);
+  const inviteJid = text(invite?.groupJid);
+  if (body.typeWebhook === 'incomingMessageReceived' && inviteJid?.endsWith('@g.us')) {
+    return { instanceId, chatId: inviteJid, chatName: text(invite?.groupName), verified: false };
+  }
   const chatId = text(sender.chatId);
   if (!chatId?.endsWith('@g.us')) return null;
-  return { instanceId: String(instance.idInstance ?? ''), chatId, chatName: text(sender.chatName) };
+  return { instanceId, chatId, chatName: text(sender.chatName), verified: true };
 }
 
 export function parseGreenApiReceipt(payload: unknown): IncomingReceipt | null {

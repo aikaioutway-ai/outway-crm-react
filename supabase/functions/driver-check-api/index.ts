@@ -1,12 +1,13 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   canCorrectDriverMarks,
+  canManageDriverLinks,
   allowedBranchIds,
   bishkekToday,
   BranchRow,
   isUuid,
   isValidToken,
-  LOGISTICS_CHECK_ROLES,
+  LOGISTICS_VIEW_ROLES,
   monthDateBounds,
   resolveSchoolTab,
   roundOfIsoDate,
@@ -74,7 +75,7 @@ async function requireEmployee(db: ReturnType<typeof createClient>, request: Req
     .eq('id', session.sub)
     .maybeSingle();
   if (error) throw error;
-  if (!employee || employee.status !== 'active' || !LOGISTICS_CHECK_ROLES.has(employee.role)) {
+  if (!employee || employee.status !== 'active' || !LOGISTICS_VIEW_ROLES.has(employee.role)) {
     throw new UserError('Нет доступа к сверке логистики', 403);
   }
   return employee as { id: string; full_name: string; role: string; status: string; school_keys: string[] | null };
@@ -448,6 +449,7 @@ Deno.serve(async request => {
         touchTransferRound(sub.transfer_id, round, sub.submitted_at);
       }
 
+      const linksAllowed = canManageDriverLinks(employee.role);
       const resultTransfers = transfers
         .map(transfer => {
           const school = resolveSchoolTab(transfer.branch_id ? branchById.get(transfer.branch_id) : null);
@@ -462,7 +464,7 @@ Deno.serve(async request => {
             driverId: transfer.driver_id,
             driverName: driver?.full_name ?? '',
             driverPhone: driver?.phone ?? '',
-            driverLinkToken: transfer.driver_link_token,
+            driverLinkToken: linksAllowed ? transfer.driver_link_token : '',
             rounds: roundsByTransfer.get(transfer.id) ?? {},
           };
         })
@@ -528,6 +530,7 @@ Deno.serve(async request => {
     }
 
     if (action === 'crm_rotate_token') {
+      if (!canManageDriverLinks(employee.role)) throw new UserError('Нет доступа к ссылкам водителей', 403);
       if (!isUuid(body.transferId)) throw new UserError('Трансфер не найден');
       const { data: transfer, error: findError } = await db
         .from('v2_transfers')

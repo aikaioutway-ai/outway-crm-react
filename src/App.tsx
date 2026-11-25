@@ -5,7 +5,7 @@ import TaskContextMenu from './modules/tasks/TaskContextMenu';
 import LogisticsTabs from './modules/families/LogisticsTabs';
 import HiddenSchoolsList from './modules/families/HiddenSchoolsList';
 import CashierViewTabs from './modules/families/CashierViewTabs';
-import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts, canDeleteIncomingReceipts, ManagerMode } from './modules/families/ManagerModeTabs';
+import ManagerModeTabs, { canAccessManagerAccruals, canAccessManagerReceipts, canAccessManagerReconciliation, canDeleteIncomingReceipts, ManagerMode } from './modules/families/ManagerModeTabs';
 import React, { lazy, Suspense, useEffect, useRef, useState } from 'react';
 import { CalendarDays, ChevronLeft } from 'lucide-react';
 import Sidebar, { canAccessSpending, canAccessSection, getAllowedSections, getInitialSection, NavSection, OWNER_EMPLOYEE_ID } from './core/bars/Sidebar';
@@ -178,7 +178,11 @@ export default function App() {
   const [requestedManagerSchoolMode, setRequestedManagerSchoolMode] = useState<ManagerMode>('directory');
   const canViewManagerAccruals = !!currentUser && canAccessManagerAccruals(currentUserRole, currentUser.id);
   const canViewManagerReceipts = !!currentUser && canAccessManagerReceipts(currentUserRole);
-  const managerModeAllowed = (mode: ManagerMode) => (mode !== 'accruals' || canViewManagerAccruals) && (mode !== 'receipts' || canViewManagerReceipts);
+  const canViewManagerReconciliation = !!currentUser && canAccessManagerReconciliation(currentUserRole);
+  const [managerReconcilePeriodKey, setManagerReconcilePeriodKey] = useState<string>(() => currentPayrollPeriodKey());
+  const [managerReconcileTransfer, setManagerReconcileTransfer] = useState('');
+  const [managerReconcileSearch, setManagerReconcileSearch] = useState('');
+  const managerModeAllowed = (mode: ManagerMode) => (mode !== 'accruals' || canViewManagerAccruals) && (mode !== 'receipts' || canViewManagerReceipts) && (mode !== 'reconciliation' || canViewManagerReconciliation);
   const managerSchoolMode = managerModeAllowed(requestedManagerSchoolMode) ? requestedManagerSchoolMode : 'directory';
   const setManagerSchoolMode = (mode: ManagerMode) => {
     setRequestedManagerSchoolMode(managerModeAllowed(mode) ? mode : 'directory');
@@ -543,8 +547,35 @@ export default function App() {
     />
   );
 
+  // «Сверка» в «Менеджере»: отметки водителей по детям, только просмотр.
+  const renderReconciliation = (schoolKey: string | null) => (
+    <>
+      <DashboardTopPanel>
+        <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
+          <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
+            <ManagerPeriodBar showAll={false} periods={RECONCILIATION_PERIODS} periodKey={managerReconcilePeriodKey} onPeriodKeyChange={setManagerReconcilePeriodKey} />
+          </div>
+          <DashboardSearch value={managerReconcileSearch} onChange={setManagerReconcileSearch} placeholder="Ребёнок, родитель, телефон..." />
+        </div>
+      </DashboardTopPanel>
+      <LogisticsReconciliation
+        key={schoolKey ?? 'ALL'}
+        userId={currentUser?.id}
+        userRole={currentUserRole}
+        schoolKey={schoolKey ?? 'ALL'}
+        periodKey={managerReconcilePeriodKey}
+        transferFilter={managerReconcileTransfer}
+        onTransferSelect={setManagerReconcileTransfer}
+        search={managerReconcileSearch}
+        sessionToken={currentUser?.sessionToken}
+        allowedSchools={currentUser?.schoolKeys}
+        onOpenFamily={openRequestFamily}
+      />
+    </>
+  );
+
   const renderManagerSchool = (schoolKey: string, period: string, day?: string, directoryPeriod?: string, onDebtTotals?: (amount: number, count: number) => void) => (
-    managerSchoolMode === 'receipts' ? renderReceipts(schoolKey) : managerSchoolMode === 'requests' ? <SchoolRequestsKanban externalDay={day} key={schoolKey} schoolKey={schoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
+    managerSchoolMode === 'reconciliation' ? renderReconciliation(schoolKey) : managerSchoolMode === 'receipts' ? renderReceipts(schoolKey) : managerSchoolMode === 'requests' ? <SchoolRequestsKanban externalDay={day} key={schoolKey} schoolKey={schoolKey} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} actorName={currentUser?.name} canEdit={canEditRequests} onOpen={row => void openRequestFamily(row.familyId, row.rowId)} /> : (
     <>
       {!isManager2 && (<DashboardTopPanel>
         {!isManager2 && managerSchoolMode !== 'directory' && (
@@ -1073,7 +1104,7 @@ export default function App() {
                     <ChevronLeft size={16} aria-hidden="true" />Все школы
                   </button>
                 )}
-                {managerSchoolKey && !isManager2 && <ManagerModeTabs showRequests showReceipts={canViewManagerReceipts} canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
+                {managerSchoolKey && !isManager2 && <ManagerModeTabs showRequests showReceipts={canViewManagerReceipts} showReconciliation={canViewManagerReconciliation} canViewAccruals={canViewManagerAccruals} compact value={managerSchoolMode} onChange={setManagerSchoolMode} />}
                 {!isManager2 && contextTaskTarget && <TaskButton target={contextTaskTarget} toolbar />}
                 {extraTabs(true)}
               </div>
@@ -1090,7 +1121,8 @@ export default function App() {
                 detailSchoolKey={isManager2 ? managerSchoolKey ?? undefined : undefined}
                 renderSchool={isManager2 && managerSchoolKey ? (period, day, directoryPeriod, onDebtTotals) => renderManagerSchool(managerSchoolKey, period, day, directoryPeriod, onDebtTotals) : undefined}
                 renderReceipts={canViewManagerReceipts ? () => renderReceipts(null) : undefined}
-                renderTransfers={isManager2 && managerSchoolKey && managerSchoolKey !== 'ALL' && managerSchoolMode !== 'requests' && managerSchoolMode !== 'receipts'
+                renderReconciliation={canViewManagerReconciliation ? () => renderReconciliation(null) : undefined}
+                renderTransfers={isManager2 && managerSchoolKey && managerSchoolKey !== 'ALL' && managerSchoolMode !== 'requests' && managerSchoolMode !== 'receipts' && managerSchoolMode !== 'reconciliation'
                   ? period => <SchoolTransferDashboard showBusFilter topPadding={0} mode={managerSchoolMode} periodKey={period} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
                   : undefined}
                 splitView={isManager2}

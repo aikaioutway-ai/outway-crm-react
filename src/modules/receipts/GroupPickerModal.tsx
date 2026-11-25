@@ -106,10 +106,10 @@ export default function GroupPickerModal({ sessionToken, transfer, onClose }: {
   async function refreshGroups() {
     setBusy(true); setError(''); setNotice(''); setProgress('Обновляем группы…');
     try {
-      const refreshed = await fetchWhatsappGroups(sessionToken);
+      const refreshed = await fetchWhatsappGroups(sessionToken, undefined, true);
       queryClient.setQueryData(QK.whatsappGroups(sessionToken), refreshed);
       const count = refreshed.length;
-      setNotice(`Получено групп: ${count}. Если нужной нет, проверьте, что номер бота добавлен в неё.`);
+      setNotice(`Получено групп: ${count}. Если нужной нет, проверьте, что номер бота добавлен в неё: новые группы появляются в Green API в течение 5 минут, CRM подхватывает их автоматически.`);
     } catch (err) { setError(err instanceof Error ? err.message : 'Не удалось обновить группы'); }
     finally { setBusy(false); setProgress(''); }
   }

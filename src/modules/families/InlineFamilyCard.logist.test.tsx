@@ -61,6 +61,6 @@ test('manager still sees money tabs and the account balance', async () => {
   render(<InlineFamilyCard family={family} onClose={jest.fn()} userRole="manager" />);
 
   await waitFor(() => expect(fetchFinanceSnapshot).toHaveBeenCalled());
-  expect(Array.from(tabLabels()).map(button => button.title)).toEqual(['Обзор', 'Дети', 'Начисления', 'Платежи и чеки', 'Документы']);
+  expect(Array.from(tabLabels()).map(button => button.title)).toEqual(['Обзор', 'Дети', 'Начисления', 'Платежи и чеки', 'Документы', 'История']);
   expect(screen.getByText('Баланс счёта')).toBeInTheDocument();
 });

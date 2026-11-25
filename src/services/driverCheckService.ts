@@ -1,4 +1,4 @@
-export { canCorrectDriverMarks } from '../../supabase/functions/driver-check-api/helpers';
+export { canCorrectDriverMarks, canManageDriverLinks } from '../../supabase/functions/driver-check-api/helpers';
 import { supabase } from './supabase';
 import { EMPLOYEE_SESSION_EXPIRED_EVENT, isEmployeeSessionExpiredMessage } from './employeeSession';
 

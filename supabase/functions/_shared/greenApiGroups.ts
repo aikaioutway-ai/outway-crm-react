@@ -32,7 +32,12 @@ export function verifyGroup(value: unknown, chatId: string, ownIds: Set<string>)
   return { chatId, name: typeof data.subject === 'string' ? data.subject : null, inviteCode: typeof data.groupInviteLink === 'string' ? inviteCode(data.groupInviteLink) : null };
 }
 
-export async function verifiedGroups(request: GroupRequest, knownIds: string[], link?: string): Promise<VerifiedGroup[]> {
+/**
+ * recent — группы, участие бота в которых уже подтверждено недавно (фоновой синхронизацией
+ * или сообщением из группы): их состав повторно не запрашивается, чтобы окно открывалось быстро.
+ * Новые группы из контактов и чатов Green API проверяются через getGroupData.
+ */
+export async function verifiedGroups(request: GroupRequest, knownIds: string[], link?: string, recent: VerifiedGroup[] = []): Promise<VerifiedGroup[]> {
   const code = link === undefined ? null : inviteCode(link);
   if (link !== undefined && !code) throw new GroupLookupError('Вставьте корректную ссылку вида https://chat.whatsapp.com/…');
   const [contacts, chats, account] = await Promise.all([request('getContacts'), request('getChats'), request('getWaSettings')]);
@@ -46,7 +51,10 @@ export async function verifiedGroups(request: GroupRequest, knownIds: string[], 
   const ids = Array.from(candidates);
   const result: VerifiedGroup[] = [];
   // Состав проверяется по очереди: Green API допускает один getGroupData в секунду.
+  const recentById = new Map(code ? [] : recent.map(group => [group.chatId, group]));
   for (const id of ids) {
+    const known = recentById.get(id);
+    if (known) { result.push(known); continue; }
     const group = verifyGroup(await request('getGroupData', { groupId: id }), id, ownIds);
     if (group && (!code || group.inviteCode === code)) result.push(group);
     if (code && result.length) return result;

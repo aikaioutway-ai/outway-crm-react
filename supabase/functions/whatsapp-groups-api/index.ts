@@ -7,11 +7,42 @@ import { accountIds, verifyGroup, verifiedGroups, GroupLookupError } from '../_s
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type, apikey, x-client-info, x-employee-session' };
 const response = (data: Record<string, unknown>, status = 200) => Response.json(data, { status, headers: cors });
 const uuid = (value: unknown) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? ''));
+// Группы, где участие бота подтверждено за последние 10 минут, повторно не проверяются (кроме фоновой синхронизации).
+const RECENT_MS = 10 * 60 * 1000;
+type Db = ReturnType<typeof createClient>;
+async function syncGroups(db: Db, inviteLink: string | undefined, reuseRecent: boolean) {
+  const { data: known, error } = await db.from('v2_whatsapp_groups').select('chat_id,name,last_seen_at').limit(500);
+  if (error) throw error;
+  const since = Date.now() - RECENT_MS;
+  const recent = reuseRecent
+    ? (known ?? []).filter(row => Date.parse(row.last_seen_at ?? '') >= since).map(row => ({ chatId: row.chat_id as string, name: (row.name as string | null) ?? null, inviteCode: null }))
+    : [];
+  const groups = await verifiedGroups(greenApiRequest, (known ?? []).map(row => row.chat_id), inviteLink, recent);
+  const recentSet = new Set(recent);
+  const seenAt = new Map((known ?? []).map(row => [row.chat_id as string, row.last_seen_at as string]));
+  const now = new Date().toISOString();
+  const fresh = groups.filter(group => !recentSet.has(group));
+  if (fresh.length) {
+    const { error: saveError } = await db.from('v2_whatsapp_groups').upsert(fresh.map(group => ({ chat_id: group.chatId, name: group.name, last_seen_at: now })), { onConflict: 'chat_id' });
+    if (saveError) throw saveError;
+  }
+  return groups.map(group => ({ ...group, lastSeenAt: recentSet.has(group) ? seenAt.get(group.chatId) ?? now : now }));
+}
+
 Deno.serve(async request => {
   if (request.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (request.method !== 'POST') return response({ ok: false, error: 'Method not allowed' }, 405);
   try {
     const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    // Фоновая синхронизация по расписанию (pg_cron): новые группы бота попадают в CRM без первого сообщения.
+    const cronToken = request.headers.get('x-groups-token');
+    if (cronToken) {
+      const db = createClient(Deno.env.get('SUPABASE_URL')!, key, { auth: { persistSession: false } });
+      const { data: valid } = await db.rpc('v2_validate_whatsapp_history_token', { p_token: cronToken });
+      if (valid !== true) return response({ ok: false, error: 'Нет доступа' }, 403);
+      const groups = await syncGroups(db, undefined, false);
+      return response({ ok: true, count: groups.length });
+    }
     let session: { sub: string } | null = null;
     try { session = await verifySession(request.headers.get('x-employee-session') ?? '', key); } catch { /* invalid session */ }
     if (!session) return response({ ok: false, error: 'Сессия недействительна или истекла' }, 401);
@@ -21,19 +52,12 @@ Deno.serve(async request => {
     if (!employee || employee.status !== 'active' || !RECEIPT_ROLES.has(employee.role)) return response({ ok: false, error: 'Нет доступа' }, 403);
     const body = await request.json();
     if (body.action === 'groups' || body.action === 'syncGroups') {
-      const { data: known, error } = await db.from('v2_whatsapp_groups').select('chat_id').limit(500);
-      if (error) throw error;
-      const groups = await verifiedGroups(greenApiRequest, (known ?? []).map(row => row.chat_id), body.inviteLink === undefined ? undefined : String(body.inviteLink));
-      const now = new Date().toISOString();
-      if (groups.length) {
-        const { error: saveError } = await db.from('v2_whatsapp_groups').upsert(groups.map(group => ({ chat_id: group.chatId, name: group.name, last_seen_at: now })), { onConflict: 'chat_id' });
-        if (saveError) throw saveError;
-      }
+      const groups = await syncGroups(db, body.inviteLink === undefined ? undefined : String(body.inviteLink), body.action === 'groups');
       const { data: transfers, error: transferError } = await db.from('v2_transfers').select('id,transfer_number,whatsapp_chat_id').not('whatsapp_chat_id', 'is', null);
       if (transferError) throw transferError;
       const byChat = new Map((transfers ?? []).map(t => [t.whatsapp_chat_id, t]));
       return response({ ok: true, count: groups.length, groups: groups.map(group => ({
-        chatId: group.chatId, name: group.name, lastSeenAt: now,
+        chatId: group.chatId, name: group.name, lastSeenAt: group.lastSeenAt,
         transferId: byChat.get(group.chatId)?.id ?? null, transferNumber: byChat.get(group.chatId)?.transfer_number ?? null,
       })) });
     }

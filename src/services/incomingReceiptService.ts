@@ -128,8 +128,9 @@ export async function fetchIncomingReceiptsSummary(sessionToken: string | undefi
   };
 }
 
-export async function fetchWhatsappGroups(sessionToken: string | undefined, inviteLink?: string): Promise<WhatsappGroup[]> {
-  return (await callApi<{ groups: WhatsappGroup[] }>(sessionToken, { action: 'groups', ...(inviteLink ? { inviteLink } : {}) })).groups;
+/** full — заново проверить участие бота во всех группах (кнопка «Обновить группы»). */
+export async function fetchWhatsappGroups(sessionToken: string | undefined, inviteLink?: string, full = false): Promise<WhatsappGroup[]> {
+  return (await callApi<{ groups: WhatsappGroup[] }>(sessionToken, { action: full ? 'syncGroups' : 'groups', ...(inviteLink ? { inviteLink } : {}) })).groups;
 }
 
 export async function syncWhatsappGroups(sessionToken: string | undefined): Promise<number> {

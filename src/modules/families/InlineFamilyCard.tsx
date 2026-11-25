@@ -732,7 +732,7 @@ export default function InlineFamilyCard({ family, onClose, userRole = 'manager'
           <nav aria-label="Разделы карточки клиента" className="family-card-tabs">
             {TABS.filter(item => {
               if (isLogist) return LOGIST_TABS.includes(item.key);
-              if (item.key === 'history') return userRole === 'admin' || userRole === 'gen_director';
+              // История семьи открыта всем сотрудникам.
               return true;
             }).map(item => {
               const active = tab === item.key;
