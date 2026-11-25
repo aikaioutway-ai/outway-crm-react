@@ -1,3 +1,4 @@
+import LogisticsReconciliationOverview from './modules/families/LogisticsReconciliationOverview';
 import { restrictedRoleFor } from './modules/employees/employeeRoles';
 import SchoolRequestsKanban from './modules/families/SchoolRequestsKanban';
 import AllRecordsButton from './core/dashboard/AllRecordsButton';
@@ -548,7 +549,11 @@ export default function App() {
   );
 
   // «Сверка» в «Менеджере»: отметки водителей по детям, только просмотр.
-  const renderReconciliation = (schoolKey: string | null) => (
+  const renderReconciliation = (schoolKey: string | null) => !schoolKey ? (
+    <LogisticsReconciliationOverview sessionToken={currentUser?.sessionToken} periodKey={managerReconcilePeriodKey}
+      onPeriodChange={setManagerReconcilePeriodKey} onSelectSchool={handleManagerSelectSchool}
+      allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />
+  ) : (
     <>
       <DashboardTopPanel>
         <div style={{ display: 'flex', alignItems: 'stretch', gap: 10, paddingRight: schoolSidebarReserveWidth, transition: 'padding-right .18s ease' }}>
@@ -1120,6 +1125,7 @@ export default function App() {
                 detailSchoolKey={isManager2 ? managerSchoolKey ?? undefined : undefined}
                 renderSchool={isManager2 && managerSchoolKey ? (period, day, directoryPeriod, onDebtTotals) => renderManagerSchool(managerSchoolKey, period, day, directoryPeriod, onDebtTotals) : undefined}
                 renderReceipts={canViewManagerReceipts ? () => renderReceipts(null) : undefined}
+                reconciliationPeriodKey={managerReconcilePeriodKey}
                 renderReconciliation={canViewManagerReconciliation ? () => renderReconciliation(null) : undefined}
                 renderTransfers={isManager2 && managerSchoolKey && managerSchoolKey !== 'ALL' && managerSchoolMode !== 'requests' && managerSchoolMode !== 'receipts' && managerSchoolMode !== 'reconciliation'
                   ? period => <SchoolTransferDashboard showBusFilter topPadding={0} mode={managerSchoolMode} periodKey={period} schoolKey={managerSchoolKey} selectedKey={managerTransferFilter} onSelect={setManagerTransferFilter} allowedSchools={currentUser?.schoolKeys} schoolTier={managerTier} />

@@ -1,3 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
+import { fetchLogisticsReconciliationMonth } from '../../services/driverCheckService';
+import { resolveReconciliationPeriod } from './LogisticsReconciliation';
+import { reconciliationRouteCounts } from './logisticsReconciliationStats';
+import { isInTestTransfer, useTestTransfers } from './testTransfers';
 import { QK, queryClient } from '../../services/queryClient';
 import type { Employee } from '../../types';
 import { requestStage } from './requestWorkflow';
@@ -11,7 +16,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 
 import { List, Plus, Search, X } from 'lucide-react';
 import { FamilyListRow, FamilySearchHit, PeriodChargeStats, BranchStat } from '../../services/crmV2Service';
-import { useIncomingReceiptsSummary, useMonthlyChargeStats, useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
+import { useIncomingReceiptsSummary, useLogisticsTable, useMonthlyChargeStats, useFamiliesTable, useBranchStats, useFamilySearch, usePeriodChargeStats, useSchoolDirectoryStats } from '../../hooks/useCrmQueries';
 import { ALL_PERIODS, currentPayrollPeriodKey, SCHOOL_DIRECTORY, SCHOOL_TABS, getBranchFilter, isSchoolAllowed, isSchoolInTier, schoolTabsForTier } from './constants';
 import { SchoolTier } from './SchoolTierTabs';
 import { money } from '../../utils/pricing';
@@ -55,6 +60,7 @@ interface ManagerOverviewProps {
   /** Вкладка «Чеки»: есть только у сотрудников с доступом к чекам. */
   renderReceipts?: () => React.ReactNode;
   renderReconciliation?: () => React.ReactNode;
+  reconciliationPeriodKey?: string;
   mode: ManagerMode;
   canViewAccruals?: boolean;
   onModeChange: (mode: ManagerMode) => void;
@@ -305,11 +311,23 @@ export function ManagerSearch({ rows, onOpenFamily, collapsible = false, compact
   );
 }
 
-export default function ManagerOverview({ sessionToken, mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers, renderReceipts, renderReconciliation }: ManagerOverviewProps) {
+export default function ManagerOverview({ sessionToken, mode, canViewAccruals = false, onModeChange, onSelectSchool, onSidebarWidthChange, onOpenFamily, allowedSchools, schoolTier = '1.0', splitView, detailSchoolKey, detailTransferFilter, onBackToOverview, employeeCardAccess, renderSchool, renderTransfers, renderReceipts, renderReconciliation, reconciliationPeriodKey }: ManagerOverviewProps) {
   const showReceipts = Boolean(renderReceipts);
   const showReconciliation = Boolean(renderReconciliation);
   const reconciliationOpen = mode === 'reconciliation' && showReconciliation;
   const receiptsOpen = (mode === 'receipts' && showReceipts) || reconciliationOpen;
+  const reconcilePeriod = resolveReconciliationPeriod(reconciliationPeriodKey ?? currentPayrollPeriodKey());
+  const reconciliation = useQuery({
+    queryKey: ['logistics-reconciliation-month', reconcilePeriod.year, reconcilePeriod.month, 'ALL', sessionToken],
+    queryFn: () => fetchLogisticsReconciliationMonth(sessionToken, { year: reconcilePeriod.year, month: reconcilePeriod.month }),
+    enabled: showReconciliation && Boolean(sessionToken),
+    staleTime: 30_000,
+  });
+  const logistics = useLogisticsTable({ enabled: showReconciliation });
+  useTestTransfers();
+  const reconciliationPending = reconciliation.data && logistics.data ? reconciliationRouteCounts(reconciliation.data,
+    logistics.data.filter(row => row.status !== 'rejected' && !isInTestTransfer(row)
+      && isSchoolInTier(row.branchFilter, schoolTier) && isSchoolAllowed(row.branchFilter, allowedSchools, schoolTier)), detailSchoolKey).pending : undefined;
   const receiptsSummary = useIncomingReceiptsSummary(showReceipts ? sessionToken : undefined);
   const receiptsToReview = receiptsSummary.data
     ? receiptsSummary.data.schools
@@ -460,6 +478,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
         { label: 'Новые', tone: 'alert', value: count(accessibleRows ? requestTotals.newRequests : undefined) },
         { label: 'В работе', value: count(accessibleRows ? requestTotals.inWork : undefined) },
       ],
+      reconciliation: [{ label: 'Не сделано', tone: 'alert', value: count(reconciliationPending) }],
       receipts: [
         { label: 'Нужно разобрать', tone: 'alert', value: count(receiptsToReview) },
       ],
@@ -468,7 +487,7 @@ export default function ManagerOverview({ sessionToken, mode, canViewAccruals = 
         { label: 'Без начислений', tone: 'alert', value: count((renderSchool ? periodQuery.data : allCharges.data) ? financial?.reduce((sum, school) => sum + (school.uncharged ?? 0), 0) : undefined) },
       ],
     };
-  }, [receiptsToReview, splitView, directoryQuery.data, allowedSchools, scopedSchools, schoolTier, accessibleRows, stats, allCharges.data, seasonTotals.debt, seasonTotals.charged, renderSchool, detailTransferFilter, mode, directoryPeriod, requestDay, periodKey, periodStats, periodQuery.data, tableDebt]);
+  }, [reconciliationPending, receiptsToReview, splitView, directoryQuery.data, allowedSchools, scopedSchools, schoolTier, accessibleRows, stats, allCharges.data, seasonTotals.debt, seasonTotals.charged, renderSchool, detailTransferFilter, mode, directoryPeriod, requestDay, periodKey, periodStats, periodQuery.data, tableDebt]);
   const selectedPeriod = mode === 'requests' ? requestDay : mode === 'directory' ? directoryPeriod : periodKey;
   const periods = mode === 'requests' ? REQUEST_DAY_PERIODS : ALL_PERIODS;
   const metrics = [{ key: 'ALL', label: 'Все периоды', month: 0, year: 0 }, ...periods]
